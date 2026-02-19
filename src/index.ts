@@ -33,6 +33,8 @@ import { trainCommand } from './commands/train';
 import { cloneCommand } from './commands/clone';
 import { devCommand } from './commands/dev';
 import { dropletCommand } from './commands/droplet';
+import { companyCommand } from './commands/company';
+import { switchCommand } from './commands/switch';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -68,6 +70,10 @@ program.addCommand(integrationsCommand);
 program.addCommand(docsCommand);
 program.addCommand(healthCommand);
 
+// Multi-company
+program.addCommand(companyCommand);
+program.addCommand(switchCommand);
+
 // Dev tools
 program.addCommand(devCommand);
 program.addCommand(dropletCommand);
@@ -88,6 +94,7 @@ program.addHelpText('after', () => {
       { cmd: 'solid pull', desc: 'Download business data as local files' },
       { cmd: 'solid push', desc: 'Push local changes to production' },
       { cmd: 'solid train chat', desc: 'Chat with your AI agent' },
+      { cmd: 'solid switch', desc: 'Switch between companies (agencies)' },
     ]),
     '',
     ui.divider('Workflow'),

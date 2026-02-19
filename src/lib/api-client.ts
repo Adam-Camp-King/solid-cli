@@ -31,9 +31,15 @@ class ApiClient {
 
     // Add auth interceptor
     this.client.interceptors.request.use((requestConfig) => {
-      const token = config.accessToken;
-      if (token) {
-        requestConfig.headers.Authorization = `Bearer ${token}`;
+      // CLI API key from env var takes priority (CI/CD, LLM agents)
+      const envApiKey = process.env.SOLID_API_KEY;
+      if (envApiKey) {
+        requestConfig.headers.Authorization = `Bearer ${envApiKey}`;
+      } else {
+        const token = config.accessToken;
+        if (token) {
+          requestConfig.headers.Authorization = `Bearer ${token}`;
+        }
       }
       const companyId = config.companyId;
       if (companyId) {
@@ -416,6 +422,76 @@ class ApiClient {
     created: { kb_entries: number; pages?: number; services?: number };
   }>> {
     const response = await this.client.post(`/api/v1/cli/templates/${name}/clone`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Multi-company (CLI Agency)
+  async companiesList(): Promise<ApiResponse<{
+    companies: Array<{ id: number; name: string; role: string; is_active: boolean; joined_at?: string }>;
+    active_company_id: number;
+    count: number;
+  }>> {
+    const response = await this.client.get('/api/v1/cli/companies/');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyCreate(name: string, template?: string, industry?: string): Promise<ApiResponse<{
+    status: string;
+    company: { id: number; name: string; slug: string };
+    membership: { role: string };
+    template?: unknown;
+  }>> {
+    const response = await this.client.post('/api/v1/cli/companies/', { name, template, industry });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companySwitch(companyId: number): Promise<ApiResponse<{
+    status: string;
+    company: { id: number; name: string };
+    role: string;
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  }>> {
+    const response = await this.client.post(`/api/v1/cli/companies/${companyId}/switch`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyInvite(companyId: number, email: string, role = 'developer'): Promise<ApiResponse<{
+    status: string;
+    message: string;
+    token?: string;
+  }>> {
+    const response = await this.client.post(`/api/v1/cli/companies/${companyId}/invite`, { email, role });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // CLI API Keys
+  async apiKeyCreate(name: string, scopes: string[], expiresInDays?: number): Promise<ApiResponse<{
+    status: string;
+    key: string;
+    warning: string;
+    api_key: { id: number; name: string; key_prefix: string; scopes: string[] };
+  }>> {
+    const response = await this.client.post('/api/v1/cli/api-keys/', {
+      name,
+      scopes,
+      expires_in_days: expiresInDays,
+    });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async apiKeyList(): Promise<ApiResponse<{
+    api_keys: Array<{ id: number; name: string; key_prefix: string; scopes: string[]; is_active: boolean; last_used_at?: string }>;
+    count: number;
+    available_scopes: string[];
+  }>> {
+    const response = await this.client.get('/api/v1/cli/api-keys/');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async apiKeyRevoke(keyId: number): Promise<ApiResponse<{ status: string; id: number }>> {
+    const response = await this.client.delete(`/api/v1/cli/api-keys/${keyId}`);
     return { data: response.data, status: response.status, success: true };
   }
 }

@@ -7,6 +7,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+interface CompanyInfo {
+  id: number;
+  name: string;
+  role: string;
+}
+
 interface SolidConfig {
   api_url: string;
   company_id?: number;
@@ -16,6 +22,7 @@ interface SolidConfig {
   token_expires_at?: string;
   user_id?: number;
   user_email?: string;
+  companies?: CompanyInfo[];
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.solid');
@@ -144,6 +151,19 @@ class ConfigManager {
     this.save();
   }
 
+  get companies(): CompanyInfo[] | undefined {
+    return this.data.companies;
+  }
+
+  set companies(list: CompanyInfo[] | undefined) {
+    if (list && list.length > 0) {
+      this.data.companies = list;
+    } else {
+      delete this.data.companies;
+    }
+    this.save();
+  }
+
   isLoggedIn(): boolean {
     const token = this.accessToken;
     const expires = this.tokenExpiresAt;
@@ -161,6 +181,7 @@ class ConfigManager {
     delete this.data.user_id;
     delete this.data.user_email;
     delete this.data.company_id;
+    delete this.data.companies;
     this.save();
   }
 
