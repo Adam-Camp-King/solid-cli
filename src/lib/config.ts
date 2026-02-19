@@ -1,8 +1,9 @@
 /**
  * Configuration management for Solid CLI
+ * Uses a simple JSON file at ~/.solid/config.json
  */
 
-import Conf from 'conf';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -17,133 +18,130 @@ interface SolidConfig {
   user_email?: string;
 }
 
-const configSchema = {
-  api_url: {
-    type: 'string' as const,
-    default: 'https://api.solidnumber.com',
-  },
-  company_id: {
-    type: 'number' as const,
-  },
-  environment: {
-    type: 'string' as const,
-    default: 'production',
-  },
-  access_token: {
-    type: 'string' as const,
-  },
-  refresh_token: {
-    type: 'string' as const,
-  },
-  token_expires_at: {
-    type: 'string' as const,
-  },
-  user_id: {
-    type: 'number' as const,
-  },
-  user_email: {
-    type: 'string' as const,
-  },
-};
+const CONFIG_DIR = path.join(os.homedir(), '.solid');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 class ConfigManager {
-  private config: Conf<SolidConfig>;
+  private data: SolidConfig;
 
   constructor() {
-    this.config = new Conf<SolidConfig>({
-      projectName: 'solid-cli',
-      schema: configSchema,
-      cwd: path.join(os.homedir(), '.solid'),
-    });
+    this.data = this.load();
+  }
+
+  private load(): SolidConfig {
+    try {
+      if (fs.existsSync(CONFIG_FILE)) {
+        const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
+        return { api_url: 'https://api.solidnumber.com', environment: 'production', ...JSON.parse(raw) };
+      }
+    } catch {
+      // Corrupted config, reset
+    }
+    return { api_url: 'https://api.solidnumber.com', environment: 'production' };
+  }
+
+  private save(): void {
+    if (!fs.existsSync(CONFIG_DIR)) {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    }
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
   }
 
   get apiUrl(): string {
-    return this.config.get('api_url', 'https://api.solidnumber.com');
+    return this.data.api_url;
   }
 
   set apiUrl(url: string) {
-    this.config.set('api_url', url);
+    this.data.api_url = url;
+    this.save();
   }
 
   get companyId(): number | undefined {
-    return this.config.get('company_id');
+    return this.data.company_id;
   }
 
   set companyId(id: number | undefined) {
     if (id) {
-      this.config.set('company_id', id);
+      this.data.company_id = id;
     } else {
-      this.config.delete('company_id');
+      delete this.data.company_id;
     }
+    this.save();
   }
 
   get environment(): string {
-    return this.config.get('environment', 'production');
+    return this.data.environment;
   }
 
   set environment(env: 'production' | 'sandbox' | 'development') {
-    this.config.set('environment', env);
+    this.data.environment = env;
+    this.save();
   }
 
   get accessToken(): string | undefined {
-    return this.config.get('access_token');
+    return this.data.access_token;
   }
 
   set accessToken(token: string | undefined) {
     if (token) {
-      this.config.set('access_token', token);
+      this.data.access_token = token;
     } else {
-      this.config.delete('access_token');
+      delete this.data.access_token;
     }
+    this.save();
   }
 
   get refreshToken(): string | undefined {
-    return this.config.get('refresh_token');
+    return this.data.refresh_token;
   }
 
   set refreshToken(token: string | undefined) {
     if (token) {
-      this.config.set('refresh_token', token);
+      this.data.refresh_token = token;
     } else {
-      this.config.delete('refresh_token');
+      delete this.data.refresh_token;
     }
+    this.save();
   }
 
   get tokenExpiresAt(): Date | undefined {
-    const expires = this.config.get('token_expires_at');
+    const expires = this.data.token_expires_at;
     return expires ? new Date(expires) : undefined;
   }
 
   set tokenExpiresAt(date: Date | undefined) {
     if (date) {
-      this.config.set('token_expires_at', date.toISOString());
+      this.data.token_expires_at = date.toISOString();
     } else {
-      this.config.delete('token_expires_at');
+      delete this.data.token_expires_at;
     }
+    this.save();
   }
 
   get userId(): number | undefined {
-    return this.config.get('user_id');
+    return this.data.user_id;
   }
 
   set userId(id: number | undefined) {
     if (id) {
-      this.config.set('user_id', id);
+      this.data.user_id = id;
     } else {
-      this.config.delete('user_id');
+      delete this.data.user_id;
     }
+    this.save();
   }
 
   get userEmail(): string | undefined {
-    return this.config.get('user_email');
+    return this.data.user_email;
   }
 
   set userEmail(email: string | undefined) {
     if (email) {
-      this.config.set('user_email', email);
+      this.data.user_email = email;
     } else {
-      this.config.delete('user_email');
+      delete this.data.user_email;
     }
+    this.save();
   }
 
   isLoggedIn(): boolean {
@@ -157,12 +155,13 @@ class ConfigManager {
   }
 
   logout(): void {
-    this.config.delete('access_token');
-    this.config.delete('refresh_token');
-    this.config.delete('token_expires_at');
-    this.config.delete('user_id');
-    this.config.delete('user_email');
-    this.config.delete('company_id');
+    delete this.data.access_token;
+    delete this.data.refresh_token;
+    delete this.data.token_expires_at;
+    delete this.data.user_id;
+    delete this.data.user_email;
+    delete this.data.company_id;
+    this.save();
   }
 
   getAll(): Partial<SolidConfig> {
@@ -176,7 +175,8 @@ class ConfigManager {
   }
 
   clear(): void {
-    this.config.clear();
+    this.data = { api_url: 'https://api.solidnumber.com', environment: 'production' };
+    this.save();
   }
 }
 

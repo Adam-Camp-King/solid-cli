@@ -83,6 +83,27 @@ class ApiClient {
     }
   }
 
+  // Generic HTTP methods (used by droplet, dev, etc.)
+  async get<T = unknown>(url: string, options?: { params?: Record<string, unknown> }): Promise<ApiResponse<T>> {
+    const response = await this.client.get(url, options);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async post<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
+    const response = await this.client.post(url, data);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async patch<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
+    const response = await this.client.patch(url, data);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async delete<T = unknown>(url: string, options?: { params?: Record<string, unknown> }): Promise<ApiResponse<T>> {
+    const response = await this.client.delete(url, options);
+    return { data: response.data, status: response.status, success: true };
+  }
+
   // Auth endpoints
   async login(email: string, password: string): Promise<ApiResponse<{
     access_token: string;

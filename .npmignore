@@ -1,0 +1,10 @@
+src/
+tsconfig.json
+.eslintrc*
+jest.config.*
+*.test.ts
+*.spec.ts
+.solid/
+node_modules/
+.git/
+.gitignore

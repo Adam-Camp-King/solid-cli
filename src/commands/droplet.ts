@@ -9,7 +9,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { apiClient } from '../lib/api-client';
-import { config } from '../lib/config';
 
 export const dropletCommand = new Command('droplet')
   .description('Manage customer droplets (Type 2: Managed Instance)');
@@ -23,7 +22,7 @@ dropletCommand
     const spinner = ora('Fetching droplets...').start();
 
     try {
-      const response = await apiClient.get('/admin/droplets', {
+      const response = await apiClient.get<any>('/admin/droplets', {
         params: { status: options.status }
       });
 
@@ -63,7 +62,7 @@ dropletCommand
     const spinner = ora(`Checking ${customer}...`).start();
 
     try {
-      const response = await apiClient.get(`/admin/droplets/${customer}/status`);
+      const response = await apiClient.get<any>(`/admin/droplets/${customer}/status`);
       const d = response.data;
 
       spinner.stop();
@@ -106,7 +105,7 @@ dropletCommand
     const spinner = ora('Starting deployment...').start();
 
     try {
-      const response = await apiClient.post(`/admin/droplets/${customer}/deploy`, {
+      const response = await apiClient.post<any>(`/admin/droplets/${customer}/deploy`, {
         version: options.version || 'latest',
         force: options.force || false
       });
@@ -142,7 +141,7 @@ dropletCommand
     const spinner = ora(`Rolling back ${customer}...`).start();
 
     try {
-      const response = await apiClient.post(`/admin/droplets/${customer}/rollback`, {
+      const response = await apiClient.post<any>(`/admin/droplets/${customer}/rollback`, {
         version: options.version
       });
 
@@ -164,7 +163,7 @@ dropletCommand
     const spinner = ora(`Creating backup for ${customer}...`).start();
 
     try {
-      const response = await apiClient.post(`/admin/droplets/${customer}/backup`, {
+      const response = await apiClient.post<any>(`/admin/droplets/${customer}/backup`, {
         full: options.full || false
       });
 
@@ -190,7 +189,7 @@ dropletCommand
     console.log(chalk.bold(`\nLogs for ${customer}${options.service ? ` (${options.service})` : ''}:\n`));
 
     try {
-      const response = await apiClient.get(`/admin/droplets/${customer}/logs`, {
+      const response = await apiClient.get<any>(`/admin/droplets/${customer}/logs`, {
         params: {
           service: options.service,
           tail: options.tail,
@@ -220,7 +219,7 @@ dropletCommand
     console.log(chalk.yellow(`\nConnecting to ${customer}...`));
 
     try {
-      const response = await apiClient.get(`/admin/droplets/${customer}/ssh-config`);
+      const response = await apiClient.get<any>(`/admin/droplets/${customer}/ssh-config`);
 
       console.log(chalk.green(`\nSSH Command:`));
       console.log(`  ssh ${response.data.user}@${response.data.ip}`);
@@ -239,7 +238,7 @@ dropletCommand
     const spinner = ora(`Executing on ${customer}...`).start();
 
     try {
-      const response = await apiClient.post(`/admin/droplets/${customer}/exec`, {
+      const response = await apiClient.post<any>(`/admin/droplets/${customer}/exec`, {
         command
       });
 
@@ -288,7 +287,7 @@ dropletCommand
       spinner.text = 'Running health checks...';
       await new Promise(r => setTimeout(r, 1000));
 
-      const response = await apiClient.post('/admin/droplets/provision', {
+      const response = await apiClient.post<any>('/admin/droplets/provision', {
         customer,
         size: options.size,
         region: options.region
@@ -327,7 +326,7 @@ dropletCommand
     const spinner = ora(`Destroying ${customer}...`).start();
 
     try {
-      await apiClient.delete(`/admin/droplets/${customer}`, {
+      await apiClient.delete<any>(`/admin/droplets/${customer}`, {
         params: { keep_backups: options.keepBackups }
       });
 
