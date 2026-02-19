@@ -350,12 +350,51 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
+  // Single page (full detail with layout_json)
+  async pageGet(pageId: number): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.get(`/api/v1/cms/pages/${pageId}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Update page
+  async pageUpdate(pageId: number, data: Record<string, unknown>): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.patch(`/api/v1/cms/pages/${pageId}`, data);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Create page
+  async pageCreate(data: Record<string, unknown>): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.post(`/api/v1/cms/pages`, data);
+    return { data: response.data, status: response.status, success: true };
+  }
+
   // AI Chat (talk to agents)
   async agentChat(message: string, agentName = 'sarah'): Promise<ApiResponse<{ response: string }>> {
     const response = await this.client.post('/api/v1/chat/', {
       message,
       agent: agentName,
     });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Templates (solid clone)
+  async templatesList(): Promise<ApiResponse<{ templates: unknown[]; total: number }>> {
+    const response = await this.client.get('/api/v1/cli/templates/');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async templatePreview(name: string): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.get(`/api/v1/cli/templates/${name}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async templateClone(name: string): Promise<ApiResponse<{
+    success: boolean;
+    template: string;
+    display_name: string;
+    created: { kb_entries: number; pages?: number; services?: number };
+  }>> {
+    const response = await this.client.post(`/api/v1/cli/templates/${name}/clone`);
     return { data: response.data, status: response.status, success: true };
   }
 }

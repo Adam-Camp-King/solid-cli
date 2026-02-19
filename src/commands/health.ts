@@ -7,6 +7,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { ui } from '../lib/ui';
 
 export const healthCommand = new Command('health')
   .description('Health check commands')
@@ -27,14 +28,18 @@ export const healthCommand = new Command('health')
           return;
         }
 
-        if (response.data.status === 'healthy') {
-          spinner.succeed(chalk.green('MCP healthy'));
-        } else {
-          spinner.warn(chalk.yellow('MCP not healthy'));
-        }
+        spinner.stop();
 
-        console.log(chalk.dim(`  MCP Enabled: ${response.data.mcp_enabled}`));
-        console.log(chalk.dim(`  Total Agents: ${response.data.agents?.total_agents || 0}`));
+        const mcpOk = response.data.status === 'healthy';
+        const agents = response.data.agents?.total_agents || 0;
+
+        console.log('');
+        console.log(ui.infoBox('MCP / AI Agents', [
+          `${chalk.bold('Status:')}  ${mcpOk ? chalk.green('● healthy') : chalk.red('● unhealthy')}`,
+          `${chalk.bold('MCP:')}     ${response.data.mcp_enabled ? chalk.green('enabled') : chalk.yellow('disabled')}`,
+          `${chalk.bold('Agents:')}  ${chalk.hex('#818cf8')(agents.toString())} active`,
+        ]));
+        console.log('');
 
       } else if (options.full) {
         // Full health check
@@ -46,26 +51,33 @@ export const healthCommand = new Command('health')
           return;
         }
 
+        spinner.stop();
+
         const summary = response.data.summary;
         const allHealthy = summary.healthy_layers === summary.total_layers;
 
-        if (allHealthy) {
-          spinner.succeed(chalk.green(`All ${summary.total_layers} layers healthy`));
-        } else {
-          spinner.warn(chalk.yellow(`${summary.healthy_layers}/${summary.total_layers} layers healthy`));
-        }
+        const layers = response.data.layers as Record<string, { status: string }>;
+        const layerLines = Object.entries(layers).map(([name, data]) => {
+          const icon = data.status === 'healthy' ? chalk.green('●') :
+            data.status === 'degraded' ? chalk.yellow('●') :
+            chalk.red('●');
+          const displayName = name.replace('layer_', '').replace(/_/g, ' ');
+          const statusText = data.status === 'healthy' ? chalk.green(data.status) :
+            data.status === 'degraded' ? chalk.yellow(data.status) :
+            chalk.red(data.status);
+          return `  ${icon} ${displayName.padEnd(20)} ${statusText}`;
+        });
 
         console.log('');
-        console.log(chalk.bold('Layers:'));
-
-        const layers = response.data.layers as Record<string, { status: string }>;
-        for (const [name, data] of Object.entries(layers)) {
-          const icon = data.status === 'healthy' ? chalk.green('✓') :
-            data.status === 'degraded' ? chalk.yellow('!') :
-            chalk.red('✗');
-          const displayName = name.replace('layer_', '').replace(/_/g, ' ');
-          console.log(`  ${icon} ${displayName}`);
-        }
+        console.log(ui.infoBox(
+          allHealthy ? `${summary.total_layers} Layers Healthy` : `${summary.healthy_layers}/${summary.total_layers} Healthy`,
+          [
+            `${chalk.bold('API:')} ${chalk.dim(config.apiUrl)}`,
+            '',
+            ...layerLines,
+          ]
+        ));
+        console.log('');
 
       } else {
         // Quick health check
@@ -77,24 +89,36 @@ export const healthCommand = new Command('health')
           return;
         }
 
-        if (response.data.status === 'healthy') {
-          spinner.succeed(chalk.green('System healthy'));
-        } else {
-          spinner.warn(chalk.yellow(`Status: ${response.data.status}`));
-        }
+        spinner.stop();
 
-        console.log(chalk.dim(`  Timestamp: ${response.data.timestamp}`));
+        const healthy = response.data.status === 'healthy';
+
+        console.log('');
+        console.log(ui.infoBox('System Health', [
+          `${chalk.bold('Status:')}    ${healthy ? chalk.green('● healthy') : chalk.red('● ' + response.data.status)}`,
+          `${chalk.bold('API:')}       ${chalk.dim(config.apiUrl)}`,
+          `${chalk.bold('Timestamp:')} ${chalk.dim(response.data.timestamp)}`,
+        ]));
+
+        if (healthy) {
+          console.log('');
+          console.log(chalk.dim('  Run `solid health --full` for detailed 6-layer check'));
+        }
+        console.log('');
       }
     } catch (error) {
       spinner.fail(chalk.red('Health check failed'));
       const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
 
-      // Try to give more context
-      if (apiError.status === 0 || apiError.message.includes('ECONNREFUSED')) {
-        console.log(chalk.dim('  Tip: Check if the API server is running'));
-        console.log(chalk.dim(`  API URL: ${config.apiUrl}`));
-      }
+      console.log('');
+      console.log(ui.errorBox('Connection Failed', [
+        apiError.message,
+        '',
+        `${chalk.dim('API URL:')} ${config.apiUrl}`,
+        '',
+        chalk.dim('Check if the API server is running.'),
+      ]));
+      console.log('');
     }
   });
 

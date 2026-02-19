@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { ui } from '../lib/ui';
 
 export const authCommand = new Command('auth')
   .description('Authentication management');
@@ -58,9 +59,13 @@ authCommand
         config.userEmail = response.data.user.email;
         config.companyId = response.data.user.company_id;
 
-        spinner.succeed(chalk.green('Login successful!'));
-        console.log(chalk.dim(`  Logged in as: ${response.data.user.email}`));
-        console.log(chalk.dim(`  Company ID: ${response.data.user.company_id}`));
+        spinner.succeed(chalk.green('Authenticated'));
+        console.log('');
+        console.log(ui.welcomeBox(
+          response.data.user.email,
+          response.data.user.company_id,
+        ));
+        console.log('');
       } catch (error) {
         spinner.fail(chalk.red('Login failed'));
         const apiError = handleApiError(error);

@@ -1,7 +1,7 @@
 /**
  * Company status/overview command for Solid CLI
  *
- * Shows a summary of the authenticated company's setup:
+ * Shows a branded summary of the authenticated company's setup:
  * phone, KB, website, services, tier — everything at a glance.
  */
 
@@ -10,6 +10,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { ui } from '../lib/ui';
 
 export const statusCommand = new Command('status')
   .description('Show your business status and setup overview')
@@ -40,44 +41,50 @@ export const statusCommand = new Command('status')
       spinner.stop();
 
       const ws = company.website_settings || {};
-
-      console.log('');
-      console.log(chalk.bold.white(`  ${company.name}`));
-      console.log(chalk.dim(`  Company ID: ${company.id} | Tier: ${chalk.cyan(company.tier || 'starter')}`));
-      console.log(chalk.dim(`  Industry: ${company.industry || 'not set'}`));
-      console.log('');
-
-      // Contact
-      console.log(chalk.bold('  Contact'));
-      console.log(`    Phone:   ${company.contact_phone ? chalk.green(company.contact_phone) : chalk.yellow('not set')}`);
-      console.log(`    Email:   ${company.contact_email ? chalk.green(company.contact_email) : chalk.yellow('not set')}`);
-      console.log(`    Address: ${company.location || chalk.dim('not set')}`);
-      console.log('');
-
-      // Website
       const slug = company.slug;
-      console.log(chalk.bold('  Website'));
-      console.log(`    URL:     ${slug ? chalk.cyan(`https://${slug}.solidnumber.com`) : chalk.yellow('not set')}`);
-      console.log(`    Color:   ${ws.primary_color || '#6366f1'}`);
-      console.log(`    Locale:  ${ws.default_locale || 'en'}`);
-      console.log('');
 
-      // Modules
-      console.log(chalk.bold('  Modules'));
-      const moduleStatus = (enabled: boolean) => enabled ? chalk.green('on') : chalk.dim('off');
-      console.log(`    Services:     ${moduleStatus(ws.show_services !== false)}`);
-      console.log(`    Products:     ${moduleStatus(ws.show_products !== false)}`);
-      console.log(`    Appointments: ${moduleStatus(ws.show_appointments !== false)}`);
-      console.log(`    Pricing:      ${moduleStatus(ws.show_pricing !== false)}`);
-      console.log(`    Promotions:   ${moduleStatus(ws.show_promotions === true)}`);
-      console.log('');
+      // ── Header ──────────────────────────────────────────────────
+      console.log(ui.bannerSmall());
+      console.log(ui.successBox(company.name, [
+        `${chalk.dim('ID:')}     ${company.id}`,
+        `${chalk.dim('Tier:')}   ${chalk.hex('#818cf8')(company.tier || 'starter')}`,
+        `${chalk.dim('Industry:')} ${company.industry || 'not set'}`,
+      ]));
 
-      // Quick tips
-      console.log(chalk.dim('  Commands:'));
-      console.log(chalk.dim('    solid kb list        — view knowledge base'));
-      console.log(chalk.dim('    solid pages list     — view website pages'));
-      console.log(chalk.dim('    solid services list  — view service catalog'));
-      console.log(chalk.dim('    solid health         — check system health'));
+      // ── Contact ─────────────────────────────────────────────────
+      console.log(ui.header('Contact'));
+      console.log(ui.label('Phone', company.contact_phone ? chalk.green(company.contact_phone) : chalk.yellow('not set')));
+      console.log(ui.label('Email', company.contact_email ? chalk.green(company.contact_email) : chalk.yellow('not set')));
+      console.log(ui.label('Address', company.location || chalk.dim('not set')));
+
+      // ── Website ─────────────────────────────────────────────────
+      console.log(ui.header('Website'));
+      console.log(ui.label('URL', slug ? chalk.cyan(`https://${slug}.solidnumber.com`) : chalk.yellow('not set')));
+      console.log(ui.label('Color', ws.primary_color || '#6366f1'));
+      console.log(ui.label('Locale', ws.default_locale || 'en'));
+
+      // ── Modules ─────────────────────────────────────────────────
+      console.log(ui.header('Modules'));
+      const on = chalk.green('●') + chalk.green(' on');
+      const off = chalk.dim('○ off');
+      console.log(ui.label('Services', ws.show_services !== false ? on : off));
+      console.log(ui.label('Products', ws.show_products !== false ? on : off));
+      console.log(ui.label('Appointments', ws.show_appointments !== false ? on : off));
+      console.log(ui.label('Pricing', ws.show_pricing !== false ? on : off));
+      console.log(ui.label('Promotions', ws.show_promotions === true ? on : off));
+
+      // ── Quick Commands ──────────────────────────────────────────
+      console.log('');
+      console.log(ui.divider('Commands'));
+      console.log('');
+      console.log(ui.commandHelp([
+        { cmd: 'solid pull', desc: 'Download your data as files' },
+        { cmd: 'solid push', desc: 'Push local changes' },
+        { cmd: 'solid kb list', desc: 'View knowledge base' },
+        { cmd: 'solid pages list', desc: 'View website pages' },
+        { cmd: 'solid train chat', desc: 'Chat with your AI agent' },
+        { cmd: 'solid health', desc: 'Check system health' },
+      ]));
       console.log('');
 
     } catch (error) {
