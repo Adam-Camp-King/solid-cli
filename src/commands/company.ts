@@ -158,6 +158,114 @@ companyCommand
     }
   });
 
+// ── List members ──────────────────────────────────────────────────
+const membersCommand = new Command('members')
+  .description('List and manage company members')
+  .option('-c, --company <id>', 'Target company ID (default: current)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const companyId = options.company ? parseInt(options.company, 10) : config.companyId;
+    if (!companyId) {
+      console.error(chalk.red('No company selected. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const spinner = ora('Loading members...').start();
+
+    try {
+      const response = await apiClient.companyMembers(companyId);
+      spinner.stop();
+
+      const { members, count } = response.data;
+
+      if (options.json) {
+        console.log(JSON.stringify(response.data, null, 2));
+        return;
+      }
+
+      if (count === 0) {
+        console.log(chalk.yellow('  No members found.'));
+        return;
+      }
+
+      console.log('');
+      console.log(chalk.bold(`  Members (${count})`));
+      console.log('');
+
+      const headers = ['User ID', 'Email', 'Role', 'Joined'];
+      const rows = members.map((m: { user_id: number; email: string; role: string; joined_at?: string }) => [
+        String(m.user_id),
+        m.email || chalk.dim('unknown'),
+        m.role,
+        m.joined_at ? m.joined_at.split('T')[0] : chalk.dim('—'),
+      ]);
+
+      console.log(ui.table(headers, rows));
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to list members'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+// ── Revoke member ─────────────────────────────────────────────────
+membersCommand
+  .command('revoke <userId>')
+  .description('Remove a member from the company')
+  .option('-c, --company <id>', 'Target company ID (default: current)')
+  .option('-y, --yes', 'Skip confirmation')
+  .action(async (userId: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const companyId = options.company ? parseInt(options.company, 10) : config.companyId;
+    if (!companyId) {
+      console.error(chalk.red('No company selected. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const targetUserId = parseInt(userId, 10);
+    if (isNaN(targetUserId)) {
+      console.error(chalk.red('Invalid user ID. Must be a number.'));
+      process.exit(1);
+    }
+
+    if (!options.yes) {
+      const inquirer = await import('inquirer');
+      const { confirm } = await inquirer.default.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: chalk.yellow(`Remove user ${targetUserId} from company ${companyId}?`),
+        default: false,
+      }]);
+      if (!confirm) {
+        console.log(chalk.dim('  Cancelled.'));
+        return;
+      }
+    }
+
+    const spinner = ora('Revoking member access...').start();
+
+    try {
+      await apiClient.companyMemberRevoke(companyId, targetUserId);
+      spinner.succeed(chalk.green(`Member (user_id=${targetUserId}) removed from company ${companyId}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to revoke member'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+companyCommand.addCommand(membersCommand);
+
 // ── Invite developer ───────────────────────────────────────────────
 companyCommand
   .command('invite <email>')

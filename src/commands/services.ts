@@ -36,7 +36,14 @@ servicesCommand
         return;
       }
 
-      const items = (response.data as any).items || [];
+      let items = (response.data as any).items || [];
+
+      if (options.category) {
+        items = items.filter((s: any) =>
+          s.category && s.category.toLowerCase() === options.category.toLowerCase()
+        );
+      }
+
       spinner.succeed(chalk.green(`${items.length} services`));
 
       if (items.length === 0) {

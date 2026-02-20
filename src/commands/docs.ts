@@ -191,29 +191,25 @@ All data is scoped to your company_id — you can only access your own business 
 | POST | \`/api/v1/cms/pages/:id/publish\` | Publish a page |
 | POST | \`/api/v1/cms/pages/:id/unpublish\` | Unpublish a page |
 
-## Knowledge Base (via MCP)
+## Knowledge Base
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | \`/mcp/tools/kb.search\` | Search KB entries |
-| POST | \`/mcp/tools/kb.create\` | Create KB entry |
-| POST | \`/mcp/tools/kb.update\` | Update KB entry |
-| POST | \`/mcp/tools/kb.delete\` | Delete KB entry |
+| GET | \`/api/v1/kb/company\` | List/search KB entries |
+| POST | \`/api/v1/kb/company\` | Create KB entry |
+| PUT | \`/api/v1/kb/company/:id\` | Update KB entry |
+| DELETE | \`/api/v1/kb/company/:id\` | Delete KB entry |
 
 ### KB Search
 
-\`\`\`json
-POST /mcp/tools/kb.search
-{
-  "query": "returns policy",
-  "limit": 20
-}
+\`\`\`bash
+GET /api/v1/kb/company?search=returns+policy&limit=20
 \`\`\`
 
 ### KB Create
 
 \`\`\`json
-POST /mcp/tools/kb.create
+POST /api/v1/kb/company
 {
   "title": "Returns Policy",
   "content": "We accept returns within 30 days...",
@@ -686,12 +682,38 @@ npm install -g @solidnumber/cli
 
 \`\`\`bash
 solid auth login              # Login with email + password
+solid auth login --token sk_solid_...  # Login with API key (CI/CD)
 solid auth status             # Check login status
 solid auth logout             # Clear credentials
+solid auth config --show      # Show stored config
+\`\`\`
+
+### API Keys
+
+\`\`\`bash
+solid auth token create -n "CI" -s kb:read,pages:write  # Create key
+solid auth token create -n "CI" -e 90                    # With 90-day expiry
+solid auth token list         # List active keys
+solid auth token revoke <id>  # Revoke a key
 \`\`\`
 
 Credentials are stored in \`~/.solid/config.json\`.
 Your session is scoped to one company_id — you can only access your own data.
+
+## Multi-Company (Agencies)
+
+\`\`\`bash
+solid company list            # List all your companies
+solid company create "Name"   # Create a new company
+solid company create "Name" --template plumber  # With industry template
+solid company info            # Current company details
+solid company invite dev@co.com  # Invite a developer
+solid company members         # List company members
+solid company members revoke <userId>  # Remove a member
+solid switch                  # Interactive company picker
+solid switch 15               # Switch by company ID
+solid switch "Mike's Plumbing"  # Switch by name
+\`\`\`
 
 ## Business Overview
 
@@ -738,7 +760,20 @@ solid pages unpublish <id>    # Unpublish a page
 
 \`\`\`bash
 solid services list           # List service catalog
+solid services list --category plumbing  # Filter by category
 solid services list --json    # JSON output
+\`\`\`
+
+## AI Training
+
+\`\`\`bash
+solid train status            # KB coverage dashboard
+solid train import ./docs/    # Bulk import .md files as KB
+solid train import ./docs/ --dry-run  # Preview import
+solid train chat              # Chat with Sarah (default agent)
+solid train chat marcus       # Chat with specific agent
+solid train add -t "Title" -c faq     # Quick-add KB entry
+solid train add -t "Title" -f file.md # Add from file
 \`\`\`
 
 ## Vibe (Natural Language)
@@ -787,6 +822,7 @@ solid docs --force            # Re-download docs (overwrite)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | \`SOLID_API_URL\` | \`https://api.solidnumber.com\` | API base URL |
+| \`SOLID_API_KEY\` | — | API key for headless auth (CI/CD, scripts) |
 
 ## Troubleshooting
 

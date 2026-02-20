@@ -164,13 +164,13 @@ trainCommand
       if (input === '/kb') {
         const spinner = ora('Searching KB...').start();
         try {
-          const kbRes = await apiClient.kbSearch('*', 10);
+          const kbRes = await apiClient.kbSearch('', 10);
           const results = (kbRes.data as any).results || [];
           spinner.stop();
 
           console.log(chalk.bold(`\n  ${results.length} KB entries:`));
           for (const entry of results) {
-            console.log(`    ${chalk.dim(`#${entry.id}`)} ${entry.title} ${chalk.dim(`[${entry.category}]`)}`);
+            console.log(`    ${chalk.dim(`#${entry.id}`)} ${entry.title} ${chalk.dim(`[${entry.category || 'general'}]`)}`);
           }
           console.log('');
         } catch {
@@ -280,7 +280,7 @@ trainCommand
     const spinner = ora('Loading training status...').start();
 
     try {
-      const kbRes = await apiClient.kbSearch('*', 100);
+      const kbRes = await apiClient.kbSearch('', 100);
       const entries = (kbRes.data as any).results || [];
 
       spinner.stop();

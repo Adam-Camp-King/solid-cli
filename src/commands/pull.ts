@@ -184,7 +184,7 @@ export const pullCommand = new Command('pull')
     if (!options.pagesOnly) {
       const kbSpinner = ora('Pulling knowledge base...').start();
       try {
-        const kbRes = await apiClient.kbSearch('*', 100);
+        const kbRes = await apiClient.kbSearch('', 100);
         const entries = (kbRes.data as any).results || [];
 
         if (entries.length > 0) {

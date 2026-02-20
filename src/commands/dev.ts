@@ -3,7 +3,6 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 
@@ -18,24 +17,14 @@ sandboxCommand
   .command('create')
   .description('Create a development sandbox')
   .option('-n, --name <name>', 'Sandbox name')
-  .action(async (options) => {
+  .action(async () => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
 
-    const spinner = ora('Creating sandbox...').start();
-
-    // TODO: Implement sandbox creation via API
-    setTimeout(() => {
-      spinner.succeed(chalk.green('Sandbox created'));
-      console.log(chalk.dim('  Name: dev-sandbox'));
-      console.log(chalk.dim('  Environment: sandbox'));
-      console.log(chalk.dim('  API URL: https://sandbox.api.solidnumber.com'));
-      console.log('');
-      console.log(chalk.dim('To use this sandbox, run:'));
-      console.log(chalk.cyan('  solid auth config --environment sandbox'));
-    }, 1000);
+    console.log(chalk.yellow('Sandbox environments are coming soon.'));
+    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
   });
 
 sandboxCommand
@@ -47,81 +36,36 @@ sandboxCommand
       process.exit(1);
     }
 
-    const spinner = ora('Checking sandbox...').start();
-
-    // TODO: Implement sandbox status check via API
-    setTimeout(() => {
-      spinner.succeed(chalk.green('Sandbox active'));
-      console.log(chalk.dim('  Name: dev-sandbox'));
-      console.log(chalk.dim('  Created: 2026-01-03'));
-      console.log(chalk.dim('  Data: Isolated from production'));
-    }, 500);
+    console.log(chalk.yellow('Sandbox environments are coming soon.'));
+    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
   });
 
 sandboxCommand
   .command('deploy')
   .description('Deploy sandbox to production')
   .option('-y, --yes', 'Skip confirmation')
-  .action(async (options) => {
+  .action(async () => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
 
-    if (!options.yes) {
-      const inquirer = await import('inquirer');
-      const { confirm } = await inquirer.default.prompt([{
-        type: 'confirm',
-        name: 'confirm',
-        message: chalk.yellow('Deploy sandbox changes to production?'),
-        default: false,
-      }]);
-      if (!confirm) {
-        console.log(chalk.dim('Deployment cancelled'));
-        return;
-      }
-    }
-
-    const spinner = ora('Deploying to production...').start();
-
-    // TODO: Implement sandbox deployment via API
-    setTimeout(() => {
-      spinner.succeed(chalk.green('Deployed to production'));
-      console.log(chalk.dim('  All sandbox changes are now live'));
-    }, 2000);
+    console.log(chalk.yellow('Sandbox environments are coming soon.'));
+    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
   });
 
 sandboxCommand
   .command('reset')
   .description('Reset sandbox to clean state')
   .option('-y, --yes', 'Skip confirmation')
-  .action(async (options) => {
+  .action(async () => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
 
-    if (!options.yes) {
-      const inquirer = await import('inquirer');
-      const { confirm } = await inquirer.default.prompt([{
-        type: 'confirm',
-        name: 'confirm',
-        message: chalk.red('Reset sandbox? This will delete all sandbox data.'),
-        default: false,
-      }]);
-      if (!confirm) {
-        console.log(chalk.dim('Reset cancelled'));
-        return;
-      }
-    }
-
-    const spinner = ora('Resetting sandbox...').start();
-
-    // TODO: Implement sandbox reset via API
-    setTimeout(() => {
-      spinner.succeed(chalk.green('Sandbox reset'));
-      console.log(chalk.dim('  Sandbox is now clean'));
-    }, 1500);
+    console.log(chalk.yellow('Sandbox environments are coming soon.'));
+    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
   });
 
 devCommand.addCommand(sandboxCommand);

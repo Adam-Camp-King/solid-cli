@@ -18,7 +18,6 @@
 import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
-import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';

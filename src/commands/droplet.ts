@@ -8,7 +8,15 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { apiClient } from '../lib/api-client';
+import { config } from '../lib/config';
+import { apiClient, handleApiError } from '../lib/api-client';
+
+function requireAuth(): void {
+  if (!config.isLoggedIn()) {
+    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+    process.exit(1);
+  }
+}
 
 export const dropletCommand = new Command('droplet')
   .description('Manage customer droplets (Type 2: Managed Instance)');
@@ -19,6 +27,7 @@ dropletCommand
   .description('List all managed customer droplets')
   .option('--status <status>', 'Filter by status (active, inactive, maintenance)')
   .action(async (options) => {
+    requireAuth();
     const spinner = ora('Fetching droplets...').start();
 
     try {
@@ -59,6 +68,7 @@ dropletCommand
   .command('status <customer>')
   .description('Get detailed status of a customer droplet')
   .action(async (customer) => {
+    requireAuth();
     const spinner = ora(`Checking ${customer}...`).start();
 
     try {
@@ -100,6 +110,7 @@ dropletCommand
   .option('--version <version>', 'Deploy specific version')
   .option('--force', 'Force deploy even if health checks fail')
   .action(async (customer, options) => {
+    requireAuth();
     console.log(chalk.yellow(`\nDeploying to ${customer}...`));
 
     const spinner = ora('Starting deployment...').start();
@@ -138,6 +149,7 @@ dropletCommand
   .description('Rollback to previous version')
   .option('--version <version>', 'Rollback to specific version')
   .action(async (customer, options) => {
+    requireAuth();
     const spinner = ora(`Rolling back ${customer}...`).start();
 
     try {
@@ -160,6 +172,7 @@ dropletCommand
   .description('Create backup of customer droplet')
   .option('--full', 'Full backup including media files')
   .action(async (customer, options) => {
+    requireAuth();
     const spinner = ora(`Creating backup for ${customer}...`).start();
 
     try {
@@ -186,6 +199,7 @@ dropletCommand
   .option('--tail <lines>', 'Number of lines to show', '100')
   .option('--follow', 'Follow log output')
   .action(async (customer, options) => {
+    requireAuth();
     console.log(chalk.bold(`\nLogs for ${customer}${options.service ? ` (${options.service})` : ''}:\n`));
 
     try {
@@ -206,8 +220,9 @@ dropletCommand
         console.log(color(`[${line.timestamp}] [${line.service}] ${line.message}`));
       }
 
-    } catch (error: any) {
-      console.error(chalk.red(error.message));
+    } catch (error) {
+      const apiError = handleApiError(error);
+      console.error(chalk.red(apiError.message));
     }
   });
 
@@ -216,6 +231,7 @@ dropletCommand
   .command('ssh <customer>')
   .description('SSH into customer droplet')
   .action(async (customer) => {
+    requireAuth();
     console.log(chalk.yellow(`\nConnecting to ${customer}...`));
 
     try {
@@ -225,8 +241,9 @@ dropletCommand
       console.log(`  ssh ${response.data.user}@${response.data.ip}`);
       console.log(chalk.gray(`\n  Or use: solid droplet exec ${customer} "<command>"`));
 
-    } catch (error: any) {
-      console.error(chalk.red(error.message));
+    } catch (error) {
+      const apiError = handleApiError(error);
+      console.error(chalk.red(apiError.message));
     }
   });
 
@@ -235,6 +252,7 @@ dropletCommand
   .command('exec <customer> <command>')
   .description('Execute command on customer droplet')
   .action(async (customer, command) => {
+    requireAuth();
     const spinner = ora(`Executing on ${customer}...`).start();
 
     try {
@@ -264,6 +282,7 @@ dropletCommand
   .option('--size <size>', 'Droplet size (s-2vcpu-4gb, s-4vcpu-8gb)', 's-2vcpu-4gb')
   .option('--region <region>', 'DigitalOcean region', 'nyc1')
   .action(async (customer, options) => {
+    requireAuth();
     console.log(chalk.bold(`\nProvisioning droplet for ${customer}...\n`));
 
     const spinner = ora('Creating droplet...').start();
@@ -316,6 +335,7 @@ dropletCommand
   .option('--force', 'Skip confirmation')
   .option('--keep-backups', 'Keep backups after destruction')
   .action(async (customer, options) => {
+    requireAuth();
     if (!options.force) {
       console.log(chalk.red.bold(`\n⚠️  WARNING: This will permanently destroy ${customer}'s droplet!`));
       console.log(chalk.red('   All data will be lost unless backed up.\n'));

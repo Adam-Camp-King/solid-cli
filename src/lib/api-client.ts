@@ -305,10 +305,17 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
-  // KB endpoints (via MCP tools)
+  // KB endpoints (via REST API)
   async kbSearch(query: string, limit = 20): Promise<ApiResponse<{ results: unknown[]; total: number }>> {
-    const response = await this.client.post('/mcp/tools/kb.search', { query, limit });
-    return { data: response.data, status: response.status, success: true };
+    const response = await this.client.get('/api/v1/kb/company', {
+      params: { search: query, limit },
+    });
+    const data = response.data as any;
+    return {
+      data: { results: data.entries || data.items || [], total: data.total || 0 },
+      status: response.status,
+      success: true,
+    };
   }
 
   async kbCreate(params: {
@@ -316,8 +323,9 @@ class ApiClient {
     content: string;
     category?: string;
   }): Promise<ApiResponse<{ success: boolean; id?: number }>> {
-    const response = await this.client.post('/mcp/tools/kb.create', params);
-    return { data: response.data, status: response.status, success: true };
+    const response = await this.client.post('/api/v1/kb/company', params);
+    const data = response.data as any;
+    return { data: { success: true, id: data.id, ...data }, status: response.status, success: true };
   }
 
   async kbUpdate(id: number, params: {
@@ -325,13 +333,13 @@ class ApiClient {
     content?: string;
     category?: string;
   }): Promise<ApiResponse<{ success: boolean }>> {
-    const response = await this.client.post('/mcp/tools/kb.update', { id, ...params });
-    return { data: response.data, status: response.status, success: true };
+    const response = await this.client.put(`/api/v1/kb/company/${id}`, params);
+    return { data: { success: true, ...response.data as any }, status: response.status, success: true };
   }
 
   async kbDelete(id: number): Promise<ApiResponse<{ success: boolean }>> {
-    const response = await this.client.post('/mcp/tools/kb.delete', { id });
-    return { data: response.data, status: response.status, success: true };
+    const response = await this.client.delete(`/api/v1/kb/company/${id}`);
+    return { data: { success: true, ...response.data as any }, status: response.status, success: true };
   }
 
   // CMS Pages
@@ -454,6 +462,25 @@ class ApiClient {
     expires_in: number;
   }>> {
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/switch`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyMembers(companyId: number): Promise<ApiResponse<{
+    company_id: number;
+    members: Array<{ user_id: number; email: string; name?: string; role: string; joined_at?: string }>;
+    count: number;
+  }>> {
+    const response = await this.client.get(`/api/v1/cli/companies/${companyId}/members`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyMemberRevoke(companyId: number, userId: number): Promise<ApiResponse<{
+    status: string;
+    message: string;
+    company_id: number;
+    user_id: number;
+  }>> {
+    const response = await this.client.delete(`/api/v1/cli/companies/${companyId}/members/${userId}`);
     return { data: response.data, status: response.status, success: true };
   }
 
