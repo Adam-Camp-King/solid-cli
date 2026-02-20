@@ -49,9 +49,10 @@ class ConfigManager {
 
   private save(): void {
     if (!fs.existsSync(CONFIG_DIR)) {
-      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+      fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
     }
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+    fs.chmodSync(CONFIG_FILE, 0o600);
   }
 
   get apiUrl(): string {
