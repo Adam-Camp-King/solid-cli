@@ -90,11 +90,11 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 |---------|-------------|
 | `solid agent dashboard` | Full consciousness overview — status, telemetry, performance |
 | `solid agent list` | List all agents with real-time status |
-| `solid agent soul <agent>` | View agent's living soul — identity, emotions, spiral stage |
-| `solid agent reflect <agent>` | Reflection history — scores, trends, Sophia's reads |
+| `solid agent soul <agent>` | View agent's living soul — identity, emotions, growth stage |
+| `solid agent reflect <agent>` | Reflection history — scores, trends, AI insights |
 | `solid agent emotions` | Emotional state dashboard across all agents |
-| `solid agent memory <agent>` | Persistent memory — learned context, atom patterns, tool expertise |
-| `solid agent spiral` | Spiral stage progression — agent growth over time |
+| `solid agent memory <agent>` | Persistent memory — learned context, behavioral patterns, tool expertise |
+| `solid agent spiral` | Growth progression — agent development over time |
 | `solid agent heartbeat [agent]` | Trigger consciousness cycle (or `--all` for all agents) |
 | `solid agent dream <agent>` | Dream mode — autonomous processing of unresolved interactions |
 | `solid agent mission "<prompt>"` | Multi-agent mission — ADA decomposes and coordinates |
