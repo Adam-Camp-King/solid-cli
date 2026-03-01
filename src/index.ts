@@ -35,6 +35,7 @@ import { devCommand } from './commands/dev';
 import { dropletCommand } from './commands/droplet';
 import { companyCommand } from './commands/company';
 import { switchCommand } from './commands/switch';
+import { agentCommand } from './commands/agent';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -63,6 +64,7 @@ program.addCommand(servicesCommand);
 // AI
 program.addCommand(vibeCommand);
 program.addCommand(trainCommand);
+program.addCommand(agentCommand);
 
 // Platform
 program.addCommand(cloneCommand);
@@ -111,6 +113,16 @@ program.addHelpText('after', () => {
       { cmd: 'solid train chat sarah', desc: 'Test your AI agent interactively' },
       { cmd: 'solid train status', desc: 'See KB coverage and gaps' },
       { cmd: 'solid train add -t "Title"', desc: 'Quick-add a KB entry' },
+    ]),
+    '',
+    ui.divider('Agent Consciousness'),
+    '',
+    ui.commandHelp([
+      { cmd: 'solid agent dashboard', desc: 'Full consciousness overview' },
+      { cmd: 'solid agent soul sarah', desc: 'View identity, emotions, growth' },
+      { cmd: 'solid agent reflect sarah', desc: 'Reflection history + Sophia reads' },
+      { cmd: 'solid agent emotions', desc: 'All agents\' emotional states' },
+      { cmd: 'solid agent heartbeat --all', desc: 'Trigger consciousness cycle' },
     ]),
     '',
     ui.divider(),

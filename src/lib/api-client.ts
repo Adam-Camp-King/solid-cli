@@ -521,6 +521,195 @@ class ApiClient {
     const response = await this.client.delete(`/api/v1/cli/api-keys/${keyId}`);
     return { data: response.data, status: response.status, success: true };
   }
+
+  // Agent consciousness endpoints
+  async agentsList(): Promise<ApiResponse<{
+    agents: Array<{
+      agent_type: string;
+      name: string;
+      description: string;
+      autonomy_level: number;
+      tool_count: number;
+    }>;
+    total: number;
+  }>> {
+    const response = await this.client.get('/api/v1/cli/agents');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentDetail(agentType: string): Promise<ApiResponse<{
+    agent_type: string;
+    name: string;
+    description: string;
+    autonomy_level: number;
+    system_prompt: string;
+    features: Record<string, boolean>;
+    approval_thresholds: Record<string, number>;
+    tools: string[];
+  }>> {
+    const response = await this.client.get(`/api/v1/cli/agents/${agentType}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentTools(agentType: string): Promise<ApiResponse<{
+    agent_type: string;
+    tools: Record<string, string[]>;
+    total: number;
+  }>> {
+    const response = await this.client.get(`/api/v1/cli/agents/${agentType}/tools`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentData(agentType: string): Promise<ApiResponse<{
+    agent_type: string;
+    performance: {
+      total_reflections: number;
+      avg_score: number;
+      pass_rate: number;
+    };
+    reflections: Array<{
+      id: number;
+      score: number;
+      passed: boolean;
+      notes: string;
+      criteria_scores: Record<string, number>;
+      tools_used: string[];
+      created_at: string;
+    }>;
+  }>> {
+    const response = await this.client.get(`/api/v1/cli/agents/${agentType}/data`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async orchestrationDashboard(): Promise<ApiResponse<{
+    agents: Array<{
+      id: number;
+      name: string;
+      agent_type: string;
+      status: string;
+      current_task_id: string | null;
+      last_active: string | null;
+      tasks_today: number;
+    }>;
+    active_tasks: number;
+    total_agents: number;
+  }>> {
+    const response = await this.client.get('/api/orchestration/dashboard');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async orchestrationAgents(statusFilter?: string): Promise<ApiResponse<{
+    agents: Array<{
+      id: number;
+      name: string;
+      agent_type: string;
+      status: string;
+      last_active: string | null;
+      tasks_today: number;
+      tasks_failed_today: number;
+    }>;
+  }>> {
+    const params = statusFilter ? { status_filter: statusFilter } : {};
+    const response = await this.client.get('/api/orchestration/agents', { params });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async orchestrationAgentDetail(agentId: number): Promise<ApiResponse<{
+    agent: {
+      name: string;
+      role: string;
+      status: string;
+      current_task_id: string | null;
+      last_active: string;
+      tasks_today: number;
+      avg_response_time: number;
+      total_tasks: number;
+      performance_30d: {
+        total_tasks: number;
+        completed: number;
+        failed: number;
+        success_rate: number;
+        avg_response_time: number;
+      };
+    };
+  }>> {
+    const response = await this.client.get(`/api/orchestration/agents/${agentId}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async orchestrationDelegate(agentId: number, task: string, priority?: number): Promise<ApiResponse<{
+    task_id: string;
+    status: string;
+    agent_id: number;
+  }>> {
+    const response = await this.client.post('/api/orchestration/delegate', {
+      agent_id: agentId,
+      task,
+      priority: priority || 5,
+    });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async orchestrationAnalytics(days?: number): Promise<ApiResponse<{
+    period_days: number;
+    total_tasks: number;
+    completed: number;
+    failed: number;
+    success_rate: number;
+    avg_response_time: number;
+    top_agents: Array<{ name: string; tasks: number; success_rate: number }>;
+  }>> {
+    const params = days ? { days } : {};
+    const response = await this.client.get('/api/orchestration/analytics', { params });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Dragon — Mission orchestration
+  async missionCreate(mission: string, agentIds?: number[]): Promise<ApiResponse<{
+    mission_id: string;
+    status: string;
+    steps: Array<{
+      step_index: number;
+      agent_id: number;
+      agent_name: string;
+      task: string;
+      status: string;
+    }>;
+    conversation_id: string;
+  }>> {
+    const body: Record<string, unknown> = { mission };
+    if (agentIds && agentIds.length > 0) body.agent_ids = agentIds;
+    const response = await this.client.post('/api/v1/agents/missions', body);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async missionExecute(missionId: string): Promise<ApiResponse<{
+    status: string;
+    mission_id: string;
+    steps_dispatched: number;
+    results: Array<{
+      step_index: number;
+      agent_name: string;
+      status: string;
+      response?: string;
+    }>;
+  }>> {
+    const response = await this.client.post(`/api/v1/agents/missions/${missionId}/execute`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Dragon — Telemetry
+  async telemetrySummary(): Promise<ApiResponse<{
+    total_tokens: number;
+    avg_latency_ms: number;
+    estimated_cost: number;
+    revenue_attributed: number;
+    active_agents: number;
+    missions_active: number;
+  }>> {
+    const response = await this.client.get('/api/v1/telemetry/agents/summary');
+    return { data: response.data, status: response.status, success: true };
+  }
 }
 
 export const apiClient = new ApiClient();
