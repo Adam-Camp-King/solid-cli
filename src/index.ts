@@ -40,6 +40,13 @@ import { antCommand } from './commands/ant';
 import { flowsCommand } from './commands/flows';
 import { brandCommand } from './commands/brand';
 import { widgetsCommand } from './commands/widgets';
+import { crmCommand } from './commands/crm';
+import { voiceCommand } from './commands/voice';
+import { inboxCommand } from './commands/inbox';
+import { scheduleCommand } from './commands/schedule';
+import { reportsCommand } from './commands/reports';
+import { inventoryCommand } from './commands/inventory';
+import { blogCommand } from './commands/blog';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -47,7 +54,7 @@ const program = new Command();
 program
   .name('solid')
   .description('Solid# CLI — AI Business Infrastructure')
-  .version('1.1.0')
+  .version('1.2.0')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
@@ -65,20 +72,33 @@ program.addCommand(kbCommand);
 program.addCommand(pagesCommand);
 program.addCommand(servicesCommand);
 
+// CRM
+program.addCommand(crmCommand);
+program.addCommand(inboxCommand);
+program.addCommand(scheduleCommand);
+
 // AI
 program.addCommand(vibeCommand);
 program.addCommand(trainCommand);
 program.addCommand(agentCommand);
 
+// Voice
+program.addCommand(voiceCommand);
+
 // Commerce
 program.addCommand(flowsCommand);
 program.addCommand(brandCommand);
 program.addCommand(widgetsCommand);
+program.addCommand(inventoryCommand);
+
+// Content
+program.addCommand(blogCommand);
 
 // Platform
 program.addCommand(cloneCommand);
 program.addCommand(integrationsCommand);
 program.addCommand(antCommand);
+program.addCommand(reportsCommand);
 program.addCommand(docsCommand);
 program.addCommand(healthCommand);
 
@@ -109,30 +129,34 @@ program.addHelpText('after', () => {
       { cmd: 'solid switch', desc: 'Switch between companies (agencies)' },
     ]),
     '',
-    ui.divider('Workflow'),
+    ui.divider('Run Your Business'),
     '',
-    `  ${chalk.dim('1.')} ${chalk.cyan('solid pull')}     ${chalk.dim('→ Download pages, KB, services')}`,
-    `  ${chalk.dim('2.')} ${chalk.dim('Edit files')}     ${chalk.dim('→ VS Code, Cursor, any editor')}`,
-    `  ${chalk.dim('3.')} ${chalk.cyan('solid push')}     ${chalk.dim('→ Deploy changes instantly')}`,
-    `  ${chalk.dim('4.')} ${chalk.cyan('solid vibe')}     ${chalk.dim('→ "Add a hero section" (natural language)')}`,
+    ui.commandHelp([
+      { cmd: 'solid crm contacts', desc: 'Contacts, deals, tasks, pipeline' },
+      { cmd: 'solid inbox', desc: 'Unified inbox (email, SMS, all channels)' },
+      { cmd: 'solid schedule list', desc: 'Appointments and calendar' },
+      { cmd: 'solid voice calls', desc: 'Call logs, voicemail, voice AI config' },
+      { cmd: 'solid inventory list', desc: 'Inventory and stock management' },
+      { cmd: 'solid reports revenue', desc: 'Revenue, analytics, CSV export' },
+    ]),
     '',
     ui.divider('Agent Management'),
     '',
     ui.commandHelp([
       { cmd: 'solid agent dashboard', desc: 'Agent overview + telemetry' },
       { cmd: 'solid agent soul sarah', desc: 'View identity, config, performance' },
-      { cmd: 'solid agent tools sarah', desc: 'Tools grouped by namespace' },
       { cmd: 'solid agent chat sarah "Hi"', desc: 'Chat with any agent' },
       { cmd: 'solid agent mission "..."', desc: 'Multi-agent mission (ADA coordinates)' },
     ]),
     '',
-    ui.divider('Commerce'),
+    ui.divider('Commerce & Content'),
     '',
     ui.commandHelp([
-      { cmd: 'solid flow list', desc: 'List commerce flows' },
-      { cmd: 'solid brand get', desc: 'View brand identity' },
-      { cmd: 'solid widget list', desc: 'List embeddable widgets' },
-      { cmd: 'solid ant import <code>', desc: 'Import code via Ant Farm' },
+      { cmd: 'solid flow list', desc: 'Commerce flows' },
+      { cmd: 'solid brand get', desc: 'Brand identity' },
+      { cmd: 'solid widget list', desc: 'Embeddable widgets' },
+      { cmd: 'solid blog list', desc: 'Blog posts + SEO audit' },
+      { cmd: 'solid ant import <code>', desc: 'Code import via Ant Farm' },
     ]),
     '',
     ui.divider(),
