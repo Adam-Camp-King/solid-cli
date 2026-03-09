@@ -36,6 +36,10 @@ import { dropletCommand } from './commands/droplet';
 import { companyCommand } from './commands/company';
 import { switchCommand } from './commands/switch';
 import { agentCommand } from './commands/agent';
+import { antCommand } from './commands/ant';
+import { flowsCommand } from './commands/flows';
+import { brandCommand } from './commands/brand';
+import { widgetsCommand } from './commands/widgets';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -43,7 +47,7 @@ const program = new Command();
 program
   .name('solid')
   .description('Solid# CLI — AI Business Infrastructure')
-  .version('1.0.0')
+  .version('1.1.0')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
@@ -66,9 +70,15 @@ program.addCommand(vibeCommand);
 program.addCommand(trainCommand);
 program.addCommand(agentCommand);
 
+// Commerce
+program.addCommand(flowsCommand);
+program.addCommand(brandCommand);
+program.addCommand(widgetsCommand);
+
 // Platform
 program.addCommand(cloneCommand);
 program.addCommand(integrationsCommand);
+program.addCommand(antCommand);
 program.addCommand(docsCommand);
 program.addCommand(healthCommand);
 
@@ -106,23 +116,23 @@ program.addHelpText('after', () => {
     `  ${chalk.dim('3.')} ${chalk.cyan('solid push')}     ${chalk.dim('→ Deploy changes instantly')}`,
     `  ${chalk.dim('4.')} ${chalk.cyan('solid vibe')}     ${chalk.dim('→ "Add a hero section" (natural language)')}`,
     '',
-    ui.divider('AI Training'),
+    ui.divider('Agent Management'),
     '',
     ui.commandHelp([
-      { cmd: 'solid train import ./kb/', desc: 'Bulk import knowledge base' },
-      { cmd: 'solid train chat sarah', desc: 'Test your AI agent interactively' },
-      { cmd: 'solid train status', desc: 'See KB coverage and gaps' },
-      { cmd: 'solid train add -t "Title"', desc: 'Quick-add a KB entry' },
+      { cmd: 'solid agent dashboard', desc: 'Agent overview + telemetry' },
+      { cmd: 'solid agent soul sarah', desc: 'View identity, config, performance' },
+      { cmd: 'solid agent tools sarah', desc: 'Tools grouped by namespace' },
+      { cmd: 'solid agent chat sarah "Hi"', desc: 'Chat with any agent' },
+      { cmd: 'solid agent mission "..."', desc: 'Multi-agent mission (ADA coordinates)' },
     ]),
     '',
-    ui.divider('Agent Consciousness'),
+    ui.divider('Commerce'),
     '',
     ui.commandHelp([
-      { cmd: 'solid agent dashboard', desc: 'Full consciousness overview' },
-      { cmd: 'solid agent soul sarah', desc: 'View identity, emotions, growth' },
-      { cmd: 'solid agent reflect sarah', desc: 'Reflection history + Sophia reads' },
-      { cmd: 'solid agent emotions', desc: 'All agents\' emotional states' },
-      { cmd: 'solid agent heartbeat --all', desc: 'Trigger consciousness cycle' },
+      { cmd: 'solid flow list', desc: 'List commerce flows' },
+      { cmd: 'solid brand get', desc: 'View brand identity' },
+      { cmd: 'solid widget list', desc: 'List embeddable widgets' },
+      { cmd: 'solid ant import <code>', desc: 'Import code via Ant Farm' },
     ]),
     '',
     ui.divider(),

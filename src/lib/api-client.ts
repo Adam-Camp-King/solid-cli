@@ -100,6 +100,11 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
+  async put<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
+    const response = await this.client.put(url, data);
+    return { data: response.data, status: response.status, success: true };
+  }
+
   async patch<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
     const response = await this.client.patch(url, data);
     return { data: response.data, status: response.status, success: true };
@@ -522,7 +527,7 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
-  // Agent consciousness endpoints
+  // Agent management endpoints
   async agentsList(): Promise<ApiResponse<{
     agents: Array<{
       agent_type: string;
