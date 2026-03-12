@@ -158,6 +158,7 @@ program.addHelpText('after', () => {
       { cmd: 'solid brand get', desc: 'Brand identity' },
       { cmd: 'solid widget list', desc: 'Embeddable widgets' },
       { cmd: 'solid blog list', desc: 'Blog posts + SEO audit' },
+      { cmd: 'solid connect figma <url>', desc: 'Import external content' },
       { cmd: 'solid ant import <code>', desc: 'Code import via Ant Farm' },
     ]),
     '',
