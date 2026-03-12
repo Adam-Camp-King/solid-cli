@@ -37,6 +37,7 @@ import { companyCommand } from './commands/company';
 import { switchCommand } from './commands/switch';
 import { agentCommand } from './commands/agent';
 import { antCommand } from './commands/ant';
+import { connectCommand } from './commands/connect';
 import { flowsCommand } from './commands/flows';
 import { brandCommand } from './commands/brand';
 import { widgetsCommand } from './commands/widgets';
@@ -97,6 +98,7 @@ program.addCommand(blogCommand);
 // Platform
 program.addCommand(cloneCommand);
 program.addCommand(integrationsCommand);
+program.addCommand(connectCommand);
 program.addCommand(antCommand);
 program.addCommand(reportsCommand);
 program.addCommand(docsCommand);
