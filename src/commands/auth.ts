@@ -18,7 +18,6 @@ authCommand
   .command('login')
   .description('Login to Solid#')
   .option('-e, --email <email>', 'Email address')
-  .option('-p, --password <password>', 'Password (not recommended for security)')
   .option('-t, --token <token>', 'Login with API key (sk_solid_...)')
   .action(async (options) => {
     try {
@@ -49,29 +48,25 @@ authCommand
       }
 
       let email = options.email;
-      let password = options.password;
 
-      // Prompt for credentials if not provided
-      if (!email || !password) {
-        const answers = await inquirer.prompt([
-          {
-            type: 'input',
-            name: 'email',
-            message: 'Email:',
-            when: !email,
-            validate: (input) => input.includes('@') || 'Please enter a valid email',
-          },
-          {
-            type: 'password',
-            name: 'password',
-            message: 'Password:',
-            when: !password,
-            mask: '*',
-          },
-        ]);
-        email = email || answers.email;
-        password = password || answers.password;
-      }
+      // Always prompt for credentials securely
+      const answers = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'email',
+          message: 'Email:',
+          when: !email,
+          validate: (input) => input.includes('@') || 'Please enter a valid email',
+        },
+        {
+          type: 'password',
+          name: 'password',
+          message: 'Password:',
+          mask: '*',
+        },
+      ]);
+      email = email || answers.email;
+      const password = answers.password;
 
       const spinner = ora('Logging in...').start();
 

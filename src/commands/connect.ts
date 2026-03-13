@@ -113,16 +113,25 @@ function printImportSummary(data: {
 connectCommand
   .command('figma <url>')
   .description('Import Figma design → CMS pages + brand tokens')
-  .option('-t, --token <token>', 'Figma Personal Access Token (or set FIGMA_PAT env var)')
   .option('--pages-only', 'Import page layouts only (skip brand tokens)')
   .option('--brand-only', 'Extract brand tokens only (skip page layouts)')
   .option('--preview', 'Dry run — show what would be imported without making changes')
   .action(async (url: string, options) => {
     requireAuth();
 
-    const token = options.token || process.env.FIGMA_PAT;
+    let token = process.env.FIGMA_PAT;
     if (!token) {
-      console.error(chalk.red('Figma token required. Use --token <PAT> or set FIGMA_PAT env var.'));
+      const answers = await (await import('inquirer')).default.prompt([{
+        type: 'password',
+        name: 'token',
+        message: 'Figma Personal Access Token:',
+        mask: '*',
+        validate: (input: string) => input.length > 0 || 'Token is required',
+      }]);
+      token = answers.token;
+    }
+    if (!token) {
+      console.error(chalk.red('Figma token required. Set FIGMA_PAT env var or enter when prompted.'));
       console.error(chalk.dim('  Get your token at: https://www.figma.com/developers/api#access-tokens'));
       process.exit(1);
     }
