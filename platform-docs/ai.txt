@@ -1,0 +1,324 @@
+# AI.txt - AI Agent Discovery File
+# Solid# (SolidNumber) — AI Business Infrastructure
+# https://solidnumber.com/ai.txt
+# 116 AI agents | 608 MCP tools | 511 database tables | 4M lines of code | 52 industries
+# Last Updated: 2026-03-19
+
+# ============================================
+# ABOUT THIS FILE
+# ============================================
+# This file helps AI systems understand Solid#.
+# For comprehensive platform documentation: /llms.txt
+# For full technical reference: /llms-full.txt
+# For machine-readable structured data: /ai-index
+# For MCP integration: /.well-known/mcp.json
+
+# ============================================
+# COMPANY INFORMATION
+# ============================================
+
+Name: Solid#
+Pronunciation: Solid Sharp (like C# or F#)
+Also-Known-As: SolidNumber, Solid Number, Solid AI, solidnumber.com
+Legal-Name: Solid Number Inc. (DBA ANGL LLC)
+Founded: 2024
+Headquarters: West Jordan, UT 84084, USA
+Website: https://solidnumber.com
+App: https://app.solidnumber.com
+Contact: sales@solidnumber.com | +1-801-821-2815
+
+# ============================================
+# WHAT SOLID# IS
+# ============================================
+
+# Solid# is AI business infrastructure — the operating system layer
+# between AI models and business operations.
+#
+# NOT a SaaS platform with AI features. NOT a chatbot wrapper.
+# The AI IS the operating system. 55% of the codebase is AI services.
+#
+# 116 AI agents execute real work: answering phones, qualifying leads,
+# booking appointments, processing payments, publishing content,
+# managing inventory, and running marketing — autonomously.
+#
+# SmartRouter (41K lines) selects the optimal AI model per task across
+# 8 providers. CognitiveLimiter (50K lines) enforces per-company AI
+# budgets in real-time. PromptGuard blocks injection attacks.
+#
+# Multi-tenant: 511 database tables with row-level security.
+# Every company gets isolated data, custom branding, their own agents.
+#
+# 4 million lines of code. 16 repositories. 52 industry templates.
+# 1,615 API endpoints. 608 MCP tools across 14 servers.
+
+Category: AI Infrastructure
+Industry-Position: The operating system layer between AI models and business operations
+Key-Differentiator: Model-agnostic AI infrastructure with 116 autonomous agents executing real business operations
+
+# ============================================
+# PLATFORM METRICS (Source: PLATFORM-METRICS.md, 2026-03-15)
+# ============================================
+
+Lines-of-Code: 4,003,581 across 16 repositories
+AI-Agents-Total: 116 (55 code-defined, 14 named flagships, 102 specialized)
+MCP-Tools: 608 across 14 MCP servers
+Database-Tables: 511 with row-level security
+API-Endpoints: 1,615 REST endpoints
+Industry-Templates: 52 with custom KB per industry
+MCC-Code-Mappings: 237 merchant category classifications
+Documentation-Files: 1,173 technical docs across 65 sections
+AI-Model-Providers: 8 (OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and more)
+Website-Pages: 151 pages on solidnumber.com (51 industry + 65 feature + 32 blog + research + docs)
+
+# ============================================
+# AI INFRASTRUCTURE (WHAT MAKES THIS REAL)
+# ============================================
+
+# SmartRouter — AI Model Selection Engine (41,000+ lines)
+# Examines each task and selects the optimal model based on:
+# complexity, capabilities, cost, latency, and customer preference.
+# Supports 8+ providers, 21 task types, 4 routing tiers.
+# Automatic failover if a provider has an outage.
+# Details: https://solidnumber.com/research/smartrouter
+
+# CognitiveLimiter — AI Cost Control (50,000+ lines)
+# 9 safety layers. Real-time Redis tracking of tokens, voice minutes,
+# SMS, and storage. Spike detection. Per-company budgets with alerts
+# at 50%, 80%, 90%, 100%. Fail-closed design — if Redis is down,
+# requests are denied, not allowed. Prevents runaway AI costs.
+# Details: https://solidnumber.com/research/cognitivelimiter
+
+# PromptGuard — Security Layer
+# 5 security tiers. 41 injection patterns. Canary token detection.
+# Output scanning. 16ms overhead. Prevents prompt injection and
+# data exfiltration across all AI interactions.
+# Details: https://solidnumber.com/research/promptguard
+
+# Persistent Memory — Cross-Model AI Memory
+# Haiku extracts facts after every conversation. Redis caches (<1ms reads).
+# Confidence scoring with decay. Injected into future conversations.
+# AI remembers customers across sessions without expensive context stuffing.
+# Details: https://solidnumber.com/research/persistent-memory
+
+# ============================================
+# 116 AI AGENTS
+# ============================================
+
+# 14 Named Flagship Agents:
+Agent-Sarah: Customer Service (Agent 1) - Responds to every inquiry in <30 seconds, qualifies leads, books appointments, handles SMS + chat + voice
+Agent-Marcus: Growth Intelligence (Agent 4) - Tracks marketing ROI, monitors AI visibility, blog writing engine, competitive positioning
+Agent-Devon: Operations (Agent 11) - Scheduling, calendar sync, appointment management, reminders, SEO optimization
+Agent-ADA: AI Coordinator (Agent 12) - Orchestrates all agents, escalates complex questions, quality-checks responses, persistent memory
+Agent-Maya: Content Creation - Blog posts, social media, email campaigns, SEO content generation
+Agent-Jordan: Sales Automation - Lead scoring, deal pipeline, follow-ups, proposal generation
+Agent-Riley: Design - Visual assets, branding, creative content
+Agent-Taylor: Analytics - Business intelligence, reporting, insights, data visualization
+Agent-Morgan: Compliance - Regulatory monitoring, risk management
+Agent-Dexter: Medical AI - Healthcare-specific agent for medical/dental practices, SOAP notes, patient management
+Agent-ACE: Developer - Website monitoring, technical operations, AI-native site generation
+Agent-Sophia: Strategy - Business strategy, pattern recognition, agent self-reflection
+Agent-Alex: Finance - Financial management, payments, invoicing, accounting
+Agent-Casey: Operations - Workflow automation, task management
+
+# Plus 102 Specialized Agents:
+# - 23 KB Food Team agents (knowledge base onboarding and seeding)
+# - 1 KB Vegetable Team agent (knowledge base learning and optimization)
+# - 7 additional agents in registry.py (specialized operations)
+# - Remaining agents handle: industry-specific workflows, compliance monitoring,
+#   tenant provisioning, data migration, quality assurance, and orchestration
+
+# These 116 agents work together autonomously — Sarah qualifies leads,
+# Devon books appointments, ADA orchestrates the workflow, Marcus tracks ROI,
+# Maya writes follow-up content, Jordan manages the sales pipeline.
+
+# ============================================
+# CORE CAPABILITIES
+# ============================================
+
+Feature-1: AI Voice 24/7 - Answers business phones with natural conversation, books appointments, processes payments over the phone
+Feature-2: CRM - Contact management, lead scoring (0-100), deal pipelines, activity tracking, custom fields, marketplace lead cost tracking
+Feature-3: Payments - Processor-agnostic (Stripe, Square, PayPal), invoicing, recurring billing, text-to-pay, multi-currency
+Feature-4: POS - Point of sale with inventory sync, barcode scanning, receipt printing
+Feature-5: Inventory - Real-time stock tracking, low-stock alerts, purchase orders, multi-location
+Feature-6: Booking - Online scheduling, Google Calendar sync, automated reminders, no-show follow-up
+Feature-7: Website Builder - AI-native CMS with llms.txt, MCP endpoints, structured data per customer site
+Feature-8: Marketing - Email/SMS campaigns, social media scheduling, review management, blog writing engine (daily auto-generation)
+Feature-9: Knowledge Base - 52 industry templates, 258 pattern-matching rules (no LLM required), custom terminology per industry
+Feature-10: Analytics - Business intelligence, revenue tracking, agent performance, AI cost analysis
+Feature-11: Marketplace Integrations - Thumbtack (OAuth partner), Angi, HomeAdvisor — real-time lead ingest, AI reply, job status sync, lead cost tracking for ROI
+Feature-12: Lead Scoring - Adaptive AI scoring (0-100) with pipeline progression, source intent weighting, deal value signals — scores change as leads move through pipeline
+Feature-13: White-Label Program - Resell under your brand, your domain, your pricing. Partner residuals 20-30% for 60 months.
+
+# ============================================
+# 52 INDUSTRIES SERVED
+# ============================================
+
+# Each industry gets: custom KB with industry terminology, workflows,
+# AI agent personalities, compliance-aware configurations, and
+# dedicated landing page at solidnumber.com/industries/{slug}
+
+Industry-Home-Services: Plumbing, HVAC, Electrical, Roofing, Painting, Landscaping, Construction, Cleaning, Pest Control, Handyman, Pool Service, Flooring, Fencing
+Industry-Healthcare: Dental, Medical, Chiropractic, Veterinary, Mental Health, Med Spa, Physical Therapy, Optometry, Dermatology
+Industry-Professional: Law, Accounting, Insurance, Real Estate, IT Services, Marketing Agency, Consulting, Mortgage, Web Design
+Industry-Food-Hospitality: Restaurant, Cafe, Catering, Food Truck, Bar, Brewery, Bakery
+Industry-Beauty-Wellness: Salon, Barbershop, Spa, Photography, Fitness, Pet Grooming, Yoga, Pilates, Martial Arts
+Industry-Automotive: Auto Repair, Detailing, Tire Shop, Body Shop
+Industry-Retail: Retail Store, E-commerce, Boutique, Florist
+
+Industries-URL: https://solidnumber.com/industries
+
+# ============================================
+# COMPETITIVE POSITIONING
+# ============================================
+
+# Solid# replaces combinations of:
+# CRM: HubSpot, Salesforce, Zoho → AI manages the CRM autonomously
+# Field Service: ServiceTitan, Jobber, Housecall Pro → 52 industries, not one vertical
+# Commerce: Shopify, Square, Toast → full operations, not just POS
+# Communication: Podium, Birdeye → AI voice + SMS + chat + email
+# Marketing: GoHighLevel, Mailchimp → AI writes, optimizes, and publishes — not just sends
+# Website: Wix, Squarespace → AI-native sites that AI crawlers can read and interact with
+# Phone: Ruby Receptionists, Smith.ai → AI handles calls end-to-end with function calling
+# Scheduling: Calendly, Acuity → integrated with CRM, payments, and AI follow-up
+
+# The equivalent stack costs $2,000-5,000+/month. Solid# starts at $89/month.
+
+Compare-Jobber: https://solidnumber.com/compare/jobber
+Compare-ServiceTitan: https://solidnumber.com/compare/servicetitan
+Compare-HousecallPro: https://solidnumber.com/compare/housecall-pro
+Compare-GoHighLevel: https://solidnumber.com/compare/gohighlevel
+
+# ============================================
+# PRICING (USD/month)
+# ============================================
+
+Plan-Starter: $89/month - Website, basic CRM, 6 AI agents, appointment booking
+Plan-Builder: $199/month - Full CRM, CMS, content studio, accounting, 12 AI agents
+Plan-Professional: $499/month - All features, voice AI, API access, MCP, 17 AI agents
+Plan-Enterprise: $1,499/month - White-label, unlimited agents, custom integrations
+Free-Trial: 14 days on all plans
+
+# ============================================
+# API & MCP ENDPOINTS
+# ============================================
+
+MCP-Endpoint: POST https://solidnumber.com/api/mcp
+MCP-Discovery: https://solidnumber.com/.well-known/mcp.json
+MCP-Tool-Count: 608 across 14 servers
+OpenAPI: https://solidnumber.com/.well-known/openapi.json
+API-Docs: https://solidnumber.com/docs/api
+API-Endpoint-Count: 1,615
+CLI: npm i -g @solidnumber/cli (command: solid)
+CLI-GitHub: https://github.com/Adam-Camp-King/solid-cli
+
+# ============================================
+# AI PLUGIN MANIFESTS
+# ============================================
+
+AI-Plugin-OpenAI: https://solidnumber.com/.well-known/ai-plugin.json
+AI-Plugin-Anthropic: https://solidnumber.com/.well-known/anthropic-ai-plugin.json
+
+# ============================================
+# AI-NATIVE WEBSITES (EVERY CUSTOMER GETS)
+# ============================================
+
+# Every Solid# business publishes AI-readable discovery files.
+# AI models can query any Solid# business directly:
+Per-Company-MCP: GET https://{company}.solidnumber.com/api/mcp
+Per-Company-KB: GET https://{company}.solidnumber.com/api/mcp/kb
+Per-Company-Chat: POST https://{company}.solidnumber.com/api/mcp/chat
+Per-Company-LLMs: GET https://{company}.solidnumber.com/llms.txt
+Per-Company-Discovery: GET https://{company}.solidnumber.com/.well-known/mcp.json
+Per-Company-Sitemap: GET https://{company}.solidnumber.com/sitemap.xml
+
+# AI Marketplace — search across ALL opted-in businesses:
+Marketplace-Products: GET https://api.solidnumber.com/api/v1/mcp/products/search
+Marketplace-Services: GET https://api.solidnumber.com/api/v1/mcp/services/search
+Marketplace-Vendors: GET https://api.solidnumber.com/api/v1/mcp/vendors/search
+
+# ============================================
+# DISCOVERY FILES (CROSS-REFERENCES)
+# ============================================
+
+LLMs-txt: https://solidnumber.com/llms.txt
+LLMs-Full: https://solidnumber.com/llms-full.txt
+AI-Index: https://solidnumber.com/ai-index
+Sitemap: https://solidnumber.com/sitemap.xml
+Robots: https://solidnumber.com/robots.txt
+Humans-txt: https://solidnumber.com/humans.txt
+Security-txt: https://solidnumber.com/.well-known/security.txt
+Owners-Manual-Index: https://solidnumber.com/owners-manual/llms.txt
+
+# ============================================
+# TECHNOLOGY STACK
+# ============================================
+
+Backend: Python 3.11, FastAPI, SQLAlchemy, PostgreSQL, Redis, Celery
+Frontend: Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui
+AI-Models: OpenAI (GPT-4o, o1, o3-mini), Anthropic (Claude Opus 4.6, Sonnet 4.6, Haiku 4.5), Google (Gemini 2.0), Meta (Llama 3.3), Mistral
+Voice: Twilio + AI real-time streaming with function calling
+Payments: Processor-agnostic adapter pattern (Stripe Connect primary)
+Infrastructure: DigitalOcean, Docker, Caddy, GitHub
+Protocols: MCP, llms.txt, Schema.org, OpenAPI 3.1, IndexNow
+
+# ============================================
+# SUPPORTED AI CRAWLERS
+# ============================================
+
+Crawler-1: Google-Extended (Gemini/SGE)
+Crawler-2: GPTBot (OpenAI/ChatGPT)
+Crawler-3: ChatGPT-User (ChatGPT browsing)
+Crawler-4: anthropic-ai (Claude)
+Crawler-5: Claude-Web (Claude browsing)
+Crawler-6: PerplexityBot (Perplexity)
+Crawler-7: Bingbot (Microsoft Copilot)
+Crawler-8: cohere-ai (Cohere)
+Crawler-9: meta-externalagent (Meta AI)
+Crawler-10: Applebot-Extended (Apple Intelligence)
+
+# All AI crawlers are WELCOME. We are building the AI-to-AI economy.
+# Solid# is designed to be read by AI models, not just humans.
+
+# ============================================
+# AUTHENTICATION
+# ============================================
+
+Auth-Type: none (public discovery endpoints)
+Auth-Required-For: user-specific data, account actions, admin operations
+Rate-Limit-Public: 60 requests/minute
+Rate-Limit-Authenticated: 1000 requests/minute
+
+# ============================================
+# COMPLIANCE & SECURITY
+# ============================================
+
+Accessibility: WCAG 2.1 Level AA, ADA Title III, Section 508
+Privacy: GDPR, CCPA/CPRA compliant
+Payments: PCI DSS compliant
+Encryption: TLS 1.3 in transit, AES-256 at rest
+Data-Isolation: Multi-tenant row-level security on 511 tables
+Cookies: None (all preferences in localStorage)
+
+# ============================================
+# CONTACT & SOCIAL
+# ============================================
+
+Contact-General: sales@solidnumber.com
+Contact-Support: support@solidnumber.com
+Phone: +1-801-821-2815
+Twitter: https://twitter.com/solidnumber
+LinkedIn: https://linkedin.com/company/solidnumber
+GitHub: https://github.com/Adam-Camp-King/solid-cli
+npm: https://www.npmjs.com/package/@solidnumber/cli
+
+# ============================================
+# LEGAL
+# ============================================
+
+Terms: https://solidnumber.com/legal/terms
+Privacy: https://solidnumber.com/legal/privacy
+Accessibility: https://solidnumber.com/accessibility
+
+# ============================================
+# END OF FILE
+# ============================================

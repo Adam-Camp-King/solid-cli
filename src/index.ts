@@ -48,6 +48,7 @@ import { scheduleCommand } from './commands/schedule';
 import { reportsCommand } from './commands/reports';
 import { inventoryCommand } from './commands/inventory';
 import { blogCommand } from './commands/blog';
+import { exploreCommand } from './commands/explore';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -107,6 +108,9 @@ program.addCommand(healthCommand);
 // Multi-company
 program.addCommand(companyCommand);
 program.addCommand(switchCommand);
+
+// Discovery
+program.addCommand(exploreCommand);
 
 // Dev tools
 program.addCommand(devCommand);
