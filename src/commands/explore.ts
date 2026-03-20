@@ -165,111 +165,58 @@ interface Message {
   content: string;
 }
 
-async function askClaude(
+const EXPLORE_API = 'https://api.solidnumber.com/api/v1/explore/chat';
+
+async function askPlatform(
   messages: Message[],
-  systemPrompt: string,
-  platformDocs: string,
-): Promise<string> {
-  // Try to use Anthropic SDK
-  let Anthropic: any;
-  try {
-    Anthropic = (await import('@anthropic-ai/sdk')).default;
-  } catch {
-    // SDK not installed — fall back to axios
-    return askClaudeViaAxios(messages, systemPrompt, platformDocs);
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.SOLID_EXPLORE_KEY || '';
-  if (!apiKey) {
-    return askClaudeViaAxios(messages, systemPrompt, platformDocs);
-  }
-
-  const client = new Anthropic({ apiKey });
-
-  const fullSystem = `${systemPrompt}\n\n## PLATFORM DOCUMENTATION (This is your source of truth)\n\n${platformDocs}`;
-
-  // Use Haiku for short questions, Sonnet for depth
-  const lastMsg = messages[messages.length - 1]?.content || '';
-  const isDeepQuestion = lastMsg.length > 100 ||
-    /how does|walk me through|explain|architecture|technical|deep dive|tell me about/i.test(lastMsg);
-  const model = isDeepQuestion ? 'claude-sonnet-4-20250514' : 'claude-haiku-4-5-20251001';
-
-  try {
-    // Stream the response
-    const stream = await client.messages.stream({
-      model,
-      max_tokens: 1024,
-      system: fullSystem,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    });
-
-    let fullResponse = '';
-
-    // Print response character by character
-    process.stdout.write(`\n  ${chalk.hex(BRAND.success)('Solid#')} ${chalk.hex(BRAND.dim)('›')} `);
-
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && 'delta' in event) {
-        const delta = event.delta as any;
-        if (delta.text) {
-          process.stdout.write(delta.text);
-          fullResponse += delta.text;
-        }
-      }
-    }
-
-    process.stdout.write('\n\n');
-    return fullResponse;
-  } catch (error: any) {
-    if (error.status === 401) {
-      return '  Unable to connect to Platform Intelligence. API key may be expired.';
-    }
-    return `  Connection error: ${error.message || 'Unknown error'}`;
-  }
-}
-
-async function askClaudeViaAxios(
-  messages: Message[],
-  systemPrompt: string,
-  platformDocs: string,
+  _systemPrompt: string,
+  _platformDocs: string,
 ): Promise<string> {
   const axios = (await import('axios')).default;
+  const ora = (await import('ora')).default;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.SOLID_EXPLORE_KEY || '';
-  if (!apiKey) {
-    return '\n  No API key found. Set ANTHROPIC_API_KEY or SOLID_EXPLORE_KEY environment variable.\n  Get a key at: https://console.anthropic.com\n';
-  }
+  const lastMessage = messages[messages.length - 1]?.content || '';
+  const history = messages.slice(0, -1);
 
-  const fullSystem = `${systemPrompt}\n\n## PLATFORM DOCUMENTATION\n\n${platformDocs}`;
-  const lastMsg = messages[messages.length - 1]?.content || '';
-  const isDeepQuestion = lastMsg.length > 100 ||
-    /how does|walk me through|explain|architecture|technical|deep dive|tell me about/i.test(lastMsg);
-  const model = isDeepQuestion ? 'claude-sonnet-4-20250514' : 'claude-haiku-4-5-20251001';
+  const spinner = ora({
+    text: chalk.hex(BRAND.dim)('  thinking...'),
+    spinner: 'dots',
+    indent: 0,
+  }).start();
 
   try {
     const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
+      EXPLORE_API,
       {
-        model,
-        max_tokens: 1024,
-        system: fullSystem,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        message: lastMessage,
+        conversation_history: history,
       },
       {
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        timeout: 30000,
+        headers: { 'content-type': 'application/json' },
+        timeout: 45000,
       },
     );
 
-    const text = response.data?.content?.[0]?.text || 'No response';
-    console.log(`\n  ${chalk.hex(BRAND.success)('Solid#')} ${chalk.hex(BRAND.dim)('›')} ${text}\n`);
+    spinner.stop();
+
+    const text = response.data?.response || 'No response';
+    const model = response.data?.model_used || '';
+    const modelTag = model ? chalk.hex(BRAND.dim)(` [${model}]`) : '';
+
+    console.log(`\n  ${chalk.hex(BRAND.success)('Solid#')} ${chalk.hex(BRAND.dim)('›')} ${text}${modelTag}\n`);
     return text;
   } catch (error: any) {
-    return `  Connection error: ${error.response?.data?.error?.message || error.message}`;
+    spinner.stop();
+
+    if (error.response?.status === 429) {
+      const msg = '  Whoa, slow down! I\'m flattered by the enthusiasm but I need a breather. Try again in a minute.';
+      console.log(`\n  ${chalk.hex(BRAND.warm)('Solid#')} ${chalk.hex(BRAND.dim)('›')} ${msg}\n`);
+      return msg;
+    }
+
+    const errMsg = error.response?.data?.detail || error.message || 'Connection error';
+    console.log(`\n  ${chalk.red('Error')} ${chalk.hex(BRAND.dim)('›')} ${errMsg}\n`);
+    return errMsg;
   }
 }
 
@@ -289,7 +236,7 @@ export const exploreCommand = new Command('explore')
     if (question) {
       // Single question mode
       const messages: Message[] = [{ role: 'user', content: question }];
-      await askClaude(messages, SYSTEM_PROMPT, platformDocs);
+      await askPlatform(messages, SYSTEM_PROMPT, platformDocs);
       return;
     }
 
@@ -326,7 +273,7 @@ export const exploreCommand = new Command('explore')
       // Keep conversation to last 10 turns to save tokens
       const recentMessages = conversationHistory.slice(-20);
 
-      const response = await askClaude(recentMessages, SYSTEM_PROMPT, platformDocs);
+      const response = await askPlatform(recentMessages, SYSTEM_PROMPT, platformDocs);
       conversationHistory.push({ role: 'assistant', content: response });
 
       rl.prompt();
