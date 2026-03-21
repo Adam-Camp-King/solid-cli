@@ -50,6 +50,7 @@ import { inventoryCommand } from './commands/inventory';
 import { blogCommand } from './commands/blog';
 import { exploreCommand } from './commands/explore';
 import { designCommand } from './commands/design';
+import { paymentCommand } from './commands/payment';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -93,6 +94,7 @@ program.addCommand(flowsCommand);
 program.addCommand(brandCommand);
 program.addCommand(widgetsCommand);
 program.addCommand(inventoryCommand);
+program.addCommand(paymentCommand);
 
 // Content
 program.addCommand(blogCommand);
