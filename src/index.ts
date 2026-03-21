@@ -49,6 +49,7 @@ import { reportsCommand } from './commands/reports';
 import { inventoryCommand } from './commands/inventory';
 import { blogCommand } from './commands/blog';
 import { exploreCommand } from './commands/explore';
+import { designCommand } from './commands/design';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -95,6 +96,9 @@ program.addCommand(inventoryCommand);
 
 // Content
 program.addCommand(blogCommand);
+
+// Design
+program.addCommand(designCommand);
 
 // Platform
 program.addCommand(cloneCommand);
