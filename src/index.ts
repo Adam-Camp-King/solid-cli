@@ -56,6 +56,10 @@ import { analyticsCommand } from './commands/analytics';
 import { seoCommand } from './commands/seo';
 import { insightsCommand } from './commands/insights';
 import { llmsCommand } from './commands/llms';
+import { accountingCommand } from './commands/accounting';
+import { webhooksCommand } from './commands/webhooks';
+import { supportCommand } from './commands/support';
+import { exportCommand } from './commands/export';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -131,6 +135,12 @@ program.addCommand(llmsCommand);
 program.addCommand(analyticsCommand);
 program.addCommand(seoCommand);
 program.addCommand(insightsCommand);
+
+// Integrations & Operations
+program.addCommand(accountingCommand);
+program.addCommand(webhooksCommand);
+program.addCommand(supportCommand);
+program.addCommand(exportCommand);
 
 // Dev tools
 program.addCommand(devCommand);
