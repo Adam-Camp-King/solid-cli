@@ -91,6 +91,24 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid context --watch` | Auto-refresh when data changes |
 | `solid context --json` | JSON output |
 
+### AI Discovery (llms.txt)
+| Command | Description |
+|---------|-------------|
+| `solid llms preview` | Preview what AI shopping agents see |
+| `solid llms check` | AI commerce readiness score |
+
+### Analytics & SEO
+| Command | Description |
+|---------|-------------|
+| `solid analytics dashboard` | Revenue, customers, transactions |
+| `solid analytics mcp-traffic` | AI crawler traffic (ChatGPT, Claude, etc.) |
+| `solid seo audit` | Full local SEO audit |
+| `solid seo rank` | Search rankings |
+| `solid seo citations` | Citation report |
+| `solid seo gaps` | Open SEO gaps |
+| `solid insights list` | AI-generated conversation insights |
+| `solid insights approve <id>` | Approve and apply to KB |
+
 ### Platform
 | Command | Description |
 |---------|-------------|

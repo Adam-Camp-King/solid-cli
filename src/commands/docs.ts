@@ -811,6 +811,43 @@ solid context --watch --interval 60  # Custom interval
 Includes: company details, full KB, pages, services, products, agents, CLI commands, file structure.
 Any AI that ingests this file has complete knowledge of the business and the Solid# platform.
 
+## AI Discovery (llms.txt)
+
+\`\`\`bash
+solid llms preview            # Preview your llms.txt (what AI agents see)
+solid llms check              # AI commerce readiness score
+\`\`\`
+
+Every company gets \`{slug}.solidnumber.com/llms.txt\` — a machine-readable storefront
+that AI shopping agents (ChatGPT, Alexa, Perplexity) crawl to find products, services,
+prices, and booking actions. Includes L3 payment capabilities.
+
+## Analytics
+
+\`\`\`bash
+solid analytics dashboard     # Revenue, customers, transactions
+solid analytics dashboard --period 7  # Last 7 days
+solid analytics mcp-traffic   # AI crawler traffic (ChatGPT, Claude, Perplexity)
+\`\`\`
+
+## Local SEO
+
+\`\`\`bash
+solid seo audit               # Full local SEO audit with score
+solid seo rank                # Current search rankings
+solid seo citations           # Citation report across directories
+solid seo gaps                # Open SEO gaps to fix
+\`\`\`
+
+## Conversation Insights
+
+\`\`\`bash
+solid insights list           # Pending AI-generated insights
+solid insights stats          # Insight statistics
+solid insights approve <id>   # Approve (add --apply to push to KB)
+solid insights reject <id>    # Reject
+\`\`\`
+
 ## Health & Diagnostics
 
 \`\`\`bash
