@@ -52,6 +52,10 @@ import { exploreCommand } from './commands/explore';
 import { designCommand } from './commands/design';
 import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
+import { analyticsCommand } from './commands/analytics';
+import { seoCommand } from './commands/seo';
+import { insightsCommand } from './commands/insights';
+import { llmsCommand } from './commands/llms';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -119,8 +123,14 @@ program.addCommand(switchCommand);
 // Discovery
 program.addCommand(exploreCommand);
 
-// AI Context
+// AI Context & Discovery
 program.addCommand(contextCommand);
+program.addCommand(llmsCommand);
+
+// Analytics & Insights
+program.addCommand(analyticsCommand);
+program.addCommand(seoCommand);
+program.addCommand(insightsCommand);
 
 // Dev tools
 program.addCommand(devCommand);
@@ -179,10 +189,20 @@ program.addHelpText('after', () => {
     ui.divider('AI Integration'),
     '',
     ui.commandHelp([
-      { cmd: 'solid context', desc: 'Generate AI context package (pipe or save)' },
-      { cmd: 'solid context --claude', desc: 'Save to .claude/CLAUDE.md' },
-      { cmd: 'solid context --cursor', desc: 'Save to .cursorrules' },
-      { cmd: 'solid context --save', desc: 'Save to SOLID-CONTEXT.md' },
+      { cmd: 'solid context --claude', desc: 'Give Claude full company knowledge' },
+      { cmd: 'solid context --cursor', desc: 'Give Cursor full company knowledge' },
+      { cmd: 'solid llms preview', desc: 'Preview what AI shopping agents see' },
+      { cmd: 'solid llms check', desc: 'AI commerce readiness score' },
+    ]),
+    '',
+    ui.divider('Analytics & SEO'),
+    '',
+    ui.commandHelp([
+      { cmd: 'solid analytics dashboard', desc: 'Revenue, customers, transactions' },
+      { cmd: 'solid analytics mcp-traffic', desc: 'Who is crawling your site (AI bots)' },
+      { cmd: 'solid seo audit', desc: 'Full local SEO audit' },
+      { cmd: 'solid seo rank', desc: 'Search rankings' },
+      { cmd: 'solid insights list', desc: 'AI-generated conversation insights' },
     ]),
     '',
     ui.divider(),
