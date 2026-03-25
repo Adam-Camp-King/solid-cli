@@ -109,6 +109,16 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid insights list` | AI-generated conversation insights |
 | `solid insights approve <id>` | Approve and apply to KB |
 
+### Operations
+| Command | Description |
+|---------|-------------|
+| `solid accounting sync` | QuickBooks/Xero sync |
+| `solid accounting status` | Sync connection status |
+| `solid webhooks list` | List webhooks |
+| `solid webhooks create <url>` | Create webhook |
+| `solid support list` | Support tickets |
+| `solid export` | Export all data (GDPR/backup) |
+
 ### Platform
 | Command | Description |
 |---------|-------------|

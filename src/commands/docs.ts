@@ -848,6 +848,38 @@ solid insights approve <id>   # Approve (add --apply to push to KB)
 solid insights reject <id>    # Reject
 \`\`\`
 
+## Accounting
+
+\`\`\`bash
+solid accounting sync         # Trigger QuickBooks/Xero sync
+solid accounting status       # Check sync connection
+solid accounting history      # View sync history
+\`\`\`
+
+## Webhooks
+
+\`\`\`bash
+solid webhooks list           # List configured webhooks
+solid webhooks create <url> -e order.created  # Create with events
+solid webhooks delete <id>    # Delete a webhook
+\`\`\`
+
+## Support
+
+\`\`\`bash
+solid support list            # List support tickets
+solid support list --status open  # Filter by status
+solid support get <id>        # View ticket details
+\`\`\`
+
+## Export
+
+\`\`\`bash
+solid export                  # Export all company data
+solid export -d ./backup      # To specific directory
+solid export --contacts-only  # CRM contacts only (GDPR)
+\`\`\`
+
 ## Health & Diagnostics
 
 \`\`\`bash
