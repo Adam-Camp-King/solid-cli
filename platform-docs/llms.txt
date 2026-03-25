@@ -110,7 +110,7 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 
 - [API Documentation](https://solidnumber.com/docs/api): 1,615 REST endpoints
 - [MCP Server](https://solidnumber.com/platform/mcp-tools): 608 tools for AI-to-AI communication
-- [Public CLI](https://www.npmjs.com/package/@solidnumber/cli): `npm i -g @solidnumber/cli` — manage businesses from terminal
+- [Public CLI](https://www.npmjs.com/package/@solidnumber/cli): `npm i -g @solidnumber/cli` — manage businesses from terminal. Run `solid context --claude` to give Claude full company knowledge, or `solid context --cursor` for Cursor.
 - [CLI Source (GitHub)](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI
 - [Authentication Guide](https://solidnumber.com/docs/authentication): API keys, JWT, OAuth
 - [Webhooks](https://solidnumber.com/docs/webhooks): Event-driven integrations

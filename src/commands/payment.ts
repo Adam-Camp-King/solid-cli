@@ -60,7 +60,7 @@ paymentCommand
       const response = await apiClient.get('/api/v1/payments/status');
       spinner.stop();
 
-      const data = response.data;
+      const data = response.data as any;
       console.log('');
       console.log(chalk.bold('  Payment Processing Status'));
       console.log(chalk.hex(BRAND.dim)('  ─────────────────────────────'));
@@ -96,7 +96,7 @@ l3Command
       const response = await apiClient.get('/api/v1/products?limit=100');
       spinner.stop();
 
-      const products = response.data?.items || response.data?.products || [];
+      const products = (response.data as any)?.items || (response.data as any)?.products || [];
       const total = products.length;
       const withSku = products.filter((p: any) => p.sku).length;
       const withUpc = products.filter((p: any) => p.upc).length;
@@ -161,7 +161,7 @@ l3Command
       const response = await apiClient.get(`/api/v1/products?search=${encodeURIComponent(sku)}&limit=5`);
       spinner.stop();
 
-      const products = response.data?.items || response.data?.products || [];
+      const products = (response.data as any)?.items || (response.data as any)?.products || [];
       const match = products.find((p: any) =>
         p.sku === sku || p.upc === sku || p.isbn === sku
       );
@@ -237,7 +237,7 @@ paymentCommand
       const response = await apiClient.get('/api/v1/companies/me');
       spinner.stop();
 
-      const company = response.data;
+      const company = response.data as any;
       const kbSub = company.kb_sub_code;
 
       console.log('');
@@ -274,7 +274,7 @@ paymentCommand
       const response = await apiClient.get(`/api/v1/products?limit=${limit}`);
       spinner.stop();
 
-      const products = response.data?.items || response.data?.products || [];
+      const products = (response.data as any)?.items || (response.data as any)?.products || [];
 
       console.log('');
       console.log(chalk.bold(`  Products — L3 Identifier Status (${products.length} shown)`));

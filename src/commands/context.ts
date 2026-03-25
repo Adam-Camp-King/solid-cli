@@ -73,6 +73,8 @@ export const contextCommand = new Command('context')
   .option('--cursor', 'Save to ./.cursorrules (for Cursor)')
   .option('--json', 'Output as JSON instead of markdown')
   .option('--minimal', 'Compact version (no command reference)')
+  .option('--watch', 'Auto-refresh context file when data changes')
+  .option('--interval <seconds>', 'Watch interval in seconds (default: 30)', '30')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -141,29 +143,85 @@ export const contextCommand = new Command('context')
       ? buildJsonContext(company, companyId, kbEntries, pages, services, products, agents)
       : buildMarkdownContext(company, companyId, kbEntries, pages, services, products, agents, !!options.minimal);
 
-    // Output
+    // Determine output file path
+    let outputPath: string | null = null;
+    let outputMode: string = 'stdout';
+
     if (options.claude) {
       const claudeDir = path.resolve('.claude');
       if (!fs.existsSync(claudeDir)) {
         fs.mkdirSync(claudeDir, { recursive: true });
       }
-      const filePath = path.join(claudeDir, 'CLAUDE.md');
-      fs.writeFileSync(filePath, doc);
-      spinner?.succeed(chalk.green(`Saved to ${filePath}`));
-      printNextSteps('claude', company.name);
+      outputPath = path.join(claudeDir, 'CLAUDE.md');
+      outputMode = 'claude';
     } else if (options.cursor) {
-      const filePath = path.resolve('.cursorrules');
-      fs.writeFileSync(filePath, doc);
-      spinner?.succeed(chalk.green(`Saved to ${filePath}`));
-      printNextSteps('cursor', company.name);
-    } else if (options.save) {
-      const filePath = path.resolve('SOLID-CONTEXT.md');
-      fs.writeFileSync(filePath, doc);
-      spinner?.succeed(chalk.green(`Saved to ${filePath}`));
-      printNextSteps('file', company.name);
+      outputPath = path.resolve('.cursorrules');
+      outputMode = 'cursor';
+    } else if (options.save || options.watch) {
+      outputPath = path.resolve('SOLID-CONTEXT.md');
+      outputMode = 'file';
+    }
+
+    // Write output
+    if (outputPath) {
+      fs.writeFileSync(outputPath, doc);
+      spinner?.succeed(chalk.green(`Saved to ${outputPath}`));
+      printNextSteps(outputMode, company.name);
     } else {
-      // Print to stdout (for piping: solid context > file.md)
       process.stdout.write(doc);
+    }
+
+    // Watch mode — re-generate on interval
+    if (options.watch && outputPath) {
+      const intervalSec = Math.max(10, parseInt(options.interval) || 30);
+      let lastHash = simpleHash(doc);
+
+      console.log(chalk.dim(`  Watching for changes every ${intervalSec}s... (Ctrl+C to stop)`));
+      console.log('');
+
+      const tick = async () => {
+        try {
+          const [compRes, kbRes, pgRes, svcRes, prodRes, agRes] =
+            await Promise.allSettled([
+              apiClient.companyInfo(),
+              apiClient.kbSearch('', 100),
+              apiClient.pagesList(),
+              apiClient.servicesList(),
+              apiClient.productsList(),
+              apiClient.agentsList(),
+            ]);
+
+          const co = compRes.status === 'fulfilled' ? ((compRes.value.data as any).company as CompanyData) : null;
+          if (!co) return;
+
+          const freshDoc = options.json
+            ? buildJsonContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as any).results || []) : [],
+                pgRes.status === 'fulfilled' ? ((pgRes.value.data as any).pages || []) : [],
+                svcRes.status === 'fulfilled' ? ((svcRes.value.data as any).items || []) : [],
+                prodRes.status === 'fulfilled' ? ((prodRes.value.data as any).items || []) : [],
+                agRes.status === 'fulfilled' ? ((agRes.value.data as any).agents || []) : [])
+            : buildMarkdownContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as any).results || []) : [],
+                pgRes.status === 'fulfilled' ? ((pgRes.value.data as any).pages || []) : [],
+                svcRes.status === 'fulfilled' ? ((svcRes.value.data as any).items || []) : [],
+                prodRes.status === 'fulfilled' ? ((prodRes.value.data as any).items || []) : [],
+                agRes.status === 'fulfilled' ? ((agRes.value.data as any).agents || []) : [], !!options.minimal);
+
+          const newHash = simpleHash(freshDoc);
+          if (newHash !== lastHash) {
+            fs.writeFileSync(outputPath!, freshDoc);
+            lastHash = newHash;
+            const time = new Date().toLocaleTimeString();
+            console.log(chalk.green(`  [${time}] Context updated — changes detected`));
+          }
+        } catch {
+          // Silently skip failed polls
+        }
+      };
+
+      setInterval(tick, intervalSec * 1000);
+
+      // Keep process alive
+      await new Promise(() => {});
     }
   });
 
@@ -223,6 +281,16 @@ function buildJsonContext(
     api_base: config.apiUrl,
     cli_version: '1.3.1',
   }, null, 2);
+}
+
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0;
+  }
+  return hash;
 }
 
 function buildMarkdownContext(

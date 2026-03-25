@@ -795,6 +795,22 @@ solid integrations deploy <id>    # Deploy integration
 solid integrations logs <id>      # View integration logs
 \`\`\`
 
+## AI Context
+
+\`\`\`bash
+solid context                 # Generate AI context package (stdout)
+solid context --claude        # Save to .claude/CLAUDE.md (Claude Code auto-reads)
+solid context --cursor        # Save to .cursorrules (Cursor auto-reads)
+solid context --save          # Save to SOLID-CONTEXT.md (paste into any AI)
+solid context --json          # JSON output
+solid context --minimal       # Compact version (no command reference)
+solid context --watch         # Auto-refresh when data changes (30s default)
+solid context --watch --interval 60  # Custom interval
+\`\`\`
+
+Includes: company details, full KB, pages, services, products, agents, CLI commands, file structure.
+Any AI that ingests this file has complete knowledge of the business and the Solid# platform.
+
 ## Health & Diagnostics
 
 \`\`\`bash

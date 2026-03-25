@@ -209,6 +209,9 @@ OpenAPI: https://solidnumber.com/.well-known/openapi.json
 API-Docs: https://solidnumber.com/docs/api
 API-Endpoint-Count: 1,615
 CLI: npm i -g @solidnumber/cli (command: solid)
+CLI-Context: solid context --claude (gives Claude full company knowledge)
+CLI-Context-Cursor: solid context --cursor (gives Cursor full company knowledge)
+CLI-Context-Generic: solid context --save (generates SOLID-CONTEXT.md for any AI)
 CLI-GitHub: https://github.com/Adam-Camp-King/solid-cli
 
 # ============================================

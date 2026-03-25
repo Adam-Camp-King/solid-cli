@@ -33,6 +33,11 @@ solid pull
 # Push changes to production
 solid push
 
+# Give your AI full context about this company
+solid context --claude    # Claude Code
+solid context --cursor    # Cursor
+solid context --save      # Any AI (paste into project)
+
 # Talk to your AI agent
 solid train chat sarah
 
@@ -76,6 +81,16 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid pages list` | List CMS pages |
 | `solid services list` | List services |
 
+### AI Context
+| Command | Description |
+|---------|-------------|
+| `solid context` | Generate AI context package (stdout) |
+| `solid context --claude` | Save to `.claude/CLAUDE.md` (auto-read by Claude Code) |
+| `solid context --cursor` | Save to `.cursorrules` (auto-read by Cursor) |
+| `solid context --save` | Save to `SOLID-CONTEXT.md` |
+| `solid context --watch` | Auto-refresh when data changes |
+| `solid context --json` | JSON output |
+
 ### Platform
 | Command | Description |
 |---------|-------------|
@@ -110,9 +125,10 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 
 ```
 1. solid pull      → Download pages, KB, services
-2. Edit files      → VS Code, Cursor, any editor
-3. solid push      → Deploy changes instantly
-4. solid vibe      → "Add a hero section" (natural language)
+2. solid context   → Give your AI full company knowledge
+3. Edit files      → VS Code, Cursor, any editor (AI-assisted)
+4. solid push      → Deploy changes instantly
+5. solid vibe      → "Add a hero section" (natural language)
 ```
 
 ## File Formats

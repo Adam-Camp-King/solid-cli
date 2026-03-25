@@ -51,6 +51,7 @@ import { blogCommand } from './commands/blog';
 import { exploreCommand } from './commands/explore';
 import { designCommand } from './commands/design';
 import { paymentCommand } from './commands/payment';
+import { contextCommand } from './commands/context';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -118,6 +119,9 @@ program.addCommand(switchCommand);
 // Discovery
 program.addCommand(exploreCommand);
 
+// AI Context
+program.addCommand(contextCommand);
+
 // Dev tools
 program.addCommand(devCommand);
 program.addCommand(dropletCommand);
@@ -170,6 +174,15 @@ program.addHelpText('after', () => {
       { cmd: 'solid blog list', desc: 'Blog posts + SEO audit' },
       { cmd: 'solid connect figma <url>', desc: 'Import external content' },
       { cmd: 'solid ant import <code>', desc: 'Code import via Ant Farm' },
+    ]),
+    '',
+    ui.divider('AI Integration'),
+    '',
+    ui.commandHelp([
+      { cmd: 'solid context', desc: 'Generate AI context package (pipe or save)' },
+      { cmd: 'solid context --claude', desc: 'Save to .claude/CLAUDE.md' },
+      { cmd: 'solid context --cursor', desc: 'Save to .cursorrules' },
+      { cmd: 'solid context --save', desc: 'Save to SOLID-CONTEXT.md' },
     ]),
     '',
     ui.divider(),
