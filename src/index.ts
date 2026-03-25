@@ -60,6 +60,10 @@ import { accountingCommand } from './commands/accounting';
 import { webhooksCommand } from './commands/webhooks';
 import { supportCommand } from './commands/support';
 import { exportCommand } from './commands/export';
+import { billingCommand } from './commands/billing';
+import { auditCommand } from './commands/audit';
+import { notificationsCommand } from './commands/notifications';
+import { domainsCommand } from './commands/domains';
 import { ui } from './lib/ui';
 
 const program = new Command();
@@ -141,6 +145,10 @@ program.addCommand(accountingCommand);
 program.addCommand(webhooksCommand);
 program.addCommand(supportCommand);
 program.addCommand(exportCommand);
+program.addCommand(billingCommand);
+program.addCommand(auditCommand);
+program.addCommand(notificationsCommand);
+program.addCommand(domainsCommand);
 
 // Dev tools
 program.addCommand(devCommand);
