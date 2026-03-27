@@ -22,6 +22,7 @@ import { authCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
 import { kbCommand } from './commands/kb';
 import { pagesCommand } from './commands/pages';
+import { siteCommand } from './commands/site';
 import { servicesCommand } from './commands/services';
 import { integrationsCommand } from './commands/integrations';
 import { vibeCommand } from './commands/vibe';
@@ -87,6 +88,7 @@ program.addCommand(pushCommand);
 // Business data
 program.addCommand(kbCommand);
 program.addCommand(pagesCommand);
+program.addCommand(siteCommand);
 program.addCommand(servicesCommand);
 
 // CRM

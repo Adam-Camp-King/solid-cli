@@ -1,6 +1,13 @@
 /**
  * CMS Page commands for Solid CLI
  *
+ * solid pages list                              → List all pages
+ * solid pages get <id>                          → View page details
+ * solid pages create --title "Services" --slug services  → Create page
+ * solid pages publish <id>                      → Publish page
+ * solid pages unpublish <id>                    → Unpublish page
+ * solid pages delete <id>                       → Delete page
+ *
  * All operations are scoped to the authenticated company_id.
  */
 
@@ -102,6 +109,126 @@ pagesCommand
       spinner.succeed(chalk.green(`Page #${id} unpublished`));
     } catch (error) {
       spinner.fail(chalk.red('Failed to unpublish page'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+// Get page details
+pagesCommand
+  .command('get <id>')
+  .description('View page details')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const pageId = parseInt(id, 10);
+    if (isNaN(pageId)) {
+      console.error(chalk.red('Invalid page ID.'));
+      process.exit(1);
+    }
+
+    const spinner = ora(`Loading page #${pageId}...`).start();
+
+    try {
+      const response = await apiClient.pageGet(pageId);
+
+      if (options.json) {
+        spinner.stop();
+        console.log(JSON.stringify(response.data, null, 2));
+        return;
+      }
+
+      const page = (response.data as any).page || response.data;
+      spinner.succeed(chalk.green(page.title || `Page #${pageId}`));
+
+      console.log('');
+      console.log(`  ${chalk.bold('ID:')}        ${page.id}`);
+      console.log(`  ${chalk.bold('Title:')}     ${page.title || chalk.dim('(none)')}`);
+      console.log(`  ${chalk.bold('Slug:')}      /${page.slug}`);
+      console.log(`  ${chalk.bold('Type:')}      ${page.page_type || 'website'}`);
+      console.log(`  ${chalk.bold('Published:')} ${page.is_published ? chalk.green('Yes') : chalk.yellow('No')}`);
+      if (page.meta_description) {
+        console.log(`  ${chalk.bold('Meta:')}      ${page.meta_description.substring(0, 80)}...`);
+      }
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to load page'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+// Create page
+pagesCommand
+  .command('create')
+  .description('Create a new page')
+  .requiredOption('--title <title>', 'Page title')
+  .requiredOption('--slug <slug>', 'URL slug (e.g., services)')
+  .option('--type <type>', 'Page type (home, about, services, contact, blog, landing)', 'website')
+  .option('--publish', 'Publish immediately')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const spinner = ora(`Creating page "${options.title}"...`).start();
+
+    try {
+      const response = await apiClient.pageCreate({
+        title: options.title,
+        slug: options.slug,
+        page_type: options.type,
+        is_published: options.publish || false,
+      });
+
+      const data = response.data as any;
+      const page = data.page || data;
+      spinner.succeed(chalk.green(`Page created: ${page.title || options.title}`));
+
+      console.log('');
+      console.log(`  ${chalk.dim('ID:')}   ${page.id}`);
+      console.log(`  ${chalk.dim('Slug:')} /${page.slug || options.slug}`);
+      console.log('');
+      if (!options.publish) {
+        console.log(chalk.dim('  Publish: ') + chalk.cyan(`solid pages publish ${page.id}`));
+      }
+      console.log(chalk.dim('  Edit in browser: ') + chalk.cyan(`/dashboard/cms/builder/${page.id}`));
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to create page'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+// Delete page
+pagesCommand
+  .command('delete <id>')
+  .description('Delete a page by ID')
+  .action(async (id: string) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const pageId = parseInt(id, 10);
+    if (isNaN(pageId)) {
+      console.error(chalk.red('Invalid page ID.'));
+      process.exit(1);
+    }
+
+    const spinner = ora(`Deleting page #${pageId}...`).start();
+
+    try {
+      await apiClient.pageDelete(pageId);
+      spinner.succeed(chalk.green(`Page #${pageId} deleted`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to delete page'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
     }
