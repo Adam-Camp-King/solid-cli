@@ -408,6 +408,43 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
+  // Sites (solid site)
+  async sitesList(): Promise<ApiResponse<{ sites: unknown[]; count: number }>> {
+    const response = await this.client.get('/api/v1/sites');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async siteGet(siteId: number): Promise<ApiResponse<{ site: Record<string, unknown> }>> {
+    const response = await this.client.get(`/api/v1/sites/${siteId}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async siteCreate(slug: string, template?: string, name?: string, isLive?: boolean): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.post('/api/v1/sites', {
+      slug,
+      template: template || 'basecamp',
+      name: name || undefined,
+      is_live: isLive ?? false,
+    });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async siteDelete(siteId: number): Promise<ApiResponse<{ success: boolean }>> {
+    const response = await this.client.delete(`/api/v1/sites/${siteId}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async siteTemplates(): Promise<ApiResponse<{ templates: unknown[]; recommended: string }>> {
+    const response = await this.client.get('/api/v1/sites/templates');
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // Page management (additional)
+  async pageDelete(pageId: number): Promise<ApiResponse<{ success: boolean }>> {
+    const response = await this.client.delete(`/api/v1/cms/pages/${pageId}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
   // AI Chat (talk to agents)
   async agentChat(message: string, agentName = 'sarah'): Promise<ApiResponse<{ response: string }>> {
     const response = await this.client.post('/api/v1/chat/', {
