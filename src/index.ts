@@ -18,12 +18,18 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Single source of truth for version — always reads from package.json
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
 import { authCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
 import { kbCommand } from './commands/kb';
 import { pagesCommand } from './commands/pages';
 import { siteCommand } from './commands/site';
 import { servicesCommand } from './commands/services';
+import { completionCommand } from './commands/completion';
 import { integrationsCommand } from './commands/integrations';
 import { vibeCommand } from './commands/vibe';
 import { healthCommand } from './commands/health';
@@ -67,12 +73,18 @@ import { notificationsCommand } from './commands/notifications';
 import { domainsCommand } from './commands/domains';
 import { ui } from './lib/ui';
 
+// Check for updates (non-blocking, runs in background)
+import updateNotifier from 'update-notifier';
+updateNotifier({ pkg, updateCheckInterval: 1000 * 60 * 60 * 4 }).notify({
+  message: `Update available: {currentVersion} → {latestVersion}\nRun {updateCommand} to update`,
+});
+
 const program = new Command();
 
 program
   .name('solid')
   .description('Solid# CLI — AI Business Infrastructure')
-  .version('1.3.1')
+  .version(pkg.version)
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
@@ -125,6 +137,7 @@ program.addCommand(antCommand);
 program.addCommand(reportsCommand);
 program.addCommand(docsCommand);
 program.addCommand(healthCommand);
+program.addCommand(completionCommand);
 
 // Multi-company
 program.addCommand(companyCommand);

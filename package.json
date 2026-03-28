@@ -1,6 +1,6 @@
 {
   "name": "@solidnumber/cli",
-  "version": "1.4.6",
+  "version": "1.5.0",
   "description": "Solid# Command Line Interface - Integration management and development tools",
   "main": "dist/index.js",
   "bin": {
@@ -48,12 +48,14 @@
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.0",
     "keytar": "^7.9.0",
-    "ora": "^8.0.0"
+    "ora": "^8.0.0",
+    "update-notifier": "^7.3.1"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.9",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.10.0",
+    "@types/update-notifier": "^6.0.8",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.50.0",
