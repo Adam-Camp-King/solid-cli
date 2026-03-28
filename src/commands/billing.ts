@@ -69,3 +69,73 @@ billingCommand.command('invoices').description('List invoices')
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+// Generate checkout link for a client company
+billingCommand.command('checkout-link <companyId>')
+  .description('Generate a Stripe checkout URL for a client company')
+  .option('-t, --tier <tier>', 'Subscription tier', 'starter')
+  .action(async (companyId: string, options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Generating checkout link...').start();
+    try {
+      const res = await apiClient.post('/api/v1/billing/checkout-link', {
+        company_id: parseInt(companyId, 10),
+        tier_slug: options.tier,
+      });
+      const d = res.data as any;
+      spinner.succeed(chalk.green('Checkout link ready'));
+      console.log('');
+      console.log(`  ${chalk.bold('URL:')}     ${chalk.cyan(d.url)}`);
+      console.log(`  ${chalk.bold('Tier:')}    ${d.tier_slug}`);
+      console.log(`  ${chalk.bold('Amount:')}  $${(d.amount_cents / 100).toFixed(2)}/mo`);
+      console.log('');
+      console.log(chalk.dim('  Send this link to your client. When they pay, their account activates automatically.'));
+      console.log('');
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+// Create and send an invoice
+billingCommand.command('invoice <companyIdOrEmail>')
+  .description('Send a Stripe invoice to a client')
+  .requiredOption('-a, --amount <cents>', 'Amount in cents (8900 = $89.00)')
+  .requiredOption('-d, --description <text>', 'Invoice description')
+  .option('--due <days>', 'Days until due', '30')
+  .option('--type <type>', 'Invoice type (agency_service, platform_subscription)', 'agency_service')
+  .action(async (target: string, options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const amountCents = parseInt(options.amount, 10);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      console.error(chalk.red('Amount must be a positive number in cents (e.g., 8900 = $89.00)'));
+      process.exit(1);
+    }
+
+    const isEmail = target.includes('@');
+    const spinner = ora(`Sending invoice for $${(amountCents / 100).toFixed(2)}...`).start();
+
+    try {
+      const body: Record<string, unknown> = {
+        amount_cents: amountCents,
+        description: options.description,
+        days_until_due: parseInt(options.due, 10),
+        invoice_type: options.type,
+      };
+      if (isEmail) {
+        body.email = target;
+      } else {
+        body.company_id = parseInt(target, 10);
+      }
+
+      const res = await apiClient.post('/api/v1/billing/invoice', body);
+      const d = res.data as any;
+      spinner.succeed(chalk.green(`Invoice sent to ${d.recipient}`));
+      console.log('');
+      console.log(`  ${chalk.bold('Invoice:')}  ${d.invoice_id}`);
+      console.log(`  ${chalk.bold('Amount:')}   $${(d.amount_cents / 100).toFixed(2)}`);
+      console.log(`  ${chalk.bold('Due:')}      ${d.due_date?.split('T')[0]}`);
+      console.log(`  ${chalk.bold('Pay URL:')} ${chalk.cyan(d.hosted_url)}`);
+      if (d.pdf_url) console.log(`  ${chalk.bold('PDF:')}     ${d.pdf_url}`);
+      console.log('');
+    } catch (e) { spinner.fail(chalk.red('Failed to send invoice')); console.error(handleApiError(e).message); }
+  });
