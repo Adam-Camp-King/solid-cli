@@ -233,3 +233,43 @@ pagesCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+// Generate page with AI
+pagesCommand
+  .command('generate <prompt>')
+  .description('Generate a page with AI (e.g., "pricing page for plumbing services")')
+  .option('--publish', 'Publish immediately')
+  .action(async (prompt: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora('Generating page with AI...').start();
+
+    try {
+      const response = await apiClient.post('/api/v1/cms/pages/ai/generate', {
+        prompt,
+        auto_publish: options.publish || false,
+      });
+
+      const data = response.data as any;
+      const page = data.page || data;
+      spinner.succeed(chalk.green(`Page generated: ${page.title || 'New Page'}`));
+
+      console.log('');
+      console.log(`  ${chalk.dim('ID:')}    ${page.id}`);
+      console.log(`  ${chalk.dim('Title:')} ${page.title}`);
+      console.log(`  ${chalk.dim('Slug:')}  /${page.slug}`);
+      console.log('');
+      if (!options.publish) {
+        console.log(chalk.dim('  Publish: ') + chalk.cyan(`solid pages publish ${page.id}`));
+      }
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to generate page'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });

@@ -15,7 +15,7 @@ billingCommand.command('status').description('Current subscription and usage')
     const ora = (await import('ora')).default;
     const spinner = ora('Loading billing...').start();
     try {
-      const res = await apiClient.get('/api/v1/billing/subscription');
+      const res = await apiClient.get('/api/v1/billing/overview');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as any;
@@ -36,7 +36,7 @@ billingCommand.command('usage').description('Current period usage (tokens, stora
     const ora = (await import('ora')).default;
     const spinner = ora('Loading usage...').start();
     try {
-      const res = await apiClient.get('/api/v1/billing/usage');
+      const res = await apiClient.get('/api/v1/billing/current-statement');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as any;

@@ -15,20 +15,39 @@ domainsCommand.command('list').description('List configured domains')
     const ora = (await import('ora')).default;
     const spinner = ora('Loading domains...').start();
     try {
-      const res = await apiClient.get('/api/v1/domains');
+      // Get subdomain + custom domains
+      const [subRes, customRes] = await Promise.all([
+        apiClient.get('/api/v1/domains/subdomain').catch(() => ({ data: {} })),
+        apiClient.get('/api/v1/domains/custom').catch(() => ({ data: [] })),
+      ]);
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const domains = (res.data as any).domains || (res.data as any).items || [];
+
+      if (options.json) {
+        console.log(JSON.stringify({ subdomain: subRes.data, custom: customRes.data }, null, 2));
+        return;
+      }
+
+      const sub = subRes.data as any;
+      const customs = (customRes.data as any).domains || customRes.data || [];
+
       console.log('');
-      console.log(ui.header(`Domains (${domains.length})`));
-      if (domains.length === 0) {
-        console.log(chalk.dim('  No custom domains. Use `solid domains add <domain>` to connect one.'));
-      } else {
-        for (const d of domains) {
-          const ssl = d.ssl_active ? chalk.green('SSL ✓') : chalk.yellow('SSL pending');
-          const primary = d.is_primary ? chalk.hex('#818cf8')(' [primary]') : '';
-          console.log(`  ${chalk.bold(d.domain)}${primary}  ${ssl}`);
+      console.log(ui.header('Domains'));
+
+      // Subdomain
+      if (sub.subdomain) {
+        console.log(`  ${chalk.bold(`${sub.subdomain}.solidnumber.com`)} ${chalk.green('● active')} ${chalk.hex('#818cf8')('[subdomain]')}`);
+      }
+
+      // Custom domains
+      if (customs.length > 0) {
+        for (const d of customs) {
+          const verified = d.verified ? chalk.green('● verified') : chalk.yellow('○ pending');
+          console.log(`  ${chalk.bold(d.domain)} ${verified}`);
         }
+      }
+
+      if (!sub.subdomain && customs.length === 0) {
+        console.log(chalk.dim('  No domains configured. Use `solid domains add <domain>` to connect one.'));
       }
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
@@ -40,40 +59,52 @@ domainsCommand.command('add <domain>').description('Add a custom domain')
     const ora = (await import('ora')).default;
     const spinner = ora(`Adding ${domain}...`).start();
     try {
-      const res = await apiClient.post('/api/v1/domains', { domain });
+      const res = await apiClient.post('/api/v1/domains/custom', { domain });
       spinner.stop();
       const d = res.data as any;
       console.log('');
       console.log(ui.successBox('Domain Added', [
         `${chalk.dim('Domain:')} ${domain}`,
-        '', chalk.dim('Add this CNAME record to your DNS:'),
-        `  ${chalk.cyan(d.cname_target || d.dns_target || '{slug}.solidnumber.com')}`,
+        '',
+        chalk.dim('Add this CNAME record to your DNS:'),
+        `  ${chalk.bold('Type:')}   CNAME`,
+        `  ${chalk.bold('Name:')}   ${domain}`,
+        `  ${chalk.bold('Target:')} ${d.cname_target || d.dns_target || 'cname.solidnumber.com'}`,
+        '',
+        chalk.dim('Then verify: solid domains verify ' + domain),
       ]));
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
 
-domainsCommand.command('remove <domain>').description('Remove a domain')
-  .action(async (domain) => {
+domainsCommand.command('remove <id>').description('Remove a custom domain by ID')
+  .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
-    const spinner = ora(`Removing ${domain}...`).start();
+    const domainId = parseInt(id, 10);
+    if (isNaN(domainId)) { console.error(chalk.red('Invalid domain ID. Use `solid domains list` to find IDs.')); process.exit(1); }
+    const spinner = ora(`Removing domain #${domainId}...`).start();
     try {
-      await apiClient.delete('/api/v1/domains', { params: { domain } });
-      spinner.succeed(chalk.green(`${domain} removed`));
+      await apiClient.delete(`/api/v1/domains/custom/${domainId}`);
+      spinner.succeed(chalk.green(`Domain #${domainId} removed`));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
 
-domainsCommand.command('verify <domain>').description('Check DNS status')
-  .action(async (domain) => {
+domainsCommand.command('verify <id>').description('Verify DNS for a custom domain')
+  .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
-    const spinner = ora(`Checking ${domain}...`).start();
+    const domainId = parseInt(id, 10);
+    if (isNaN(domainId)) { console.error(chalk.red('Invalid domain ID.')); process.exit(1); }
+    const spinner = ora(`Verifying domain #${domainId}...`).start();
     try {
-      const res = await apiClient.get('/api/v1/domains/verify', { params: { domain } });
+      const res = await apiClient.post(`/api/v1/domains/custom/${domainId}/verify`);
       spinner.stop();
       const d = res.data as any;
-      if (d.verified || d.dns_verified) { console.log(chalk.green(`  ✓ ${domain} — verified`)); }
-      else { console.log(chalk.yellow(`  ○ ${domain} — DNS not yet propagated`)); }
+      if (d.verified) {
+        console.log(chalk.green(`  ✓ Domain verified and active`));
+      } else {
+        console.log(chalk.yellow(`  ○ DNS not yet propagated. Check your CNAME record.`));
+      }
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });

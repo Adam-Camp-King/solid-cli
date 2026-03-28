@@ -230,3 +230,40 @@ siteCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+// Regenerate website pages
+siteCommand
+  .command('regenerate')
+  .description('Regenerate all non-customized pages with updated design preferences')
+  .option('--style <preset>', 'Style preset (modern, bold, classic, warm)')
+  .option('--color <hex>', 'Primary color (e.g., #6366f1)')
+  .option('--cta <text>', 'CTA button text')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora('Regenerating website pages...').start();
+
+    try {
+      const body: Record<string, unknown> = {};
+      if (options.style) body.style_preset = options.style;
+      if (options.color) body.primary_color = options.color;
+      if (options.cta) body.cta_text = options.cta;
+
+      const response = await apiClient.post('/api/v1/cms/pages/regenerate-website', body);
+      const data = response.data as any;
+      spinner.succeed(chalk.green('Website regenerated'));
+
+      console.log('');
+      if (data.pages_regenerated) console.log(`  ${chalk.dim('Pages updated:')} ${data.pages_regenerated}`);
+      if (data.pages_skipped) console.log(`  ${chalk.dim('Pages skipped (customized):')} ${data.pages_skipped}`);
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to regenerate'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
