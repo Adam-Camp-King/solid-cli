@@ -353,6 +353,75 @@ function extractStats(html: string): Array<{ value: string; label: string }> {
   return stats;
 }
 
+// ─── Claude AI Parser ───────────────────────────────────────────────
+
+async function parseWithClaude(html: string): Promise<Block[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error(chalk.red('ANTHROPIC_API_KEY not set. Set it or remove --ai flag.'));
+    process.exit(1);
+  }
+
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey });
+
+    // Truncate very large HTML to avoid token limits
+    const truncated = html.length > 30000 ? html.slice(0, 30000) + '\n<!-- truncated -->' : html;
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: `Convert this HTML into a JSON array of CMS content blocks.
+
+Each block must have: { "type": "<block_type>", "content": { ... } }
+
+Available block types and their content fields:
+- hero: { headline, subheadline, cta_text, cta_url }
+- features: { title, features: [{ title, description }] }
+- pricing: { title, plans: [{ name, price, description, features: ["..."] }] }
+- cta: { headline, subheadline, cta_text, cta_url }
+- testimonials: { title, testimonials: [{ quote, name }] }
+- faq: { title, questions: [{ question, answer }] }
+- contact: { title, button_text }
+- stats: { stats: [{ value, label }] }
+- text: { title, text }
+- team: { title, members: [{ name, role }] }
+- gallery: { images: [{ url, alt }] }
+- process-steps: { title, steps: [{ title, description }] }
+- booking: { title, description, button_text }
+- video: { url, title }
+- divider: {}
+
+Return ONLY a JSON array. No markdown, no explanation.
+
+HTML:
+${truncated}`,
+      }],
+    });
+
+    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+
+    // Extract JSON array from response
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) return [];
+
+    // Validate each block
+    return parsed.filter((b: any) =>
+      b && typeof b.type === 'string' && typeof b.content === 'object'
+    );
+  } catch (error: any) {
+    console.error(chalk.yellow(`  AI parsing failed: ${error.message || 'Unknown error'}`));
+    console.error(chalk.dim('  Falling back to regex parser...'));
+    return [];
+  }
+}
+
 // ─── Main Command ───────────────────────────────────────────────────
 
 export const importCommand = new Command('import')
@@ -364,6 +433,7 @@ export const importCommand = new Command('import')
   .option('--stdin', 'Read HTML from stdin (pipe)')
   .option('--clipboard', 'Read HTML from system clipboard')
   .option('--publish', 'Mark page as published')
+  .option('--ai', 'Use Claude AI for smarter block classification (requires ANTHROPIC_API_KEY)')
   .option('--dir <path>', 'Working directory', process.cwd())
   .action(async (file, options) => {
     let html = '';
@@ -419,16 +489,29 @@ export const importCommand = new Command('import')
     const title = options.page;
     const slug = options.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-    const spinner = ora('Parsing HTML into blocks...').start();
+    let blocks: Block[];
 
-    const blocks = parseHtmlToBlocks(html);
-
-    if (blocks.length === 0) {
-      spinner.fail(chalk.red('Could not extract any content blocks from the HTML.'));
-      process.exit(1);
+    if (options.ai) {
+      const spinner = ora('Using Claude AI to parse HTML into blocks...').start();
+      blocks = await parseWithClaude(html);
+      if (blocks.length === 0) {
+        spinner.text = 'AI returned no blocks, falling back to regex parser...';
+        blocks = parseHtmlToBlocks(html);
+      }
+      if (blocks.length === 0) {
+        spinner.fail(chalk.red('Could not extract any content blocks from the HTML.'));
+        process.exit(1);
+      }
+      spinner.succeed(`AI detected ${blocks.length} content blocks`);
+    } else {
+      const spinner = ora('Parsing HTML into blocks...').start();
+      blocks = parseHtmlToBlocks(html);
+      if (blocks.length === 0) {
+        spinner.fail(chalk.red('Could not extract any content blocks. Try --ai for smarter parsing.'));
+        process.exit(1);
+      }
+      spinner.succeed(`Detected ${blocks.length} content blocks`);
     }
-
-    spinner.succeed(`Detected ${blocks.length} content blocks`);
 
     // Show what was detected
     for (const block of blocks) {
