@@ -315,9 +315,12 @@ class ApiClient {
     const response = await this.client.get('/api/v1/kb/company', {
       params: { search: query, limit },
     });
-    const data = response.data as any;
+    const data = response.data as Record<string, unknown>;
     return {
-      data: { results: data.entries || data.items || [], total: data.total || 0 },
+      data: {
+        results: (data.entries || data.items || []) as unknown[],
+        total: (data.total || 0) as number,
+      },
       status: response.status,
       success: true,
     };
@@ -329,8 +332,8 @@ class ApiClient {
     category?: string;
   }): Promise<ApiResponse<{ success: boolean; id?: number }>> {
     const response = await this.client.post('/api/v1/kb/company', params);
-    const data = response.data as any;
-    return { data: { success: true, id: data.id, ...data }, status: response.status, success: true };
+    const data = response.data as Record<string, unknown>;
+    return { data: { success: true, id: data.id as number | undefined }, status: response.status, success: true };
   }
 
   async kbUpdate(id: number, params: {
@@ -339,12 +342,14 @@ class ApiClient {
     category?: string;
   }): Promise<ApiResponse<{ success: boolean }>> {
     const response = await this.client.put(`/api/v1/kb/company/${id}`, params);
-    return { data: { success: true, ...response.data as any }, status: response.status, success: true };
+    void response.data; // response acknowledged
+    return { data: { success: true }, status: response.status, success: true };
   }
 
   async kbDelete(id: number): Promise<ApiResponse<{ success: boolean }>> {
     const response = await this.client.delete(`/api/v1/kb/company/${id}`);
-    return { data: { success: true, ...response.data as any }, status: response.status, success: true };
+    void response.data;
+    return { data: { success: true }, status: response.status, success: true };
   }
 
   // CMS Pages
