@@ -65,6 +65,30 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid status` | Company dashboard |
 | `solid pull` | Download pages, KB, settings as files |
 | `solid push` | Push local changes to production |
+| `solid diff` | Preview changes before pushing |
+| `solid serve` | Local preview server (localhost:4000) |
+| `solid open <page>` | Open page in web WYSIWYG builder |
+| `solid watch` | Auto-push on file save |
+
+### Import & Sandbox
+| Command | Description |
+|---------|-------------|
+| `solid import file.html --page "Title"` | Convert HTML/JSX to CMS blocks |
+| `solid import --clipboard --page "Title"` | Import from clipboard |
+| `solid sandbox create` | Fork site into isolated sandbox |
+| `solid sandbox status` | Show sandbox changes |
+| `solid sandbox diff` | Compare sandbox vs original |
+| `solid sandbox push` | Promote sandbox to production |
+| `solid sandbox reset` | Discard sandbox |
+
+### Multi-Company & Droplets
+| Command | Description |
+|---------|-------------|
+| `solid company create "Name"` | Create on shared platform |
+| `solid company create "Name" --dedicated` | Provision dedicated droplet |
+| `solid company create "Name" --dedicated --size medium` | With size (small/medium/large) |
+| `solid switch <id>` | Switch active company |
+| `solid droplet status <customer>` | Check droplet health |
 
 ### AI Training
 | Command | Description |
@@ -152,11 +176,23 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 ## Workflow
 
 ```
-1. solid pull      → Download pages, KB, services
-2. solid context   → Give your AI full company knowledge
-3. Edit files      → VS Code, Cursor, any editor (AI-assisted)
-4. solid push      → Deploy changes instantly
-5. solid vibe      → "Add a hero section" (natural language)
+1. solid pull                          → Download pages, KB, services
+2. solid serve --open                  → Preview locally at localhost:4000
+3. solid context --claude              → Give your AI full company knowledge
+4. Edit files / solid import / vibe    → Make changes any way you want
+5. solid diff                          → Preview what will change
+6. solid push                          → Deploy to production
+```
+
+### Agency Workflow (Sandbox Mode)
+```
+1. solid pull                          → Get the client's site
+2. solid sandbox create                → Fork into .sandbox/
+3. solid serve --dir .sandbox          → Preview sandbox locally
+4. solid import promo.html --page "Ad" → Add ChatGPT landing page
+5. solid sandbox diff                  → Review all changes
+6. solid sandbox push                  → Promote to main files
+7. solid push                          → Deploy to production
 ```
 
 ## File Formats
