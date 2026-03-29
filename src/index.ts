@@ -74,6 +74,9 @@ import { domainsCommand } from './commands/domains';
 import { openCommand } from './commands/open';
 import { diffCommand } from './commands/diff';
 import { serveCommand } from './commands/serve';
+import { importCommand } from './commands/import';
+import { watchCommand } from './commands/watch';
+import { sandboxCommand } from './commands/sandbox';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -102,6 +105,9 @@ program.addCommand(pushCommand);
 program.addCommand(diffCommand);
 program.addCommand(serveCommand);
 program.addCommand(openCommand);
+program.addCommand(importCommand);
+program.addCommand(watchCommand);
+program.addCommand(sandboxCommand);
 
 // Business data
 program.addCommand(kbCommand);

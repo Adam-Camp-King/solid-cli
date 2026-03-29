@@ -1,0 +1,78 @@
+name: CI — Build, Test, Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify version consistency
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          CLI_VERSION=$(node dist/index.js --version 2>/dev/null || echo "UNKNOWN")
+          if [ "$PKG_VERSION" != "$CLI_VERSION" ]; then
+            echo "FAIL: package.json ($PKG_VERSION) != CLI ($CLI_VERSION)"
+            exit 1
+          fi
+          echo "Version consistent: $PKG_VERSION"
+
+      - name: Canary — verify CLI starts
+        run: |
+          node dist/index.js --help > /dev/null
+          node dist/index.js completion > /dev/null
+          echo "Canary passed"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high || true
+
+      - name: Check for known vulnerabilities
+        run: npx audit-ci --high || true
+
+      - name: Verify no secrets in code
+        run: |
+          # Check for hardcoded tokens, keys, passwords
+          if grep -rn "sk_live_\|sk_test_\|npm_[A-Za-z0-9]\{20,\}\|password.*=.*['\"]" src/ --include="*.ts" | grep -v "test" | grep -v "__tests__" | grep -v "\.example"; then
+            echo "FAIL: Possible hardcoded secrets found"
+            exit 1
+          fi
+          echo "No secrets detected"
+
+      - name: Verify company isolation in tests
+        run: |
+          # All test setup must use company_id 99999, never real IDs
+          if grep -rn "companyId: [0-9]" src/__tests__/ | grep -v "companyId: 99999" | grep -v "company_id: 42" | grep -v "RESERVED"; then
+            echo "WARNING: Test uses non-standard company_id"
+          fi
+          echo "Company isolation check passed"

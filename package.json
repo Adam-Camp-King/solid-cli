@@ -14,8 +14,10 @@
     "test": "jest --forceExit --detectOpenHandles",
     "test:coverage": "jest --coverage --forceExit --detectOpenHandles",
     "test:smoke": "jest --testPathPattern=integration --forceExit",
+    "test:security": "jest --testPathPattern=company-isolation --forceExit",
+    "audit": "npm audit --audit-level=high",
     "prepublish:check": "bash scripts/prepublish.sh",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test && npm run test:security"
   },
   "keywords": [
     "solid",

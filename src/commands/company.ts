@@ -77,9 +77,14 @@ companyCommand
 // ── Create company ─────────────────────────────────────────────────
 companyCommand
   .command('create <name>')
-  .description('Create a new company')
+  .description('Create a new company (shared platform or dedicated droplet)')
   .option('-t, --template <template>', 'Industry template to apply (e.g., plumber, hvac)')
   .option('-i, --industry <industry>', 'Industry name')
+  .option('--tier <tier>', 'Subscription tier: starter, builder, professional, enterprise', 'starter')
+  .option('--dedicated', 'Provision a dedicated droplet (own server, database, AI)')
+  .option('--size <size>', 'Droplet size: small ($72/mo), medium ($144/mo), large ($288/mo)', 'small')
+  .option('--region <region>', 'Droplet region: nyc1, sfo1, ams3, sgp1', 'nyc1')
+  .option('--domain <domain>', 'Custom domain (e.g., app.clientsite.com)')
   .option('--json', 'Output as JSON')
   .action(async (name: string, options) => {
     if (!config.isLoggedIn()) {
@@ -87,37 +92,105 @@ companyCommand
       process.exit(1);
     }
 
-    const spinner = ora(`Creating company "${name}"...`).start();
+    const isDedicated = options.dedicated || false;
 
-    try {
-      const response = await apiClient.companyCreate(name, options.template, options.industry);
-      spinner.succeed(chalk.green('Company created'));
+    if (isDedicated) {
+      // ── Dedicated Droplet Flow ──
+      const sizeMap: Record<string, { label: string; price: string }> = {
+        small: { label: 's-2vcpu-4gb', price: '$72/mo' },
+        medium: { label: 's-4vcpu-8gb', price: '$144/mo' },
+        large: { label: 's-8vcpu-16gb', price: '$288/mo' },
+      };
+      const sizeInfo = sizeMap[options.size] || sizeMap.small;
 
-      if (options.json) {
-        console.log(JSON.stringify(response.data, null, 2));
-        return;
+      console.log('');
+      console.log(chalk.bold('  Dedicated Droplet Provisioning'));
+      console.log(chalk.dim(`  Company:  ${name}`));
+      console.log(chalk.dim(`  Size:     ${options.size} (${sizeInfo.label}) — ${sizeInfo.price}`));
+      console.log(chalk.dim(`  Region:   ${options.region}`));
+      console.log(chalk.dim(`  Template: ${options.template || 'none'}`));
+      if (options.domain) console.log(chalk.dim(`  Domain:   ${options.domain}`));
+      console.log('');
+
+      const spinner = ora('Provisioning dedicated droplet...').start();
+
+      try {
+        // Generate slug from name
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+        const response = await apiClient.post<any>('/admin/droplets/provision', {
+          customer_slug: slug,
+          company_name: name,
+          size: sizeInfo.label,
+          region: options.region,
+          tier_slug: options.tier,
+          kb_sub_code: options.template || undefined,
+          industry_name: options.industry || undefined,
+          custom_domain: options.domain || undefined,
+        });
+
+        spinner.succeed(chalk.green('Dedicated droplet provisioned'));
+
+        if (options.json) {
+          console.log(JSON.stringify(response.data, null, 2));
+          return;
+        }
+
+        const data = response.data as any;
+        console.log('');
+        console.log(ui.successBox('Dedicated Company Created', [
+          `Company:  ${data.company?.name || name}`,
+          `ID:       ${data.company?.id || 'pending'}`,
+          `Droplet:  ${data.droplet?.status || 'provisioning'}`,
+          `IP:       ${data.droplet?.ip_address || 'assigning...'}`,
+          `URL:      ${data.droplet?.subdomain ? `${data.droplet.subdomain}.solidnumber.com` : 'configuring...'}`,
+          `Size:     ${options.size} — ${sizeInfo.price}`,
+        ]));
+        console.log('');
+        console.log(chalk.dim('  Droplet takes 2-5 minutes to fully provision.'));
+        console.log(chalk.dim(`  Check status: solid droplet status ${slug}`));
+        console.log('');
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to provision droplet'));
+        const apiError = handleApiError(error);
+        console.error(chalk.red(`  ${apiError.message}`));
       }
+    } else {
+      // ── Shared Platform Flow (existing) ──
+      const spinner = ora(`Creating company "${name}"...`).start();
 
-      const company = response.data.company;
-      console.log('');
-      console.log(ui.successBox('Company Created', [
-        `ID:   ${company.id}`,
-        `Name: ${company.name}`,
-        `Slug: ${company.slug}`,
-        `Role: ${response.data.membership.role}`,
-      ]));
+      try {
+        const response = await apiClient.companyCreate(name, options.template, options.industry);
+        spinner.succeed(chalk.green('Company created'));
 
-      if (response.data.template) {
-        console.log(chalk.dim(`  Template: ${options.template} applied`));
+        if (options.json) {
+          console.log(JSON.stringify(response.data, null, 2));
+          return;
+        }
+
+        const company = response.data.company;
+        console.log('');
+        console.log(ui.successBox('Company Created', [
+          `ID:   ${company.id}`,
+          `Name: ${company.name}`,
+          `Slug: ${company.slug}`,
+          `Role: ${response.data.membership.role}`,
+          `Mode: Shared platform (multi-tenant)`,
+        ]));
+
+        if (response.data.template) {
+          console.log(chalk.dim(`  Template: ${options.template} applied`));
+        }
+
+        console.log('');
+        console.log(chalk.dim('  Switch to it: ') + chalk.cyan(`solid switch ${company.id}`));
+        console.log(chalk.dim('  Need a dedicated server? Add --dedicated'));
+        console.log('');
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to create company'));
+        const apiError = handleApiError(error);
+        console.error(chalk.red(`  ${apiError.message}`));
       }
-
-      console.log('');
-      console.log(chalk.dim('  Switch to it: ') + chalk.cyan(`solid switch ${company.id}`));
-      console.log('');
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to create company'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
     }
   });
 
