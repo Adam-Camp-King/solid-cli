@@ -1,148 +1,69 @@
 /**
  * Development commands for Solid CLI
+ *
+ * Redirects to the real commands that replaced the old stubs:
+ *   solid dev sandbox → solid sandbox
+ *   solid dev server  → solid serve
+ *   solid dev logs    → solid health --full
  */
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { config } from '../lib/config';
 
 export const devCommand = new Command('dev')
-  .description('Development tools');
+  .description('Development tools (see: solid serve, solid sandbox, solid import)');
 
-// Sandbox commands
-const sandboxCommand = new Command('sandbox')
-  .description('Sandbox environment management');
-
-sandboxCommand
-  .command('create')
-  .description('Create a development sandbox')
-  .option('-n, --name <name>', 'Sandbox name')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    console.log(chalk.yellow('Sandbox environments are coming soon.'));
-    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
+devCommand
+  .command('sandbox')
+  .description('Use `solid sandbox` instead')
+  .allowUnknownOption()
+  .action(() => {
+    console.log(chalk.cyan('solid dev sandbox has been replaced by:'));
+    console.log('');
+    console.log(`  ${chalk.bold('solid sandbox create')}    Fork site into isolated sandbox`);
+    console.log(`  ${chalk.bold('solid sandbox status')}    Show what changed`);
+    console.log(`  ${chalk.bold('solid sandbox diff')}      Compare sandbox vs original`);
+    console.log(`  ${chalk.bold('solid sandbox push')}      Promote sandbox to main files`);
+    console.log(`  ${chalk.bold('solid sandbox reset')}     Discard sandbox`);
+    console.log('');
   });
 
-sandboxCommand
-  .command('status')
-  .description('Check sandbox status')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    console.log(chalk.yellow('Sandbox environments are coming soon.'));
-    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
-  });
-
-sandboxCommand
-  .command('deploy')
-  .description('Deploy sandbox to production')
-  .option('-y, --yes', 'Skip confirmation')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    console.log(chalk.yellow('Sandbox environments are coming soon.'));
-    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
-  });
-
-sandboxCommand
-  .command('reset')
-  .description('Reset sandbox to clean state')
-  .option('-y, --yes', 'Skip confirmation')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    console.log(chalk.yellow('Sandbox environments are coming soon.'));
-    console.log(chalk.dim('Track progress: https://solidnumber.com/docs/cli'));
-  });
-
-devCommand.addCommand(sandboxCommand);
-
-// Local development server
 devCommand
   .command('server')
-  .description('Start local development server')
-  .option('-p, --port <port>', 'Port number', '3000')
-  .action((options) => {
-    console.log(chalk.cyan('Starting local development server...'));
-    console.log(chalk.dim(`  Port: ${options.port}`));
-    console.log(chalk.dim('  API Proxy: Enabled'));
+  .description('Use `solid serve` instead')
+  .action(() => {
+    console.log(chalk.cyan('solid dev server has been replaced by:'));
     console.log('');
-    console.log(chalk.yellow('Note: This command requires the Solid# development environment.'));
-    console.log(chalk.dim('See: Owners-Manual/02-Backend/development-setup.md'));
+    console.log(`  ${chalk.bold('solid serve')}             Start local preview at localhost:4000`);
+    console.log(`  ${chalk.bold('solid serve --open')}      Auto-open browser`);
+    console.log(`  ${chalk.bold('solid serve --port 3333')} Custom port`);
+    console.log('');
+    console.log(chalk.dim('Renders all 25 CMS block types with live reload.'));
+    console.log('');
   });
 
-// Generate command
 devCommand
   .command('generate <type>')
   .alias('g')
-  .description('Generate boilerplate code')
-  .option('-n, --name <name>', 'Name of the generated item')
-  .action((type, options) => {
-    const validTypes = ['integration', 'workflow', 'webhook', 'model'];
-
-    if (!validTypes.includes(type)) {
-      console.error(chalk.red(`Invalid type: ${type}`));
-      console.log(chalk.dim(`Valid types: ${validTypes.join(', ')}`));
-      process.exit(1);
-    }
-
-    const name = options.name || `my-${type}`;
-
-    console.log(chalk.cyan(`Generating ${type}: ${name}`));
+  .description('Use `solid import` for HTML or `solid clone` for templates')
+  .action((type) => {
+    console.log(chalk.cyan('solid dev generate has been replaced by:'));
     console.log('');
-
-    switch (type) {
-      case 'integration':
-        console.log(chalk.bold('Generated files:'));
-        console.log(chalk.dim(`  integrations/${name}/index.ts`));
-        console.log(chalk.dim(`  integrations/${name}/config.ts`));
-        console.log(chalk.dim(`  integrations/${name}/README.md`));
-        break;
-      case 'workflow':
-        console.log(chalk.bold('Generated files:'));
-        console.log(chalk.dim(`  workflows/${name}.ts`));
-        break;
-      case 'webhook':
-        console.log(chalk.bold('Generated files:'));
-        console.log(chalk.dim(`  webhooks/${name}/handler.ts`));
-        console.log(chalk.dim(`  webhooks/${name}/validator.ts`));
-        break;
-      case 'model':
-        console.log(chalk.bold('Generated files:'));
-        console.log(chalk.dim(`  models/${name}.py`));
-        console.log(chalk.dim(`  migrations/add_${name}_table.py`));
-        break;
-    }
-
+    console.log(`  ${chalk.bold('solid import file.html --page "Title"')}   Convert HTML to CMS blocks`);
+    console.log(`  ${chalk.bold('solid import --clipboard --page "Title"')} Import from clipboard`);
+    console.log(`  ${chalk.bold('solid import --ai --page "Title"')}        Use Claude for smart parsing`);
+    console.log(`  ${chalk.bold('solid clone plumber')}                     Scaffold from industry template`);
     console.log('');
-    console.log(chalk.yellow('Note: This is a preview. Actual file generation coming soon.'));
   });
 
-// Logs command
 devCommand
   .command('logs')
-  .description('View development logs')
-  .option('-f, --follow', 'Follow log output')
-  .option('-n, --lines <number>', 'Number of lines', '50')
-  .option('--level <level>', 'Log level (debug, info, warn, error)')
-  .action((options) => {
-    console.log(chalk.cyan('Fetching logs...'));
-    console.log(chalk.dim(`  Lines: ${options.lines}`));
-    console.log(chalk.dim(`  Follow: ${options.follow || false}`));
-    console.log(chalk.dim(`  Level: ${options.level || 'all'}`));
+  .description('Use `solid health` for system status')
+  .action(() => {
+    console.log(chalk.cyan('For logs and health monitoring:'));
     console.log('');
-    console.log(chalk.yellow('Note: Log streaming requires connection to the development server.'));
+    console.log(`  ${chalk.bold('solid health')}            Quick health check`);
+    console.log(`  ${chalk.bold('solid health --full')}     Full 6-layer health check`);
+    console.log(`  ${chalk.bold('solid health --mcp')}      MCP/agent system health`);
+    console.log('');
   });
