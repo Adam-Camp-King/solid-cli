@@ -1,10 +1,14 @@
 src/
+dist/__tests__/
 tsconfig.json
 .eslintrc*
 jest.config.*
 *.test.ts
 *.spec.ts
 .solid/
+.sandbox/
 node_modules/
 .git/
 .gitignore
+coverage/
+.github/

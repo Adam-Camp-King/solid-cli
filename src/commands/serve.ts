@@ -306,6 +306,17 @@ function renderPage(page: any, ctx: CompanyContext, allPages: any[]): string {
     <span>Solid# Local Preview — <strong>${esc(title)}</strong></span>
     <span>${sections.length} sections &middot; ${page.is_published ? 'Published' : 'Draft'} &middot; ${esc(page.page_type || 'website')}</span>
   </div>
+  <script>
+    // Live reload — reconnects on disconnect
+    (function() {
+      function connect() {
+        var es = new EventSource('/__livereload');
+        es.onmessage = function() { location.reload(); };
+        es.onerror = function() { es.close(); setTimeout(connect, 2000); };
+      }
+      connect();
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -362,10 +373,27 @@ export const serveCommand = new Command('serve')
       process.exit(1);
     }
 
+    // SSE clients for live reload
+    const sseClients: Set<http.ServerResponse> = new Set();
+
     const server = http.createServer((req, res) => {
       const pages = loadPages(dir);
       const ctx = loadContext(dir);
       const url = (req.url || '/').replace(/\?.*$/, '');
+
+      // Live reload SSE endpoint
+      if (url === '/__livereload') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.write('data: connected\n\n');
+        sseClients.add(res);
+        req.on('close', () => sseClients.delete(res));
+        return;
+      }
 
       // Index page
       if (url === '/' || url === '/index') {
@@ -412,7 +440,7 @@ export const serveCommand = new Command('serve')
         console.log(`    ${status}  /${p.slug}  ${chalk.dim(p.title)}`);
       });
       console.log('');
-      console.log(chalk.dim('  Edit pages/*.json and refresh to see changes.'));
+      console.log(chalk.dim('  Live reload enabled — browser refreshes on file save.'));
       console.log(chalk.dim('  Press Ctrl+C to stop.'));
       console.log('');
 
@@ -423,13 +451,33 @@ export const serveCommand = new Command('serve')
       }
     });
 
-    // Watch for file changes and log
+    // Watch for file changes — trigger live reload
+    const notifyReload = (filename: string) => {
+      console.log(chalk.dim(`  [${new Date().toLocaleTimeString()}] ${filename} changed — reloading browsers`));
+      for (const client of sseClients) {
+        try { client.write('data: reload\n\n'); } catch { sseClients.delete(client); }
+      }
+    };
+
+    // Watch config
+    const configFile = path.join(dir, 'solid.config.json');
+    if (fs.existsSync(configFile)) {
+      fs.watchFile(configFile, { interval: 1000 }, () => notifyReload('solid.config.json'));
+    }
+
+    // Watch KB
+    const kbDir = path.join(dir, 'kb');
+    if (fs.existsSync(kbDir)) {
+      fs.watch(kbDir, { recursive: true }, (_, filename) => {
+        if (filename?.endsWith('.md')) notifyReload(`kb/${filename}`);
+      });
+    }
+
+    // Watch pages
     const pagesDir = path.join(dir, 'pages');
     if (fs.existsSync(pagesDir)) {
-      fs.watch(pagesDir, { recursive: true }, (eventType, filename) => {
-        if (filename?.endsWith('.json')) {
-          console.log(chalk.dim(`  [${new Date().toLocaleTimeString()}] ${filename} changed — refresh browser`));
-        }
+      fs.watch(pagesDir, { recursive: true }, (_, filename) => {
+        if (filename?.endsWith('.json')) notifyReload(`pages/${filename}`);
       });
     }
   });
