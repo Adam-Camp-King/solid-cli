@@ -1,6 +1,6 @@
 {
   "name": "@solidnumber/cli",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "Solid# Command Line Interface - Integration management and development tools",
   "main": "dist/index.js",
   "bin": {
