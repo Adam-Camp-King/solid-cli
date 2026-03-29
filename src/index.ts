@@ -71,6 +71,9 @@ import { billingCommand } from './commands/billing';
 import { auditCommand } from './commands/audit';
 import { notificationsCommand } from './commands/notifications';
 import { domainsCommand } from './commands/domains';
+import { openCommand } from './commands/open';
+import { diffCommand } from './commands/diff';
+import { serveCommand } from './commands/serve';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -96,6 +99,9 @@ program.addCommand(authCommand);
 program.addCommand(statusCommand);
 program.addCommand(pullCommand);
 program.addCommand(pushCommand);
+program.addCommand(diffCommand);
+program.addCommand(serveCommand);
+program.addCommand(openCommand);
 
 // Business data
 program.addCommand(kbCommand);
