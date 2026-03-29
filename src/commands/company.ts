@@ -136,7 +136,7 @@ companyCommand
           return;
         }
 
-        const data = response.data as any;
+        const data = response.data as Record<string, any>;
         console.log('');
         console.log(ui.successBox('Dedicated Company Created', [
           `Company:  ${data.company?.name || name}`,

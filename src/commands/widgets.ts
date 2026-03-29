@@ -40,7 +40,7 @@ widgetsCommand
       if (options.status) params.status = options.status;
 
       const response = await apiClient.get('/api/v1/cli/widgets', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const widgets = data.widgets || [];
 
       if (options.json) {
@@ -86,7 +86,7 @@ widgetsCommand
 
     try {
       const response = await apiClient.get(`/api/v1/cli/widgets/${widgetId}`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -152,7 +152,7 @@ widgetsCommand
       }
 
       const response = await apiClient.post('/api/v1/cli/widgets', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Widget created'));
       console.log('');
@@ -184,7 +184,7 @@ widgetsCommand
       const response = await apiClient.get(`/api/v1/cli/widgets/${widgetId}/embed`, {
         params: { format: options.format },
       });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(`Embed code (${options.format})`);
       console.log('');

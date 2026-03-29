@@ -21,7 +21,7 @@ accountingCommand.command('sync').description('Trigger a full accounting sync')
       const res = await apiClient.post('/api/v1/accounting/sync');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.successBox('Sync Started', [`${chalk.dim('Status:')}  ${d.status || 'running'}`, `${chalk.dim('Sync ID:')} ${d.sync_id || d.id || 'n/a'}`]));
       console.log('');
@@ -38,7 +38,7 @@ accountingCommand.command('status').description('Check sync status')
       const res = await apiClient.get('/api/v1/accounting/sync/status');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Accounting Sync'));
       if (d.provider) console.log(ui.label('Provider', d.provider));
@@ -59,7 +59,7 @@ accountingCommand.command('history').description('View sync history')
       const res = await apiClient.get('/api/v1/accounting/sync/history', { params: { limit: options.limit } });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       const entries = d.history || d.syncs || [];
       console.log('');
       console.log(ui.header(`Sync History (${entries.length})`));

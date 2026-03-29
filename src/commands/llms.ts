@@ -78,7 +78,7 @@ llmsCommand
 
       // Show the URL
       const infoRes = await apiClient.companyInfo();
-      const company = (infoRes.data as any).company;
+      const company = (infoRes.data as Record<string, any>).company;
       const slug = company?.slug;
       if (slug) {
         console.log(ui.label('Live URL', chalk.cyan(`https://${slug}.solidnumber.com/llms.txt`)));
@@ -119,9 +119,9 @@ llmsCommand
 
       spinner.stop();
 
-      const products = prodRes.status === 'fulfilled' ? ((prodRes.value.data as any).items || []) : [];
-      const services = svcRes.status === 'fulfilled' ? ((svcRes.value.data as any).items || []) : [];
-      const company = infoRes.status === 'fulfilled' ? (infoRes.value.data as any).company : null;
+      const products = prodRes.status === 'fulfilled' ? ((prodRes.value.data as Record<string, any>).items || []) : [];
+      const services = svcRes.status === 'fulfilled' ? ((svcRes.value.data as Record<string, any>).items || []) : [];
+      const company = infoRes.status === 'fulfilled' ? (infoRes.value.data as Record<string, any>).company : null;
 
       console.log('');
       console.log(ui.header('AI Commerce Readiness'));

@@ -24,7 +24,7 @@ supportCommand.command('list').description('List support tickets')
       const res = await apiClient.get('/api/v1/support/tickets', { params });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const tickets = (res.data as any).tickets || (res.data as any).items || [];
+      const tickets = (res.data as Record<string, any>).tickets || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Support Tickets (${tickets.length})`));
       if (tickets.length === 0) { console.log(chalk.dim('  No tickets.')); }
@@ -43,7 +43,7 @@ supportCommand.command('get <id>').description('View ticket details')
       const res = await apiClient.get(`/api/v1/support/tickets/${id}`);
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const t = res.data as any;
+      const t = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header(`Ticket #${t.id || id}`));
       if (t.subject || t.title) console.log(ui.label('Subject', t.subject || t.title));

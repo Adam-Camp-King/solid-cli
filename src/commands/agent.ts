@@ -71,7 +71,7 @@ agentCommand
       const { data } = await apiClient.agentsList();
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const agents = (data as any).agents || [];
+      const agents = (data as Record<string, any>).agents || [];
       console.log(ui.header(`Agents (${agents.length})`));
       if (!agents.length) { console.log(chalk.dim('  No agents found.\n')); return; }
       console.log(ui.table(
@@ -101,8 +101,8 @@ agentCommand
         apiClient.agentDetail(agentType), apiClient.agentData(agentType),
       ]);
       spinner.stop();
-      const detail = detailRes.status === 'fulfilled' ? (detailRes.value.data as any) : null;
-      const data = dataRes.status === 'fulfilled' ? (dataRes.value.data as any) : null;
+      const detail = detailRes.status === 'fulfilled' ? (detailRes.value.data as Record<string, any>) : null;
+      const data = dataRes.status === 'fulfilled' ? (dataRes.value.data as Record<string, any>) : null;
       if (!detail) { console.log(ui.errorBox('Not Found', [`Agent "${name}" (${agentType}) not found.`])); return; }
       if (opts.json) { console.log(JSON.stringify({ detail, data }, null, 2)); return; }
 
@@ -153,8 +153,8 @@ agentCommand
       const { data } = await apiClient.agentTools(agentType);
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const toolMap = (data as any).tools || {};
-      console.log(ui.header(`Tools for ${name} (${(data as any).total || 0} total)`));
+      const toolMap = (data as Record<string, any>).tools || {};
+      console.log(ui.header(`Tools for ${name} (${(data as Record<string, any>).total || 0} total)`));
       const namespaces = Object.keys(toolMap).sort();
       if (!namespaces.length) { console.log(chalk.dim('  No tools found.\n')); return; }
       for (const ns of namespaces) {
@@ -181,7 +181,7 @@ agentCommand
       const { data } = await apiClient.agentData(agentType);
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const d = data as any;
+      const d = data as Record<string, any>;
       const perf = d.performance;
       if (perf) {
         console.log(ui.header('Performance Summary'));
@@ -220,7 +220,7 @@ agentCommand
       const { data } = await apiClient.agentData(agentType);
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const reflections = (data as any).reflections || [];
+      const reflections = (data as Record<string, any>).reflections || [];
       if (!reflections.length) { console.log(chalk.dim('\n  No reflections to extract patterns from.\n')); return; }
 
       console.log(ui.header(`Memory — ${name}`));
@@ -277,7 +277,7 @@ agentCommand
       );
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const reply = (data as any).response || (data as any).message || JSON.stringify(data);
+      const reply = (data as Record<string, any>).response || (data as Record<string, any>).message || JSON.stringify(data);
       console.log('\n' + ui.infoBox(name, [reply]) + '\n');
     } catch (e) { catchError(spinner, 'Chat failed')(e); }
   });
@@ -296,8 +296,8 @@ agentCommand
         apiClient.orchestrationDashboard(), apiClient.telemetrySummary(),
       ]);
       spinner.stop();
-      const dash = dashRes.status === 'fulfilled' ? (dashRes.value.data as any) : null;
-      const tel = telRes.status === 'fulfilled' ? (telRes.value.data as any) : null;
+      const dash = dashRes.status === 'fulfilled' ? (dashRes.value.data as Record<string, any>) : null;
+      const tel = telRes.status === 'fulfilled' ? (telRes.value.data as Record<string, any>) : null;
       if (opts.json) { console.log(JSON.stringify({ dashboard: dash, telemetry: tel }, null, 2)); return; }
 
       console.log(ui.header('Agent Dashboard'));
@@ -349,7 +349,7 @@ agentCommand
     try {
       const { data } = await apiClient.telemetrySummary();
       spinner.stop();
-      const t = data as any;
+      const t = data as Record<string, any>;
       if (opts.json) { console.log(JSON.stringify(t, null, 2)); return; }
       const roi = t.estimated_cost > 0 && t.revenue_attributed > 0
         ? `${((t.revenue_attributed / t.estimated_cost) * 100).toFixed(0)}%` : '-';
@@ -376,11 +376,11 @@ agentCommand
     requireLogin();
     const spinner = ora('Creating mission...').start();
     try {
-      const { data: mission } = await apiClient.missionCreate(description) as any;
+      const { data: mission } = await apiClient.missionCreate(description) as Record<string, any>;
 
       if (opts.execute && mission.mission_id) {
         spinner.text = 'Executing mission...';
-        const { data: result } = await apiClient.missionExecute(mission.mission_id) as any;
+        const { data: result } = await apiClient.missionExecute(mission.mission_id) as Record<string, any>;
         spinner.stop();
         if (opts.json) { console.log(JSON.stringify({ mission, execution: result }, null, 2)); return; }
         console.log(ui.successBox('Mission Executed', [
@@ -458,7 +458,7 @@ agentCommand
       try {
         const { data } = await apiClient.agentDetail(agentType);
         spinner.stop();
-        const d = data as any;
+        const d = data as Record<string, any>;
         if (opts.json) { console.log(JSON.stringify(d, null, 2)); return; }
         console.log(ui.header(`Settings — ${d.name || agentType}`));
         console.log(ui.label('Type', d.agent_type));

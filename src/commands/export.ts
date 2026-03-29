@@ -30,28 +30,28 @@ export const exportCommand = new Command('export')
     try {
       // Company info
       spinner.text = 'Exporting company info...';
-      try { const r = await apiClient.companyInfo(); fs.writeFileSync(path.join(exportDir, 'company.json'), JSON.stringify((r.data as any).company, null, 2)); fileCount++; } catch { /* skip */ }
+      try { const r = await apiClient.companyInfo(); fs.writeFileSync(path.join(exportDir, 'company.json'), JSON.stringify((r.data as Record<string, any>).company, null, 2)); fileCount++; } catch { /* skip */ }
 
       if (!options.contactsOnly) {
         // KB
         spinner.text = 'Exporting knowledge base...';
-        try { const r = await apiClient.kbSearch('', 100); fs.writeFileSync(path.join(exportDir, 'knowledge-base.json'), JSON.stringify((r.data as any).results || [], null, 2)); fileCount++; } catch { /* skip */ }
+        try { const r = await apiClient.kbSearch('', 100); fs.writeFileSync(path.join(exportDir, 'knowledge-base.json'), JSON.stringify((r.data as Record<string, any>).results || [], null, 2)); fileCount++; } catch { /* skip */ }
 
         // Pages
         spinner.text = 'Exporting pages...';
-        try { const r = await apiClient.pagesList(); fs.writeFileSync(path.join(exportDir, 'pages.json'), JSON.stringify((r.data as any).pages || [], null, 2)); fileCount++; } catch { /* skip */ }
+        try { const r = await apiClient.pagesList(); fs.writeFileSync(path.join(exportDir, 'pages.json'), JSON.stringify((r.data as Record<string, any>).pages || [], null, 2)); fileCount++; } catch { /* skip */ }
 
         // Services
         spinner.text = 'Exporting services...';
-        try { const r = await apiClient.servicesList(); fs.writeFileSync(path.join(exportDir, 'services.json'), JSON.stringify((r.data as any).items || [], null, 2)); fileCount++; } catch { /* skip */ }
+        try { const r = await apiClient.servicesList(); fs.writeFileSync(path.join(exportDir, 'services.json'), JSON.stringify((r.data as Record<string, any>).items || [], null, 2)); fileCount++; } catch { /* skip */ }
 
         // Products
         spinner.text = 'Exporting products...';
-        try { const r = await apiClient.productsList(); fs.writeFileSync(path.join(exportDir, 'products.json'), JSON.stringify((r.data as any).items || [], null, 2)); fileCount++; } catch { /* skip */ }
+        try { const r = await apiClient.productsList(); fs.writeFileSync(path.join(exportDir, 'products.json'), JSON.stringify((r.data as Record<string, any>).items || [], null, 2)); fileCount++; } catch { /* skip */ }
 
         // Agents
         spinner.text = 'Exporting agents...';
-        try { const r = await apiClient.agentsList(); fs.writeFileSync(path.join(exportDir, 'agents.json'), JSON.stringify((r.data as any).agents || [], null, 2)); fileCount++; } catch { /* skip */ }
+        try { const r = await apiClient.agentsList(); fs.writeFileSync(path.join(exportDir, 'agents.json'), JSON.stringify((r.data as Record<string, any>).agents || [], null, 2)); fileCount++; } catch { /* skip */ }
       }
 
       // Contacts

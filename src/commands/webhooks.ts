@@ -21,7 +21,7 @@ webhooksCommand.command('list').description('List configured webhooks')
       const res = await apiClient.get('/api/v1/developer/webhooks');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const hooks = (res.data as any).webhooks || (res.data as any).items || [];
+      const hooks = (res.data as Record<string, any>).webhooks || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Webhooks (${hooks.length})`));
       if (hooks.length === 0) { console.log(chalk.dim('  No webhooks. Use `solid webhooks create` to add one.')); }
@@ -40,7 +40,7 @@ webhooksCommand.command('create <url>').description('Create a webhook')
       const events = options.events ? options.events.split(',').map((e: string) => e.trim()) : [];
       const res = await apiClient.post('/api/v1/developer/webhooks', { url, name: options.name || url, events });
       spinner.stop();
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.successBox('Webhook Created', [`${chalk.dim('URL:')}    ${url}`, `${chalk.dim('ID:')}     ${d.id || 'n/a'}`, `${chalk.dim('Secret:')} ${d.secret || 'check dashboard'}`]));
       console.log('');

@@ -48,7 +48,7 @@ kbCommand
       }
 
       console.log('');
-      for (const entry of results as any[]) {
+      for (const entry of results as Record<string, string>[]) {
         const category = entry.category ? chalk.cyan(`[${entry.category}]`) : '';
         console.log(`  ${chalk.bold(entry.title || 'Untitled')} ${category}`);
         if (entry.content) {
@@ -115,8 +115,8 @@ kbCommand
     try {
       const response = await apiClient.kbCreate({ title, content, category });
       spinner.succeed(chalk.green(`KB entry created: "${title}"`));
-      if ((response.data as any).id) {
-        console.log(chalk.dim(`  ID: ${(response.data as any).id}`));
+      if ((response.data as Record<string, any>).id) {
+        console.log(chalk.dim(`  ID: ${(response.data as Record<string, any>).id}`));
       }
     } catch (error) {
       spinner.fail(chalk.red('Failed to create KB entry'));

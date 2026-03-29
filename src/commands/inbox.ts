@@ -60,7 +60,7 @@ export const inboxCommand = new Command('inbox')
         return;
       }
 
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const messages = data?.items || data || [];
       spinner.succeed(chalk.green(`${messages.length} messages`));
 
@@ -70,7 +70,8 @@ export const inboxCommand = new Command('inbox')
       }
 
       console.log('');
-      for (const msg of messages as any[]) {
+      for (const raw of messages as unknown[]) {
+        const msg = raw as Record<string, string>;
         const channel = msg.channel ? chalk.cyan(`[${msg.channel}]`) : '';
         const direction = msg.direction === 'inbound' ? chalk.yellow('←') : chalk.blue('→');
         const contact = msg.contact_name || msg.contact_id || 'Unknown';
@@ -133,7 +134,7 @@ inboxCommand
         message,
       });
 
-      const result = response.data as any || {};
+      const result = response.data as Record<string, any> || {};
       const channel = result.channel || 'auto';
       spinner.succeed(chalk.green(`Message sent via ${channel}`));
     } catch (error) {
@@ -171,7 +172,7 @@ emailCmd
         return;
       }
 
-      const edata = response.data as any;
+      const edata = response.data as Record<string, any>;
       const emails = edata?.items || edata || [];
       spinner.succeed(chalk.green(`${emails.length} emails`));
 
@@ -181,7 +182,8 @@ emailCmd
       }
 
       console.log('');
-      for (const email of emails as any[]) {
+      for (const raw of emails as unknown[]) {
+        const email = raw as Record<string, string>;
         const dir = email.direction === 'inbound' ? chalk.yellow('←') : chalk.blue('→');
         const from = email.from_address || email.from || '';
         const to = email.to_address || email.to || '';
@@ -213,7 +215,7 @@ emailCmd
         return;
       }
 
-      const email = response.data as any || {};
+      const email = response.data as Record<string, any> || {};
       spinner.succeed(chalk.green('Email loaded'));
       console.log('');
       console.log(`  ${chalk.bold('Subject:')} ${email.subject || '(no subject)'}`);
@@ -291,12 +293,12 @@ emailCmd
         return;
       }
 
-      const tdata = response.data as any;
+      const tdata = response.data as Record<string, any>;
       const emails = tdata?.items || tdata || [];
       spinner.succeed(chalk.green(`Thread: ${emails.length} messages`));
 
       console.log('');
-      for (const email of emails) {
+      for (const email of emails as Record<string, string>[]) {
         const dir = email.direction === 'inbound' ? chalk.yellow('← IN') : chalk.blue('→ OUT');
         console.log(`  ${dir}  ${formatDate(email.created_at)}`);
         console.log(`  ${chalk.bold(email.subject || '(no subject)')}`);
@@ -333,7 +335,7 @@ const campaignsCmd = inboxCommand
         return;
       }
 
-      const cdata = response.data as any;
+      const cdata = response.data as Record<string, any>;
       const campaigns = cdata?.items || cdata || [];
       spinner.succeed(chalk.green(`${campaigns.length} campaigns`));
 
@@ -376,7 +378,7 @@ campaignsCmd
         body: options.body,
       });
 
-      const campaign = response.data as any || {};
+      const campaign = response.data as Record<string, any> || {};
       spinner.succeed(chalk.green(`Campaign created: ${campaign.id || campaign.name || 'OK'}`));
     } catch (error) {
       spinner.fail(chalk.red('Failed to create campaign'));

@@ -112,7 +112,7 @@ export const openCommand = new Command('open')
     if (!pageId) {
       try {
         const response = await apiClient.pagesList();
-        const pages = (response.data as any)?.pages || [];
+        const pages = (response.data as Record<string, any>)?.pages || [];
         const match = pages.find((p: any) => p.slug === slug);
         if (match) {
           pageId = match.id;

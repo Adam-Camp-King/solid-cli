@@ -21,7 +21,7 @@ export const auditCommand = new Command('audit')
       const res = await apiClient.get('/api/v1/audit/log', { params });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const entries = (res.data as any).entries || (res.data as any).logs || (res.data as any).items || [];
+      const entries = (res.data as Record<string, any>).entries || (res.data as Record<string, any>).logs || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Audit Log (${entries.length})`));
       if (entries.length === 0) { console.log(chalk.dim('  No activity recorded yet.')); }

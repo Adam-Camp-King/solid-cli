@@ -104,32 +104,32 @@ export const contextCommand = new Command('context')
     // Extract data safely
     const company: CompanyData | null =
       companyResult.status === 'fulfilled'
-        ? ((companyResult.value.data as any).company as CompanyData)
+        ? ((companyResult.value.data as Record<string, any>).company as CompanyData)
         : null;
 
     const kbEntries: KBEntry[] =
       kbResult.status === 'fulfilled'
-        ? ((kbResult.value.data as any).results || [])
+        ? ((kbResult.value.data as Record<string, any>).results || [])
         : [];
 
     const pages: PageItem[] =
       pagesResult.status === 'fulfilled'
-        ? ((pagesResult.value.data as any).pages || [])
+        ? ((pagesResult.value.data as Record<string, any>).pages || [])
         : [];
 
     const services: ServiceItem[] =
       servicesResult.status === 'fulfilled'
-        ? ((servicesResult.value.data as any).items || [])
+        ? ((servicesResult.value.data as Record<string, any>).items || [])
         : [];
 
     const products: any[] =
       productsResult.status === 'fulfilled'
-        ? ((productsResult.value.data as any).items || [])
+        ? ((productsResult.value.data as Record<string, any>).items || [])
         : [];
 
     const agents: AgentItem[] =
       agentsResult.status === 'fulfilled'
-        ? ((agentsResult.value.data as any).agents || [])
+        ? ((agentsResult.value.data as Record<string, any>).agents || [])
         : [];
 
     if (!company) {
@@ -191,20 +191,20 @@ export const contextCommand = new Command('context')
               apiClient.agentsList(),
             ]);
 
-          const co = compRes.status === 'fulfilled' ? ((compRes.value.data as any).company as CompanyData) : null;
+          const co = compRes.status === 'fulfilled' ? ((compRes.value.data as Record<string, any>).company as CompanyData) : null;
           if (!co) return;
 
           const freshDoc = options.json
-            ? buildJsonContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as any).results || []) : [],
-                pgRes.status === 'fulfilled' ? ((pgRes.value.data as any).pages || []) : [],
-                svcRes.status === 'fulfilled' ? ((svcRes.value.data as any).items || []) : [],
-                prodRes.status === 'fulfilled' ? ((prodRes.value.data as any).items || []) : [],
-                agRes.status === 'fulfilled' ? ((agRes.value.data as any).agents || []) : [])
-            : buildMarkdownContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as any).results || []) : [],
-                pgRes.status === 'fulfilled' ? ((pgRes.value.data as any).pages || []) : [],
-                svcRes.status === 'fulfilled' ? ((svcRes.value.data as any).items || []) : [],
-                prodRes.status === 'fulfilled' ? ((prodRes.value.data as any).items || []) : [],
-                agRes.status === 'fulfilled' ? ((agRes.value.data as any).agents || []) : [], !!options.minimal);
+            ? buildJsonContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as Record<string, any>).results || []) : [],
+                pgRes.status === 'fulfilled' ? ((pgRes.value.data as Record<string, any>).pages || []) : [],
+                svcRes.status === 'fulfilled' ? ((svcRes.value.data as Record<string, any>).items || []) : [],
+                prodRes.status === 'fulfilled' ? ((prodRes.value.data as Record<string, any>).items || []) : [],
+                agRes.status === 'fulfilled' ? ((agRes.value.data as Record<string, any>).agents || []) : [])
+            : buildMarkdownContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as Record<string, any>).results || []) : [],
+                pgRes.status === 'fulfilled' ? ((pgRes.value.data as Record<string, any>).pages || []) : [],
+                svcRes.status === 'fulfilled' ? ((svcRes.value.data as Record<string, any>).items || []) : [],
+                prodRes.status === 'fulfilled' ? ((prodRes.value.data as Record<string, any>).items || []) : [],
+                agRes.status === 'fulfilled' ? ((agRes.value.data as Record<string, any>).agents || []) : [], !!options.minimal);
 
           const newHash = simpleHash(freshDoc);
           if (newHash !== lastHash) {

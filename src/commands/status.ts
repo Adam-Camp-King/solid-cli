@@ -25,7 +25,7 @@ export const statusCommand = new Command('status')
 
     try {
       const response = await apiClient.companyInfo();
-      const company = (response.data as any).company;
+      const company = (response.data as Record<string, any>).company;
 
       if (!company) {
         spinner.fail(chalk.red('Company not found'));

@@ -269,7 +269,7 @@ export const pushCommand = new Command('push')
             if (page.data.meta_description) createData.meta_description = page.data.meta_description;
 
             const result = await apiClient.pageCreate(createData);
-            const newPage = result.data as any;
+            const newPage = result.data as Record<string, any>;
 
             // Update manifest with new page ID
             manifest.pages[page.file] = {
@@ -314,7 +314,7 @@ export const pushCommand = new Command('push')
               content: kb.data.content,
               category: kb.data.category,
             });
-            const newEntry = result.data as any;
+            const newEntry = result.data as Record<string, any>;
 
             // Update manifest with new KB ID
             manifest.kb[kb.file] = {

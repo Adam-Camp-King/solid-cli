@@ -34,7 +34,7 @@ inventoryCommand
     try {
       const params = { limit: parseInt(options.limit), offset: 0 };
       const response = await apiClient.get('/Inventory/', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const items = data.items || data.inventory || [];
 
       if (options.json) {
@@ -51,7 +51,7 @@ inventoryCommand
       }
 
       console.log('');
-      for (const item of items) {
+      for (const item of items as Record<string, any>[]) {
         const qty = item.on_hand ?? item.quantity ?? 0;
         const qtyColor = qty <= 0 ? chalk.red : qty < 10 ? chalk.yellow : chalk.green;
         const price = item.price !== undefined ? chalk.green(`$${Number(item.price).toFixed(2)}`) : '';
@@ -74,7 +74,7 @@ inventoryCommand
 
     try {
       const response = await apiClient.get(`/Inventory/${encodeURIComponent(sku)}`);
-      const item = response.data as any;
+      const item = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -118,7 +118,7 @@ inventoryCommand
       if (options.price) body.price = parseFloat(options.price);
 
       const response = await apiClient.post('/Inventory/', body);
-      const item = response.data as any;
+      const item = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green(`Item created: ${options.sku}`));
       console.log(chalk.dim(`  ${options.name} — qty: ${options.quantity}`));
@@ -208,7 +208,7 @@ inventoryCommand
       if (options.dryRun) form.append('dry_run', 'true');
 
       const response = await apiClient.post('/api/v1/Inventory/uploadCsv', form);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.dryRun) {
         spinner.succeed(chalk.green('Dry run complete'));
@@ -219,7 +219,7 @@ inventoryCommand
         if (data.preview) {
           console.log('');
           console.log(chalk.dim('  Preview:'));
-          for (const row of (data.preview as any[]).slice(0, 5)) {
+          for (const row of (data.preview as Record<string, string>[]).slice(0, 5)) {
             console.log(`    ${row.sku || row.id} — ${row.name || ''} qty: ${row.on_hand ?? row.quantity ?? '?'}`);
           }
         }

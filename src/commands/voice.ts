@@ -42,12 +42,12 @@ const callsCmd = voiceCommand
       const params: Record<string, string> = { limit: options.limit };
       if (options.status) params.status = options.status;
       const response = await apiClient.get('/api/v1/calls', { params });
-      const calls = (response.data as any).items || response.data || [];
+      const calls = (response.data as Record<string, any>).items || response.data || [];
       if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${calls.length} calls`));
       if (calls.length === 0) { console.log(chalk.dim('  No calls found.')); return; }
       console.log('');
-      for (const c of calls as any[]) {
+      for (const c of calls as Record<string, any>[]) {
         const st = c.status === 'completed' ? chalk.green(c.status) : c.status === 'missed' ? chalk.red(c.status) : chalk.yellow(c.status || 'unknown');
         const dir = c.direction === 'inbound' ? chalk.cyan('IN ') : chalk.magenta('OUT');
         const dur = c.duration_seconds ? chalk.dim(`${c.duration_seconds}s`) : '';
@@ -67,7 +67,7 @@ callsCmd
     const spinner = ora('Loading call details...').start();
     try {
       const response = await apiClient.get(`/api/v1/calls/${callId}`);
-      const c = response.data as any;
+      const c = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
       spinner.succeed(chalk.green('Call details'));
       console.log('');
@@ -97,7 +97,7 @@ voiceCommand
     const spinner = ora('Loading voice stats...').start();
     try {
       const response = await apiClient.get('/api/v1/stats');
-      const s = response.data as any;
+      const s = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Voice statistics'));
       console.log('');
@@ -121,12 +121,12 @@ const numbersCmd = voiceCommand
     const spinner = ora('Loading phone numbers...').start();
     try {
       const response = await apiClient.get('/api/v1/phone-numbers');
-      const numbers = (response.data as any).items || response.data || [];
+      const numbers = (response.data as Record<string, any>).items || response.data || [];
       if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${numbers.length} phone numbers`));
       if (numbers.length === 0) { console.log(chalk.dim('  No phone numbers configured.')); return; }
       console.log('');
-      for (const n of numbers as any[]) {
+      for (const n of numbers as Record<string, any>[]) {
         const label = n.label ? chalk.cyan(` (${n.label})`) : '';
         const status = n.active ? chalk.green('active') : chalk.dim('inactive');
         console.log(`  ${chalk.bold(n.number || n.phone_number)}${label} — ${status}`);
@@ -148,7 +148,7 @@ numbersCmd
       if (options.label) body.label = options.label;
       const response = await apiClient.post('/api/v1/phone-numbers', body);
       spinner.succeed(chalk.green(`Phone number added: ${options.number}`));
-      if ((response.data as any).id) console.log(chalk.dim(`  ID: ${(response.data as any).id}`));
+      if ((response.data as Record<string, any>).id) console.log(chalk.dim(`  ID: ${(response.data as Record<string, any>).id}`));
     } catch (error) { fail(spinner, 'Failed to add phone number', error); }
   });
 
@@ -190,12 +190,12 @@ const voicemailCmd = voiceCommand
     const spinner = ora('Loading voicemails...').start();
     try {
       const response = await apiClient.get('/api/v1/voicemails');
-      const items = (response.data as any).items || response.data || [];
+      const items = (response.data as Record<string, any>).items || response.data || [];
       if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} voicemails`));
       if (items.length === 0) { console.log(chalk.dim('  No voicemails.')); return; }
       console.log('');
-      for (const vm of items as any[]) {
+      for (const vm of items as Record<string, any>[]) {
         const read = vm.is_read ? chalk.dim('read') : chalk.yellow('NEW');
         const from = vm.from || vm.caller || 'Unknown';
         const date = vm.created_at ? chalk.dim(new Date(vm.created_at).toLocaleString()) : '';
@@ -219,7 +219,7 @@ voicemailCmd
     const spinner = ora('Loading voicemail...').start();
     try {
       const response = await apiClient.get(`/api/v1/voicemails/${id}`);
-      const vm = response.data as any;
+      const vm = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(vm, null, 2)); return; }
       spinner.succeed(chalk.green('Voicemail details'));
       console.log('');
@@ -259,7 +259,7 @@ const personalityCmd = voiceCommand
     const spinner = ora('Loading voice personality...').start();
     try {
       const response = await apiClient.get('/api/v1/voice-personality');
-      const p = response.data as any;
+      const p = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green('Voice personality'));
       console.log('');
@@ -318,11 +318,11 @@ voiceCommand
     const spinner = ora('Loading available voices...').start();
     try {
       const response = await apiClient.get('/api/v1/voice-personality/voices');
-      const voices = (response.data as any).voices || response.data || [];
+      const voices = (response.data as Record<string, any>).voices || response.data || [];
       if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${voices.length} voices available`));
       console.log('');
-      for (const v of voices as any[]) {
+      for (const v of voices as Record<string, any>[]) {
         const name = chalk.bold(v.name || v.id);
         const desc = v.description ? chalk.dim(` — ${v.description}`) : '';
         const lang = v.language ? chalk.cyan(` [${v.language}]`) : '';
@@ -342,13 +342,13 @@ voiceCommand
     const spinner = ora('Loading transcript...').start();
     try {
       const response = await apiClient.get(`/api/v1/voice/calls/${callId}/transcript`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green('Call transcript'));
       console.log('');
       const entries = data.entries || data.messages || [];
       if (entries.length > 0) {
-        for (const entry of entries as any[]) {
+        for (const entry of entries as Record<string, any>[]) {
           const speaker = entry.speaker || entry.role || 'Unknown';
           const label = speaker.toLowerCase().includes('agent') ? chalk.cyan(speaker) : chalk.yellow(speaker);
           console.log(`  ${label}: ${entry.text || entry.content || ''}`);

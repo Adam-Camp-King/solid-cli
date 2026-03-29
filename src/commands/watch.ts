@@ -179,7 +179,7 @@ async function pushPage(filePath: string, relative: string, manifest: any, dryRu
       layout_json: data.layout_json || { sections: [] },
     });
     // Update manifest with new ID
-    const newPage = (response.data as any)?.page;
+    const newPage = (response.data as Record<string, any>)?.page;
     if (newPage?.id) {
       manifest.pages = manifest.pages || {};
       manifest.pages[fileName] = { id: newPage.id, slug: data.slug, updated_at: new Date().toISOString() };

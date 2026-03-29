@@ -127,7 +127,7 @@ export const diffCommand = new Command('diff')
           let remotePagesMap: Record<string, any> = {};
           try {
             const response = await apiClient.pagesList();
-            const remotePages = (response.data as any)?.pages || [];
+            const remotePages = (response.data as Record<string, any>)?.pages || [];
             for (const p of remotePages) {
               remotePagesMap[p.slug] = p;
             }
@@ -153,7 +153,7 @@ export const diffCommand = new Command('diff')
               let remoteFull: any = null;
               try {
                 const pageResponse = await apiClient.pageGet(remote.id);
-                remoteFull = (pageResponse.data as any)?.page || pageResponse.data;
+                remoteFull = (pageResponse.data as Record<string, any>)?.page || pageResponse.data;
               } catch {
                 remoteFull = remote;
               }
@@ -205,7 +205,7 @@ export const diffCommand = new Command('diff')
           let remoteKbMap: Record<number, any> = {};
           try {
             const kbResponse = await apiClient.kbSearch('*', 500);
-            const entries = (kbResponse.data as any)?.results || (kbResponse.data as any)?.entries || [];
+            const entries = (kbResponse.data as Record<string, any>)?.results || (kbResponse.data as Record<string, any>)?.entries || [];
             for (const e of (Array.isArray(entries) ? entries : [])) {
               remoteKbMap[e.id] = e;
             }

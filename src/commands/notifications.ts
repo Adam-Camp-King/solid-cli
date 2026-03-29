@@ -20,7 +20,7 @@ notificationsCommand.command('list').description('List recent notifications')
       const res = await apiClient.get('/api/v1/notifications', { params });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const items = (res.data as any).notifications || (res.data as any).items || [];
+      const items = (res.data as Record<string, any>).notifications || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Notifications (${items.length})`));
       if (items.length === 0) { console.log(chalk.dim('  No notifications.')); }

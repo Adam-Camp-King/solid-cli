@@ -37,7 +37,7 @@ seoCommand
 
     try {
       const response = await apiClient.post('/api/v1/seo-audit/run', body);
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       spinner.succeed(chalk.green('SEO audit started'));
       console.log('');
       console.log(`  ${chalk.bold('Target:')}  ${d.target_url}`);
@@ -74,7 +74,7 @@ seoCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('SEO Site Audit'));
 
@@ -138,7 +138,7 @@ seoCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Local SEO Audit'));
 
@@ -190,7 +190,7 @@ seoCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Search Rankings'));
 
@@ -233,7 +233,7 @@ seoCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Citations'));
 
@@ -275,7 +275,7 @@ seoCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       const gaps = d.gaps || [];
       console.log('');
       console.log(ui.header(`SEO Gaps (${gaps.length})`));

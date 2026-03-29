@@ -50,7 +50,7 @@ blogCommand
         return;
       }
 
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const posts = data.posts || data.items || [];
       spinner.succeed(chalk.green(`${posts.length} blog posts`));
 
@@ -88,7 +88,7 @@ blogCommand
 
     try {
       const response = await apiClient.get(`/api/v1/cms/blog/posts/${id}`);
-      const post = response.data as any;
+      const post = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -177,7 +177,7 @@ blogCommand
       if (tagList.length) body.tags = tagList;
 
       const response = await apiClient.post('/api/v1/cms/blog/posts', body);
-      const post = response.data as any;
+      const post = response.data as Record<string, any>;
       spinner.succeed(chalk.green(`Blog post created: "${title}"`));
       if (post.id) console.log(chalk.dim(`  ID: ${post.id}`));
     } catch (error) {
@@ -266,7 +266,7 @@ seoCommand
 
     try {
       const response = await apiClient.post('/local-seo/audit');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -309,7 +309,7 @@ seoCommand
 
     try {
       const response = await apiClient.get('/local-seo/profile');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -339,7 +339,7 @@ seoCommand
 
     try {
       const response = await apiClient.get('/local-seo/gaps');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -379,7 +379,7 @@ seoCommand
 
     try {
       const response = await apiClient.get('/local-seo/citations');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();

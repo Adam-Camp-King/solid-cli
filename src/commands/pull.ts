@@ -95,7 +95,7 @@ export const pullCommand = new Command('pull')
     const infoSpinner = ora('Pulling company info...').start();
     try {
       const infoRes = await apiClient.companyInfo();
-      const company = (infoRes.data as any).company;
+      const company = (infoRes.data as Record<string, any>).company;
       manifest.company_name = company?.name || '';
 
       const configData = {
@@ -128,7 +128,7 @@ export const pullCommand = new Command('pull')
       const pagesSpinner = ora('Pulling pages...').start();
       try {
         const pagesRes = await apiClient.pagesList();
-        const pages = (pagesRes.data as any).pages || [];
+        const pages = (pagesRes.data as Record<string, any>).pages || [];
 
         if (pages.length > 0) {
           const pagesDir = path.join(baseDir, 'pages');
@@ -138,7 +138,7 @@ export const pullCommand = new Command('pull')
             // Fetch full page with layout_json
             try {
               const fullPage = await apiClient.pageGet(page.id);
-              const pageData = fullPage.data as any;
+              const pageData = fullPage.data as Record<string, any>;
 
               const filename = `${pageData.slug || slugify(pageData.title)}.json`;
               const fileContent = {
@@ -185,7 +185,7 @@ export const pullCommand = new Command('pull')
       const kbSpinner = ora('Pulling knowledge base...').start();
       try {
         const kbRes = await apiClient.kbSearch('', 100);
-        const entries = (kbRes.data as any).results || [];
+        const entries = (kbRes.data as Record<string, any>).results || [];
 
         if (entries.length > 0) {
           const kbDir = path.join(baseDir, 'kb');
@@ -231,7 +231,7 @@ export const pullCommand = new Command('pull')
       const svcSpinner = ora('Pulling services...').start();
       try {
         const svcRes = await apiClient.servicesList();
-        const items = (svcRes.data as any).items || [];
+        const items = (svcRes.data as Record<string, any>).items || [];
 
         if (items.length > 0) {
           const svcDir = path.join(baseDir, 'services');
@@ -281,7 +281,7 @@ export const pullCommand = new Command('pull')
       const prodSpinner = ora('Pulling products...').start();
       try {
         const prodRes = await apiClient.productsList();
-        const items = (prodRes.data as any).items || [];
+        const items = (prodRes.data as Record<string, any>).items || [];
 
         if (items.length > 0) {
           const prodDir = path.join(baseDir, 'products');

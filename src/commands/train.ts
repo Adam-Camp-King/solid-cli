@@ -165,7 +165,7 @@ trainCommand
         const spinner = ora('Searching KB...').start();
         try {
           const kbRes = await apiClient.kbSearch('', 10);
-          const results = (kbRes.data as any).results || [];
+          const results = (kbRes.data as Record<string, any>).results || [];
           spinner.stop();
 
           console.log(chalk.bold(`\n  ${results.length} KB entries:`));
@@ -184,7 +184,7 @@ trainCommand
 
       try {
         const response = await apiClient.agentChat(input, agentName);
-        const reply = (response.data as any).response || (response.data as any).message || 'No response';
+        const reply = (response.data as Record<string, any>).response || (response.data as Record<string, any>).message || 'No response';
         spinner.stop();
 
         console.log(`  ${chalk.green(agentName)} > ${reply}`);
@@ -254,7 +254,7 @@ trainCommand
         category: options.category,
       });
 
-      const entry = result.data as any;
+      const entry = result.data as Record<string, any>;
       spinner.succeed(chalk.green(`KB entry created: "${options.title}" [${options.category}]`));
       if (entry.id) {
         console.log(chalk.dim(`  ID: ${entry.id}`));
@@ -281,7 +281,7 @@ trainCommand
 
     try {
       const kbRes = await apiClient.kbSearch('', 100);
-      const entries = (kbRes.data as any).results || [];
+      const entries = (kbRes.data as Record<string, any>).results || [];
 
       spinner.stop();
 

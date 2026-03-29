@@ -27,8 +27,8 @@ domainsCommand.command('list').description('List configured domains')
         return;
       }
 
-      const sub = subRes.data as any;
-      const customs = (customRes.data as any).domains || customRes.data || [];
+      const sub = subRes.data as Record<string, any>;
+      const customs = (customRes.data as Record<string, any>).domains || customRes.data || [];
 
       console.log('');
       console.log(ui.header('Domains'));
@@ -61,7 +61,7 @@ domainsCommand.command('add <domain>').description('Add a custom domain')
     try {
       const res = await apiClient.post('/api/v1/domains/custom', { domain });
       spinner.stop();
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.successBox('Domain Added', [
         `${chalk.dim('Domain:')} ${domain}`,
@@ -100,7 +100,7 @@ domainsCommand.command('verify <id>').description('Verify DNS for a custom domai
     try {
       const res = await apiClient.post(`/api/v1/domains/custom/${domainId}/verify`);
       spinner.stop();
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       if (d.verified) {
         console.log(chalk.green(`  ✓ Domain verified and active`));
       } else {

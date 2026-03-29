@@ -39,7 +39,7 @@ antCommand
       if (options.sourceUrl) body.source_url = options.sourceUrl;
 
       const response = await apiClient.post('/api/v1/cli/ant/import', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Import created'));
       console.log('');
@@ -73,7 +73,7 @@ antCommand
 
     try {
       const response = await apiClient.post('/api/v1/cli/ant/import-url', { url });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('URL imported'));
       console.log('');
@@ -111,7 +111,7 @@ antCommand
       }
 
       const response = await apiClient.post('/api/v1/cli/ant/execute', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Import executed'));
       console.log('');
@@ -149,7 +149,7 @@ antCommand
       if (options.limit) params.limit = parseInt(options.limit);
 
       const response = await apiClient.get('/api/v1/cli/ant/imports', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const imports = data.imports || [];
 
       spinner.succeed(`${imports.length} imports`);
@@ -187,7 +187,7 @@ antCommand
     const spinner = ora('Loading import...').start();
     try {
       const response = await apiClient.get(`/api/v1/cli/ant/imports/${importId}`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -242,7 +242,7 @@ antCommand
 
     try {
       const response = await apiClient.post(`/api/v1/cli/ant/imports/${importId}/rollback`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Import rolled back'));
       if (data.rolled_back) {
@@ -268,7 +268,7 @@ antCommand
       if (options.formatHint) body.format_hint = options.formatHint;
 
       const response = await apiClient.post('/api/v1/cli/ant/analyze', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed('Analysis complete');
       console.log(ui.header('Code Analysis'));

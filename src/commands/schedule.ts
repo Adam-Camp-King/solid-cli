@@ -32,7 +32,7 @@ scheduleCommand
       if (options.status) params.status = options.status;
 
       const response = await apiClient.get('/api/v1/schedule', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const items = data.appointments || data.items || [];
 
       if (options.json) {
@@ -66,7 +66,7 @@ scheduleCommand
 
     try {
       const response = await apiClient.get(`/api/v1/schedule/${id}`);
-      const apt = response.data as any;
+      const apt = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -110,7 +110,7 @@ scheduleCommand
       if (options.notes) body.notes = options.notes;
 
       const response = await apiClient.post('/api/v1/schedule', body);
-      const apt = response.data as any;
+      const apt = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green(`Appointment created (#${apt.id || 'OK'})`));
       console.log(chalk.dim(`  ${options.date} at ${options.time}`));
@@ -182,7 +182,7 @@ scheduleCommand
 
     try {
       const response = await apiClient.get('/api/v1/schedule/calendar');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -220,7 +220,7 @@ scheduleCommand
     try {
       const params = { service_id: options.serviceId, date: options.date };
       const response = await apiClient.get('/api/v1/availability/slots', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const slots = data.slots || data.available || [];
 
       if (options.json) {

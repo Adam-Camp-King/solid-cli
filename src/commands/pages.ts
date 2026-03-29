@@ -46,7 +46,7 @@ pagesCommand
         return;
       }
 
-      const pages = (response.data as any).pages || [];
+      const pages = (response.data as Record<string, any>).pages || [];
       spinner.succeed(chalk.green(`${pages.length} pages`));
 
       if (pages.length === 0) {
@@ -142,7 +142,7 @@ pagesCommand
         return;
       }
 
-      const page = (response.data as any).page || response.data;
+      const page = (response.data as Record<string, any>).page || response.data;
       spinner.succeed(chalk.green(page.title || `Page #${pageId}`));
 
       console.log('');
@@ -186,7 +186,7 @@ pagesCommand
         is_published: options.publish || false,
       });
 
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const page = data.page || data;
       spinner.succeed(chalk.green(`Page created: ${page.title || options.title}`));
 
@@ -254,7 +254,7 @@ pagesCommand
         auto_publish: options.publish || false,
       });
 
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const page = data.page || data;
       spinner.succeed(chalk.green(`Page generated: ${page.title || 'New Page'}`));
 

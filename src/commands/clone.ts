@@ -47,7 +47,7 @@ export const cloneCommand = new Command('clone')
 
       try {
         const response = await apiClient.templatesList();
-        const templates = (response.data as any).templates || [];
+        const templates = (response.data as Record<string, any>).templates || [];
         spinner.stop();
 
         console.log('');
@@ -89,7 +89,7 @@ export const cloneCommand = new Command('clone')
 
       try {
         const response = await apiClient.templatePreview(templateName);
-        const data = response.data as any;
+        const data = response.data as Record<string, any>;
         spinner.stop();
 
         console.log('');
@@ -139,7 +139,7 @@ export const cloneCommand = new Command('clone')
 
     try {
       const response = await apiClient.templateClone(templateName);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       cloneSpinner.succeed(chalk.green(`Template cloned: ${data.display_name}`));
 

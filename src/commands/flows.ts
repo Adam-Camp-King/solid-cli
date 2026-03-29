@@ -62,7 +62,7 @@ flowsCommand
       if (options.type) params.commerce_type = options.type;
 
       const response = await apiClient.get('/api/v1/cli/flows', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const flows = data.flows || [];
 
       if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
@@ -97,7 +97,7 @@ flowsCommand
     const spinner = ora('Loading flow...').start();
     try {
       const response = await apiClient.get(`/api/v1/cli/flows/${flowId}`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
 
@@ -138,7 +138,7 @@ flowsCommand
       if (options.trialDays) body.trial_days = parseInt(options.trialDays);
 
       const response = await apiClient.post('/api/v1/cli/flows', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Flow created'));
       console.log('');
@@ -208,7 +208,7 @@ flowsCommand
     const spinner = ora('Loading metrics...').start();
     try {
       const response = await apiClient.get(`/api/v1/cli/flows/${flowId}/metrics`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
 
@@ -241,7 +241,7 @@ flowsCommand
       if (options.price) params.price = parseFloat(options.price);
 
       const response = await apiClient.post(`/api/v1/cli/flows/${flowId}/clone`, params);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Flow cloned'));
       console.log('');
@@ -264,7 +264,7 @@ flowsCommand
     const spinner = ora('Loading flow agents...').start();
     try {
       const response = await apiClient.get(`/api/v1/cli/flows/${flowId}/agents`);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const agents = data.agents || [];
 
       spinner.succeed(`${agents.length} agents on flow`);

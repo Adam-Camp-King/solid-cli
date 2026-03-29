@@ -32,7 +32,7 @@ brandCommand
     const spinner = ora('Loading brand...').start();
     try {
       const response = await apiClient.get('/api/v1/cli/brand');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -149,7 +149,7 @@ brandCommand
       };
 
       const response = await apiClient.post('/api/v1/cli/brand', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green('Brand created'));
       console.log('');
@@ -222,7 +222,7 @@ brandCommand
       const response = await apiClient.get('/api/v1/cli/brand/export', {
         params: { format: options.format },
       });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       spinner.succeed(`Brand exported as ${options.format}`);
       console.log('');
@@ -252,7 +252,7 @@ brandCommand
     const spinner = ora('Auditing brand consistency...').start();
     try {
       const response = await apiClient.get('/api/v1/cli/brand/audit');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();

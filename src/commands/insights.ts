@@ -39,7 +39,7 @@ insightsCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       const insights = d.insights || d.items || [];
       console.log('');
       console.log(ui.header(`Pending Insights (${insights.length})`));
@@ -85,7 +85,7 @@ insightsCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Insight Statistics'));
       if (d.total !== undefined) console.log(ui.label('Total', String(d.total)));

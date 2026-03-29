@@ -36,7 +36,7 @@ servicesCommand
         return;
       }
 
-      let items = (response.data as any).items || [];
+      let items = (response.data as Record<string, any>).items || [];
 
       if (options.category) {
         items = items.filter((s: any) =>

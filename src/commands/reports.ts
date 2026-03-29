@@ -40,7 +40,7 @@ reportsCommand
 
     try {
       const response = await apiClient.get('/Reports/definitions');
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const definitions = data.definitions || data.reports || REPORT_TYPES;
 
       if (options.json) {
@@ -85,7 +85,7 @@ reportsCommand
       }
 
       const response = await apiClient.post('/Reports/run', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -135,7 +135,7 @@ reportsCommand
     try {
       const params = { days: parseInt(options.days) };
       const response = await apiClient.get('/Reports/revenue-summary', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();
@@ -173,7 +173,7 @@ reportsCommand
     try {
       const params = { limit: parseInt(options.limit), days: parseInt(options.days) };
       const response = await apiClient.get('/Reports/top-products', { params });
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const items = data.products || data.items || [];
 
       if (options.json) {
@@ -218,7 +218,7 @@ reportsCommand
       if (options.to) body.date_to = options.to;
 
       const response = await apiClient.post('/Reports/export', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
 
       if (data.csv || data.content) {
         const csv = data.csv || data.content;

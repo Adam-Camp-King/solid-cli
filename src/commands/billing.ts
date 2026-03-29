@@ -18,7 +18,7 @@ billingCommand.command('status').description('Current subscription and usage')
       const res = await apiClient.get('/api/v1/billing/overview');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Subscription'));
       if (d.tier || d.plan) console.log(ui.label('Tier', chalk.hex('#818cf8')(d.tier || d.plan)));
@@ -39,7 +39,7 @@ billingCommand.command('usage').description('Current period usage (tokens, stora
       const res = await apiClient.get('/api/v1/billing/current-statement');
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Usage This Period'));
       if (d.tokens_used !== undefined) console.log(ui.label('AI Tokens', d.tokens_used.toLocaleString()));
@@ -61,7 +61,7 @@ billingCommand.command('invoices').description('List invoices')
       const res = await apiClient.get('/api/v1/billing/invoices', { params: { limit: options.limit } });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const invoices = (res.data as any).invoices || (res.data as any).items || [];
+      const invoices = (res.data as Record<string, any>).invoices || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Invoices (${invoices.length})`));
       if (invoices.length === 0) { console.log(chalk.dim('  No invoices yet.')); }
@@ -83,7 +83,7 @@ billingCommand.command('checkout-link <companyId>')
         company_id: parseInt(companyId, 10),
         tier_slug: options.tier,
       });
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       spinner.succeed(chalk.green('Checkout link ready'));
       console.log('');
       console.log(`  ${chalk.bold('URL:')}     ${chalk.cyan(d.url)}`);
@@ -128,7 +128,7 @@ billingCommand.command('invoice <companyIdOrEmail>')
       }
 
       const res = await apiClient.post('/api/v1/billing/invoice', body);
-      const d = res.data as any;
+      const d = res.data as Record<string, any>;
       spinner.succeed(chalk.green(`Invoice sent to ${d.recipient}`));
       console.log('');
       console.log(`  ${chalk.bold('Invoice:')}  ${d.invoice_id}`);

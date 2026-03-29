@@ -40,7 +40,7 @@ siteCommand
         return;
       }
 
-      const sites = (response.data as any).sites || [];
+      const sites = (response.data as Record<string, any>).sites || [];
       spinner.succeed(chalk.green(`${sites.length} sites`));
 
       if (sites.length === 0) {
@@ -89,7 +89,7 @@ siteCommand
         options.live || false,
       );
 
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const site = data.site || {};
       spinner.succeed(chalk.green(`Site created: ${site.name || slug}`));
 
@@ -144,7 +144,7 @@ siteCommand
         return;
       }
 
-      const site = (response.data as any).site || {};
+      const site = (response.data as Record<string, any>).site || {};
       spinner.succeed(chalk.green(site.name || site.slug));
 
       console.log('');
@@ -208,7 +208,7 @@ siteCommand
 
     try {
       const response = await apiClient.siteTemplates();
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       const templates = data.templates || [];
       const recommended = data.recommended;
 
@@ -254,7 +254,7 @@ siteCommand
       if (options.cta) body.cta_text = options.cta;
 
       const response = await apiClient.post('/api/v1/cms/pages/regenerate-website', body);
-      const data = response.data as any;
+      const data = response.data as Record<string, any>;
       spinner.succeed(chalk.green('Website regenerated'));
 
       console.log('');

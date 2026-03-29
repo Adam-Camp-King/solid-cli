@@ -41,7 +41,7 @@ analyticsCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Business Analytics'));
 
@@ -79,7 +79,7 @@ analyticsCommand
         return;
       }
 
-      const d = response.data as any;
+      const d = response.data as Record<string, any>;
       console.log('');
       console.log(ui.header('AI Crawler Traffic'));
 
