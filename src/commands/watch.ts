@@ -233,8 +233,6 @@ async function pushSettings(filePath: string, dryRun: boolean) {
     return;
   }
 
-  const companyId = config.companyId;
-  if (!companyId) return;
-  await apiClient.updateWebsiteSettings(companyId, data.website_settings);
+  await apiClient.updateWebsiteSettings(data.website_settings);
   console.log(chalk.green(`  [updated] website settings`));
 }
