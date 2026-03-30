@@ -833,6 +833,37 @@ class ApiClient {
   }
 
   // =========================================================================
+  // CLI Agent Logs & Testing
+  // =========================================================================
+
+  async agentLogs(agentType?: string, options: { hours?: number; limit?: number; event_type?: string } = {}): Promise<ApiResponse<unknown>> {
+    const url = agentType ? `/api/v1/cli/agents/${agentType}/logs` : '/api/v1/cli/agents/logs';
+    const response = await this.client.get(url, { params: options });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentErrors(agentType: string, hours = 24, limit = 50): Promise<ApiResponse<unknown>> {
+    const response = await this.client.get(`/api/v1/cli/agents/${agentType}/logs/errors`, { params: { hours, limit } });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentTest(options: {
+    agent_type: string;
+    prompt: string;
+    assertions?: string[];
+    not_assertions?: string[];
+    timeout_seconds?: number;
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/v1/cli/agents/test', options);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentTestResults(hours = 24, limit = 50): Promise<ApiResponse<unknown>> {
+    const response = await this.client.get('/api/v1/cli/agents/test/results', { params: { hours, limit } });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // =========================================================================
   // CLI Company Migration
   // =========================================================================
 

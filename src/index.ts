@@ -78,6 +78,8 @@ import { importCommand } from './commands/import';
 import { watchCommand } from './commands/watch';
 import { sandboxCommand } from './commands/sandbox';
 import { historyCommand, rollbackCommand } from './commands/history';
+import { logsCommand } from './commands/logs';
+import { testCommand } from './commands/test';
 import { deployCommand } from './commands/deploy';
 import { migrateCommand } from './commands/migrate';
 import { ui } from './lib/ui';
@@ -115,6 +117,8 @@ program.addCommand(historyCommand);
 program.addCommand(rollbackCommand);
 program.addCommand(deployCommand);
 program.addCommand(migrateCommand);
+program.addCommand(logsCommand);
+program.addCommand(testCommand);
 
 // Business data
 program.addCommand(kbCommand);
