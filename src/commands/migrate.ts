@@ -26,6 +26,7 @@ export const migrateCommand = new Command('migrate')
   .option('--pages <slugs>', 'Specific page slugs (comma-separated)')
   .option('--kb-ids <ids>', 'Specific KB entry IDs (comma-separated)')
   .option('--overwrite', 'Overwrite existing items on target (default: skip)')
+  .option('--replace <pairs>', 'Find/replace in migrated content (e.g. "Acme:Beta Inc,old.com:new.com")')
   .option('-y, --yes', 'Skip confirmation')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
