@@ -363,7 +363,51 @@ export const serveCommand = new Command('serve')
   .option('--port <number>', 'Server port', '4000')
   .option('--dir <path>', 'Working directory', process.cwd())
   .option('--open', 'Auto-open browser')
+  .option('--preview <token>', 'Serve a preview deployment locally (fetches from API)')
   .action(async (options) => {
+    // Preview mode: fetch preview data from API and serve it
+    if (options.preview) {
+      const { config: cfg } = await import('../lib/config');
+      const { apiClient: api, handleApiError: handleErr } = await import('../lib/api-client');
+      const ora = (await import('ora')).default;
+
+      if (!cfg.isLoggedIn()) {
+        console.error(chalk.red('Not logged in. Run: solid auth login'));
+        return;
+      }
+
+      const spinner = ora('Fetching preview data...').start();
+      try {
+        const res = await api.previewGet(options.preview);
+        const data = res.data as any;
+        spinner.succeed(chalk.green(`Preview loaded: ${data.page_count} pages`));
+
+        // Write preview pages to temp dir
+        const tmpDir = path.join(options.dir, '.preview-' + options.preview.substring(0, 8));
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+        const pagesDir = path.join(tmpDir, 'pages');
+        if (!fs.existsSync(pagesDir)) fs.mkdirSync(pagesDir);
+
+        for (const page of (data.pages_snapshot || [])) {
+          const filename = (page.slug || 'untitled') + '.json';
+          fs.writeFileSync(path.join(pagesDir, filename), JSON.stringify(page, null, 2) + '\n');
+        }
+
+        if (data.settings_snapshot) {
+          fs.writeFileSync(path.join(tmpDir, 'solid.config.json'), JSON.stringify(data.settings_snapshot, null, 2) + '\n');
+        }
+
+        // Override dir to temp dir and fall through to normal serve
+        options.dir = tmpDir;
+        console.log(chalk.dim(`  Serving preview from ${tmpDir}`));
+        console.log('');
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to fetch preview'));
+        console.error(chalk.red(`  ${handleErr(error).message}`));
+        return;
+      }
+    }
+
     const dir = options.dir;
     const port = parseInt(options.port);
 
