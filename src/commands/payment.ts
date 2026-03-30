@@ -57,7 +57,7 @@ paymentCommand
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Loading payment status...'), spinner: 'dots' }).start();
 
     try {
-      const response = await apiClient.get('/api/v1/payments/status');
+      const response = await apiClient.get('/api/v1/billing/overview');
       spinner.stop();
 
       const data = response.data as Record<string, any>;

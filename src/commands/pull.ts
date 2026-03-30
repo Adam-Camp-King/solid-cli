@@ -52,6 +52,8 @@ export const pullCommand = new Command('pull')
   .option('--pages-only', 'Only pull pages')
   .option('--kb-only', 'Only pull knowledge base')
   .option('--force', 'Overwrite existing files without prompting')
+  .option('--cache', 'Save API responses to .solid/cache/ for offline use')
+  .option('--offline', 'Use cached data instead of calling API (requires prior --cache pull)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -65,6 +67,67 @@ export const pullCommand = new Command('pull')
     }
 
     const baseDir = path.resolve(options.dir);
+    const cacheDir = path.join(baseDir, '.solid', 'cache');
+
+    // ── Offline mode: restore from cache ─────────────────────────────
+    if (options.offline) {
+      if (!fs.existsSync(cacheDir)) {
+        console.error(chalk.red('No cache found. Run `solid pull --cache` first.'));
+        process.exit(1);
+      }
+
+      const cacheMetaPath = path.join(cacheDir, 'meta.json');
+      if (!fs.existsSync(cacheMetaPath)) {
+        console.error(chalk.red('Cache metadata missing. Run `solid pull --cache` to rebuild.'));
+        process.exit(1);
+      }
+
+      const cacheMeta = JSON.parse(fs.readFileSync(cacheMetaPath, 'utf-8'));
+      console.log('');
+      console.log(chalk.yellow(`  Working offline from cache (${cacheMeta.cached_at})`));
+      console.log('');
+
+      // Restore pages from cache
+      const cachedPages = path.join(cacheDir, 'pages');
+      if (fs.existsSync(cachedPages)) {
+        const pagesOut = path.join(baseDir, 'pages');
+        ensureDir(pagesOut);
+        for (const file of fs.readdirSync(cachedPages)) {
+          fs.copyFileSync(path.join(cachedPages, file), path.join(pagesOut, file));
+        }
+        console.log(chalk.green(`  ✓ ${fs.readdirSync(cachedPages).length} pages restored from cache`));
+      }
+
+      // Restore KB from cache
+      const cachedKB = path.join(cacheDir, 'kb');
+      if (fs.existsSync(cachedKB)) {
+        const kbOut = path.join(baseDir, 'kb');
+        ensureDir(kbOut);
+        for (const file of fs.readdirSync(cachedKB)) {
+          fs.copyFileSync(path.join(cachedKB, file), path.join(kbOut, file));
+        }
+        console.log(chalk.green(`  ✓ ${fs.readdirSync(cachedKB).length} KB entries restored from cache`));
+      }
+
+      // Restore config from cache
+      const cachedConfig = path.join(cacheDir, 'solid.config.json');
+      if (fs.existsSync(cachedConfig)) {
+        fs.copyFileSync(cachedConfig, path.join(baseDir, 'solid.config.json'));
+        console.log(chalk.green('  ✓ solid.config.json restored from cache'));
+      }
+
+      // Restore manifest from cache
+      const cachedManifest = path.join(cacheDir, 'manifest.json');
+      if (fs.existsSync(cachedManifest)) {
+        ensureDir(path.join(baseDir, '.solid'));
+        fs.copyFileSync(cachedManifest, path.join(baseDir, '.solid', 'manifest.json'));
+      }
+
+      console.log('');
+      console.log(chalk.dim('  Note: Offline data may be stale. Run `solid pull` when online to sync.'));
+      console.log('');
+      return;
+    }
 
     // Check if directory has existing solid project
     const manifestPath = path.join(baseDir, '.solid', 'manifest.json');
@@ -328,6 +391,53 @@ export const pullCommand = new Command('pull')
     // ── Write manifest ───────────────────────────────────────────────
     ensureDir(path.join(baseDir, '.solid'));
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+    // ── Save offline cache if requested ─────────────────────────────
+    if (options.cache) {
+      const cacheSpinner = ora('Saving offline cache...').start();
+      try {
+        ensureDir(cacheDir);
+
+        // Cache pages
+        const pagesDir = path.join(baseDir, 'pages');
+        if (fs.existsSync(pagesDir)) {
+          const cachedPages = path.join(cacheDir, 'pages');
+          ensureDir(cachedPages);
+          for (const file of fs.readdirSync(pagesDir)) {
+            fs.copyFileSync(path.join(pagesDir, file), path.join(cachedPages, file));
+          }
+        }
+
+        // Cache KB
+        const kbDir = path.join(baseDir, 'kb');
+        if (fs.existsSync(kbDir)) {
+          const cachedKB = path.join(cacheDir, 'kb');
+          ensureDir(cachedKB);
+          for (const file of fs.readdirSync(kbDir)) {
+            fs.copyFileSync(path.join(kbDir, file), path.join(cachedKB, file));
+          }
+        }
+
+        // Cache config + manifest
+        const configFile = path.join(baseDir, 'solid.config.json');
+        if (fs.existsSync(configFile)) {
+          fs.copyFileSync(configFile, path.join(cacheDir, 'solid.config.json'));
+        }
+        fs.copyFileSync(manifestPath, path.join(cacheDir, 'manifest.json'));
+
+        // Cache metadata
+        fs.writeFileSync(path.join(cacheDir, 'meta.json'), JSON.stringify({
+          company_id: companyId,
+          company_name: manifest.company_name,
+          cached_at: new Date().toISOString(),
+          file_count: totalFiles,
+        }, null, 2) + '\n');
+
+        cacheSpinner.succeed(chalk.green(`Offline cache saved to .solid/cache/`));
+      } catch {
+        cacheSpinner.warn(chalk.yellow('Could not save offline cache'));
+      }
+    }
 
     // ── Write .gitignore for .solid ──────────────────────────────────
     const gitignorePath = path.join(baseDir, '.gitignore');

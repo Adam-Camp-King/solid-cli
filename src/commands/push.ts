@@ -150,6 +150,7 @@ export const pushCommand = new Command('push')
   .option('--pages-only', 'Only push page changes')
   .option('--kb-only', 'Only push KB changes')
   .option('--settings-only', 'Only push website settings')
+  .option('--force', 'Skip conflict detection (overwrite remote changes)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -244,6 +245,53 @@ export const pushCommand = new Command('push')
     } catch {
       // Non-fatal — don't block push if snapshot fails
       snapshotSpinner.warn(chalk.yellow('Could not save snapshot (history may be incomplete)'));
+    }
+
+    // ── Conflict detection ──────────────────────────────────────────
+    let conflicts: { file: string; localTime: string; remoteTime: string }[] = [];
+    if (!options.force && !options.dryRun) {
+      const conflictSpinner = ora('Checking for remote changes...').start();
+      try {
+        const updates = changes.pages.filter(p => p.action === 'update' && manifest.pages[p.file]?.id);
+        for (const page of updates) {
+          const manifestEntry = manifest.pages[page.file];
+          if (!manifestEntry?.updated_at) continue;
+          try {
+            const remote = await apiClient.pageGet(manifestEntry.id);
+            const remoteUpdatedAt = (remote.data as any)?.updated_at;
+            if (remoteUpdatedAt && new Date(remoteUpdatedAt) > new Date(manifestEntry.updated_at)) {
+              conflicts.push({
+                file: page.file,
+                localTime: manifestEntry.updated_at,
+                remoteTime: remoteUpdatedAt,
+              });
+            }
+          } catch {
+            // Skip conflict check if we can't fetch the page
+          }
+        }
+        if (conflicts.length > 0) {
+          conflictSpinner.warn(chalk.yellow(`${conflicts.length} conflict(s) detected`));
+          console.log('');
+          for (const c of conflicts) {
+            console.log(`  ${chalk.yellow('!')} pages/${c.file}`);
+            console.log(`    ${chalk.dim('Local pull:')}  ${new Date(c.localTime).toLocaleString()}`);
+            console.log(`    ${chalk.dim('Remote edit:')} ${new Date(c.remoteTime).toLocaleString()}`);
+          }
+          console.log('');
+          if (!options.yes) {
+            const proceed = await confirm(chalk.bold(`  Remote changes will be overwritten. Continue? (y/N) `));
+            if (!proceed) {
+              console.log(chalk.dim('  Cancelled. Run solid pull to get latest, then push again.'));
+              return;
+            }
+          }
+        } else {
+          conflictSpinner.succeed(chalk.green('No conflicts'));
+        }
+      } catch {
+        conflictSpinner.warn(chalk.yellow('Could not check for conflicts (pushing anyway)'));
+      }
     }
 
     // ── Push pages ────────────────────────────────────────────────────

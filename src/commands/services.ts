@@ -72,3 +72,46 @@ servicesCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+// Create service
+servicesCommand
+  .command('create')
+  .description('Create a new service')
+  .requiredOption('-t, --title <title>', 'Service title')
+  .option('-p, --price <price>', 'Price (dollars)')
+  .option('-d, --duration <minutes>', 'Duration in minutes')
+  .option('-c, --category <category>', 'Category')
+  .option('--description <text>', 'Description')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const spinner = ora(`Creating service "${options.title}"...`).start();
+    try {
+      const body: Record<string, unknown> = { title: options.title };
+      if (options.price) body.price = parseFloat(options.price);
+      if (options.duration) body.duration_minutes = parseInt(options.duration, 10);
+      if (options.category) body.category = options.category;
+      if (options.description) body.description = options.description;
+
+      const res = await apiClient.post('/api/v1/cms/public/services', body);
+      spinner.succeed(chalk.green('Service created'));
+      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const d = res.data as Record<string, any>;
+      console.log(`  ID: ${d.id || d.service?.id || 'created'}`);
+      console.log(`  Title: ${options.title}`);
+      if (options.price) console.log(`  Price: $${options.price}`);
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+// Delete service
+servicesCommand
+  .command('delete <id>')
+  .description('Delete a service by ID')
+  .action(async (id) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const spinner = ora(`Deleting service ${id}...`).start();
+    try {
+      await apiClient.delete(`/api/v1/services/${id}`);
+      spinner.succeed(chalk.green(`Service ${id} deleted`));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
