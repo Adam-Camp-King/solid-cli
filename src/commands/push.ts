@@ -236,6 +236,16 @@ export const pushCommand = new Command('push')
     let pushed = 0;
     let errors = 0;
 
+    // ── Snapshot current state before overwriting ─────────────────────
+    const snapshotSpinner = ora('Saving version snapshot...').start();
+    try {
+      await apiClient.createSnapshot('cli', `Before push at ${new Date().toISOString()}`);
+      snapshotSpinner.succeed(chalk.green('Version snapshot saved'));
+    } catch {
+      // Non-fatal — don't block push if snapshot fails
+      snapshotSpinner.warn(chalk.yellow('Could not save snapshot (history may be incomplete)'));
+    }
+
     // ── Push pages ────────────────────────────────────────────────────
     if (!options.kbOnly && !options.settingsOnly && changes.pages.length > 0) {
       const pagesSpinner = ora('Pushing pages...').start();
