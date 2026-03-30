@@ -757,6 +757,112 @@ class ApiClient {
     const response = await this.client.get('/api/v1/telemetry/agents/summary');
     return { data: response.data, status: response.status, success: true };
   }
+  // =========================================================================
+  // CLI History & Rollback
+  // =========================================================================
+
+  async historyPages(slug?: string, limit = 50): Promise<ApiResponse<unknown>> {
+    const url = slug ? `/api/v1/cli/history/pages/${slug}` : '/api/v1/cli/history/pages';
+    const response = await this.client.get(url, { params: { limit } });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async historyPageVersion(slug: string, version: number): Promise<ApiResponse<unknown>> {
+    const response = await this.client.get(`/api/v1/cli/history/pages/${slug}/${version}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async rollbackPage(slug: string, version: number): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/v1/cli/history/pages/${slug}/rollback`, { version });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async historyKB(entryId?: number, limit = 50): Promise<ApiResponse<unknown>> {
+    const url = entryId ? `/api/v1/cli/history/kb/${entryId}` : '/api/v1/cli/history/kb';
+    const response = await this.client.get(url, { params: { limit } });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async rollbackKB(entryId: number, version: number): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/v1/cli/history/kb/${entryId}/rollback`, { version });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async createSnapshot(source = 'cli', changeSummary?: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/v1/cli/history/snapshot', {
+      source,
+      change_summary: changeSummary,
+    });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // =========================================================================
+  // CLI Preview Deployments
+  // =========================================================================
+
+  async previewCreate(options: {
+    title?: string;
+    ttl_hours?: number;
+    pages_only?: boolean;
+    kb_only?: boolean;
+  } = {}): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/v1/cli/preview', options);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async previewList(status?: string, limit = 20): Promise<ApiResponse<unknown>> {
+    const params: Record<string, unknown> = { limit };
+    if (status) params.status = status;
+    const response = await this.client.get('/api/v1/cli/preview', { params });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async previewGet(token: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.get(`/api/v1/cli/preview/${token}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async previewPromote(token: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/v1/cli/preview/${token}/promote`, { confirm: true });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async previewExpire(token: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.delete(`/api/v1/cli/preview/${token}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // =========================================================================
+  // CLI Company Migration
+  // =========================================================================
+
+  async migratePreview(options: {
+    source_company_id: number;
+    target_company_id: number;
+    include_pages?: boolean;
+    include_kb?: boolean;
+    include_settings?: boolean;
+    page_slugs?: string[];
+    kb_ids?: number[];
+    overwrite_existing?: boolean;
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/v1/cli/migrate/preview', options);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async migrateExecute(options: {
+    source_company_id: number;
+    target_company_id: number;
+    include_pages?: boolean;
+    include_kb?: boolean;
+    include_settings?: boolean;
+    page_slugs?: string[];
+    kb_ids?: number[];
+    overwrite_existing?: boolean;
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/v1/cli/migrate/execute', options);
+    return { data: response.data, status: response.status, success: true };
+  }
 }
 
 export const apiClient = new ApiClient();

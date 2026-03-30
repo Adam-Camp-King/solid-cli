@@ -77,6 +77,9 @@ import { serveCommand } from './commands/serve';
 import { importCommand } from './commands/import';
 import { watchCommand } from './commands/watch';
 import { sandboxCommand } from './commands/sandbox';
+import { historyCommand, rollbackCommand } from './commands/history';
+import { deployCommand } from './commands/deploy';
+import { migrateCommand } from './commands/migrate';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -108,6 +111,10 @@ program.addCommand(openCommand);
 program.addCommand(importCommand);
 program.addCommand(watchCommand);
 program.addCommand(sandboxCommand);
+program.addCommand(historyCommand);
+program.addCommand(rollbackCommand);
+program.addCommand(deployCommand);
+program.addCommand(migrateCommand);
 
 // Business data
 program.addCommand(kbCommand);
@@ -196,6 +203,10 @@ program.addHelpText('after', () => {
       { cmd: 'solid clone plumber', desc: 'Scaffold from 52 industry templates' },
       { cmd: 'solid pull', desc: 'Download business data as local files' },
       { cmd: 'solid push', desc: 'Push local changes to production' },
+      { cmd: 'solid history', desc: 'View version history for pages & KB' },
+      { cmd: 'solid rollback', desc: 'Rollback to a previous version' },
+      { cmd: 'solid deploy', desc: 'Preview deployment with shareable URL' },
+      { cmd: 'solid migrate', desc: 'Copy pages/KB between companies' },
       { cmd: 'solid train chat', desc: 'Chat with your AI agent' },
       { cmd: 'solid switch', desc: 'Switch between companies (agencies)' },
     ]),
