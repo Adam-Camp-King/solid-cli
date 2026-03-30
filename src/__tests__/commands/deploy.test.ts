@@ -28,7 +28,7 @@ describe('deploy commands', () => {
         success: true,
       });
 
-      const result = await mockApi.previewCreate({ pages: ['home', 'about'], duration_hours: 48 });
+      const result = await mockApi.previewCreate({ title: 'Test Preview', ttl_hours: 48 });
       expect(mockApi.previewCreate).toHaveBeenCalled();
       expect((result.data as any).token).toBe('preview_abc123');
       expect((result.data as any).url).toContain('preview');
