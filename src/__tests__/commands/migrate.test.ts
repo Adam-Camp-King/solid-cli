@@ -32,8 +32,8 @@ describe('migrate command', () => {
       });
 
       const result = await mockApi.migratePreview({
-        from_company_id: 10,
-        to_company_id: 20,
+        source_company_id: 10,
+        target_company_id: 20,
       });
 
       expect(mockApi.migratePreview).toHaveBeenCalled();
