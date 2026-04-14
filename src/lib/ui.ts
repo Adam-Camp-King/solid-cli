@@ -6,6 +6,10 @@
  */
 
 import chalk from 'chalk';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
 // ── Brand Colors ────────────────────────────────────────────────────
 // Solid# purple/indigo gradient
@@ -80,7 +84,7 @@ function stripAnsi(str: string): string {
 export function banner(): string {
   const logo = gradientLines(LOGO_LINES);
   const tagline = chalk.dim('  AI Business Infrastructure');
-  const version = chalk.dim(`  v1.0.0`);
+  const version = chalk.dim(`  v${pkg.version}`);
 
   return `\n${logo}\n${tagline}  ${version}\n`;
 }
@@ -175,7 +179,7 @@ export async function animatedBanner(): Promise<void> {
     await delay(60);
   }
   console.log('');
-  console.log(chalk.dim('  AI Business Infrastructure') + '  ' + chalk.dim('v1.0.0'));
+  console.log(chalk.dim('  AI Business Infrastructure') + '  ' + chalk.dim(`v${pkg.version}`));
   console.log('');
 }
 
