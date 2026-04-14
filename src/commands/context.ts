@@ -502,7 +502,7 @@ function buildMarkdownContext(
     lines.push('### API Access');
     lines.push('```bash');
     lines.push('# For CI/CD or AI agent integration:');
-    lines.push('export SOLID_API_KEY=sk_live_...');
+    lines.push('export SOLID_API_KEY=your_api_key_here');
     lines.push('solid status  # Now uses API key instead of login token');
     lines.push('```');
     lines.push('');
