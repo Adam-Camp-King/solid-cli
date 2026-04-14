@@ -148,12 +148,8 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
-  async healthFull(): Promise<ApiResponse<{
-    status: string;
-    layers: Record<string, unknown>;
-    summary: { healthy_layers: number; total_layers: number };
-  }>> {
-    const response = await this.client.get('/api/v1/healthcheck/');
+  async healthFull(): Promise<ApiResponse<Record<string, any>>> {
+    const response = await this.client.get('/api/v1/health');
     return { data: response.data, status: response.status, success: true };
   }
 

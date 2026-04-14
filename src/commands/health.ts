@@ -42,24 +42,8 @@ export const healthCommand = new Command('health')
         console.log('');
 
       } else if (options.full) {
-        // Full health check (requires admin access in production)
-        let response;
-        try {
-          response = await apiClient.healthFull();
-        } catch {
-          // Full healthcheck is admin-gated in production — fall back to quick
-          spinner.warn(chalk.yellow('Full health check not available (admin-only in production)'));
-          console.log(chalk.dim('  Falling back to quick health check...\n'));
-          const quick = await apiClient.healthQuick();
-          const healthy = quick.data.status === 'healthy';
-          console.log(ui.infoBox('System Health', [
-            `${chalk.bold('Status:')}    ${healthy ? chalk.green('● healthy') : chalk.red('● ' + quick.data.status)}`,
-            `${chalk.bold('API:')}       ${chalk.dim(config.apiUrl)}`,
-            `${chalk.bold('Timestamp:')} ${chalk.dim(quick.data.timestamp)}`,
-          ]));
-          console.log('');
-          return;
-        }
+        // Full health check — /api/v1/health
+        const response = await apiClient.healthFull();
 
         if (options.json) {
           spinner.stop();
@@ -69,30 +53,54 @@ export const healthCommand = new Command('health')
 
         spinner.stop();
 
-        const summary = response.data.summary;
-        const allHealthy = summary.healthy_layers === summary.total_layers;
+        const d = response.data;
+        const isHealthy = d.status === 'healthy';
+        const statusIcon = isHealthy ? chalk.green('● healthy') :
+          d.status === 'degraded' ? chalk.yellow('● degraded') :
+          chalk.red('● ' + d.status);
 
-        const layers = response.data.layers as Record<string, { status: string }>;
-        const layerLines = Object.entries(layers).map(([name, data]) => {
-          const icon = data.status === 'healthy' ? chalk.green('●') :
-            data.status === 'degraded' ? chalk.yellow('●') :
-            chalk.red('●');
-          const displayName = name.replace('layer_', '').replace(/_/g, ' ');
-          const statusText = data.status === 'healthy' ? chalk.green(data.status) :
-            data.status === 'degraded' ? chalk.yellow(data.status) :
-            chalk.red(data.status);
-          return `  ${icon} ${displayName.padEnd(20)} ${statusText}`;
-        });
+        const lines: string[] = [
+          `${chalk.bold('Status:')}    ${statusIcon}`,
+          `${chalk.bold('API:')}       ${chalk.dim(config.apiUrl)}`,
+          `${chalk.bold('Timestamp:')} ${chalk.dim(d.timestamp)}`,
+        ];
+
+        // Show detailed info if available (requires HEALTH_CHECK_SECRET)
+        if (d.checks) {
+          lines.push('');
+          for (const [name, value] of Object.entries(d.checks)) {
+            const displayName = name.replace(/_/g, ' ');
+            const icon = value === 'ok' || value === 'loaded' ? chalk.green('●') :
+              String(value).includes('active') ? chalk.green('●') :
+              chalk.red('●');
+            lines.push(`  ${icon} ${displayName.padEnd(20)} ${chalk.dim(String(value))}`);
+          }
+        }
+
+        if (d.ports) {
+          lines.push('');
+          for (const [name, value] of Object.entries(d.ports)) {
+            const displayName = name.replace(/^\d+_/, '').replace(/_/g, ' ');
+            const icon = value === 'listening' || value === 'connected' ? chalk.green('●') :
+              chalk.red('●');
+            lines.push(`  ${icon} ${displayName.padEnd(20)} ${chalk.dim(String(value))}`);
+          }
+        }
+
+        if (d.warnings && d.warnings.length > 0) {
+          lines.push('');
+          for (const w of d.warnings) {
+            lines.push(`  ${chalk.yellow('⚠')} ${chalk.dim(w)}`);
+          }
+        }
+
+        if (!d.checks) {
+          lines.push('');
+          lines.push(chalk.dim('  Detailed checks require HEALTH_CHECK_SECRET'));
+        }
 
         console.log('');
-        console.log(ui.infoBox(
-          allHealthy ? `${summary.total_layers} Layers Healthy` : `${summary.healthy_layers}/${summary.total_layers} Healthy`,
-          [
-            `${chalk.bold('API:')} ${chalk.dim(config.apiUrl)}`,
-            '',
-            ...layerLines,
-          ]
-        ));
+        console.log(ui.infoBox('System Health', lines));
         console.log('');
 
       } else {
