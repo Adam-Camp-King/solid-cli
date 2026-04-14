@@ -135,7 +135,8 @@ class ApiClient {
   }>> {
     try {
       const response = await this.client.get('/api/v1/auth/me');
-      return { data: { authenticated: true, user: response.data }, status: response.status, success: true };
+      const user = response.data?.user || response.data;
+      return { data: { authenticated: true, user }, status: response.status, success: true };
     } catch {
       return { data: { authenticated: false }, status: 401, success: false };
     }
@@ -370,10 +371,7 @@ class ApiClient {
 
   // Services
   async servicesList(): Promise<ApiResponse<{ items: unknown[]; total: number }>> {
-    const companyId = config.companyId;
-    const response = await this.client.get(`/api/v1/cms/public/services`, {
-      params: { company_id: companyId },
-    });
+    const response = await this.client.get(`/api/v1/services/catalog`);
     return { data: response.data, status: response.status, success: true };
   }
 

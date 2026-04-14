@@ -30,9 +30,14 @@ seoCommand
     }
 
     const ora = (await import('ora')).default;
-    const body: Record<string, unknown> = {};
-    if (options.url) body.target_url = options.url;
 
+    if (!options.url) {
+      console.error(chalk.red('Missing required --url option.'));
+      console.log(chalk.dim('  Usage: solid seo site-audit --url https://example.com'));
+      process.exit(1);
+    }
+
+    const body = { target_url: options.url };
     const spinner = ora('Starting SEO site audit (this runs in background)...').start();
 
     try {

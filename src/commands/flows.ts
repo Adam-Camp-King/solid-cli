@@ -12,8 +12,18 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
 function requireAuth(): void {
+  const apiKey = process.env.SOLID_API_KEY;
+  if (apiKey && apiKey.startsWith('sk_solid_')) return;
   if (!config.isLoggedIn()) {
     console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+    process.exit(1);
+  }
+  // Flows endpoints require a CLI API key, not a JWT login token
+  if (!apiKey) {
+    console.error(chalk.red('Flows require a CLI API key.'));
+    console.log(chalk.dim('  1. Create one: solid auth token create -n "my-key" -s "flows:read,flows:write"'));
+    console.log(chalk.dim('  2. Export it:  export SOLID_API_KEY=sk_solid_...'));
+    console.log(chalk.dim('  3. Then retry: solid flow list'));
     process.exit(1);
   }
 }

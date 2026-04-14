@@ -11,14 +11,15 @@
 import { Command } from 'commander';
 
 const COMMANDS = [
-  'auth', 'status', 'pull', 'push', 'kb', 'pages', 'site', 'services',
-  'clone', 'agent', 'company', 'switch', 'crm', 'voice', 'health',
-  'vibe', 'integrations', 'brand', 'inventory', 'blog', 'flows',
-  'widgets', 'ant', 'connect', 'llms', 'audit', 'context', 'analytics',
-  'seo', 'billing', 'domains', 'train', 'design', 'insights',
-  'notifications', 'schedule', 'inbox', 'export', 'webhooks',
-  'support', 'reports', 'payment', 'dev', 'explore', 'docs',
-  'droplet', 'accounting',
+  'auth', 'status', 'pull', 'push', 'diff', 'serve', 'open', 'import',
+  'watch', 'sandbox', 'history', 'rollback', 'deploy', 'migrate', 'logs',
+  'test', 'kb', 'pages', 'site', 'services', 'clone', 'agent', 'company',
+  'switch', 'crm', 'voice', 'health', 'vibe', 'integrations', 'brand',
+  'inventory', 'blog', 'flow', 'widget', 'ant', 'connect', 'llms',
+  'audit', 'context', 'analytics', 'seo', 'billing', 'domains', 'train',
+  'design', 'insights', 'notifications', 'schedule', 'inbox', 'export',
+  'webhooks', 'support', 'reports', 'payment', 'dev', 'explore', 'docs',
+  'droplet', 'accounting', 'completion',
 ];
 
 const SUBCOMMANDS: Record<string, string[]> = {
@@ -37,6 +38,12 @@ const SUBCOMMANDS: Record<string, string[]> = {
   train: ['import', 'chat', 'add', 'status'],
   brand: ['get', 'update', 'css', 'export', 'audit', 'palette'],
   webhooks: ['list', 'create', 'delete'],
+  flow: ['list', 'create', 'activate', 'pause', 'test', 'archive', 'metrics'],
+  sandbox: ['fork', 'list', 'deploy', 'delete', 'diff', 'status'],
+  history: ['pages', 'kb'],
+  health: ['quick', 'full', 'mcp'],
+  analytics: ['dashboard', 'mcp-traffic'],
+  completion: ['--bash', '--fish', '--zsh'],
 };
 
 function generateZsh(): string {

@@ -196,9 +196,19 @@ authCommand
         console.log(chalk.dim('  Run `solid auth login` to re-authenticate'));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to check status'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      // Network failed — fall back to local config
+      if (config.userEmail || config.companyId) {
+        spinner.succeed(chalk.green('Authenticated (offline)'));
+        console.log(chalk.dim(`  Email: ${config.userEmail || 'unknown'}`));
+        console.log(chalk.dim(`  Company ID: ${config.companyId || 'unknown'}`));
+        console.log(chalk.dim(`  Environment: ${config.environment}`));
+        console.log(chalk.dim(`  API URL: ${config.apiUrl}`));
+        console.log(chalk.dim('  (Could not verify with server)'));
+      } else {
+        spinner.fail(chalk.red('Failed to check status'));
+        const apiError = handleApiError(error);
+        console.error(chalk.red(`  ${apiError.message}`));
+      }
     }
   });
 

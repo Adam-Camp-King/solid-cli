@@ -61,7 +61,7 @@ export const inboxCommand = new Command('inbox')
       }
 
       const data = response.data as Record<string, any>;
-      const messages = data?.items || data || [];
+      const messages = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
       spinner.succeed(chalk.green(`${messages.length} messages`));
 
       if (messages.length === 0) {

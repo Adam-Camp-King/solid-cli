@@ -45,11 +45,17 @@ analyticsCommand
       console.log('');
       console.log(ui.header('Business Analytics'));
 
-      if (d.revenue !== undefined) console.log(ui.label('Revenue', chalk.green(`$${(d.revenue || 0).toLocaleString()}`)));
-      if (d.transactions !== undefined) console.log(ui.label('Transactions', String(d.transactions || 0)));
-      if (d.customers !== undefined) console.log(ui.label('Customers', String(d.customers || 0)));
-      if (d.new_customers !== undefined) console.log(ui.label('New Customers', String(d.new_customers || 0)));
-      if (d.avg_transaction !== undefined) console.log(ui.label('Avg Transaction', chalk.green(`$${(d.avg_transaction || 0).toFixed(2)}`)));
+      const hasData = d.revenue !== undefined || d.transactions !== undefined || d.customers !== undefined;
+      if (hasData) {
+        if (d.revenue !== undefined) console.log(ui.label('Revenue', chalk.green(`$${(d.revenue || 0).toLocaleString()}`)));
+        if (d.transactions !== undefined) console.log(ui.label('Transactions', String(d.transactions || 0)));
+        if (d.customers !== undefined) console.log(ui.label('Customers', String(d.customers || 0)));
+        if (d.new_customers !== undefined) console.log(ui.label('New Customers', String(d.new_customers || 0)));
+        if (d.avg_transaction !== undefined) console.log(ui.label('Avg Transaction', chalk.green(`$${(d.avg_transaction || 0).toFixed(2)}`)));
+      } else {
+        console.log(chalk.dim('  No analytics data available yet.'));
+        console.log(chalk.dim('  Data appears after your first transactions.'));
+      }
       console.log('');
     } catch (error) {
       spinner.fail(chalk.red('Failed to load analytics'));

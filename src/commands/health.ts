@@ -42,8 +42,24 @@ export const healthCommand = new Command('health')
         console.log('');
 
       } else if (options.full) {
-        // Full health check
-        const response = await apiClient.healthFull();
+        // Full health check (requires admin access in production)
+        let response;
+        try {
+          response = await apiClient.healthFull();
+        } catch {
+          // Full healthcheck is admin-gated in production — fall back to quick
+          spinner.warn(chalk.yellow('Full health check not available (admin-only in production)'));
+          console.log(chalk.dim('  Falling back to quick health check...\n'));
+          const quick = await apiClient.healthQuick();
+          const healthy = quick.data.status === 'healthy';
+          console.log(ui.infoBox('System Health', [
+            `${chalk.bold('Status:')}    ${healthy ? chalk.green('● healthy') : chalk.red('● ' + quick.data.status)}`,
+            `${chalk.bold('API:')}       ${chalk.dim(config.apiUrl)}`,
+            `${chalk.bold('Timestamp:')} ${chalk.dim(quick.data.timestamp)}`,
+          ]));
+          console.log('');
+          return;
+        }
 
         if (options.json) {
           spinner.stop();
@@ -122,24 +138,7 @@ export const healthCommand = new Command('health')
     }
   });
 
-// Subcommands for convenience
-healthCommand
-  .command('quick')
-  .description('Quick health check')
-  .action(() => {
-    healthCommand.parseAsync(['node', 'health']);
-  });
-
-healthCommand
-  .command('full')
-  .description('Full 6-layer health check')
-  .action(() => {
-    healthCommand.parseAsync(['node', 'health', '--full']);
-  });
-
-healthCommand
-  .command('mcp')
-  .description('MCP health check')
-  .action(() => {
-    healthCommand.parseAsync(['node', 'health', '--mcp']);
-  });
+// Usage:
+//   solid health          → quick check
+//   solid health --full   → 6-layer check (admin-only in prod)
+//   solid health --mcp    → MCP/agent check
