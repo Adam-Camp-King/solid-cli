@@ -48,16 +48,23 @@ class ApiClient {
       return requestConfig;
     });
 
-    // Add response interceptor
+    // Add response interceptor — retry once on 401 with token refresh
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          // Try to refresh token
+        const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean };
+        // Only attempt refresh if: 401, not already retried, not a login/refresh request itself
+        if (
+          error.response?.status === 401 &&
+          originalRequest &&
+          !originalRequest._retry &&
+          !originalRequest.url?.includes('/auth/login') &&
+          !originalRequest.url?.includes('/auth/refresh')
+        ) {
+          originalRequest._retry = true;
           const refreshed = await this.refreshToken();
-          if (refreshed && error.config) {
-            // Retry original request
-            return this.client.request(error.config);
+          if (refreshed) {
+            return this.client.request(originalRequest);
           }
         }
         throw error;
@@ -84,7 +91,8 @@ class ApiClient {
 
       return true;
     } catch {
-      config.logout();
+      // Don't nuke the session — let the command fail with 401 instead
+      // User can re-login manually. Prevents token wipe on network blips.
       return false;
     }
   }
