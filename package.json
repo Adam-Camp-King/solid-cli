@@ -28,7 +28,7 @@
     "ai"
   ],
   "author": "Solid# <hello@solidnumber.com>",
-  "license": "MIT",
+  "license": "BSL-1.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/Adam-Camp-King/solid-cli.git"

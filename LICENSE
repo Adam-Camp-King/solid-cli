@@ -1,0 +1,37 @@
+Business Source License 1.1
+
+Licensor:  Solid# (Adam Campbell)
+Licensed Work:  @solidnumber/cli
+Change Date:  2030-04-14
+Change License:  Apache License, Version 2.0
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant, below.
+
+Additional Use Grant:
+
+You may use the Licensed Work for any purpose, including production use,
+PROVIDED THAT you do not offer a commercial product or service that
+competes with the Licensed Work or any product or service offered by the
+Licensor that includes the Licensed Work.
+
+For purposes of this license, "compete" means offering a substantially
+similar command-line interface tool for managing AI-powered business
+infrastructure.
+
+Change Date:
+
+On the Change Date above, this license converts to the Change License
+specified above (Apache 2.0), at which point all restrictions are removed.
+
+No Warranty
+
+THE LICENSED WORK IS PROVIDED "AS IS". THE LICENSOR HEREBY DISCLAIMS ALL
+WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+For more information on the Business Source License, see
+https://mariadb.com/bsl11/
