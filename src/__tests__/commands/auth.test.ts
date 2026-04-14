@@ -28,7 +28,7 @@ describe('auth logic', () => {
         data: {
           access_token: 'new_token_abc',
           refresh_token: 'new_refresh_xyz',
-          expires_at: '2026-12-31T00:00:00Z',
+          expires_in: 3600,
           user: { id: 5, email: 'dev@agency.com', company_id: 42 },
         },
         status: 200,
@@ -52,7 +52,7 @@ describe('auth logic', () => {
         data: {
           access_token: 'token',
           refresh_token: 'refresh',
-          expires_at: '2026-12-31T00:00:00Z',
+          expires_in: 3600,
           user: { id: 1, email: 'test@test.com', company_id: 99 },
         },
         status: 200,

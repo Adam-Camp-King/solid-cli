@@ -76,7 +76,8 @@ authCommand
         // Store credentials
         config.accessToken = response.data.access_token;
         config.refreshToken = response.data.refresh_token;
-        config.tokenExpiresAt = new Date(response.data.expires_at);
+        // Backend returns expires_in (seconds), not expires_at
+        config.tokenExpiresAt = new Date(Date.now() + (response.data.expires_in || 3600) * 1000);
         config.userId = response.data.user.id;
         config.userEmail = response.data.user.email;
         config.companyId = response.data.user.company_id;

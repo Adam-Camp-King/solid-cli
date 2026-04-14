@@ -119,7 +119,7 @@ class ApiClient {
   async login(email: string, password: string): Promise<ApiResponse<{
     access_token: string;
     refresh_token: string;
-    expires_at: string;
+    expires_in: number;
     user: { id: number; email: string; company_id: number };
   }>> {
     const response = await this.client.post('/api/v1/auth/login', {
