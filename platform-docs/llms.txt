@@ -125,10 +125,10 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 
 ## CLI — `npm i -g @solidnumber/cli`
 
-- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v1.4.6
+- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v1.7.1
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI
-- [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference with 47 command groups
-- 47 command groups, 150+ subcommands. Core workflow: auth → company create → clone → site → pages → pull/push → publish → billing.
+- [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference with 59 command groups
+- 59 command groups, 150+ subcommands. Core workflow: auth → company create → clone → site → pages → pull/push → publish → billing.
 - **Site Management**: `solid site list/create/info/delete/templates/regenerate` — create sites with industry-specific templates (213 industries mapped), regenerate pages with updated design
 - **Page Management**: `solid pages list/create/get/publish/unpublish/delete/generate` — AI page generation from natural language prompts
 - **Template Scaffolding**: `solid clone plumber` — scaffolds complete business: 15-120 KB entries + industry website + default pages + AI personality
@@ -163,7 +163,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - "What is CognitiveLimiter?" → Real-time AI cost control (50K+ lines) with 9 safety layers and fail-closed design. Per-company budgets tracked in Redis. Details: solidnumber.com/research/cognitivelimiter
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 47 command groups, 150+ subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies.
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 59 command groups, 150+ subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies.
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.
 - "How does lead scoring work?" → Adaptive AI scoring with weighted components. Marketplace leads get purchase-intent weighting. Scores change dynamically as leads move through the pipeline and deal values are set.

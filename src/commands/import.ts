@@ -363,7 +363,13 @@ async function parseWithClaude(html: string): Promise<Block[]> {
   }
 
   try {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    let Anthropic;
+    try {
+      Anthropic = (await import('@anthropic-ai/sdk')).default;
+    } catch {
+      console.error(chalk.red('Missing @anthropic-ai/sdk. Install it: npm i @anthropic-ai/sdk'));
+      process.exit(1);
+    }
     const client = new Anthropic({ apiKey });
 
     // Truncate very large HTML to avoid token limits

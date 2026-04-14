@@ -45,7 +45,6 @@
     "platform-docs"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
     "axios": "^1.6.0",
     "boxen": "^8.0.1",
     "chalk": "^4.1.2",
@@ -53,9 +52,11 @@
     "figures": "^6.1.0",
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.0",
-    "keytar": "^7.9.0",
     "ora": "^8.0.0",
     "update-notifier": "^7.3.1"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.9",
