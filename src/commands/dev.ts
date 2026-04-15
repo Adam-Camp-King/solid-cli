@@ -214,7 +214,7 @@ devCommand
 
     const spinner = ora(`Deploying "${options.name}" for company ${options.company}...`).start();
     try {
-      const res = await apiClient.post<any>('/api/v1/sandbox/deploy', {
+      const res = await apiClient.post<any>('/api/v1/sandbox/publish', {
         company_id: parseInt(options.company, 10),
         module_name: options.name,
       });
@@ -250,7 +250,7 @@ devCommand
 
     const spinner = ora('Disabling module...').start();
     try {
-      await apiClient.post(`/sandbox/disable/${options.company}/${options.name}`, {});
+      await apiClient.post('/api/v1/sandbox/exit');
       spinner.succeed(chalk.green(`Module "${options.name}" disabled`));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
@@ -267,7 +267,7 @@ devCommand
 
     const spinner = ora('Enabling module...').start();
     try {
-      await apiClient.post('/api/v1/sandbox/deploy', {
+      await apiClient.post('/api/v1/sandbox/publish', {
         company_id: parseInt(options.company, 10),
         module_name: options.name,
       });
