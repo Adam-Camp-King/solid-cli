@@ -166,11 +166,12 @@ class ConfigManager {
   }
 
   isLoggedIn(): boolean {
+    // Check if we have a token (access or refresh)
+    // Don't reject on expiry — the API client's interceptor will auto-refresh
     const token = this.accessToken;
-    const expires = this.tokenExpiresAt;
+    const refresh = this.refreshToken;
 
-    if (!token) return false;
-    if (expires && expires < new Date()) return false;
+    if (!token && !refresh) return false;
 
     return true;
   }

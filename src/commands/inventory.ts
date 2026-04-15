@@ -33,7 +33,7 @@ inventoryCommand
 
     try {
       const params = { limit: parseInt(options.limit), offset: 0 };
-      const response = await apiClient.get('/Inventory/', { params });
+      const response = await apiClient.get('/api/v1/Inventory/list', { params });
       const data = response.data as Record<string, any>;
       const items = data.items || data.inventory || [];
 
@@ -73,7 +73,7 @@ inventoryCommand
     const spinner = ora(`Loading item ${sku}...`).start();
 
     try {
-      const response = await apiClient.get(`/Inventory/${encodeURIComponent(sku)}`);
+      const response = await apiClient.get(`/api/v1/Inventory/get`, { params: { sku } });
       const item = response.data as Record<string, any>;
 
       if (options.json) {
@@ -117,7 +117,7 @@ inventoryCommand
       };
       if (options.price) body.price = parseFloat(options.price);
 
-      const response = await apiClient.post('/Inventory/', body);
+      const response = await apiClient.post('/api/v1/Inventory/create', body);
       const item = response.data as Record<string, any>;
 
       spinner.succeed(chalk.green(`Item created: ${options.sku}`));
@@ -148,7 +148,7 @@ inventoryCommand
     const spinner = ora(`Updating item ${sku}...`).start();
 
     try {
-      await apiClient.patch(`/Inventory/${encodeURIComponent(sku)}`, body);
+      await apiClient.post('/api/v1/Inventory/update', { ...body, sku });
       spinner.succeed(chalk.green(`Item ${sku} updated`));
     } catch (error) {
       spinner.fail(chalk.red(`Failed to update item ${sku}`));
@@ -173,7 +173,7 @@ inventoryCommand
         reason: options.reason || '',
       };
 
-      await apiClient.post('/Inventory/adjust', body);
+      await apiClient.post('/api/v1/Inventory/adjust', body);
       const direction = parseInt(options.quantity) >= 0 ? '+' : '';
       spinner.succeed(chalk.green(`Stock adjusted: ${sku} (${direction}${options.quantity})`));
     } catch (error) {

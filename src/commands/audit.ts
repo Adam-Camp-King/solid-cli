@@ -18,7 +18,7 @@ export const auditCommand = new Command('audit')
       const params: Record<string, unknown> = { limit: options.limit };
       if (options.user) params.user_email = options.user;
       if (options.action) params.action_type = options.action;
-      const res = await apiClient.get('/api/v1/audit/log', { params });
+      const res = await apiClient.get('/api/v1/security/audit/logs', { params });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const entries = (res.data as Record<string, any>).entries || (res.data as Record<string, any>).logs || (res.data as Record<string, any>).items || [];
