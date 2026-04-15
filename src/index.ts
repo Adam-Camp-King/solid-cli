@@ -193,7 +193,7 @@ program.addCommand(devCommand);
 program.addCommand(dropletCommand);
 
 // ── Custom help screen ──────────────────────────────────────────────
-program.addHelpText('beforeAll', () => {
+program.addHelpText('before', () => {
   return ui.banner();
 });
 
