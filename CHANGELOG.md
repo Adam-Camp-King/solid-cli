@@ -2,6 +2,32 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.7.2] — 2026-04-14
+
+### Added
+- `solid dashboard` — cross-company overview for agencies (revenue, agents, health)
+- `solid api list/docs/call` — API explorer from the CLI (13 sections, 70+ endpoints)
+- `solid proposal "Business" --template plumber` — branded client proposals with tier pricing
+- `solid webhooks listen` — forward production webhooks to localhost for development
+- `solid webhooks test <event>` — send test webhook events to local server
+- `solid status --all` — quick view of all companies for agencies
+- `solid open --portal / --api-docs / --sdk / --webhooks` — open developer docs in browser
+- Developer portal, API docs, and SDK links in help output
+
+### Fixed
+- Refresh interceptor no longer nukes session on 401 (was wiping tokens on network blips)
+- Banner only shows on top-level `--help`, not subcommand help
+- Health `--full` hits correct endpoint `/api/v1/health`
+- 9 CLI bugs from QA audit (inbox, auth, services, SEO, flows, completion, analytics)
+- Chalk v5 → v4 for Node 18 compatibility
+- Version banner reads from package.json instead of hardcoded v1.0.0
+
+### Changed
+- License changed from MIT to BSL-1.1
+- `@anthropic-ai/sdk` moved to optionalDependencies
+- Dead `keytar` dependency removed
+- Platform docs `llms.txt` updated (v1.4.6 → v1.7.2, 47 → 62 commands)
+
 ## [1.7.1] — 2026-04-14
 
 ### Fixed
