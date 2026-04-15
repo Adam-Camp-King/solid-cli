@@ -52,28 +52,29 @@ demoCommand
       await apiClient.companySwitch(companyId);
       await apiClient.templateClone(template);
 
-      // Step 3: Set demo metadata (expires, password)
-      spinner.text = 'Configuring demo...';
+      // Step 3: Configure demo mode + auto-provision phone via backend
+      spinner.text = 'Setting up demo (provisioning AI phone)...';
       const expiresHours = parseExpires(options.expires);
       const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000);
-
-      await apiClient.post('/api/v1/companies/me/settings', {
-        demo_mode: true,
-        demo_expires_at: expiresAt.toISOString(),
-        demo_password: options.password || `demo-${Date.now().toString(36).slice(-4)}`,
-      }).catch(() => {}); // Best-effort — settings endpoint may not support all fields yet
-
-      // Step 4: Check if voice/phone is available
       let phoneNumber = null;
+
       try {
-        spinner.text = 'Checking voice AI...';
-        const phoneRes = await apiClient.get('/api/v1/phone-numbers');
-        const phones = (phoneRes.data as Record<string, any>).phone_numbers || [];
-        if (phones.length > 0) {
-          phoneNumber = phones[0].number || phones[0].phone_number;
+        const demoRes = await apiClient.post(`/api/v1/cli/companies/${companyId}/demo-setup`);
+        const demoData = demoRes.data as Record<string, any>;
+        if (demoData.phone?.phone_number) {
+          phoneNumber = demoData.phone.phone_number;
         }
       } catch {
-        // Voice not provisioned — skip
+        // Demo setup endpoint may not exist yet — fall back to checking existing phones
+        try {
+          const phoneRes = await apiClient.get('/api/v1/phone-numbers');
+          const phones = (phoneRes.data as Record<string, any>).phone_numbers || [];
+          if (phones.length > 0) {
+            phoneNumber = phones[0].number || phones[0].phone_number;
+          }
+        } catch {
+          // No phone — demo still works, just without voice AI
+        }
       }
 
       // Switch back to original company
