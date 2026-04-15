@@ -35,7 +35,37 @@ export const openCommand = new Command('open')
   .option('--sites', 'Open sites manager')
   .option('--settings', 'Open CMS settings')
   .option('--analytics', 'Open CMS analytics')
+  .option('--portal', 'Open developer portal')
+  .option('--api-docs', 'Open API documentation')
+  .option('--sdk', 'Open SDK documentation')
+  .option('--webhooks', 'Open webhooks documentation')
   .action(async (slug, options) => {
+    // Developer docs — no auth needed
+    if (options.portal) {
+      const url = 'https://developers.solidnumber.com';
+      console.log(chalk.dim(`Opening: ${url}`));
+      await openBrowser(url);
+      return;
+    }
+    if (options.apiDocs) {
+      const url = 'https://solidnumber.com/docs/api';
+      console.log(chalk.dim(`Opening: ${url}`));
+      await openBrowser(url);
+      return;
+    }
+    if (options.sdk) {
+      const url = 'https://solidnumber.com/docs/sdks';
+      console.log(chalk.dim(`Opening: ${url}`));
+      await openBrowser(url);
+      return;
+    }
+    if (options.webhooks) {
+      const url = 'https://solidnumber.com/docs/webhooks';
+      console.log(chalk.dim(`Opening: ${url}`));
+      await openBrowser(url);
+      return;
+    }
+
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);

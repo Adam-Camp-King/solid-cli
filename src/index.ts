@@ -267,9 +267,11 @@ program.addHelpText('after', () => {
     '',
     ui.divider(),
     '',
-    `  ${chalk.dim('Docs:')}  ${chalk.cyan('solid docs')}      ${chalk.dim('Pull developer documentation')}`,
-    `  ${chalk.dim('Help:')}  ${chalk.cyan('solid <cmd> -h')} ${chalk.dim('Help for any command')}`,
-    `  ${chalk.dim('Web:')}   ${chalk.hex('#818cf8')('https://solidnumber.com/developers')}`,
+    `  ${chalk.dim('Docs:')}    ${chalk.cyan('solid docs')}      ${chalk.dim('Pull developer documentation')}`,
+    `  ${chalk.dim('Help:')}    ${chalk.cyan('solid <cmd> -h')} ${chalk.dim('Help for any command')}`,
+    `  ${chalk.dim('Portal:')}  ${chalk.hex('#818cf8')('https://developers.solidnumber.com')}`,
+    `  ${chalk.dim('API:')}     ${chalk.hex('#818cf8')('https://solidnumber.com/docs/api')}`,
+    `  ${chalk.dim('SDK:')}     ${chalk.hex('#818cf8')('https://solidnumber.com/docs/sdks')}`,
     '',
   ];
 
