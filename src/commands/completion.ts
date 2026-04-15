@@ -19,7 +19,7 @@ const COMMANDS = [
   'audit', 'context', 'analytics', 'seo', 'billing', 'domains', 'train',
   'design', 'insights', 'notifications', 'schedule', 'inbox', 'export',
   'webhooks', 'support', 'reports', 'payment', 'dev', 'explore', 'docs',
-  'droplet', 'accounting', 'completion',
+  'droplet', 'accounting', 'completion', 'dashboard', 'api', 'proposal',
 ];
 
 const SUBCOMMANDS: Record<string, string[]> = {
@@ -37,13 +37,15 @@ const SUBCOMMANDS: Record<string, string[]> = {
   clone: ['--list', '--preview'],
   train: ['import', 'chat', 'add', 'status'],
   brand: ['get', 'update', 'css', 'export', 'audit', 'palette'],
-  webhooks: ['list', 'create', 'delete'],
+  webhooks: ['list', 'create', 'delete', 'listen', 'test'],
   flow: ['list', 'create', 'activate', 'pause', 'test', 'archive', 'metrics'],
   sandbox: ['fork', 'list', 'deploy', 'delete', 'diff', 'status'],
   history: ['pages', 'kb'],
   health: ['quick', 'full', 'mcp'],
   analytics: ['dashboard', 'mcp-traffic'],
   completion: ['--bash', '--fish', '--zsh'],
+  dashboard: ['--revenue', '--agents'],
+  api: ['list', 'docs', 'call'],
 };
 
 function generateZsh(): string {

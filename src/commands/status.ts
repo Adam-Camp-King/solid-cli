@@ -15,10 +15,44 @@ import { ui } from '../lib/ui';
 export const statusCommand = new Command('status')
   .description('Show your business status and setup overview')
   .option('--json', 'Output as JSON')
+  .option('--all', 'Show status for all companies (agencies)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
+    }
+
+    // Agency mode: show all companies
+    if (options.all) {
+      const spinner = ora('Loading all companies...').start();
+      try {
+        const companiesRes = await apiClient.companiesList();
+        const companies = companiesRes.data.companies || [];
+        spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(companies, null, 2));
+          return;
+        }
+
+        console.log('');
+        console.log(ui.header(`All Companies (${companies.length})`));
+        console.log('');
+        for (const c of companies) {
+          const isActive = c.id === config.companyId;
+          const marker = isActive ? chalk.green('● ') : '  ';
+          const name = isActive ? chalk.bold.green(c.name) : chalk.bold(c.name);
+          console.log(`${marker}${name}  ${chalk.dim('ID:' + c.id)}  ${chalk.dim(c.role)}`);
+        }
+        console.log('');
+        console.log(chalk.dim(`  Active: ${config.companyId}. Switch: solid switch <id>`));
+        console.log(chalk.dim('  Full dashboard: solid dashboard'));
+        console.log('');
+      } catch (error) {
+        spinner.fail(chalk.red('Failed'));
+        console.error(handleApiError(error).message);
+      }
+      return;
     }
 
     const spinner = ora('Loading business status...').start();

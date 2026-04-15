@@ -82,6 +82,10 @@ import { logsCommand } from './commands/logs';
 import { testCommand } from './commands/test';
 import { deployCommand } from './commands/deploy';
 import { migrateCommand } from './commands/migrate';
+import { dashboardCommand } from './commands/dashboard';
+import { apiCommand } from './commands/api';
+import { proposalCommand } from './commands/proposal';
+import { addWebhookListenCommand } from './commands/webhooks-listen';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -191,6 +195,14 @@ program.addCommand(domainsCommand);
 // Dev tools
 program.addCommand(devCommand);
 program.addCommand(dropletCommand);
+
+// Agency & developer tools
+program.addCommand(dashboardCommand);
+program.addCommand(apiCommand);
+program.addCommand(proposalCommand);
+
+// Wire webhook listen/test into existing webhooks command
+addWebhookListenCommand(webhooksCommand);
 
 // ── Custom help screen ──────────────────────────────────────────────
 program.addHelpText('before', () => {
