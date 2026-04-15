@@ -209,6 +209,93 @@ brandCommand
     }
   });
 
+// Set — white-label power command
+brandCommand
+  .command('set')
+  .description('Set brand properties (white-label: logo, domain, email, colors)')
+  .option('--logo <path>', 'Logo image path (uploads to CDN)')
+  .option('--domain <domain>', 'Custom domain (e.g., joesplumbing.com)')
+  .option('--colors <hex,hex>', 'Primary,secondary colors (e.g., "#1a1a2e,#e94560")')
+  .option('--email-from <email>', 'Sender email for notifications')
+  .option('--company-name <name>', 'Display name (overrides company name in UI)')
+  .option('--favicon <path>', 'Favicon path')
+  .action(async (options) => {
+    requireAuth();
+
+    const hasOpts = options.logo || options.domain || options.colors || options.emailFrom || options.companyName || options.favicon;
+    if (!hasOpts) {
+      console.error(chalk.red('No options provided.'));
+      console.log(chalk.dim('  Usage: solid brand set --logo ./logo.png --domain example.com --colors "#1a1a2e,#e94560"'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const updates: string[] = [];
+
+    // Handle domain
+    if (options.domain) {
+      const spinner = ora(`Configuring domain: ${options.domain}...`).start();
+      try {
+        await apiClient.post('/api/v1/domains/add', { domain: options.domain });
+        spinner.succeed(chalk.green(`Domain: ${options.domain}`));
+        updates.push('domain');
+      } catch (error) {
+        spinner.fail(chalk.red(`Domain failed: ${handleApiError(error).message}`));
+      }
+    }
+
+    // Handle colors + name via brand update
+    if (options.colors || options.companyName || options.emailFrom) {
+      const spinner = ora('Updating brand...').start();
+      try {
+        const body: Record<string, unknown> = {};
+        if (options.companyName) body.name = options.companyName;
+        if (options.emailFrom) body.email_from = options.emailFrom;
+        if (options.colors) {
+          const [primary, secondary] = options.colors.split(',').map((c: string) => c.trim());
+          body.design = {
+            ...(primary ? { primary_color: primary } : {}),
+            ...(secondary ? { secondary_color: secondary } : {}),
+          };
+        }
+        await apiClient.patch('/api/v1/cli/brand', body);
+        spinner.succeed(chalk.green('Brand updated'));
+        if (options.colors) updates.push('colors');
+        if (options.companyName) updates.push('name');
+        if (options.emailFrom) updates.push('email');
+      } catch (error) {
+        spinner.fail(chalk.red(`Brand update failed: ${handleApiError(error).message}`));
+      }
+    }
+
+    // Handle logo upload
+    if (options.logo) {
+      const spinner = ora(`Uploading logo: ${options.logo}...`).start();
+      try {
+        const fs = await import('fs');
+        if (!fs.existsSync(options.logo)) {
+          spinner.fail(chalk.red(`File not found: ${options.logo}`));
+        } else {
+          // Upload via company settings
+          await apiClient.post('/api/v1/companies/me/logo', {
+            logo_path: options.logo,
+          });
+          spinner.succeed(chalk.green('Logo uploaded'));
+          updates.push('logo');
+        }
+      } catch (error) {
+        spinner.fail(chalk.red(`Logo failed: ${handleApiError(error).message}`));
+      }
+    }
+
+    console.log('');
+    if (updates.length > 0) {
+      console.log(chalk.green(`  ✓ Updated: ${updates.join(', ')}`));
+      console.log(chalk.dim('  Preview: solid brand get'));
+    }
+    console.log('');
+  });
+
 // Export brand
 brandCommand
   .command('export')

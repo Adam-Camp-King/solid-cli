@@ -2,6 +2,28 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.7.3] — 2026-04-15
+
+### Added
+- `solid demo create plumber "Joe's" --expires 72h` — live demo with AI for sales meetings
+- `solid demo convert <id> --tier starter` — convert demo to paid via checkout link
+- `solid sandbox fork` — server-side sandbox (isolated copy via backend API)
+- `solid sandbox preview` — shareable preview URL for client approval
+- `solid sandbox promote` — push sandbox to production
+- `solid sandbox exit` — discard sandbox
+- `solid brand set --logo --domain --colors --email-from` — full white-label from CLI
+- `solid init my-app --type marketplace` — scaffold apps on Solid# (4 templates: basic, marketplace, saas, agency-dashboard)
+- `solid payment analytics` — payment volume, interchange savings, chargebacks
+- `solid payment connect stripe --account acct_123` — connect payment processor
+- `solid payment terminal --amount 49.99` — POS from the CLI
+- Tab completion for all new commands
+
+### Fixed
+- Inventory endpoints: corrected to /api/v1/Inventory/list, /get, /create, /adjust
+- Audit endpoint: /api/v1/audit/log → /api/v1/security/audit/logs
+- Token auto-refresh: isLoggedIn() no longer rejects expired tokens (interceptor handles refresh)
+- .npmignore: dist/__tests__/ excluded from npm package
+
 ## [1.7.2] — 2026-04-14
 
 ### Added

@@ -87,6 +87,7 @@ import { apiCommand } from './commands/api';
 import { proposalCommand } from './commands/proposal';
 import { addWebhookListenCommand } from './commands/webhooks-listen';
 import { demoCommand } from './commands/demo';
+import { initCommand } from './commands/init';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -203,6 +204,7 @@ program.addCommand(apiCommand);
 program.addCommand(proposalCommand);
 
 program.addCommand(demoCommand);
+program.addCommand(initCommand);
 
 // Wire webhook listen/test into existing webhooks command
 addWebhookListenCommand(webhooksCommand);

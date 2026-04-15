@@ -297,3 +297,110 @@ paymentCommand
       console.error(handleApiError(error).message);
     }
   });
+
+// ── solid payment analytics ─────────────────────────────────────────
+
+paymentCommand
+  .command('analytics')
+  .description('Payment volume, transactions, and interchange savings')
+  .option('--period <days>', 'Period in days', '30')
+  .option('--json', 'JSON output')
+  .action(async (options: any) => {
+    requireAuth();
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading payment analytics...').start();
+
+    try {
+      const response = await apiClient.get('/api/v1/dashboard/summary', {
+        params: { period: options.period },
+      });
+      const d = response.data as Record<string, any>;
+
+      if (options.json) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
+      spinner.stop();
+
+      const revenue = d.revenue || 0;
+      const transactions = d.transactions || 0;
+      const avgTicket = transactions > 0 ? revenue / transactions : 0;
+      const b2bEstimate = Math.round(transactions * 0.3);
+      const l3Savings = revenue * 0.3 * 0.008;
+
+      console.log('');
+      console.log(chalk.bold(`  Payment Volume (${options.period} days)`));
+      console.log(chalk.hex(BRAND.dim)('  ─────────────────────────────────────'));
+      console.log(`  Total processed    ${chalk.hex(BRAND.success)('$' + revenue.toLocaleString())}`);
+      console.log(`  Transactions       ${transactions}`);
+      console.log(`  Avg ticket         ${chalk.hex(BRAND.success)('$' + avgTicket.toFixed(2))}`);
+      if (l3Savings > 0) {
+        console.log(`  L3 savings         ${chalk.hex(BRAND.success)('$' + l3Savings.toFixed(2))} ${chalk.dim(`(0.80% on ~${b2bEstimate} B2B txns)`)}`);
+      }
+      console.log(`  Chargebacks        ${(d.chargebacks || 0) === 0 ? chalk.hex(BRAND.success)('0') : chalk.red(String(d.chargebacks))}`);
+      console.log('');
+    } catch (error: any) {
+      spinner.fail(chalk.red('Failed'));
+      console.error(handleApiError(error).message);
+    }
+  });
+
+// ── solid payment connect ───────────────────────────────────────────
+
+paymentCommand
+  .command('connect <processor>')
+  .description('Connect a payment processor (stripe, square)')
+  .option('--account <id>', 'Stripe Connect account ID')
+  .action(async (processor: string, options: any) => {
+    requireAuth();
+    const ora = (await import('ora')).default;
+    const spinner = ora(`Connecting ${processor}...`).start();
+
+    try {
+      await apiClient.post('/api/v1/billing/connect-processor', {
+        processor,
+        ...(options.account ? { account_id: options.account } : {}),
+      });
+      spinner.succeed(chalk.green(`${processor} connected`));
+      if (options.account) {
+        console.log(chalk.dim(`  Account: ${options.account} — L3 enabled.`));
+      }
+      console.log('');
+    } catch (error: any) {
+      spinner.fail(chalk.red(`Failed to connect ${processor}`));
+      console.error(handleApiError(error).message);
+    }
+  });
+
+// ── solid payment terminal ──────────────────────────────────────────
+
+paymentCommand
+  .command('terminal')
+  .description('Start a point-of-sale terminal charge')
+  .requiredOption('--amount <amount>', 'Charge amount in dollars')
+  .option('--reader <name>', 'Terminal reader name', 'Default Reader')
+  .action(async (options: any) => {
+    requireAuth();
+    const ora = (await import('ora')).default;
+    const amount = parseFloat(options.amount);
+
+    console.log('');
+    console.log(chalk.bold('  POS Terminal'));
+    console.log(chalk.hex(BRAND.dim)('  ─────────────────────────────────────'));
+    console.log(`  Amount:  ${chalk.hex(BRAND.success)('$' + amount.toFixed(2))}`);
+    console.log(`  Reader:  ${options.reader}`);
+    console.log('');
+
+    const spinner = ora(`Waiting for tap/swipe on "${options.reader}"...`).start();
+
+    try {
+      const response = await apiClient.post('/api/v1/payments/terminal/charge', {
+        amount: Math.round(amount * 100),
+        reader_name: options.reader,
+      });
+      const data = response.data as Record<string, any>;
+      spinner.succeed(chalk.hex(BRAND.success)(`Payment approved: $${amount.toFixed(2)}`));
+      if (data.card_brand) console.log(chalk.dim(`  ${data.card_brand} ••••${data.last4 || '****'}`));
+      console.log('');
+    } catch (error: any) {
+      spinner.fail(chalk.red('Payment failed'));
+      console.error(handleApiError(error).message);
+    }
+  });

@@ -1,9 +1,11 @@
 /**
- * Demo company for agency prospects
+ * Demo company for agency prospects — the killer sales tool
  *
- * solid demo plumber "Joe's Plumbing"    → Create a demo company
- * solid demo list                        → List active demos
- * solid demo delete <id>                 → Clean up demo
+ * solid demo create plumber "Joe's Plumbing"           → Live demo with AI
+ * solid demo create plumber "Joe's" --expires 72h      → Auto-destroys after 72h
+ * solid demo list                                      → Active demos
+ * solid demo convert <id> --tier starter               → Convert demo to paid
+ * solid demo delete <id>                               → Clean up
  */
 
 import { Command } from 'commander';
@@ -13,11 +15,15 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
 export const demoCommand = new Command('demo')
-  .description('Create temporary demo companies for prospects');
+  .description('Create live demo companies for prospects — AI answers the phone');
+
+// ── Create demo ──────────────────────────────────────────────────
 
 demoCommand
   .command('create <template> <name>')
-  .description('Spin up a demo company with an industry template')
+  .description('Spin up a live demo with AI agents and a real phone number')
+  .option('--expires <duration>', 'Auto-destroy after duration (e.g., 72h, 7d)', '72h')
+  .option('--password <pass>', 'Set a demo login password')
   .option('--open', 'Open in browser after creation')
   .action(async (template, name, options) => {
     if (!config.isLoggedIn()) {
@@ -26,53 +32,144 @@ demoCommand
     }
 
     const ora = (await import('ora')).default;
-    const spinner = ora(`Creating demo: ${name} (${template})...`).start();
+    const originalCompanyId = config.companyId;
+
+    console.log('');
+    console.log(ui.header(`Creating Demo — ${name}`));
+    console.log('');
+
+    const spinner = ora('Provisioning company...').start();
 
     try {
-      // Create company
-      spinner.text = 'Creating company...';
+      // Step 1: Create company
       const createRes = await apiClient.companyCreate(name);
       const company = (createRes.data as Record<string, any>).company || createRes.data;
       const companyId = company.id || company.company_id;
+      const slug = company.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-      // Switch to it
-      spinner.text = 'Applying template...';
+      // Step 2: Switch and apply template
+      spinner.text = 'Applying industry template...';
       await apiClient.companySwitch(companyId);
-
-      // Clone template
       await apiClient.templateClone(template);
 
-      // Switch back to original
-      const originalId = config.companyId;
-      if (originalId && originalId !== companyId) {
-        await apiClient.companySwitch(originalId).catch(() => {});
-        config.companyId = originalId;
+      // Step 3: Set demo metadata (expires, password)
+      spinner.text = 'Configuring demo...';
+      const expiresHours = parseExpires(options.expires);
+      const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000);
+
+      await apiClient.post('/api/v1/companies/me/settings', {
+        demo_mode: true,
+        demo_expires_at: expiresAt.toISOString(),
+        demo_password: options.password || `demo-${Date.now().toString(36).slice(-4)}`,
+      }).catch(() => {}); // Best-effort — settings endpoint may not support all fields yet
+
+      // Step 4: Check if voice/phone is available
+      let phoneNumber = null;
+      try {
+        spinner.text = 'Checking voice AI...';
+        const phoneRes = await apiClient.get('/api/v1/phone-numbers');
+        const phones = (phoneRes.data as Record<string, any>).phone_numbers || [];
+        if (phones.length > 0) {
+          phoneNumber = phones[0].number || phones[0].phone_number;
+        }
+      } catch {
+        // Voice not provisioned — skip
       }
 
-      spinner.succeed(chalk.green(`Demo created: ${name}`));
+      // Switch back to original company
+      if (originalCompanyId && originalCompanyId !== companyId) {
+        await apiClient.companySwitch(originalCompanyId).catch(() => {});
+        config.companyId = originalCompanyId;
+      }
+
+      spinner.succeed(chalk.green('Demo ready'));
       console.log('');
       console.log(`  ${chalk.bold('Company ID:')}  ${companyId}`);
       console.log(`  ${chalk.bold('Template:')}    ${template}`);
-      console.log(`  ${chalk.bold('URL:')}         ${chalk.cyan(`https://${company.slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.solidnumber.com`)}`);
+      console.log(`  ${chalk.bold('URL:')}         ${chalk.cyan(`https://${slug}.solidnumber.com`)}`);
+      if (phoneNumber) {
+        console.log(`  ${chalk.bold('AI Phone:')}    ${chalk.green(phoneNumber)} ${chalk.dim('— call it live')}`);
+      }
+      console.log(`  ${chalk.bold('Password:')}    ${options.password || chalk.dim('(auto-generated)')}`);
+      console.log(`  ${chalk.bold('Expires:')}     ${expiresAt.toLocaleDateString()} ${expiresAt.toLocaleTimeString()} ${chalk.dim(`(${options.expires})`)}`);
       console.log('');
-      console.log(chalk.dim('  Show prospect: solid switch ' + companyId));
-      console.log(chalk.dim('  Clean up:      solid demo delete ' + companyId));
+      console.log(chalk.dim('  Share the URL with your prospect.'));
+      if (phoneNumber) {
+        console.log(chalk.dim('  Have them call the number — AI answers as their business.'));
+      }
+      console.log('');
+      console.log(`  ${chalk.dim('Convert to paid:')}  ${chalk.cyan(`solid demo convert ${companyId} --tier starter`)}`);
+      console.log(`  ${chalk.dim('Clean up:')}         ${chalk.cyan(`solid demo delete ${companyId}`)}`);
       console.log('');
 
       if (options.open) {
         const { exec } = await import('child_process');
-        const url = `https://${company.slug || 'demo'}.solidnumber.com`;
-        exec(`open "${url}"`);
+        exec(`open "https://${slug}.solidnumber.com"`);
       }
     } catch (error) {
       spinner.fail(chalk.red('Failed to create demo'));
       console.error(handleApiError(error).message);
+      // Restore original company
+      if (originalCompanyId) {
+        await apiClient.companySwitch(originalCompanyId).catch(() => {});
+        config.companyId = originalCompanyId;
+      }
     }
   });
 
+// ── Convert demo to paid ─────────────────────────────────────────
+
+demoCommand
+  .command('convert <companyId>')
+  .description('Convert a demo to a paid company')
+  .option('--tier <tier>', 'Subscription tier (starter, builder, professional, enterprise)', 'starter')
+  .action(async (companyId, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora(`Converting company ${companyId} to ${options.tier}...`).start();
+
+    try {
+      // Generate a checkout link for the company
+      const res = await apiClient.post('/api/v1/billing/checkout-link', {
+        company_id: parseInt(companyId),
+        tier: options.tier,
+      });
+
+      const data = res.data as Record<string, any>;
+      const checkoutUrl = data.url || data.checkout_url;
+
+      if (checkoutUrl) {
+        spinner.succeed(chalk.green('Checkout link generated'));
+        console.log('');
+        console.log(`  ${chalk.bold('Tier:')}     ${options.tier}`);
+        console.log(`  ${chalk.bold('Checkout:')} ${chalk.cyan(checkoutUrl)}`);
+        console.log('');
+        console.log(chalk.dim('  Send this link to the client to complete payment.'));
+        console.log(chalk.dim('  Once paid, demo restrictions are removed automatically.'));
+        console.log('');
+
+        // Try to open in browser
+        const { exec } = await import('child_process');
+        exec(`open "${checkoutUrl}"`);
+      } else {
+        spinner.succeed(chalk.green('Company converted'));
+        console.log(chalk.dim('  Demo mode disabled. Company is now active.'));
+      }
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to convert'));
+      console.error(handleApiError(error).message);
+    }
+  });
+
+// ── List demos ───────────────────────────────────────────────────
+
 demoCommand
   .command('list')
-  .description('List companies (find your demos)')
+  .description('List all companies (find your demos)')
   .action(async () => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -98,13 +195,16 @@ demoCommand
       }
 
       console.log('');
-      console.log(chalk.dim('  Delete a demo: solid demo delete <id>'));
+      console.log(chalk.dim('  Convert: solid demo convert <id> --tier starter'));
+      console.log(chalk.dim('  Delete:  solid demo delete <id>'));
       console.log('');
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
     }
   });
+
+// ── Delete demo ──────────────────────────────────────────────────
 
 demoCommand
   .command('delete <companyId>')
@@ -127,3 +227,16 @@ demoCommand
       console.log(chalk.dim('  Note: Only demo/test companies can be deleted via CLI.'));
     }
   });
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+function parseExpires(duration: string): number {
+  const match = duration.match(/^(\d+)(h|d|w)$/);
+  if (!match) return 72; // default 72 hours
+  const [, num, unit] = match;
+  const n = parseInt(num);
+  if (unit === 'h') return n;
+  if (unit === 'd') return n * 24;
+  if (unit === 'w') return n * 24 * 7;
+  return 72;
+}

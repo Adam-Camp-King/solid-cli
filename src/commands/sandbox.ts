@@ -17,6 +17,7 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
+import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
 const SANDBOX_DIR = '.sandbox';
@@ -327,4 +328,130 @@ sandboxCommand
     fs.rmSync(sandboxPath, { recursive: true, force: true });
 
     console.log(chalk.green('Sandbox discarded. Main files unchanged.'));
+  });
+
+// ── Fork (server-side sandbox) ─────────────────────────────────────
+
+sandboxCommand
+  .command('fork')
+  .description('Create a server-side sandbox (isolated copy for safe editing)')
+  .action(async () => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora('Forking company into sandbox...').start();
+
+    try {
+      // Check if sandbox is already enabled
+      const statusRes = await apiClient.get('/api/v1/sandbox/status');
+      const status = statusRes.data as Record<string, any>;
+
+      if (status.sandbox_active || status.is_sandbox) {
+        spinner.warn(chalk.yellow('Sandbox already active'));
+        console.log(chalk.dim('  Run `solid sandbox promote` to push changes, or `solid sandbox exit` to discard.'));
+        return;
+      }
+
+      // Enable sandbox mode
+      await apiClient.post('/api/v1/sandbox/enabled', { enabled: true });
+      spinner.succeed(chalk.green('Sandbox forked'));
+      console.log('');
+      console.log(chalk.dim('  All changes are now isolated. Production is untouched.'));
+      console.log(chalk.dim('  solid sandbox preview    Shareable preview URL'));
+      console.log(chalk.dim('  solid sandbox diff       See what changed'));
+      console.log(chalk.dim('  solid sandbox promote    Push to production'));
+      console.log(chalk.dim('  solid sandbox exit       Discard all changes'));
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to fork'));
+      console.error(handleApiError(error).message);
+    }
+  });
+
+// ── Preview (shareable URL) ────────────────────────────────────────
+
+sandboxCommand
+  .command('preview')
+  .description('Get a shareable preview URL for the sandbox')
+  .action(async () => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora('Generating preview...').start();
+
+    try {
+      const res = await apiClient.previewCreate({ title: 'Sandbox Preview' });
+      const data = res.data as Record<string, any>;
+      const url = data.url || data.preview_url;
+
+      spinner.succeed(chalk.green('Preview ready'));
+      console.log('');
+      console.log(`  ${chalk.bold('URL:')} ${chalk.cyan(url)}`);
+      if (data.expires_at) {
+        console.log(`  ${chalk.dim('Expires:')} ${new Date(data.expires_at).toLocaleString()}`);
+      }
+      console.log('');
+      console.log(chalk.dim('  Share with your client for approval.'));
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to create preview'));
+      console.error(handleApiError(error).message);
+    }
+  });
+
+// ── Promote (server-side publish) ──────────────────────────────────
+
+sandboxCommand
+  .command('promote')
+  .description('Push sandbox changes to production')
+  .action(async () => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora('Promoting sandbox to production...').start();
+
+    try {
+      const res = await apiClient.post('/api/v1/sandbox/publish');
+      const data = res.data as Record<string, any>;
+      spinner.succeed(chalk.green('Sandbox promoted to production'));
+      if (data.changes_published) {
+        console.log(chalk.dim(`  ${data.changes_published} changes published`));
+      }
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to promote'));
+      console.error(handleApiError(error).message);
+    }
+  });
+
+// ── Exit (discard server-side sandbox) ─────────────────────────────
+
+sandboxCommand
+  .command('exit')
+  .description('Discard server-side sandbox (rollback all changes)')
+  .action(async () => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const ora = (await import('ora')).default;
+    const spinner = ora('Exiting sandbox...').start();
+
+    try {
+      await apiClient.post('/api/v1/sandbox/exit');
+      spinner.succeed(chalk.green('Sandbox discarded. Back to production.'));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed'));
+      console.error(handleApiError(error).message);
+    }
   });
