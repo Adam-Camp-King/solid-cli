@@ -1,7 +1,7 @@
 {
   "name": "@solidnumber/cli",
-  "version": "1.7.5",
-  "description": "Solid# Command Line Interface - Integration management and development tools",
+  "version": "1.7.6",
+  "description": "AI business infrastructure from the terminal — CRM, payments, voice AI, 116 agents, 52 industry templates. solid clone plumber → instant business.",
   "main": "dist/index.js",
   "bin": {
     "solid": "./dist/index.js"
@@ -20,12 +20,27 @@
     "prepublishOnly": "npm run build && npm test && npm run test:security"
   },
   "keywords": [
-    "solid",
-    "solidnumber",
     "cli",
-    "integrations",
-    "vibe",
-    "ai"
+    "ai",
+    "crm",
+    "business",
+    "saas",
+    "mcp",
+    "ai-agents",
+    "voice-ai",
+    "multi-tenant",
+    "payments",
+    "small-business",
+    "agency",
+    "white-label",
+    "plumber",
+    "hvac",
+    "dentist",
+    "booking",
+    "scheduling",
+    "seo",
+    "ai-receptionist",
+    "business-infrastructure"
   ],
   "author": "Solid# <hello@solidnumber.com>",
   "license": "BSL-1.1",

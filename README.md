@@ -1,19 +1,16 @@
 # @solidnumber/cli
 
-**Solid# CLI — AI Business Infrastructure from the terminal.**
+Run an AI-powered business from your terminal.
+62 commands. 52 industries. 116 AI agents. One CLI.
 
-Build, train, and deploy AI-powered businesses without leaving your editor.
+```bash
+npx @solidnumber/cli clone plumber
+```
 
 ## Install
 
 ```bash
 npm install -g @solidnumber/cli
-```
-
-Or run without installing:
-
-```bash
-npx @solidnumber/cli
 ```
 
 ## Quick Start
