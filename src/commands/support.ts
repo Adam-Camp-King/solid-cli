@@ -21,7 +21,7 @@ supportCommand.command('list').description('List support tickets')
     try {
       const params: Record<string, unknown> = { limit: options.limit };
       if (options.status) params.status = options.status;
-      const res = await apiClient.get('/api/portal/support/tickets', { params });
+      const res = await apiClient.get('/api/v1/support/tickets', { params });
       spinner.stop();
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const tickets = (res.data as Record<string, any>).tickets || (res.data as Record<string, any>).items || [];

@@ -147,7 +147,7 @@ seoCommand
     const spinner = ora('Running SEO audit...').start();
 
     try {
-      const response = await apiClient.post('/api/v1/local-seo/audit');
+      const response = await apiClient.post('/api/v1/local-seo/audit', { company_id: config.companyId });
       spinner.stop();
 
       if (options.json) {
@@ -199,7 +199,7 @@ seoCommand
     const spinner = ora('Loading rankings...').start();
 
     try {
-      const response = await apiClient.get('/api/v1/local-seo/rank-map');
+      const response = await apiClient.get('/api/v1/local-seo/rank-map', { params: { company_id: config.companyId } });
       spinner.stop();
 
       if (options.json) {
@@ -242,7 +242,7 @@ seoCommand
     const spinner = ora('Loading citations...').start();
 
     try {
-      const response = await apiClient.get('/api/v1/local-seo/citations');
+      const response = await apiClient.get('/api/v1/local-seo/citations', { params: { company_id: config.companyId } });
       spinner.stop();
 
       if (options.json) {
@@ -284,7 +284,7 @@ seoCommand
     const spinner = ora('Loading SEO gaps...').start();
 
     try {
-      const response = await apiClient.get('/api/v1/local-seo/gaps');
+      const response = await apiClient.get('/api/v1/local-seo/gaps', { params: { company_id: config.companyId } });
       spinner.stop();
 
       if (options.json) {
