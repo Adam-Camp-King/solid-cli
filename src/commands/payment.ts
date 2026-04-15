@@ -234,10 +234,10 @@ paymentCommand
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Loading MCC mapping...'), spinner: 'dots' }).start();
 
     try {
-      const response = await apiClient.get('/api/v1/companies/me');
+      const response = await apiClient.companyInfo();
       spinner.stop();
 
-      const company = response.data as Record<string, any>;
+      const company = (response.data as Record<string, any>).company || response.data as Record<string, any>;
       const kbSub = company.kb_sub_code;
 
       console.log('');

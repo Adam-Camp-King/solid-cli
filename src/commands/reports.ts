@@ -39,7 +39,7 @@ reportsCommand
     const spinner = ora('Loading report definitions...').start();
 
     try {
-      const response = await apiClient.get('/Reports/definitions');
+      const response = await apiClient.get('/api/v1/Reports/definitions');
       const data = response.data as Record<string, any>;
       const definitions = data.definitions || data.reports || REPORT_TYPES;
 
@@ -84,7 +84,7 @@ reportsCommand
         body.date_to = now.toISOString().split('T')[0];
       }
 
-      const response = await apiClient.post('/Reports/run', body);
+      const response = await apiClient.post('/api/v1/Reports/run', body);
       const data = response.data as Record<string, any>;
 
       if (options.json) {
@@ -134,7 +134,7 @@ reportsCommand
 
     try {
       const params = { days: parseInt(options.days) };
-      const response = await apiClient.get('/Reports/revenue-summary', { params });
+      const response = await apiClient.get('/api/v1/Reports/revenue-summary', { params });
       const data = response.data as Record<string, any>;
 
       if (options.json) {
@@ -172,7 +172,7 @@ reportsCommand
 
     try {
       const params = { limit: parseInt(options.limit), days: parseInt(options.days) };
-      const response = await apiClient.get('/Reports/top-products', { params });
+      const response = await apiClient.get('/api/v1/Reports/top-products', { params });
       const data = response.data as Record<string, any>;
       const items = data.products || data.items || [];
 
@@ -217,7 +217,7 @@ reportsCommand
       if (options.from) body.date_from = options.from;
       if (options.to) body.date_to = options.to;
 
-      const response = await apiClient.post('/Reports/export', body);
+      const response = await apiClient.post('/api/v1/Reports/export', body);
       const data = response.data as Record<string, any>;
 
       if (data.csv || data.content) {

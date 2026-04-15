@@ -31,8 +31,20 @@ seoCommand
 
     const ora = (await import('ora')).default;
 
+    // Default to company site URL if --url not provided
     if (!options.url) {
-      console.error(chalk.red('Missing required --url option.'));
+      try {
+        const statusRes = await apiClient.companyInfo();
+        const company = (statusRes.data as Record<string, any>).company;
+        const slug = company?.slug;
+        if (slug) {
+          options.url = `https://${slug}.solidnumber.com`;
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (!options.url) {
+      console.error(chalk.red('Missing --url and could not detect company site.'));
       console.log(chalk.dim('  Usage: solid seo site-audit --url https://example.com'));
       process.exit(1);
     }

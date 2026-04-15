@@ -41,7 +41,7 @@ const callsCmd = voiceCommand
     try {
       const params: Record<string, string> = { limit: options.limit };
       if (options.status) params.status = options.status;
-      const response = await apiClient.get('/api/v1/calls', { params });
+      const response = await apiClient.get('/api/v1/voice/calls', { params });
       const calls = (response.data as Record<string, any>).items || response.data || [];
       if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${calls.length} calls`));

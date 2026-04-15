@@ -42,7 +42,7 @@ devCommand
     const spinner = ora(`Creating module "${options.name}" for company ${companyId}...`).start();
 
     try {
-      const res = await apiClient.post<any>('/sandbox/create', {
+      const res = await apiClient.post<any>('/api/v1/sandbox/create', {
         company_id: companyId,
         module_name: options.name,
         description: options.description || '',
@@ -214,7 +214,7 @@ devCommand
 
     const spinner = ora(`Deploying "${options.name}" for company ${options.company}...`).start();
     try {
-      const res = await apiClient.post<any>('/sandbox/deploy', {
+      const res = await apiClient.post<any>('/api/v1/sandbox/deploy', {
         company_id: parseInt(options.company, 10),
         module_name: options.name,
       });
@@ -267,7 +267,7 @@ devCommand
 
     const spinner = ora('Enabling module...').start();
     try {
-      await apiClient.post('/sandbox/deploy', {
+      await apiClient.post('/api/v1/sandbox/deploy', {
         company_id: parseInt(options.company, 10),
         module_name: options.name,
       });
@@ -317,7 +317,7 @@ devCommand
 
     const spinner = ora('Loading system status...').start();
     try {
-      const res = await apiClient.get<any>('/modules/admin/status');
+      const res = await apiClient.get<any>('/api/v1/modules/admin/status');
       spinner.stop();
 
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }

@@ -31,7 +31,7 @@ dropletCommand
     const spinner = ora('Fetching droplets...').start();
 
     try {
-      const response = await apiClient.get<any>('/admin/droplets', {
+      const response = await apiClient.get<any>('/api/v1/admin/droplets', {
         params: { status: options.status }
       });
 
@@ -306,7 +306,7 @@ dropletCommand
       spinner.text = 'Running health checks...';
       await new Promise(r => setTimeout(r, 1000));
 
-      const response = await apiClient.post<any>('/admin/droplets/provision', {
+      const response = await apiClient.post<any>('/api/v1/admin/droplets/provision', {
         customer,
         size: options.size,
         region: options.region

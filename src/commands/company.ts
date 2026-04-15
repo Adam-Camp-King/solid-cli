@@ -118,7 +118,7 @@ companyCommand
         // Generate slug from name
         const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-        const response = await apiClient.post<any>('/admin/droplets/provision', {
+        const response = await apiClient.post<any>('/api/v1/admin/droplets/provision', {
           customer_slug: slug,
           company_name: name,
           size: sizeInfo.label,

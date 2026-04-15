@@ -265,7 +265,7 @@ seoCommand
     const spinner = ora('Running SEO audit...').start();
 
     try {
-      const response = await apiClient.post('/local-seo/audit');
+      const response = await apiClient.post('/api/v1/local-seo/audit');
       const data = response.data as Record<string, any>;
 
       if (options.json) {
@@ -308,7 +308,7 @@ seoCommand
     const spinner = ora('Loading SEO profile...').start();
 
     try {
-      const response = await apiClient.get('/local-seo/profile');
+      const response = await apiClient.get('/api/v1/local-seo/profile');
       const data = response.data as Record<string, any>;
 
       if (options.json) {
@@ -338,7 +338,7 @@ seoCommand
     const spinner = ora('Loading SEO gaps...').start();
 
     try {
-      const response = await apiClient.get('/local-seo/gaps');
+      const response = await apiClient.get('/api/v1/local-seo/gaps');
       const data = response.data as Record<string, any>;
 
       if (options.json) {
@@ -378,7 +378,7 @@ seoCommand
     const spinner = ora('Loading citations...').start();
 
     try {
-      const response = await apiClient.get('/local-seo/citations');
+      const response = await apiClient.get('/api/v1/local-seo/citations');
       const data = response.data as Record<string, any>;
 
       if (options.json) {
