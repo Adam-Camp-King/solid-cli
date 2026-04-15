@@ -42,6 +42,7 @@
   },
   "files": [
     "dist",
+    "!dist/__tests__",
     "platform-docs"
   ],
   "dependencies": {

@@ -29,6 +29,7 @@ export const cloneCommand = new Command('clone')
   .option('--list', 'List all available templates')
   .option('--preview', 'Preview template contents without cloning')
   .option('--pull', 'Also pull files after cloning (default: true)')
+  .option('--company <names...>', 'Create + clone for multiple companies (agency bulk mode)')
   .action(async (templateName, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -39,6 +40,44 @@ export const cloneCommand = new Command('clone')
     if (!companyId) {
       console.error(chalk.red('No company_id set. Run `solid auth login` first.'));
       process.exit(1);
+    }
+
+    // ── Bulk clone for agencies ──────────────────────────────────────
+    if (options.company && options.company.length > 0 && templateName) {
+      const ora = (await import('ora')).default;
+      console.log('');
+      console.log(ui.header(`Bulk Clone — ${options.company.length} companies × ${templateName}`));
+      console.log('');
+
+      for (const companyName of options.company) {
+        const spinner = ora(`Creating ${companyName}...`).start();
+        try {
+          // Create company
+          const createRes = await apiClient.companyCreate(companyName);
+          const newCompany = (createRes.data as Record<string, any>).company || createRes.data;
+          const newId = newCompany.id || newCompany.company_id;
+          spinner.text = `Cloning ${templateName} for ${companyName} (ID: ${newId})...`;
+
+          // Switch to new company and clone template
+          await apiClient.companySwitch(newId);
+          await apiClient.templateClone(templateName);
+
+          spinner.succeed(chalk.green(`${companyName} — ID: ${newId} — ${templateName} template applied`));
+        } catch (error) {
+          spinner.fail(chalk.red(`${companyName} — failed: ${(error as Error).message}`));
+        }
+      }
+
+      // Switch back to original company
+      if (companyId) {
+        await apiClient.companySwitch(companyId).catch(() => {});
+        config.companyId = companyId;
+      }
+
+      console.log('');
+      console.log(chalk.dim(`  Switch to any: solid switch <id>`));
+      console.log('');
+      return;
     }
 
     // ── List templates ────────────────────────────────────────────────

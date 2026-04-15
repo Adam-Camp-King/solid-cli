@@ -86,6 +86,7 @@ import { dashboardCommand } from './commands/dashboard';
 import { apiCommand } from './commands/api';
 import { proposalCommand } from './commands/proposal';
 import { addWebhookListenCommand } from './commands/webhooks-listen';
+import { demoCommand } from './commands/demo';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -200,6 +201,8 @@ program.addCommand(dropletCommand);
 program.addCommand(dashboardCommand);
 program.addCommand(apiCommand);
 program.addCommand(proposalCommand);
+
+program.addCommand(demoCommand);
 
 // Wire webhook listen/test into existing webhooks command
 addWebhookListenCommand(webhooksCommand);

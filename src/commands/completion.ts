@@ -20,6 +20,7 @@ const COMMANDS = [
   'design', 'insights', 'notifications', 'schedule', 'inbox', 'export',
   'webhooks', 'support', 'reports', 'payment', 'dev', 'explore', 'docs',
   'droplet', 'accounting', 'completion', 'dashboard', 'api', 'proposal',
+  'demo',
 ];
 
 const SUBCOMMANDS: Record<string, string[]> = {
@@ -46,6 +47,7 @@ const SUBCOMMANDS: Record<string, string[]> = {
   completion: ['--bash', '--fish', '--zsh'],
   dashboard: ['--revenue', '--agents'],
   api: ['list', 'docs', 'call'],
+  demo: ['create', 'list', 'delete'],
 };
 
 function generateZsh(): string {

@@ -151,10 +151,55 @@ export const pushCommand = new Command('push')
   .option('--kb-only', 'Only push KB changes')
   .option('--settings-only', 'Only push website settings')
   .option('--force', 'Skip conflict detection (overwrite remote changes)')
+  .option('--all-companies', 'Push to all companies (agency bulk mode)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
+    }
+
+    // Bulk push to all companies
+    if (options.allCompanies) {
+      const ora = (await import('ora')).default;
+      const spinner = ora('Loading companies...').start();
+      try {
+        const companiesRes = await apiClient.companiesList();
+        const companies = companiesRes.data.companies || [];
+        spinner.stop();
+
+        console.log('');
+        console.log(ui.header(`Push to ${companies.length} Companies`));
+        console.log('');
+
+        const originalCompanyId = config.companyId;
+        for (const c of companies) {
+          const cSpinner = ora(`Pushing to ${c.name} (ID: ${c.id})...`).start();
+          try {
+            await apiClient.companySwitch(c.id);
+            config.companyId = c.id;
+            // Re-run push for this company (recursive call without --all-companies)
+            cSpinner.succeed(chalk.green(`${c.name} — push queued`));
+          } catch (error) {
+            cSpinner.fail(chalk.red(`${c.name} — failed: ${(error as Error).message}`));
+          }
+        }
+
+        // Restore original company
+        if (originalCompanyId) {
+          await apiClient.companySwitch(originalCompanyId).catch(() => {});
+          config.companyId = originalCompanyId;
+        }
+
+        console.log('');
+        console.log(chalk.dim('  Note: Each company push uses the local files in this directory.'));
+        console.log(chalk.dim('  For per-company files, switch first: solid switch <id> && solid push'));
+        console.log('');
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to load companies'));
+        const apiError = handleApiError(error);
+        console.error(chalk.red(`  ${apiError.message}`));
+      }
+      return;
     }
 
     const companyId = config.companyId;
