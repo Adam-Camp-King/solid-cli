@@ -135,6 +135,9 @@ async function askPlatform(
   }).start();
 
   try {
+    // Backend returns SSE (text/event-stream): `data: <chunk>\n\n` lines,
+    // terminated by `data: [DONE]\n\n`. Consume the stream and print tokens
+    // as they arrive so the CLI gets the same typing effect as the web UI.
     const response = await axios.post(
       EXPLORE_API,
       {
@@ -142,19 +145,51 @@ async function askPlatform(
         conversation_history: history,
       },
       {
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
         timeout: 45000,
+        responseType: 'stream',
       },
     );
 
     spinner.stop();
 
-    const text = response.data?.response || 'No response';
-    const model = response.data?.model_used || '';
-    const modelTag = model ? chalk.hex(BRAND.dim)(` [${model}]`) : '';
+    process.stdout.write(`\n  ${chalk.hex(BRAND.success)('Solid#')} ${chalk.hex(BRAND.dim)('›')} `);
 
-    console.log(`\n  ${chalk.hex(BRAND.success)('Solid#')} ${chalk.hex(BRAND.dim)('›')} ${text}${modelTag}\n`);
-    return text;
+    let full = '';
+    let buffer = '';
+    let errored = false;
+
+    const stream = response.data as NodeJS.ReadableStream;
+    for await (const chunk of stream) {
+      buffer += chunk.toString('utf-8');
+      let idx: number;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const event = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (!event.startsWith('data: ')) continue;
+        const payload = event.slice(6);
+        if (payload === '[DONE]') continue;
+        if (payload.startsWith('[ERROR]')) {
+          errored = true;
+          const msg = payload.slice(7).trim();
+          process.stdout.write(chalk.red(msg));
+          full += msg;
+          continue;
+        }
+        process.stdout.write(payload);
+        full += payload;
+      }
+    }
+
+    process.stdout.write('\n\n');
+
+    if (!full) {
+      const msg = errored ? 'Platform Intelligence hit a snag. Try again.' : 'No response';
+      console.log(`  ${chalk.red('Error')} ${chalk.hex(BRAND.dim)('›')} ${msg}\n`);
+      return msg;
+    }
+
+    return full;
   } catch (error: any) {
     spinner.stop();
 
