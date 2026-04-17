@@ -56,7 +56,10 @@ interface BrowserLoginResult {
   expiresIn?: number;
 }
 
-async function browserLogin(onReady?: (url: string) => void): Promise<BrowserLoginResult> {
+async function browserLogin(
+  opts: { companyId?: number } = {},
+  onReady?: (url: string) => void,
+): Promise<BrowserLoginResult> {
   const state = crypto.randomBytes(32).toString('hex');
 
   return new Promise((resolve, reject) => {
@@ -138,7 +141,9 @@ async function browserLogin(onReady?: (url: string) => void): Promise<BrowserLog
         return;
       }
       const port = addr.port;
-      const url = `${frontendUrlFor(config.apiUrl)}/auth/cli-auth?port=${port}&state=${state}`;
+      const params = new URLSearchParams({ port: String(port), state });
+      if (opts.companyId) params.set('company', String(opts.companyId));
+      const url = `${frontendUrlFor(config.apiUrl)}/auth/cli-auth?${params.toString()}`;
       if (onReady) onReady(url);
       openBrowser(url);
     });
@@ -176,6 +181,80 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c] as string));
 }
 
+// ---------------------------------------------------------------------------
+// Company picker (handles 1 or 1200 companies)
+// ---------------------------------------------------------------------------
+
+const PICKER_INLINE_THRESHOLD = 20;
+
+interface CompanyChoice {
+  id: number;
+  name: string;
+  role: string;
+}
+
+function formatChoice(c: CompanyChoice, defaultId: number) {
+  const label = `${c.name} (ID: ${c.id}) — ${c.role}`;
+  return c.id === defaultId
+    ? { name: chalk.green(`${label} [current]`), value: c.id }
+    : { name: label, value: c.id };
+}
+
+async function pickCompany(companies: CompanyChoice[], defaultId: number): Promise<number> {
+  // Small list — show as a normal list
+  if (companies.length <= PICKER_INLINE_THRESHOLD) {
+    const { companyId } = await inquirer.prompt([{
+      type: 'list',
+      name: 'companyId',
+      message: 'Select company:',
+      choices: companies.map((c) => formatChoice(c, defaultId)),
+      default: defaultId,
+      pageSize: PICKER_INLINE_THRESHOLD,
+    }]);
+    return companyId;
+  }
+
+  // Large list — filter first, then choose
+  console.log(chalk.dim(`  ${companies.length} companies — type to filter (name or ID), or press Enter to skip and keep [current].`));
+  const { filter } = await inquirer.prompt([{
+    type: 'input',
+    name: 'filter',
+    message: 'Filter:',
+  }]);
+
+  const q = (filter as string || '').trim().toLowerCase();
+  if (!q) return defaultId;
+
+  const matches = companies.filter((c) =>
+    c.name.toLowerCase().includes(q) || String(c.id).includes(q),
+  );
+
+  if (matches.length === 0) {
+    console.log(chalk.yellow('  No matches — keeping current company.'));
+    return defaultId;
+  }
+  if (matches.length === 1) {
+    const m = matches[0];
+    console.log(chalk.dim(`  → ${m.name} (ID: ${m.id})`));
+    return m.id;
+  }
+
+  const visible = matches.slice(0, 30);
+  const truncated = matches.length > visible.length;
+  if (truncated) {
+    console.log(chalk.dim(`  Showing first ${visible.length} of ${matches.length} matches — refine filter for more.`));
+  }
+  const { companyId } = await inquirer.prompt([{
+    type: 'list',
+    name: 'companyId',
+    message: 'Select company:',
+    choices: visible.map((c) => formatChoice(c, defaultId)),
+    default: defaultId,
+    pageSize: 15,
+  }]);
+  return companyId;
+}
+
 export const authCommand = new Command('auth')
   .description('Authentication management');
 
@@ -186,6 +265,7 @@ authCommand
   .option('-e, --email <email>', 'Email address (forces password mode)')
   .option('-t, --token <token>', 'Login with API key (sk_solid_...)')
   .option('-p, --password', 'Use email/password prompt instead of browser')
+  .option('-c, --company <id>', 'Skip multi-company picker — auth directly into this company ID', (v) => parseInt(v, 10))
   .action(async (options) => {
     try {
       // API key login (for scripts/CI)
@@ -220,7 +300,7 @@ authCommand
       if (!usePassword) {
         let spinner: ReturnType<typeof ora> | null = null;
         try {
-          const result = await browserLogin((url) => {
+          const result = await browserLogin({ companyId: options.company }, (url) => {
             console.log('');
             console.log(chalk.dim('  Opening browser to authenticate...'));
             console.log(chalk.dim(`  If it does not open, visit: ${url}`));
@@ -248,6 +328,14 @@ authCommand
 
           console.log(chalk.green(`✔ Authenticated as ${status.data.user.email}`));
 
+          // If --company was passed, the token is already scoped — skip picker
+          if (options.company) {
+            console.log('');
+            console.log(ui.welcomeBox(status.data.user.email, status.data.user.company_id));
+            console.log('');
+            return;
+          }
+
           // Multi-company picker (same as password flow)
           try {
             const companiesResponse = await apiClient.companiesList();
@@ -259,22 +347,10 @@ authCommand
               console.log('');
               console.log(chalk.bold(`  ${companies.length} companies available:`));
               console.log('');
-              const choices = companies.map((c: { id: number; name: string; role: string }) => ({
-                name: c.id === status.data.user!.company_id
-                  ? chalk.green(`${c.name} (ID: ${c.id}) — ${c.role} [default]`)
-                  : `${c.name} (ID: ${c.id}) — ${c.role}`,
-                value: c.id,
-              }));
-              const answer = await inquirer.prompt([{
-                type: 'list',
-                name: 'companyId',
-                message: 'Select company:',
-                choices,
-                default: status.data.user.company_id,
-              }]);
-              if (answer.companyId !== status.data.user.company_id) {
+              const picked = await pickCompany(companies, status.data.user.company_id);
+              if (picked && picked !== status.data.user.company_id) {
                 const switchSpinner = ora('Switching...').start();
-                const switchResponse = await apiClient.companySwitch(answer.companyId);
+                const switchResponse = await apiClient.companySwitch(picked);
                 config.accessToken = switchResponse.data.access_token;
                 config.refreshToken = switchResponse.data.refresh_token;
                 config.companyId = switchResponse.data.company.id;
@@ -283,6 +359,7 @@ authCommand
               }
               console.log('');
               console.log(chalk.dim('  Switch later: solid switch'));
+              console.log(chalk.dim('  Skip picker:  solid auth login --company <id>'));
             } else {
               console.log('');
               console.log(ui.welcomeBox(status.data.user.email, config.companyId!));
