@@ -437,26 +437,11 @@ authCommand
             console.log(chalk.bold(`  ${companies.length} companies available:`));
             console.log('');
 
-            // Show picker
-            const choices = companies.map((c: { id: number; name: string; role: string }) => ({
-              name: c.id === response.data.user.company_id
-                ? chalk.green(`${c.name} (ID: ${c.id}) — ${c.role} [default]`)
-                : `${c.name} (ID: ${c.id}) — ${c.role}`,
-              value: c.id,
-            }));
+            const picked = await pickCompany(companies, response.data.user.company_id);
 
-            const answer = await inquirer.prompt([{
-              type: 'list',
-              name: 'companyId',
-              message: 'Select company:',
-              choices,
-              default: response.data.user.company_id,
-            }]);
-
-            // Switch if different from default
-            if (answer.companyId !== response.data.user.company_id) {
+            if (picked && picked !== response.data.user.company_id) {
               const switchSpinner = ora('Switching...').start();
-              const switchResponse = await apiClient.companySwitch(answer.companyId);
+              const switchResponse = await apiClient.companySwitch(picked);
               config.accessToken = switchResponse.data.access_token;
               config.refreshToken = switchResponse.data.refresh_token;
               config.companyId = switchResponse.data.company.id;
