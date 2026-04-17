@@ -12,17 +12,18 @@ import * as path from 'path';
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
 // ── Brand Colors ────────────────────────────────────────────────────
-// Solid# purple/indigo gradient
-const BRAND_COLORS = ['#818cf8', '#6366f1', '#4f46e5', '#4338ca'];
+// Solid# indigo gradient (light → deep)
+const BRAND_COLORS = ['#a5b4fc', '#818cf8', '#6366f1', '#4f46e5', '#4338ca'];
 
 // ── ASCII Logo ──────────────────────────────────────────────────────
+// ANSI Shadow font, 1-space letter gaps. Wordmark (`Solid#`) lives in the tagline.
 const LOGO_LINES = [
-  '  ███████╗ ██████╗ ██╗     ██╗██████╗  ██╗  ██╗',
-  '  ██╔════╝██╔═══██╗██║     ██║██╔══██╗ ██║  ██║',
-  '  ███████╗██║   ██║██║     ██║██║  ██║ ███████║',
-  '  ╚════██║██║   ██║██║     ██║██║  ██║ ╚════██║',
-  '  ███████║╚██████╔╝███████╗██║██████╔╝      ██║',
-  '  ╚══════╝ ╚═════╝ ╚══════╝╚═╝╚═════╝       ╚═╝',
+  '  ███████╗  ██████╗  ██╗      ██╗ ██████╗ ',
+  '  ██╔════╝ ██╔═══██╗ ██║      ██║ ██╔══██╗',
+  '  ███████╗ ██║   ██║ ██║      ██║ ██║  ██║',
+  '  ╚════██║ ██║   ██║ ██║      ██║ ██║  ██║',
+  '  ███████║ ╚██████╔╝ ███████╗ ██║ ██████╔╝',
+  '  ╚══════╝  ╚═════╝  ╚══════╝ ╚═╝ ╚═════╝ ',
 ];
 
 const LOGO_SMALL = [
@@ -44,6 +45,22 @@ function brandGradient(text: string): string {
 
 function gradientLines(lines: string[]): string {
   return lines.map((line) => brandGradient(line)).join('\n');
+}
+
+// Diagonal gradient: each glyph's color depends on both row and column,
+// so the logo reads light→deep from top-left to bottom-right.
+function gradientDiagonal(lines: string[]): string {
+  const colors = BRAND_COLORS;
+  const maxLen = Math.max(...lines.map((l) => l.length));
+  return lines.map((line, rowIdx) => {
+    return [...line].map((ch, colIdx) => {
+      if (ch === ' ') return ch;
+      const t = (rowIdx / Math.max(1, lines.length - 1)) * 0.5
+              + (colIdx / Math.max(1, maxLen - 1)) * 0.5;
+      const i = Math.min(colors.length - 1, Math.floor(t * colors.length));
+      return chalk.hex(colors[i])(ch);
+    }).join('');
+  }).join('\n');
 }
 
 // ── Box Drawing ─────────────────────────────────────────────────────
@@ -82,11 +99,13 @@ function stripAnsi(str: string): string {
 // ── Public API ──────────────────────────────────────────────────────
 
 export function banner(): string {
-  const logo = gradientLines(LOGO_LINES);
-  const tagline = chalk.dim('  AI Business Infrastructure');
-  const version = chalk.dim(`  v${pkg.version}`);
+  const logo = gradientDiagonal(LOGO_LINES);
+  const dot = chalk.hex('#6366f1')(' · ');
+  const mark = chalk.bold.hex('#818cf8')('Solid') + chalk.bold.hex('#a5b4fc')('#');
+  const tagline = chalk.dim('AI Business Infrastructure');
+  const version = chalk.dim(`v${pkg.version}`);
 
-  return `\n${logo}\n${tagline}  ${version}\n`;
+  return `\n${logo}\n\n  ${mark}${dot}${tagline}${dot}${version}\n`;
 }
 
 export function bannerSmall(): string {
