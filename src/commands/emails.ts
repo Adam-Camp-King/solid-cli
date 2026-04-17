@@ -197,9 +197,16 @@ emailsCommand
   .option('--subject <subject>', 'Override subject')
   .action(async (name, opts) => {
     requireAuth();
+    let vars: unknown;
+    try {
+      vars = JSON.parse(opts.vars);
+    } catch {
+      console.error(chalk.red('Invalid JSON passed to --vars'));
+      process.exit(1);
+    }
     const body: Record<string, unknown> = {
       to: opts.to,
-      variables: JSON.parse(opts.vars),
+      variables: vars,
     };
     if (opts.subject) body.subject = opts.subject;
     const s = ora(`Sending ${name}...`).start();

@@ -140,7 +140,15 @@ chainsCommand
   .option('--input <json>', 'Input payload as JSON')
   .action(async (id, opts) => {
     requireAuth();
-    const body = opts.input ? JSON.parse(opts.input) : {};
+    let body: unknown = {};
+    if (opts.input) {
+      try {
+        body = JSON.parse(opts.input);
+      } catch {
+        console.error(chalk.red('Invalid JSON passed to --input'));
+        process.exit(1);
+      }
+    }
     const s = ora(`Executing ${id}...`).start();
     try {
       const res = await apiClient.post(`/api/v1/chains/${id}/execute`, body);
