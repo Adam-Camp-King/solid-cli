@@ -268,23 +268,53 @@ brandCommand
       }
     }
 
-    // Handle logo upload
+    // Handle logo upload — REAL multipart now (T4). The path is a local
+    // file; we stream its bytes to the backend, which stores via the
+    // multi-tenant asset engine and returns a CDN URL.
     if (options.logo) {
       const spinner = ora(`Uploading logo: ${options.logo}...`).start();
       try {
         const fs = await import('fs');
-        if (!fs.existsSync(options.logo)) {
-          spinner.fail(chalk.red(`File not found: ${options.logo}`));
+        const path = await import('path');
+        const FormData = (await import('form-data')).default;
+        const localPath = path.resolve(options.logo);
+        if (!fs.existsSync(localPath)) {
+          spinner.fail(chalk.red(`File not found: ${localPath}`));
         } else {
-          // Upload via company settings
-          await apiClient.post('/api/v1/companies/me/logo', {
-            logo_path: options.logo,
-          });
+          const form = new FormData();
+          form.append('file', fs.createReadStream(localPath));
+          const res = await apiClient.post('/api/v1/companies/me/logo', form);
+          const r = res.data as Record<string, any>;
           spinner.succeed(chalk.green('Logo uploaded'));
+          if (r.logo_url) console.log(chalk.dim(`    ${r.logo_url}`));
           updates.push('logo');
         }
       } catch (error) {
         spinner.fail(chalk.red(`Logo failed: ${handleApiError(error).message}`));
+      }
+    }
+
+    // Handle favicon upload (T4 — same pipeline, smaller cap)
+    if (options.favicon) {
+      const spinner = ora(`Uploading favicon: ${options.favicon}...`).start();
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const FormData = (await import('form-data')).default;
+        const localPath = path.resolve(options.favicon);
+        if (!fs.existsSync(localPath)) {
+          spinner.fail(chalk.red(`File not found: ${localPath}`));
+        } else {
+          const form = new FormData();
+          form.append('file', fs.createReadStream(localPath));
+          const res = await apiClient.post('/api/v1/companies/me/favicon', form);
+          const r = res.data as Record<string, any>;
+          spinner.succeed(chalk.green('Favicon uploaded'));
+          if (r.favicon_url) console.log(chalk.dim(`    ${r.favicon_url}`));
+          updates.push('favicon');
+        }
+      } catch (error) {
+        spinner.fail(chalk.red(`Favicon failed: ${handleApiError(error).message}`));
       }
     }
 
