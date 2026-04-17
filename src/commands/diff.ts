@@ -8,6 +8,8 @@
  * solid diff --pages-only   → Only page changes
  * solid diff --kb-only      → Only KB changes
  * solid diff --summary      → Just file names, no content
+ * solid diff --json         → Structured JSON output for AI coding agents
+ *                             (exit 0 = no changes, exit 1 = changes present)
  */
 
 import { Command } from 'commander';
@@ -92,6 +94,36 @@ function textDiff(local: string, remote: string): { added: number; removed: numb
   return { added, removed, changed: added > 0 || removed > 0 };
 }
 
+// ─── JSON result shape ───────────────────────────────────────────────
+// Stable contract consumed by AI coding agents. Keep backwards-compatible.
+
+interface PageResult {
+  file: string;
+  slug: string;
+  change_type: 'added' | 'removed' | 'modified';
+  diffs?: DiffEntry[];        // only for "modified"
+  diff_count?: number;        // only for "modified"
+}
+
+interface KbResult {
+  file: string;
+  id: number | null;
+  change_type: 'added' | 'removed' | 'modified';
+  added_lines?: number;       // only for "modified"
+  removed_lines?: number;     // only for "modified"
+}
+
+interface JsonResult {
+  ok: true;
+  summary: {
+    pages_changed: number;
+    kb_changed: number;
+    total_changes: number;
+  };
+  pages: PageResult[];
+  kb: KbResult[];
+}
+
 // ─── Main command ────────────────────────────────────────────────────
 
 export const diffCommand = new Command('diff')
@@ -100,9 +132,14 @@ export const diffCommand = new Command('diff')
   .option('--pages-only', 'Only show page changes')
   .option('--kb-only', 'Only show KB changes')
   .option('--summary', 'Just file names, no content details')
+  .option('--json', 'Structured JSON output (exit 1 if changes present)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      if (options.json) {
+        console.log(JSON.stringify({ ok: false, error: 'not_logged_in', message: 'Run `solid auth login` first.' }));
+      } else {
+        console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      }
       process.exit(1);
     }
 
@@ -110,12 +147,28 @@ export const diffCommand = new Command('diff')
     const manifestPath = path.join(dir, '.solid', 'manifest.json');
 
     if (!fs.existsSync(manifestPath)) {
-      console.error(chalk.red('No .solid/manifest.json found. Run `solid pull` first.'));
+      if (options.json) {
+        console.log(JSON.stringify({ ok: false, error: 'no_manifest', message: 'Run `solid pull` first.' }));
+      } else {
+        console.error(chalk.red('No .solid/manifest.json found. Run `solid pull` first.'));
+      }
       process.exit(1);
     }
 
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-    const spinner = ora('Fetching current production state...').start();
+    const jsonMode = !!options.json;
+    const spinner = jsonMode ? null : ora('Fetching current production state...').start();
+
+    const result: JsonResult = {
+      ok: true,
+      summary: { pages_changed: 0, kb_changed: 0, total_changes: 0 },
+      pages: [],
+      kb: [],
+    };
+
+    const log = (msg: string) => {
+      if (!jsonMode) console.log(msg);
+    };
 
     let totalChanges = 0;
 
@@ -144,7 +197,8 @@ export const diffCommand = new Command('diff')
 
               if (!remote) {
                 // New page (exists locally, not on server)
-                console.log(chalk.green(`+ pages/${file}`) + chalk.dim(' (new page)'));
+                log(chalk.green(`+ pages/${file}`) + chalk.dim(' (new page)'));
+                result.pages.push({ file: `pages/${file}`, slug, change_type: 'added' });
                 pageChanges++;
                 continue;
               }
@@ -160,8 +214,8 @@ export const diffCommand = new Command('diff')
 
               const diffs = deepDiff(local, remoteFull);
               if (diffs.length > 0) {
-                console.log(chalk.yellow(`~ pages/${file}`) + chalk.dim(` (${diffs.length} changes)`));
-                if (!options.summary) {
+                log(chalk.yellow(`~ pages/${file}`) + chalk.dim(` (${diffs.length} changes)`));
+                if (!options.summary && !jsonMode) {
                   for (const d of diffs.slice(0, 10)) {
                     if (d.type === 'changed') {
                       console.log(chalk.dim(`    ${d.path}:`));
@@ -177,6 +231,13 @@ export const diffCommand = new Command('diff')
                     console.log(chalk.dim(`    ... and ${diffs.length - 10} more changes`));
                   }
                 }
+                result.pages.push({
+                  file: `pages/${file}`,
+                  slug,
+                  change_type: 'modified',
+                  diff_count: diffs.length,
+                  diffs: options.summary ? [] : diffs,
+                });
                 pageChanges++;
               }
 
@@ -187,14 +248,16 @@ export const diffCommand = new Command('diff')
 
           // Pages that exist remotely but not locally
           for (const [slug] of Object.entries(remotePagesMap)) {
-            console.log(chalk.red(`- pages/${slug}.json`) + chalk.dim(' (exists on server, not locally)'));
+            log(chalk.red(`- pages/${slug}.json`) + chalk.dim(' (exists on server, not locally)'));
+            result.pages.push({ file: `pages/${slug}.json`, slug, change_type: 'removed' });
             pageChanges++;
           }
 
           if (pageChanges === 0 && !options.kbOnly) {
-            console.log(chalk.dim('  Pages: no changes'));
+            log(chalk.dim('  Pages: no changes'));
           }
           totalChanges += pageChanges;
+          result.summary.pages_changed = pageChanges;
         }
       }
 
@@ -228,14 +291,16 @@ export const diffCommand = new Command('diff')
               const id = idMatch ? parseInt(idMatch[1]) : null;
 
               if (!id) {
-                console.log(chalk.green(`+ kb/${file}`) + chalk.dim(' (new entry)'));
+                log(chalk.green(`+ kb/${file}`) + chalk.dim(' (new entry)'));
+                result.kb.push({ file: `kb/${file}`, id: null, change_type: 'added' });
                 kbChanges++;
                 continue;
               }
 
               const remote = remoteKbMap[id];
               if (!remote) {
-                console.log(chalk.green(`+ kb/${file}`) + chalk.dim(' (new entry, ID not on server)'));
+                log(chalk.green(`+ kb/${file}`) + chalk.dim(' (new entry, ID not on server)'));
+                result.kb.push({ file: `kb/${file}`, id, change_type: 'added' });
                 kbChanges++;
                 continue;
               }
@@ -244,7 +309,14 @@ export const diffCommand = new Command('diff')
               const remoteContent = remote.content || remote.text || '';
               const diff = textDiff(body, remoteContent);
               if (diff.changed) {
-                console.log(chalk.yellow(`~ kb/${file}`) + chalk.dim(` (+${diff.added} -${diff.removed} lines)`));
+                log(chalk.yellow(`~ kb/${file}`) + chalk.dim(` (+${diff.added} -${diff.removed} lines)`));
+                result.kb.push({
+                  file: `kb/${file}`,
+                  id,
+                  change_type: 'modified',
+                  added_lines: diff.added,
+                  removed_lines: diff.removed,
+                });
                 kbChanges++;
               }
 
@@ -253,15 +325,24 @@ export const diffCommand = new Command('diff')
           }
 
           if (kbChanges === 0 && !options.pagesOnly) {
-            console.log(chalk.dim('  KB: no changes'));
+            log(chalk.dim('  KB: no changes'));
           }
           totalChanges += kbChanges;
+          result.summary.kb_changed = kbChanges;
         }
       }
 
-      spinner.stop();
+      result.summary.total_changes = totalChanges;
 
-      // ── Summary ──
+      if (spinner) spinner.stop();
+
+      if (jsonMode) {
+        console.log(JSON.stringify(result, null, 2));
+        // diff-standard exit codes: 0 = no changes, 1 = changes present
+        process.exit(totalChanges === 0 ? 0 : 1);
+      }
+
+      // ── Human summary ──
       console.log('');
       if (totalChanges === 0) {
         console.log(chalk.green('No changes. Local files match production.'));
@@ -271,9 +352,13 @@ export const diffCommand = new Command('diff')
       }
 
     } catch (error) {
-      spinner.stop();
+      if (spinner) spinner.stop();
       const err = handleApiError(error);
-      console.error(chalk.red(`Failed to diff: ${err.message}`));
-      process.exit(1);
+      if (jsonMode) {
+        console.log(JSON.stringify({ ok: false, error: 'diff_failed', message: err.message }));
+      } else {
+        console.error(chalk.red(`Failed to diff: ${err.message}`));
+      }
+      process.exit(2);
     }
   });
