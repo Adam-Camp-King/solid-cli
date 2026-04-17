@@ -428,3 +428,46 @@ voiceCommand
       spinner.succeed(chalk.green(`Released ${r.phone_number} (${r.db_rows_inactivated} DB row(s) inactivated)`));
     } catch (error) { fail(spinner, 'Release failed', error); }
   });
+
+// ── Real OpenAI Realtime + Twilio cost ──────────────────────────────
+
+voiceCommand
+  .command('cost')
+  .description('Real OpenAI Realtime + Twilio cost over the last N days, broken down by day. Pulls actual token usage from response.done events.')
+  .option('--days <n>', 'Lookback window', '30')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const days = parseInt(opts.days, 10) || 30;
+    const spinner = ora(`Loading voice cost (last ${days}d)...`).start();
+    try {
+      const res = await apiClient.get('/api/v1/voice/cost-summary', { params: { days } });
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      const t = r.totals;
+      spinner.succeed(chalk.green(`Voice cost — last ${days} days`));
+      console.log('');
+      console.log(`  ${chalk.bold('Calls:')}            ${t.calls}  ${chalk.dim(`(${t.ai_calls_with_real_usage} with real OpenAI usage data)`)}`);
+      console.log(`  ${chalk.bold('Total minutes:')}    ${(t.duration_seconds / 60).toFixed(1)}`);
+      console.log('');
+      console.log(`  ${chalk.bold('Twilio:')}           $${t.twilio_usd}`);
+      console.log(`  ${chalk.bold('OpenAI Realtime:')}  $${t.openai_usd}  ${chalk.red('← the silent killer')}`);
+      console.log(`  ${chalk.bold('Total:')}            $${t.total_usd}`);
+      console.log('');
+      if (t.ai_calls_with_real_usage > 0) {
+        console.log(`  ${chalk.dim('Avg OpenAI cost / call:')}    $${t.avg_openai_cost_per_call_usd}`);
+        console.log(`  ${chalk.dim('Avg OpenAI cost / minute:')}  $${t.avg_openai_cost_per_minute_usd}`);
+        console.log('');
+      }
+      if (r.daily?.length) {
+        console.log(chalk.bold('  Daily breakdown:'));
+        for (const d of r.daily.slice(0, 14) as Record<string, any>[]) {
+          const callsLabel = `${d.calls} call${d.calls === 1 ? '' : 's'}`.padEnd(10);
+          console.log(`    ${chalk.dim(d.date)}  ${callsLabel}  Twilio $${d.twilio_usd}  OpenAI ${chalk.yellow('$' + d.openai_usd)}`);
+        }
+        if (r.daily.length > 14) console.log(chalk.dim(`    … ${r.daily.length - 14} more days (use --json for full data)`));
+      }
+      console.log('');
+      console.log(chalk.dim(`  ${r.note}`));
+    } catch (error) { fail(spinner, 'Failed to load cost summary', error); }
+  });
