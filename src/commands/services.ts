@@ -93,13 +93,41 @@ servicesCommand
       if (options.category) body.category = options.category;
       if (options.description) body.description = options.description;
 
-      const res = await apiClient.post('/api/v1/cms/public/services', body);
+      const res = await apiClient.post('/api/v1/services/catalog', body);
       spinner.succeed(chalk.green('Service created'));
       if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       console.log(`  ID: ${d.id || d.service?.id || 'created'}`);
       console.log(`  Title: ${options.title}`);
       if (options.price) console.log(`  Price: $${options.price}`);
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+// Update service
+servicesCommand
+  .command('update <id>')
+  .description('Update a service')
+  .option('-t, --title <title>', 'New title')
+  .option('-p, --price <price>', 'New price')
+  .option('-d, --duration <minutes>', 'New duration')
+  .option('-c, --category <category>', 'New category')
+  .option('--description <text>', 'New description')
+  .action(async (id, options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const body: Record<string, unknown> = {};
+    if (options.title) body.title = options.title;
+    if (options.price) body.price = parseFloat(options.price);
+    if (options.duration) body.duration_minutes = parseInt(options.duration, 10);
+    if (options.category) body.category = options.category;
+    if (options.description) body.description = options.description;
+    if (Object.keys(body).length === 0) {
+      console.error(chalk.red('Provide at least one field to update.'));
+      process.exit(1);
+    }
+    const spinner = ora(`Updating service ${id}...`).start();
+    try {
+      await apiClient.put(`/api/v1/services/catalog/${id}`, body);
+      spinner.succeed(chalk.green(`Service ${id} updated`));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
 
@@ -111,7 +139,7 @@ servicesCommand
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const spinner = ora(`Deleting service ${id}...`).start();
     try {
-      await apiClient.delete(`/api/v1/services/${id}`);
+      await apiClient.delete(`/api/v1/services/catalog/${id}`);
       spinner.succeed(chalk.green(`Service ${id} deleted`));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });

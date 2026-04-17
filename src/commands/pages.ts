@@ -206,6 +206,49 @@ pagesCommand
     }
   });
 
+// Update page
+pagesCommand
+  .command('update <id>')
+  .description('Update page metadata (title, slug, type, publish state)')
+  .option('--title <title>', 'New title')
+  .option('--slug <slug>', 'New slug')
+  .option('--type <type>', 'New page type')
+  .option('--publish', 'Publish the page')
+  .option('--unpublish', 'Unpublish the page')
+  .action(async (id: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const pageId = parseInt(id, 10);
+    if (isNaN(pageId)) {
+      console.error(chalk.red('Invalid page ID.'));
+      process.exit(1);
+    }
+
+    const body: Record<string, unknown> = {};
+    if (options.title) body.title = options.title;
+    if (options.slug) body.slug = options.slug;
+    if (options.type) body.page_type = options.type;
+    if (options.publish) body.is_published = true;
+    if (options.unpublish) body.is_published = false;
+
+    if (Object.keys(body).length === 0) {
+      console.error(chalk.red('Provide at least one field (--title, --slug, --type, --publish, --unpublish).'));
+      process.exit(1);
+    }
+
+    const spinner = ora(`Updating page #${pageId}...`).start();
+    try {
+      await apiClient.pageUpdate(pageId, body);
+      spinner.succeed(chalk.green(`Page #${pageId} updated`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to update page'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
 // Delete page
 pagesCommand
   .command('delete <id>')

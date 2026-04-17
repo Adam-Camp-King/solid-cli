@@ -125,6 +125,42 @@ kbCommand
     }
   });
 
+// Update KB entry
+kbCommand
+  .command('update <id>')
+  .description('Update a knowledge base entry')
+  .option('--title <title>', 'New title')
+  .option('--content <text>', 'New content')
+  .option('--category <category>', 'New category')
+  .action(async (id: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const entryId = parseInt(id, 10);
+    if (isNaN(entryId)) {
+      console.error(chalk.red('Invalid entry ID.'));
+      process.exit(1);
+    }
+    const body: { title?: string; content?: string; category?: string } = {};
+    if (options.title) body.title = options.title;
+    if (options.content) body.content = options.content;
+    if (options.category) body.category = options.category;
+    if (Object.keys(body).length === 0) {
+      console.error(chalk.red('Provide at least one field to update (--title, --content, --category).'));
+      process.exit(1);
+    }
+    const spinner = ora(`Updating KB entry #${entryId}...`).start();
+    try {
+      await apiClient.kbUpdate(entryId, body);
+      spinner.succeed(chalk.green(`KB entry #${entryId} updated`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to update KB entry'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
 // Delete KB entry
 kbCommand
   .command('delete <id>')

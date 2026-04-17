@@ -331,9 +331,42 @@ tasksCommand.command('complete <id>').description('Mark a task as complete')
     requireAuth();
     const spinner = ora('Completing task...').start();
     try {
-      await apiClient.patch(`/api/v1/crm/tasks/${id}/complete`);
+      await apiClient.put(`/api/v1/crm/tasks/${id}/complete`);
       spinner.succeed(chalk.green(`Task ${id} marked complete`));
     } catch (e) { spinner.fail(chalk.red('Failed to complete task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
+  });
+
+tasksCommand.command('update <id>').description('Update a task')
+  .option('--title <title>', 'New title')
+  .option('--priority <priority>', 'Priority (low, medium, high)')
+  .option('--due <date>', 'Due date (YYYY-MM-DD)')
+  .option('--status <status>', 'Status')
+  .action(async (id: string, opts) => {
+    requireAuth();
+    const body: Rec = {};
+    if (opts.title) body.title = opts.title;
+    if (opts.priority) body.priority = opts.priority;
+    if (opts.due) body.due_date = opts.due;
+    if (opts.status) body.status = opts.status;
+    if (Object.keys(body).length === 0) {
+      console.error(chalk.red('Provide at least one field to update.'));
+      process.exit(1);
+    }
+    const spinner = ora(`Updating task ${id}...`).start();
+    try {
+      await apiClient.put(`/api/v1/crm/tasks/${id}`, body);
+      spinner.succeed(chalk.green(`Task ${id} updated`));
+    } catch (e) { spinner.fail(chalk.red('Failed to update task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
+  });
+
+tasksCommand.command('delete <id>').description('Delete a task')
+  .action(async (id: string) => {
+    requireAuth();
+    const spinner = ora(`Deleting task ${id}...`).start();
+    try {
+      await apiClient.delete(`/api/v1/crm/tasks/${id}`);
+      spinner.succeed(chalk.green(`Task ${id} deleted`));
+    } catch (e) { spinner.fail(chalk.red('Failed to delete task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
   });
 
 crmCommand.addCommand(tasksCommand);

@@ -67,7 +67,7 @@ callsCmd
     requireAuth();
     const spinner = ora('Loading call details...').start();
     try {
-      const response = await apiClient.get(`/api/v1/calls/${callId}`);
+      const response = await apiClient.get(`/api/v1/voice/calls/${callId}`);
       const c = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
       spinner.succeed(chalk.green('Call details'));
@@ -97,7 +97,7 @@ voiceCommand
     requireAuth();
     const spinner = ora('Loading voice stats...').start();
     try {
-      const response = await apiClient.get('/api/v1/stats');
+      const response = await apiClient.get('/api/v1/voice/stats');
       const s = response.data as Record<string, any>;
       if (options.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Voice statistics'));

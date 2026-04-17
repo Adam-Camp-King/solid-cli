@@ -257,7 +257,7 @@ Manage all your Solid# client companies from one place.
 };
 
 export const initCommand = new Command('init')
-  .description('Scaffold a new app on Solid# infrastructure')
+  .description('Scaffold a LOCAL app template (boilerplate files only — does NOT create a company; use `solid company create` or `solid demo create` for that)')
   .argument('<name>', 'Project name')
   .option('-t, --type <type>', 'App type (basic, marketplace, saas, agency-dashboard)', 'basic')
   .option('--list', 'List available app types')

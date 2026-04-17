@@ -182,6 +182,23 @@ inventoryCommand
     }
   });
 
+// Archive (soft-delete) inventory item
+inventoryCommand
+  .command('archive <sku>')
+  .alias('delete')
+  .description('Archive (soft-delete) an inventory item')
+  .action(async (sku) => {
+    requireAuth();
+    const spinner = ora(`Archiving ${sku}...`).start();
+    try {
+      await apiClient.post('/api/v1/Inventory/archive', { sku });
+      spinner.succeed(chalk.green(`Item ${sku} archived`));
+    } catch (error) {
+      spinner.fail(chalk.red(`Failed to archive ${sku}`));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
 // CSV import
 inventoryCommand
   .command('import <file>')
