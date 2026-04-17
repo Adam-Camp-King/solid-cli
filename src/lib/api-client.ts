@@ -902,11 +902,30 @@ export const apiClient = new ApiClient();
 
 export function handleApiError(error: unknown): ApiError {
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ detail?: string; message?: string }>;
-    return {
-      message: axiosError.response?.data?.detail || axiosError.response?.data?.message || axiosError.message,
-      status: axiosError.response?.status || 500,
-    };
+    const axiosError = error as AxiosError<{ detail?: unknown; message?: string }>;
+    const raw = axiosError.response?.data?.detail ?? axiosError.response?.data?.message ?? axiosError.message;
+    // FastAPI 422s send `detail` as an array of {loc, msg, type} objects.
+    // Flattening to "loc.path: msg" beats printing "[object Object]".
+    let message: string;
+    if (typeof raw === 'string') {
+      message = raw;
+    } else if (Array.isArray(raw)) {
+      message = raw
+        .map((d) => {
+          if (d && typeof d === 'object') {
+            const loc = Array.isArray((d as any).loc) ? (d as any).loc.join('.') : '';
+            const msg = (d as any).msg || JSON.stringify(d);
+            return loc ? `${loc}: ${msg}` : msg;
+          }
+          return String(d);
+        })
+        .join('; ');
+    } else if (raw && typeof raw === 'object') {
+      message = JSON.stringify(raw);
+    } else {
+      message = axiosError.message || 'Request failed';
+    }
+    return { message, status: axiosError.response?.status || 500 };
   }
   return {
     message: error instanceof Error ? error.message : 'Unknown error',

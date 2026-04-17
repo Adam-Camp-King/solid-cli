@@ -1,7 +1,7 @@
 /**
  * Onboarding / setup-wizard commands.
  * Wraps controllers/setup_wizard.py at /api/v1/setup-wizard/* and
- * controllers/onboarding_v2.py at /api/v1/onboarding/v2/*.
+ * controllers/onboarding_v2.py at /api/v1/onboarding-v2/*.
  *
  * This is the programmatic path to provision a brand-new client end-to-end:
  * email + domain + phone (BUY a Twilio number) + payment + website. Anything
@@ -265,23 +265,39 @@ phoneCmd
   .command('search')
   .description('Search Twilio inventory for available numbers')
   .option('--area-code <code>', 'Area code (e.g. 415)')
-  .option('--country <iso>', 'Country', 'US')
-  .option('--contains <digits>', 'Number must contain digits')
+  .option('--type <t>', 'local | toll_free', 'local')
+  .option('-l, --limit <n>', 'Max results (1-20)', '10')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
     requireAuth();
-    const body: Record<string, unknown> = { country: opts.country };
+    const body: Record<string, unknown> = {
+      number_type: opts.type,
+      limit: parseInt(opts.limit, 10),
+    };
     if (opts.areaCode) body.area_code = opts.areaCode;
-    if (opts.contains) body.contains = opts.contains;
-    const spinner = ora('Searching...').start();
+    const spinner = ora('Searching Twilio...').start();
     try {
       const res = await apiClient.post('/api/v1/setup-wizard/phone/search', body);
       const data = res.data as Record<string, any>;
       const items = data.numbers || data.results || [];
       if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      spinner.succeed(chalk.green(`${items.length} number(s) available`));
+      // Surface backend's "Twilio not configured" message so users don't think
+      // they got 0 real results — they got 0 because the account is unwired.
+      if (data.message) {
+        spinner.warn(chalk.yellow(data.message));
+      } else if (items.length === 0) {
+        spinner.warn(chalk.yellow('No matching numbers available. Try a different --area-code or --type toll_free.'));
+      } else {
+        spinner.succeed(chalk.green(`${items.length} number(s) available`));
+        const cost = data.monthly_cost ? ` (monthly cost: $${(data.monthly_cost / 100).toFixed(2)})` : '';
+        if (cost) console.log(chalk.dim(`  Pricing:${cost}`));
+        console.log('');
+      }
       for (const n of items as Record<string, any>[]) {
-        console.log(`  ${chalk.bold(n.phone_number || n.number)}  ${chalk.dim(n.locality || n.region || '')}  ${chalk.dim(n.capabilities?.voice ? '📞' : '')}`);
+        const caps = (n.capabilities && typeof n.capabilities === 'object')
+          ? Object.entries(n.capabilities).filter(([, v]) => v).map(([k]) => k).join(',')
+          : '';
+        console.log(`  ${chalk.bold(n.phone_number || n.number)}  ${chalk.dim(n.locality || n.region || '')}  ${chalk.dim(caps)}`);
       }
     } catch (e) { fail(spinner, 'Search failed', e); }
   });
@@ -489,18 +505,56 @@ onboardingCommand
 
 onboardingCommand
   .command('discover')
-  .description('Run business-discovery (v2 onboarding) — analyze a website / business name')
-  .requiredOption('--input <text>', 'Website URL or business name')
+  .description('Industry discovery (v2 onboarding) — match a business to an industry template')
+  .requiredOption('--message <text>', 'Business description or industry keyword (e.g. "plumber", "acme plumbing services")')
+  .option('--session <id>', 'Existing session ID (resume a flow)')
+  .option('--ref <code>', 'Partner referral code')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
     requireAuth();
+    const body: Record<string, unknown> = { message: opts.message };
+    if (opts.session) body.session_id = opts.session;
+    if (opts.ref) body.ref_code = opts.ref;
     const spinner = ora('Discovering...').start();
     try {
-      const res = await apiClient.post('/api/v1/onboarding/v2/discover', { input: opts.input });
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
-      spinner.succeed(chalk.green('Discovery complete'));
-      console.log(JSON.stringify(res.data, null, 2));
+      const res = await apiClient.post('/api/v1/onboarding-v2/discover', body);
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (r.blocked) {
+        spinner.warn(chalk.yellow(r.blocked_message || 'Discovery blocked'));
+        return;
+      }
+      spinner.succeed(chalk.green(r.matched ? 'Match found' : 'No direct match'));
+      console.log('');
+      console.log(`  ${chalk.bold('Session:')}   ${r.session_id}`);
+      if (r.industry) {
+        console.log(`  ${chalk.bold('Industry:')}  ${r.industry.name || r.industry.code || JSON.stringify(r.industry)}`);
+      }
+      if (r.suggestions && r.suggestions.length > 0) {
+        console.log('');
+        console.log(chalk.bold('  Suggestions:'));
+        for (const s of r.suggestions) {
+          console.log(`    ${typeof s === 'string' ? s : (s.name || JSON.stringify(s))}`);
+        }
+      }
     } catch (e) { fail(spinner, 'Discovery failed', e); }
+  });
+
+onboardingCommand
+  .command('set-business')
+  .description('Save a business name to a discovery session (Step 1b of v2)')
+  .requiredOption('--name <name>', 'Business name')
+  .option('--session <id>', 'Existing session ID')
+  .action(async (opts) => {
+    requireAuth();
+    const body: Record<string, unknown> = { business_name: opts.name };
+    if (opts.session) body.session_id = opts.session;
+    const spinner = ora('Saving business name...').start();
+    try {
+      const res = await apiClient.post('/api/v1/onboarding-v2/set-business', body);
+      spinner.succeed(chalk.green('Saved'));
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { fail(spinner, 'Failed', e); }
   });
 
 onboardingCommand
@@ -512,8 +566,23 @@ onboardingCommand
     const spinner = ora('Provisioning tenant...').start();
     try {
       const body = JSON.parse(opts.data);
-      const res = await apiClient.post('/api/v1/onboarding/v2/provision', body);
+      const res = await apiClient.post('/api/v1/onboarding-v2/provision', body);
       const r = res.data as Record<string, any>;
       spinner.succeed(chalk.green(`Tenant provisioned: ${r.company_id || r.id}`));
     } catch (e) { fail(spinner, 'Provision failed', e); }
+  });
+
+onboardingCommand
+  .command('session')
+  .description('Get the current onboarding v2 session')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const spinner = ora('Loading session...').start();
+    try {
+      const res = await apiClient.get('/api/v1/onboarding-v2/session');
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      spinner.succeed(chalk.green('Session'));
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { fail(spinner, 'Failed', e); }
   });
