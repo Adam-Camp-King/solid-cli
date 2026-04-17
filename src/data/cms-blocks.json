@@ -1,0 +1,371 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "source": "Owners-Manual/71-Agent-Native-CLI/05-BLOCK-SCHEMA.md",
+    "extracted_from": "solid-frontend/src/components/cms/blocks/*.tsx interfaces",
+    "note": "Kept in sync manually. When Stitch lands or blocks change, update this file alongside the doc. Future: move to a backend-served /api/v1/cms/schema endpoint."
+  },
+  "envelope": {
+    "sections": "array of block objects",
+    "notes": [
+      "Top-level may be wrapped as {\"sections\": [...]} (default) or {\"blocks\": [...]} (alias accepted).",
+      "Each section must have `type: string` matching a canonical block type or alias.",
+      "Props can be flat on the section (recommended) or nested under `config` / `props`.",
+      "`id` is optional but recommended for stable diffs.",
+      "`SECTION_TYPE_MAP` in solid-frontend/src/components/cms/PageRenderer.tsx resolves kebab-case / snake_case / PascalCase / aliases into the 27 registry components."
+    ]
+  },
+  "blocks": [
+    {
+      "type": "hero",
+      "component": "Hero",
+      "category": "Headers",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "ctaText": "string",
+        "ctaLink": "string",
+        "backgroundStyle": "\"gradient\" | \"solid\" | \"image\"",
+        "backgroundImage": "string",
+        "backgroundColor": "string (hex or CSS var)",
+        "textColor": "string",
+        "buttonColor": "string",
+        "alignment": "\"left\" | \"center\" | \"right\""
+      },
+      "example": {
+        "id": "hero-1",
+        "type": "hero",
+        "title": "Transform Your Workflow",
+        "subtitle": "The all-in-one platform for modern teams",
+        "ctaText": "Start Free Trial",
+        "ctaLink": "/signup"
+      }
+    },
+    {
+      "type": "hero-image",
+      "component": "HeroImage",
+      "category": "Headers",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "primaryCTA": "string",
+        "secondaryCTA": "string",
+        "backgroundImage": "string (url)",
+        "showVideoButton": "boolean"
+      }
+    },
+    {
+      "type": "hero-split",
+      "component": "HeroSplit",
+      "category": "Headers",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "features": "string[]",
+        "primaryCTA": "string",
+        "imageUrl": "string"
+      }
+    },
+    {
+      "type": "text",
+      "component": "TextBlock",
+      "category": "Content",
+      "props": {
+        "title": "string",
+        "content": "string (HTML/markdown-ish, backend sanitizes)",
+        "alignment": "\"left\" | \"center\" | \"right\"",
+        "maxWidth": "\"sm\" | \"md\" | \"lg\" | \"full\"",
+        "backgroundColor": "string"
+      }
+    },
+    {
+      "type": "accordion",
+      "component": "Accordion",
+      "category": "Content",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "items": "AccordionItem[] — { id, title, content }",
+        "allowMultiple": "boolean"
+      }
+    },
+    {
+      "type": "process-steps",
+      "component": "ProcessSteps",
+      "category": "Content",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "steps": "Step[] — { id, title, description }"
+      }
+    },
+    {
+      "type": "blog-preview",
+      "component": "BlogPreview",
+      "category": "Content",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "posts": "BlogPost[] — { id, title, excerpt, image, href }",
+        "viewAllLink": "string",
+        "viewAllText": "string"
+      }
+    },
+    {
+      "type": "features",
+      "component": "FeaturesGrid",
+      "category": "Features & Pricing",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "features": "Feature[] — { icon, title, description }",
+        "columns": "2 | 3 | 4",
+        "backgroundColor": "string"
+      },
+      "enums": {
+        "icon": ["Zap", "Shield", "Star", "Rocket", "Users", "BarChart", "Lock", "Globe"]
+      },
+      "example": {
+        "id": "features-1",
+        "type": "features",
+        "title": "Why us",
+        "features": [
+          { "icon": "Zap", "title": "Fast", "description": "60-minute response." },
+          { "icon": "Shield", "title": "Safe", "description": "Bonded and insured." }
+        ],
+        "columns": 2
+      }
+    },
+    {
+      "type": "pricing",
+      "component": "PricingCards",
+      "category": "Features & Pricing",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "tiers": "PricingTier[] — { name, price, period, description, features[], cta, ctaLink, highlighted }"
+      }
+    },
+    {
+      "type": "cta",
+      "component": "CTA",
+      "category": "Calls to Action",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "primaryCta": "string",
+        "primaryLink": "string",
+        "secondaryCta": "string",
+        "secondaryLink": "string",
+        "backgroundStyle": "\"gradient\" | \"solid\"",
+        "backgroundColor": "string",
+        "buttonColor": "string"
+      }
+    },
+    {
+      "type": "countdown",
+      "component": "Countdown",
+      "category": "Calls to Action",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "targetDate": "string (ISO-8601)",
+        "ctaText": "string",
+        "ctaLink": "string"
+      }
+    },
+    {
+      "type": "testimonials",
+      "component": "Testimonials",
+      "category": "Social Proof",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "testimonials": "Testimonial[] — { quote, author, role, avatar }"
+      },
+      "notes": "Auto-merges Google reviews from company context if available."
+    },
+    {
+      "type": "stats",
+      "component": "Stats",
+      "category": "Social Proof",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "stats": "Stat[] — { value, label, icon }"
+      },
+      "enums": {
+        "icon": ["trending", "users", "globe", "zap"]
+      }
+    },
+    {
+      "type": "team",
+      "component": "Team",
+      "category": "Social Proof",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "members": "TeamMember[] — { id, name, role, image, bio }"
+      }
+    },
+    {
+      "type": "logo-cloud",
+      "component": "LogoCloud",
+      "category": "Social Proof",
+      "props": {
+        "title": "string",
+        "logos": "Logo[] — { id, name, src }"
+      }
+    },
+    {
+      "type": "google-reviews",
+      "component": "GoogleReviews",
+      "category": "Social Proof",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "overallRating": "number",
+        "totalReviews": "number",
+        "reviews": "Review[] — { author, rating, text, date }"
+      }
+    },
+    {
+      "type": "gallery",
+      "component": "Gallery",
+      "category": "Media",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "images": "GalleryImage[] — { id, src, alt, caption }",
+        "columns": "2 | 3 | 4",
+        "layout": "\"grid\" | \"masonry\""
+      }
+    },
+    {
+      "type": "video-embed",
+      "component": "VideoEmbed",
+      "category": "Media",
+      "aliases": ["video"],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "videoUrl": "string (YouTube/Vimeo auto-parsed)",
+        "thumbnailUrl": "string",
+        "aspectRatio": "\"16:9\" | \"4:3\" | \"1:1\"",
+        "autoplay": "boolean"
+      }
+    },
+    {
+      "type": "before-after",
+      "component": "BeforeAfter",
+      "category": "Media",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "items": "ComparisonItem[] — { before, after, caption }"
+      }
+    },
+    {
+      "type": "contact",
+      "component": "ContactForm",
+      "category": "Forms & Widgets",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "email": "string",
+        "phone": "string",
+        "address": "string"
+      },
+      "notes": "Pulls missing contact fields from company context."
+    },
+    {
+      "type": "booking",
+      "component": "BookingWidget",
+      "category": "Forms & Widgets",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "services": "string[]"
+      },
+      "notes": "Pulls missing services from company context."
+    },
+    {
+      "type": "chat-widget",
+      "component": "ChatWidgetBlock",
+      "category": "Forms & Widgets",
+      "aliases": ["chat_widget"],
+      "props": {
+        "chat_id": "string",
+        "position": "\"bottom-right\" | \"bottom-left\"",
+        "greeting": "string",
+        "primaryColor": "string"
+      }
+    },
+    {
+      "type": "business-hours",
+      "component": "BusinessHours",
+      "category": "Business Info",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "hours": "DayHours[] — { day, open, close, closed }"
+      },
+      "notes": "If `hours` omitted, parses free-text hours from company context."
+    },
+    {
+      "type": "products",
+      "component": "ProductCatalog",
+      "category": "Business Info",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "category": "string",
+        "featured_only": "boolean",
+        "columns": "2 | 3 | 4",
+        "show_prices": "boolean",
+        "layout": "\"grid\" | \"list\""
+      },
+      "notes": "Pulls products from company context."
+    },
+    {
+      "type": "service-area",
+      "component": "ServiceArea",
+      "category": "Business Info",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "regions": "ServiceRegion[] — { id, name, description }",
+        "mapEmbed": "string"
+      }
+    },
+    {
+      "type": "map-embed",
+      "component": "MapEmbed",
+      "category": "Business Info",
+      "props": {
+        "title": "string",
+        "subtitle": "string"
+      },
+      "notes": "Renders a directions card using company context address/phone/hours. No iframe, no API key required."
+    },
+    {
+      "type": "faq",
+      "component": "FAQ",
+      "category": "FAQ",
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "faqs": "FAQItem[] — { id, question, answer }"
+      }
+    },
+    {
+      "type": "divider",
+      "component": "Divider",
+      "category": "Layout",
+      "props": {
+        "style": "\"line\" | \"dots\" | \"gradient\" | \"space\"",
+        "spacing": "\"small\" | \"medium\" | \"large\""
+      }
+    }
+  ]
+}

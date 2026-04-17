@@ -104,6 +104,7 @@ import { landingCommand } from './commands/landing';
 import { chatWidgetsCommand } from './commands/chat_widgets';
 import { paymentLinksCommand } from './commands/payment_links';
 import { subscriptionsCommand } from './commands/subscriptions';
+import { schemaCommand } from './commands/schema';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -150,6 +151,7 @@ program.addCommand(kbCommand);
 program.addCommand(pagesCommand);
 program.addCommand(siteCommand);
 program.addCommand(servicesCommand);
+program.addCommand(schemaCommand);
 
 // CRM
 program.addCommand(crmCommand);

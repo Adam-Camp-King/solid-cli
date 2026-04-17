@@ -1,13 +1,13 @@
 {
   "name": "@solidnumber/cli",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "description": "AI business infrastructure from the terminal — CRM, payments, voice AI, 116 agents, 52 industry templates. solid clone plumber → instant business.",
   "main": "dist/index.js",
   "bin": {
     "solid": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').cpSync('src/data','dist/data',{recursive:true})\"",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts",
