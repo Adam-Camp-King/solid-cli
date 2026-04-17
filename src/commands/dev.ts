@@ -1,345 +1,303 @@
 /**
- * Development commands for Solid CLI — Sandbox Engine
+ * solid dev — Custom module development lifecycle (T3)
  *
- * Full module development lifecycle:
- *   solid dev create --company 47 --name "mortgage-dashboard"
- *   solid dev list --company 47
- *   solid dev status --company 47 --name "mortgage-dashboard"
- *   solid dev validate --company 47 --name "mortgage-dashboard"
- *   solid dev snapshot --company 47
- *   solid dev deploy --company 47 --name "mortgage-dashboard"
- *   solid dev disable --company 47 --name "mortgage-dashboard"
- *   solid dev cleanup --company 47 --name "mortgage-dashboard"
+ * Wraps /api/v1/modules/* — the company-scoped dev loop:
+ *   solid dev module create <name>             scaffold + register
+ *   solid dev module list                       what your company has
+ *   solid dev module pull <folder> [--out dir]  download files
+ *   solid dev module push <folder> [--from dir] upload files
+ *   solid dev module deploy <folder>            validate + reload + enable
+ *   solid dev module validate <folder>          lint without deploy
+ *   solid dev module disable <folder>           keep on disk, take offline
+ *   solid dev module delete <folder>            permanent
+ *   solid dev module routes <folder>            list mounted routes
  *
+ * Predecessor: hit fictional /api/v1/sandbox/* endpoints. Now real.
  * See: Owners-Manual/15-AI-Sandbox-Engine/05-SOLID-DEV-CLI.md
  */
 
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
+import * as fs from 'fs';
+import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { ui } from '../lib/ui';
+
+function requireAuth(): void {
+  if (!config.isLoggedIn()) {
+    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+    process.exit(1);
+  }
+}
+
+function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): void {
+  spinner.fail(chalk.red(msg));
+  console.error(chalk.red(`  ${handleApiError(error).message}`));
+}
 
 export const devCommand = new Command('dev')
-  .description('Sandbox engine — create, test, deploy custom modules per company');
+  .description('Custom module development — scaffold, push, deploy code that runs in Solid# scoped to your company');
 
-// ─── Create ─────────────────────────────────────────────────────────
+// All subcommands hang off `solid dev module <verb>` to match the sprint
+// doc and make the namespace clear.
+const moduleCmd = new Command('module').description('Module lifecycle (scaffold/push/deploy/...)');
 
-devCommand
-  .command('create')
-  .description('Create a new custom module sandbox')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name (lowercase, hyphens)')
-  .option('-d, --description <text>', 'Module description')
-  .option('--json', 'JSON output')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+// ─── create ──────────────────────────────────────────────────────────
 
-    const companyId = parseInt(options.company, 10);
-    if (companyId <= 3) { console.error(chalk.red('Company ID must be > 3 (1-3 are reserved).')); process.exit(1); }
-
-    const spinner = ora(`Creating module "${options.name}" for company ${companyId}...`).start();
-
+moduleCmd
+  .command('create <name>')
+  .description('Scaffold a new module — creates folder + manifest + skeleton routes.py + tests')
+  .option('--description <text>', 'One-line description')
+  .option('--author <name>', 'Author / agency name')
+  .option('--out <dir>', 'Local directory to also pull files into', '.')
+  .option('--json', 'Output as JSON')
+  .action(async (name, opts) => {
+    requireAuth();
+    const spinner = ora(`Scaffolding module "${name}"...`).start();
     try {
-      const res = await apiClient.post<any>('/api/v1/sandbox/create', {
-        company_id: companyId,
-        module_name: options.name,
-        description: options.description || '',
-      });
-
-      spinner.succeed(chalk.green('Module created'));
-
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-
-      const d = res.data as Record<string, any>;
+      const body: Record<string, unknown> = { module_name: name };
+      if (opts.description) body.description = opts.description;
+      if (opts.author) body.author = opts.author;
+      const res = await apiClient.post('/api/v1/modules/scaffold', body);
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      spinner.succeed(chalk.green(`Scaffolded ${r.folder_name}`));
       console.log('');
-      console.log(ui.successBox('Sandbox Created', [
-        `Folder:  ${d.folder_name}`,
-        `Company: ${companyId}`,
-        `Module:  ${options.name}`,
-        `Version: 0.1.0`,
-      ]));
+      console.log(`  ${chalk.bold('Folder:')}     ${r.folder_name}`);
+      console.log(`  ${chalk.bold('Module:')}     ${r.module_name}`);
+      console.log(`  ${chalk.bold('Company:')}    ${r.company_id}`);
+      console.log(`  ${chalk.bold('Files:')}      ${(r.files || []).length}`);
       console.log('');
-      console.log(chalk.dim('Next steps:'));
-      for (const step of d.next_steps || []) {
+      for (const step of (r.next_steps || []) as string[]) {
         console.log(chalk.dim(`  ${step}`));
       }
-      console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+      // Also pull immediately if --out given
+      if (opts.out) {
+        console.log('');
+        await pullModuleToDisk(r.folder_name, opts.out);
+      }
+    } catch (error) { fail(spinner, 'Scaffold failed', error); }
   });
 
-// ─── List ───────────────────────────────────────────────────────────
+// ─── list ────────────────────────────────────────────────────────────
 
-devCommand
+moduleCmd
   .command('list')
-  .description('List custom modules for a company')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .option('--json', 'JSON output')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
+  .description('List custom modules for the authenticated company')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
     const spinner = ora('Loading modules...').start();
     try {
-      const res = await apiClient.get<any>(`/sandbox/list/${options.company}`);
-      spinner.stop();
-
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-
-      const modules = (res.data as Record<string, any>)?.modules || [];
-      console.log('');
-      console.log(chalk.bold(`  Modules for Company ${options.company} (${modules.length})`));
-      console.log('');
-
-      if (modules.length === 0) {
-        console.log(chalk.dim('  No modules yet. Create one with: solid dev create -c <id> -n <name>'));
-      } else {
-        const headers = ['Module', 'Version', 'Status', 'Description'];
-        const rows = modules.map((m: any) => [
-          m.module_name,
-          m.version,
-          m.enabled ? chalk.green('enabled') : chalk.yellow('disabled'),
-          (m.description || '').slice(0, 40),
-        ]);
-        console.log(ui.table(headers, rows));
-      }
-      console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
-// ─── Status ─────────────────────────────────────────────────────────
-
-devCommand
-  .command('status')
-  .description('Check module status')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name')
-  .option('--json', 'JSON output')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    const spinner = ora('Checking status...').start();
-    try {
-      const res = await apiClient.get<any>(`/sandbox/status/${options.company}/${options.name}`);
-      spinner.stop();
-
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-
-      const d = res.data as Record<string, any>;
-      if (!d.exists) {
-        console.log(chalk.yellow(`  Module "${options.name}" not found for company ${options.company}`));
+      const res = await apiClient.get('/api/v1/modules');
+      const items = (res.data as Record<string, any>[]) ?? [];
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
+      spinner.succeed(chalk.green(`${items.length} module(s)`));
+      if (!items.length) {
+        console.log('');
+        console.log(chalk.dim('  No modules yet. Try: solid dev module create <name>'));
         return;
       }
-
       console.log('');
-      console.log(ui.header(`Module: ${d.module_name}`));
-      console.log(ui.label('Folder', d.folder_name));
-      console.log(ui.label('Company', String(d.company_id)));
-      console.log(ui.label('Version', d.version || 'unknown'));
-      console.log(ui.label('Status', d.enabled ? chalk.green('enabled') : chalk.yellow('disabled')));
-      console.log(ui.label('Routes', String(d.route_count)));
-      console.log(ui.label('Backend', d.has_backend ? chalk.green('yes') : chalk.dim('no')));
-      console.log(ui.label('Frontend', d.has_frontend ? chalk.green('yes') : chalk.dim('no')));
-      console.log(ui.label('Tests', d.has_tests ? chalk.green('yes') : chalk.dim('no')));
-      console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+      for (const m of items) {
+        const dot = m.enabled ? chalk.green('●') : chalk.dim('○');
+        console.log(`  ${dot} ${chalk.bold(m.folder_name)}  v${m.version}  ${chalk.dim(`${m.route_count} routes @ ${m.route_prefix}`)}`);
+        if (m.description) console.log(`      ${chalk.dim(m.description)}`);
+      }
+    } catch (error) { fail(spinner, 'List failed', error); }
   });
 
-// ─── Validate ───────────────────────────────────────────────────────
+// ─── routes ──────────────────────────────────────────────────────────
 
-devCommand
-  .command('validate')
-  .alias('check')
-  .description('Run 6-checkpoint security validation on a module')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+moduleCmd
+  .command('routes <module_name>')
+  .description('List mounted routes for one of your modules')
+  .option('--json', 'Output as JSON')
+  .action(async (moduleName, opts) => {
+    requireAuth();
+    const spinner = ora('Loading routes...').start();
+    try {
+      const res = await apiClient.get(`/api/v1/modules/${moduleName}/routes`);
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      spinner.succeed(chalk.green(`${r.count ?? 0} route(s)`));
+      for (const route of r.routes || []) {
+        const methods = (route.methods || []).join(',');
+        console.log(`  ${chalk.cyan(methods.padEnd(8))}  ${route.path}`);
+      }
+    } catch (error) { fail(spinner, 'Failed to load routes', error); }
+  });
 
+// ─── pull ────────────────────────────────────────────────────────────
+
+async function pullModuleToDisk(folderName: string, outDir: string): Promise<void> {
+  const spinner = ora(`Pulling ${folderName}...`).start();
+  try {
+    const listRes = await apiClient.get(`/api/v1/modules/${folderName}/source`);
+    const data = listRes.data as Record<string, any>;
+    const files = (data.files || []) as Array<{ path: string }>;
+    const target = path.resolve(outDir, folderName);
+    fs.mkdirSync(target, { recursive: true });
+    for (const f of files) {
+      const fileRes = await apiClient.get(`/api/v1/modules/${folderName}/source/${f.path}`);
+      const fr = fileRes.data as Record<string, any>;
+      const localPath = path.join(target, f.path);
+      fs.mkdirSync(path.dirname(localPath), { recursive: true });
+      fs.writeFileSync(localPath, fr.content ?? '');
+    }
+    spinner.succeed(chalk.green(`Pulled ${files.length} file(s) → ${target}`));
+  } catch (error) {
+    spinner.fail(chalk.red(`Pull failed`));
+    console.error(chalk.red(`  ${handleApiError(error).message}`));
+  }
+}
+
+moduleCmd
+  .command('pull <folder>')
+  .description('Download module source files to disk')
+  .option('--out <dir>', 'Parent directory (folder created inside)', '.')
+  .action(async (folder, opts) => {
+    requireAuth();
+    await pullModuleToDisk(folder, opts.out);
+  });
+
+// ─── push ────────────────────────────────────────────────────────────
+
+const PUSH_ALLOWED_EXT = new Set([
+  '.py', '.json', '.md', '.txt', '.yaml', '.yml',
+  '.ts', '.tsx', '.js', '.jsx', '.css', '.scss', '.html',
+]);
+
+function walkFiles(root: string, base: string = ''): Array<{ rel: string; abs: string }> {
+  const out: Array<{ rel: string; abs: string }> = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || entry.name === '__pycache__' || entry.name === 'node_modules') continue;
+    const abs = path.join(root, entry.name);
+    const rel = base ? `${base}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      out.push(...walkFiles(abs, rel));
+    } else if (entry.isFile()) {
+      if (PUSH_ALLOWED_EXT.has(path.extname(entry.name))) {
+        out.push({ rel, abs });
+      }
+    }
+  }
+  return out;
+}
+
+moduleCmd
+  .command('push <folder>')
+  .description('Upload local files for a module to the server (mirrors source tree)')
+  .option('--from <dir>', 'Local source directory (defaults to ./<folder>)')
+  .action(async (folder, opts) => {
+    requireAuth();
+    const fromDir = path.resolve(opts.from || `./${folder}`);
+    if (!fs.existsSync(fromDir) || !fs.statSync(fromDir).isDirectory()) {
+      console.error(chalk.red(`Local directory not found: ${fromDir}`));
+      process.exit(1);
+    }
+    const files = walkFiles(fromDir);
+    if (files.length === 0) {
+      console.error(chalk.red('No pushable files found (allowed: .py .json .md .ts .tsx .js .jsx .css .html .yaml).'));
+      process.exit(1);
+    }
+    const spinner = ora(`Pushing ${files.length} file(s) to ${folder}...`).start();
+    let pushed = 0;
+    let failed = 0;
+    for (const f of files) {
+      try {
+        const content = fs.readFileSync(f.abs, 'utf-8');
+        await apiClient.put(`/api/v1/modules/${folder}/source/${f.rel}`, { content });
+        pushed += 1;
+        spinner.text = `Pushing... ${pushed}/${files.length} (${f.rel})`;
+      } catch (error) {
+        failed += 1;
+        spinner.text = `${f.rel}: ${handleApiError(error).message}`;
+      }
+    }
+    if (failed === 0) {
+      spinner.succeed(chalk.green(`Pushed ${pushed} file(s)`));
+    } else {
+      spinner.warn(chalk.yellow(`Pushed ${pushed}, ${failed} failed`));
+    }
+  });
+
+// ─── validate ────────────────────────────────────────────────────────
+
+moduleCmd
+  .command('validate <folder>')
+  .description('Validate module without deploying — surfaces errors + warnings')
+  .option('--json', 'Output as JSON')
+  .action(async (folder, opts) => {
+    requireAuth();
     const spinner = ora('Validating...').start();
     try {
-      const res = await apiClient.get<any>(`/sandbox/validate/${options.company}/${options.name}`);
-      spinner.stop();
-
-      const d = res.data as Record<string, any>;
-      if (d.valid) {
-        console.log(chalk.green(`  ✓ Module "${options.name}" passed all 6 checkpoints`));
+      const res = await apiClient.get(`/api/v1/modules/admin/validate/${folder}`);
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (r.valid) {
+        spinner.succeed(chalk.green('Valid'));
       } else {
-        console.log(chalk.red(`  ✗ Module "${options.name}" failed validation`));
-        for (const err of d.errors || []) {
-          console.log(chalk.red(`    Checkpoint ${err.checkpoint}: ${err.message}`));
-        }
+        spinner.fail(chalk.red(`${r.error_count} error(s)`));
       }
-      for (const warn of d.warnings || []) {
-        console.log(chalk.yellow(`    Warning: ${warn.message}`));
+      for (const e of r.errors || []) console.log(`  ${chalk.red('✖')} ${chalk.dim(e.checkpoint)}: ${e.message}`);
+      for (const w of r.warnings || []) console.log(`  ${chalk.yellow('⚠')} ${chalk.dim(w.checkpoint)}: ${w.message}`);
+    } catch (error) { fail(spinner, 'Validate failed', error); }
+  });
+
+// ─── deploy ──────────────────────────────────────────────────────────
+
+moduleCmd
+  .command('deploy <folder>')
+  .description('Validate + set enabled=true + hot-reload — module goes live at /api/v1/custom/<name>/*')
+  .option('--json', 'Output as JSON')
+  .action(async (folder, opts) => {
+    requireAuth();
+    const spinner = ora(`Deploying ${folder}...`).start();
+    try {
+      const res = await apiClient.post(`/api/v1/modules/${folder}/deploy`);
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (!r.deployed) {
+        spinner.fail(chalk.red(`Deploy blocked — ${(r.errors || []).length} validation error(s)`));
+        for (const e of r.errors || []) console.log(`  ${chalk.red('✖')} ${chalk.dim(e.checkpoint)}: ${e.message}`);
+        process.exit(1);
       }
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
-// ─── Snapshot ───────────────────────────────────────────────────────
-
-devCommand
-  .command('snapshot')
-  .description('Create a dev database snapshot of company data')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    const spinner = ora(`Creating snapshot for company ${options.company}...`).start();
-    try {
-      const res = await apiClient.post<any>(`/sandbox/snapshot/${options.company}`, {});
-      const d = res.data as Record<string, any>;
-
-      if (d.success) {
-        spinner.succeed(chalk.green(`Snapshot created: ${d.sandbox_db}`));
-        console.log(chalk.dim(`  Tables: ${d.tables_copied}  Rows: ${d.rows_copied}  Time: ${d.duration_seconds}s`));
-      } else {
-        spinner.fail(chalk.red('Snapshot failed'));
-        for (const err of d.errors || []) {
-          console.log(chalk.red(`  ${err}`));
-        }
-      }
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
-// ─── Deploy ─────────────────────────────────────────────────────────
-
-devCommand
-  .command('deploy')
-  .description('Deploy module to production (validates first)')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    const spinner = ora(`Deploying "${options.name}" for company ${options.company}...`).start();
-    try {
-      const res = await apiClient.post<any>('/api/v1/sandbox/publish', {
-        company_id: parseInt(options.company, 10),
-        module_name: options.name,
-      });
-
-      const d = res.data as Record<string, any>;
-      spinner.succeed(chalk.green(`Deployed: ${options.name} v${d.version}`));
-      console.log(chalk.dim(`  Enabled: ${d.enabled}  Routes available at: /api/v1/custom/${options.name}/*`));
-    } catch (e: any) {
-      spinner.fail(chalk.red('Deploy failed'));
-      const err = handleApiError(e);
-      if (err.message?.includes('Validation failed')) {
-        const detail = (e as any)?.response?.data?.detail;
-        if (detail?.errors) {
-          for (const v of detail.errors) {
-            console.log(chalk.red(`  Checkpoint ${v.checkpoint}: ${v.message}`));
-          }
-        }
-      } else {
-        console.error(chalk.red(`  ${err.message}`));
-      }
-    }
-  });
-
-// ─── Disable ────────────────────────────────────────────────────────
-
-devCommand
-  .command('disable')
-  .description('Disable a module without deleting it')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    const spinner = ora('Disabling module...').start();
-    try {
-      await apiClient.post('/api/v1/sandbox/exit');
-      spinner.succeed(chalk.green(`Module "${options.name}" disabled`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
-// ─── Enable (re-deploy) ─────────────────────────────────────────────
-
-devCommand
-  .command('enable')
-  .description('Re-enable a disabled module')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    const spinner = ora('Enabling module...').start();
-    try {
-      await apiClient.post('/api/v1/sandbox/publish', {
-        company_id: parseInt(options.company, 10),
-        module_name: options.name,
-      });
-      spinner.succeed(chalk.green(`Module "${options.name}" enabled`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
-// ─── Cleanup ────────────────────────────────────────────────────────
-
-devCommand
-  .command('cleanup')
-  .description('Delete a module completely (directory + dev database)')
-  .requiredOption('-c, --company <id>', 'Company ID')
-  .requiredOption('-n, --name <name>', 'Module name')
-  .option('-y, --yes', 'Skip confirmation')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    if (!options.yes) {
-      const readline = await import('readline');
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const answer = await new Promise<string>((resolve) => {
-        rl.question(chalk.yellow(`  Delete module "${options.name}" for company ${options.company}? This cannot be undone. (y/N) `), resolve);
-      });
-      rl.close();
-      if (!answer.toLowerCase().startsWith('y')) {
-        console.log(chalk.dim('  Cancelled.'));
-        return;
-      }
-    }
-
-    const spinner = ora('Cleaning up...').start();
-    try {
-      const res = await apiClient.delete<any>(`/sandbox/cleanup/${options.company}/${options.name}`);
-      spinner.succeed(chalk.green((res.data as Record<string, any>)?.message || 'Cleaned up'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
-// ─── Modules system status ──────────────────────────────────────────
-
-devCommand
-  .command('system')
-  .description('Show module system status (all companies)')
-  .option('--json', 'JSON output')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-
-    const spinner = ora('Loading system status...').start();
-    try {
-      const res = await apiClient.get<any>('/api/v1/modules/admin/status');
-      spinner.stop();
-
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-
-      const d = res.data as Record<string, any>;
+      spinner.succeed(chalk.green(`Deployed ${r.module_name} v${r.version}`));
       console.log('');
-      console.log(chalk.bold(`  Module System`));
-      console.log(chalk.dim(`  Loaded: ${d.loaded_count} modules  Cache: ${d.cache_backend}`));
-      console.log('');
-
-      if (d.modules?.length > 0) {
-        const headers = ['Module', 'Company', 'Version', 'Status', 'Routes', 'Prefix'];
-        const rows = d.modules.map((m: any) => [
-          m.module_name,
-          String(m.company_id),
-          m.version,
-          m.enabled ? chalk.green('on') : chalk.dim('off'),
-          String(m.route_count),
-          chalk.dim(m.route_prefix),
-        ]);
-        console.log(ui.table(headers, rows));
-      }
-      console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+      console.log(`  ${chalk.bold('Mounted at:')} ${chalk.cyan(r.route_prefix + '/*')}`);
+      console.log(`  ${chalk.bold('Routes:')}     ${r.route_count}`);
+      for (const w of r.warnings || []) console.log(`  ${chalk.yellow('⚠')} ${w.checkpoint}: ${w.message}`);
+    } catch (error) { fail(spinner, 'Deploy failed', error); }
   });
+
+// ─── disable ─────────────────────────────────────────────────────────
+
+moduleCmd
+  .command('disable <folder>')
+  .description('Take a module offline without deleting (manifest enabled=false)')
+  .action(async (folder) => {
+    requireAuth();
+    const spinner = ora(`Disabling ${folder}...`).start();
+    try {
+      await apiClient.post(`/api/v1/modules/admin/${folder}/disable`);
+      spinner.succeed(chalk.green(`${folder} disabled`));
+    } catch (error) { fail(spinner, 'Disable failed', error); }
+  });
+
+// ─── delete ──────────────────────────────────────────────────────────
+
+moduleCmd
+  .command('delete <folder>')
+  .description('Permanently delete a module from disk and unload it. Cannot be undone.')
+  .action(async (folder) => {
+    requireAuth();
+    const spinner = ora(`Deleting ${folder}...`).start();
+    try {
+      await apiClient.delete(`/api/v1/modules/${folder}`);
+      spinner.succeed(chalk.green(`${folder} deleted`));
+    } catch (error) { fail(spinner, 'Delete failed', error); }
+  });
+
+devCommand.addCommand(moduleCmd);
