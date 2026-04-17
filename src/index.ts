@@ -88,6 +88,11 @@ import { proposalCommand } from './commands/proposal';
 import { addWebhookListenCommand } from './commands/webhooks-listen';
 import { demoCommand } from './commands/demo';
 import { initCommand } from './commands/init';
+import { leadsCommand } from './commands/leads';
+import { productsCommand } from './commands/products';
+import { ordersCommand } from './commands/orders';
+import { ecommerceCommand } from './commands/ecommerce';
+import { marketplaceCommand } from './commands/marketplace';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -134,6 +139,7 @@ program.addCommand(servicesCommand);
 
 // CRM
 program.addCommand(crmCommand);
+program.addCommand(leadsCommand);
 program.addCommand(inboxCommand);
 program.addCommand(scheduleCommand);
 
@@ -150,6 +156,10 @@ program.addCommand(flowsCommand);
 program.addCommand(brandCommand);
 program.addCommand(widgetsCommand);
 program.addCommand(inventoryCommand);
+program.addCommand(productsCommand);
+program.addCommand(ordersCommand);
+program.addCommand(ecommerceCommand);
+program.addCommand(marketplaceCommand);
 program.addCommand(paymentCommand);
 
 // Content
