@@ -361,3 +361,70 @@ voiceCommand
       }
     } catch (error) { fail(spinner, 'Failed to load transcript', error); }
   });
+
+// ── Twilio Reconciliation (super-admin only) ─────────────────────────
+
+voiceCommand
+  .command('audit')
+  .description('Compare Twilio-billed phone numbers against our DB. Surfaces orphans Twilio is billing you for that our system never tracked. Super-admin only.')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const spinner = ora('Auditing Twilio account...').start();
+    try {
+      const res = await apiClient.get('/api/v1/voice/twilio-audit');
+      const r = res.data as Record<string, any>;
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      spinner.succeed(chalk.green(`Twilio: ${r.twilio_count} number(s) | DB: ${r.db_count} number(s)`));
+      console.log('');
+      if (r.matched?.length) {
+        console.log(chalk.green(`✓ Matched (${r.matched.length}):`));
+        for (const n of r.matched) console.log(`    ${n.phone_number}  ${chalk.dim(n.sid)}`);
+        console.log('');
+      }
+      if (r.twilio_orphans?.length) {
+        console.log(chalk.red(`💸 Twilio orphans (${r.twilio_orphans.length}) — Twilio bills you, our DB doesn't know:`));
+        for (const n of r.twilio_orphans) {
+          const created = n.date_created ? n.date_created.split('T')[0] : '?';
+          console.log(`    ${chalk.bold(n.phone_number)}  ${chalk.dim(n.sid)}  ${chalk.dim(`created ${created}`)}  ${chalk.dim(n.friendly_name || '')}`);
+        }
+        console.log('');
+        console.log(chalk.yellow(`  Estimated waste: ~$${r.estimated_monthly_waste_usd}/mo`));
+        console.log(chalk.dim(`  Release with: solid voice release-orphan <sid> --confirm`));
+        console.log('');
+      }
+      if (r.db_orphans?.length) {
+        console.log(chalk.yellow(`⚠ DB orphans (${r.db_orphans.length}) — our DB has rows for numbers Twilio doesn't have:`));
+        for (const e164 of r.db_orphans) console.log(`    ${e164}`);
+        console.log(chalk.dim(`  These are cosmetic — no Twilio billing, but our DB is wrong.`));
+        console.log('');
+      }
+      if (!r.twilio_orphans?.length && !r.db_orphans?.length) {
+        console.log(chalk.green('  ✓ No orphans. DB and Twilio are in sync.'));
+      }
+    } catch (error) { fail(spinner, 'Audit failed', error); }
+  });
+
+voiceCommand
+  .command('release-orphan <sid>')
+  .description('Release a Twilio phone number permanently (stops monthly billing). Use SID from `solid voice audit`. Super-admin only.')
+  .option('--confirm', 'Actually release. Without this it dry-runs.')
+  .action(async (sid, opts) => {
+    requireAuth();
+    const spinner = ora(opts.confirm ? `Releasing ${sid}...` : `Dry-run: previewing release of ${sid}...`).start();
+    try {
+      const res = await apiClient.post('/api/v1/voice/twilio-release', { sid, confirm: !!opts.confirm });
+      const r = res.data as Record<string, any>;
+      if (r.dry_run) {
+        spinner.warn(chalk.yellow('Dry-run — pass --confirm to actually release'));
+        console.log('');
+        console.log(`  ${chalk.bold('Would release:')} ${r.would_release.phone_number}`);
+        console.log(`  ${chalk.dim('SID:')} ${r.would_release.sid}`);
+        console.log(`  ${chalk.dim('Friendly name:')} ${r.would_release.friendly_name || '—'}`);
+        console.log('');
+        console.log(chalk.red('  ⚠ This is permanent. The number cannot be reclaimed.'));
+        return;
+      }
+      spinner.succeed(chalk.green(`Released ${r.phone_number} (${r.db_rows_inactivated} DB row(s) inactivated)`));
+    } catch (error) { fail(spinner, 'Release failed', error); }
+  });
