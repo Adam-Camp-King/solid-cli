@@ -385,9 +385,27 @@ leadsCommand
       if (opts.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green('Pipeline'));
       console.log('');
-      const stages = p.stages || [];
-      for (const s of stages as Record<string, any>[]) {
-        console.log(`  ${chalk.bold(s.name || s.stage)}: ${chalk.cyan(s.count ?? 0)}  ${chalk.dim(`$${s.value ?? 0}`)}`);
+      // Backend can return stages as either:
+      //   - Array<{name|stage, count, value}>
+      //   - {<stage_name>: {count, value}}   (dict-shaped)
+      //   - {<stage_name>: <count>}          (number-valued shortcut)
+      const raw = p.stages ?? p.pipeline ?? p;
+      let rows: Array<{ name: string; count: unknown; value?: unknown }> = [];
+      if (Array.isArray(raw)) {
+        rows = raw.map((s: any) => ({ name: s.name || s.stage, count: s.count ?? 0, value: s.value }));
+      } else if (raw && typeof raw === 'object') {
+        rows = Object.entries(raw).map(([name, v]: [string, any]) => {
+          if (v && typeof v === 'object') return { name, count: v.count ?? 0, value: v.value };
+          return { name, count: v };
+        });
+      }
+      if (rows.length === 0) {
+        console.log(chalk.dim('  No pipeline data yet.'));
+        return;
+      }
+      for (const s of rows) {
+        const val = s.value !== undefined ? chalk.dim(`  $${s.value}`) : '';
+        console.log(`  ${chalk.bold(s.name)}: ${chalk.cyan(String(s.count))}${val}`);
       }
     } catch (e) { fail(spinner, 'Failed to load pipeline', e); }
   });
