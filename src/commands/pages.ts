@@ -3,7 +3,9 @@
  *
  * solid pages list                              → List all pages
  * solid pages get <id>                          → View page details
- * solid pages create --title "Services" --slug services  → Create page
+ * solid pages create --title X --slug y         → Create page (empty shell; backend hydrates starter sections by page_type)
+ * solid pages create --title X --slug y --layout-json ./home.json
+ *                                               → Create page with inline content from a local JSON file
  * solid pages publish <id>                      → Publish page
  * solid pages unpublish <id>                    → Unpublish page
  * solid pages delete <id>                       → Delete page
@@ -170,21 +172,57 @@ pagesCommand
   .requiredOption('--slug <slug>', 'URL slug (e.g., services)')
   .option('--type <type>', 'Page type (home, about, services, contact, blog, landing)', 'website')
   .option('--publish', 'Publish immediately')
+  .option('--layout-json <file>', 'Path to a JSON file containing layout_json (e.g., {"sections": [...]})')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
 
+    // Optional: inline layout from a JSON file. Omit to let the backend
+    // hydrate an industry-shaped starter for home/about/contact/services
+    // (or a hero-only fallback for other page_types).
+    let layoutJson: unknown;
+    if (options.layoutJson) {
+      const fs = await import('fs');
+      let raw: string;
+      try {
+        raw = fs.readFileSync(options.layoutJson, 'utf-8');
+      } catch (e) {
+        console.error(chalk.red(`Could not read --layout-json file: ${options.layoutJson}`));
+        console.error(chalk.red(`  ${(e as Error).message}`));
+        process.exit(1);
+      }
+      try {
+        layoutJson = JSON.parse(raw);
+      } catch {
+        console.error(chalk.red(`Invalid JSON in --layout-json file: ${options.layoutJson}`));
+        process.exit(1);
+      }
+      // Only assert it's a JSON object — the CMS layout envelope is defined
+      // by the backend (current: `{"sections": [...]}`). Keeping the CLI-side
+      // check loose means schema evolution on the server doesn't require a
+      // CLI release. The backend will reject malformed shapes.
+      if (typeof layoutJson !== 'object' || layoutJson === null || Array.isArray(layoutJson)) {
+        console.error(chalk.red('--layout-json file must contain a JSON object.'));
+        console.error(chalk.dim('  See Owners-Manual/71-Agent-Native-CLI/05-BLOCK-SCHEMA.md for the current block schema.'));
+        process.exit(1);
+      }
+    }
+
     const spinner = ora(`Creating page "${options.title}"...`).start();
 
     try {
-      const response = await apiClient.pageCreate({
+      const payload: Record<string, unknown> = {
         title: options.title,
         slug: options.slug,
         page_type: options.type,
         is_published: options.publish || false,
-      });
+      };
+      if (layoutJson !== undefined) {
+        payload.layout_json = layoutJson;
+      }
+      const response = await apiClient.pageCreate(payload);
 
       const data = response.data as Record<string, any>;
       const page = data.page || data;
