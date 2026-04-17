@@ -97,6 +97,13 @@ import { usersCommand } from './commands/users';
 import { keysCommand } from './commands/keys';
 import { storageCommand } from './commands/storage';
 import { onboardingCommand } from './commands/onboarding';
+import { chainsCommand } from './commands/chains';
+import { formsCommand } from './commands/forms';
+import { emailsCommand } from './commands/emails';
+import { landingCommand } from './commands/landing';
+import { chatWidgetsCommand } from './commands/chat_widgets';
+import { paymentLinksCommand } from './commands/payment_links';
+import { subscriptionsCommand } from './commands/subscriptions';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -161,6 +168,7 @@ program.addCommand(storageCommand);
 program.addCommand(vibeCommand);
 program.addCommand(trainCommand);
 program.addCommand(agentCommand);
+program.addCommand(chainsCommand);
 
 // Voice
 program.addCommand(voiceCommand);
@@ -178,6 +186,16 @@ program.addCommand(paymentCommand);
 
 // Content
 program.addCommand(blogCommand);
+program.addCommand(landingCommand);
+program.addCommand(chatWidgetsCommand);
+program.addCommand(formsCommand);
+
+// Email
+program.addCommand(emailsCommand);
+
+// Billing / payments
+program.addCommand(paymentLinksCommand);
+program.addCommand(subscriptionsCommand);
 
 // Design
 program.addCommand(designCommand);

@@ -150,6 +150,79 @@ scheduleCommand
     }
   });
 
+// Hold a slot (10-minute reservation for checkout)
+scheduleCommand
+  .command('hold')
+  .description('Hold an appointment slot (temporary reservation)')
+  .requiredOption('--service-id <id>', 'Service ID')
+  .requiredOption('--start <iso>', 'Start time (ISO8601)')
+  .action(async (opts) => {
+    requireAuth();
+    const spinner = ora('Holding slot...').start();
+    try {
+      const res = await apiClient.post('/api/v1/appointments/hold', {
+        service_id: parseInt(opts.serviceId, 10),
+        start_time: opts.start,
+      });
+      const r = res.data as Record<string, any>;
+      spinner.succeed(chalk.green(`Hold: ${r.hold_id || r.id}`));
+      if (r.expires_at) console.log(chalk.dim(`  expires: ${r.expires_at}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to hold slot'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
+// Book an appointment
+scheduleCommand
+  .command('book')
+  .description('Book an appointment (converts a hold, or books directly)')
+  .requiredOption('--service-id <id>', 'Service ID')
+  .requiredOption('--start <iso>', 'Start time (ISO8601)')
+  .requiredOption('--customer-email <email>', 'Customer email')
+  .option('--hold-id <id>', 'Hold ID if converting a held slot')
+  .option('--notes <text>', 'Notes')
+  .action(async (opts) => {
+    requireAuth();
+    const body: Record<string, unknown> = {
+      service_id: parseInt(opts.serviceId, 10),
+      start_time: opts.start,
+      customer_email: opts.customerEmail,
+    };
+    if (opts.holdId) body.hold_id = opts.holdId;
+    if (opts.notes) body.notes = opts.notes;
+    const spinner = ora('Booking...').start();
+    try {
+      const res = await apiClient.post('/api/v1/appointments/book', body);
+      const a = res.data as Record<string, any>;
+      spinner.succeed(chalk.green(`Appointment booked: ${a.id}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to book'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
+// Reschedule
+scheduleCommand
+  .command('reschedule <id>')
+  .description('Reschedule an appointment')
+  .requiredOption('--start <iso>', 'New start time (ISO8601)')
+  .action(async (id, opts) => {
+    requireAuth();
+    const spinner = ora('Rescheduling...').start();
+    try {
+      const res = await apiClient.post('/api/v1/appointments/reschedule', {
+        appointment_id: parseInt(id, 10),
+        start_time: opts.start,
+      });
+      const a = res.data as Record<string, any>;
+      spinner.succeed(chalk.green(`Rescheduled: ${a.id}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to reschedule'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
 // Cancel appointment
 scheduleCommand
   .command('cancel <id>')

@@ -139,3 +139,160 @@ billingCommand.command('invoice <companyIdOrEmail>')
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed to send invoice')); console.error(handleApiError(e).message); }
   });
+
+// ── Payment methods ──────────────────────────────────────────────────
+
+billingCommand.command('methods').description('List saved payment methods')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading payment methods...').start();
+    try {
+      const res = await apiClient.get('/api/v1/billing/payment-methods');
+      const data = res.data as Record<string, any>;
+      const items = data.payment_methods || data.items || [];
+      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      spinner.succeed(chalk.green(`${items.length} payment method(s)`));
+      console.log('');
+      for (const m of items as Record<string, any>[]) {
+        const def = m.is_default ? chalk.cyan(' (default)') : '';
+        console.log(`  ${chalk.bold(m.id)}  ${m.brand || m.type || '—'} •••• ${m.last4 || '????'}  ${chalk.dim(`${m.exp_month}/${m.exp_year}`)}${def}`);
+        if (m.nickname) console.log(chalk.dim(`      ${m.nickname}`));
+      }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('method-add').description('Attach a new payment method from a Stripe token')
+  .requiredOption('--token <pm>', 'Stripe payment method token (pm_...)')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Attaching payment method...').start();
+    try {
+      const res = await apiClient.post('/api/v1/billing/payment-method/add', { payment_method_token: options.token });
+      spinner.succeed(chalk.green(`Payment method attached: ${(res.data as Record<string, any>).id}`));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('method-default <id>').description('Set a payment method as default')
+  .action(async (id) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora(`Setting ${id} as default...`).start();
+    try {
+      await apiClient.patch(`/api/v1/billing/payment-method/${id}/set-default`);
+      spinner.succeed(chalk.green('Default set'));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('method-nickname <id>').description('Rename a payment method')
+  .requiredOption('--nickname <text>', 'Nickname')
+  .action(async (id, options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Updating nickname...').start();
+    try {
+      await apiClient.patch(`/api/v1/billing/payment-method/${id}/nickname`, { nickname: options.nickname });
+      spinner.succeed(chalk.green('Nickname updated'));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('method-remove <id>').description('Remove a payment method')
+  .action(async (id) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora(`Removing ${id}...`).start();
+    try {
+      await apiClient.delete(`/api/v1/billing/payment-method/${id}`);
+      spinner.succeed(chalk.green('Removed'));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+// ── Charges, statement, subscription detail ──────────────────────────
+
+billingCommand.command('charges').description('List charges')
+  .option('-l, --limit <n>', 'Max results', '50')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading charges...').start();
+    try {
+      const res = await apiClient.get('/api/v1/billing/charges', { params: { limit: parseInt(options.limit, 10) } });
+      const data = res.data as Record<string, any>;
+      const items = data.charges || data.items || [];
+      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      spinner.succeed(chalk.green(`${items.length} charge(s)`));
+      console.log('');
+      for (const c of items as Record<string, any>[]) {
+        console.log(`  ${chalk.bold(c.id)}  $${c.amount || (c.amount_cents / 100).toFixed(2)}  ${chalk.dim(c.status || '')}  ${chalk.dim(c.created_at?.split('T')[0] || '')}`);
+      }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('statement').description('Current billing statement')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading statement...').start();
+    try {
+      const res = await apiClient.get('/api/v1/billing/current-statement');
+      if (options.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      spinner.succeed(chalk.green('Current statement'));
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('subscription <customerId>').description('Subscription details for a customer')
+  .option('--json', 'JSON output')
+  .action(async (customerId, options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading...').start();
+    try {
+      const res = await apiClient.get(`/api/v1/billing/subscription/${customerId}`);
+      if (options.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      spinner.succeed(chalk.green('Subscription'));
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('invoice-pdf <invoiceId>').description('Download an invoice PDF URL')
+  .action(async (invoiceId) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading PDF URL...').start();
+    try {
+      const res = await apiClient.get(`/api/v1/billing/invoices/${invoiceId}/pdf`);
+      const r = res.data as Record<string, any>;
+      spinner.succeed(chalk.green('PDF URL'));
+      if (r.url || r.pdf_url) console.log(chalk.cyan(`  ${r.url || r.pdf_url}`));
+      else console.log(JSON.stringify(r, null, 2));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('trial').description('Trial status')
+  .action(async () => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Loading trial status...').start();
+    try {
+      const res = await apiClient.get('/api/v1/billing/trial-status');
+      spinner.succeed(chalk.green('Trial'));
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+billingCommand.command('upgrade-trial').description('Convert trial to paid subscription')
+  .requiredOption('--plan <slug>', 'Target plan slug')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora('Upgrading trial...').start();
+    try {
+      await apiClient.post('/api/v1/billing/upgrade-trial', { plan_slug: options.plan });
+      spinner.succeed(chalk.green('Trial upgraded'));
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });

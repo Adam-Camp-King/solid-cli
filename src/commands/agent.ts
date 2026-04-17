@@ -484,3 +484,63 @@ agentCommand
       ]) + '\n');
     } catch (e) { catchError(spinner, 'Failed to update settings')(e); }
   });
+
+// ── profile / clone / customize ────────────────────────────────────────
+// Note: Solid's 116 agents are global personas in AgentRegistry. The "create
+// a custom agent per company" pattern is layered on top via agent_profiles.py
+// (PUT /{agent_type}) which customizes name, prompt, tools, personality
+// *for this company*. Effectively: fork an existing agent and own the
+// per-company overrides.
+
+agentCommand
+  .command('profile <name>')
+  .description('Show the per-company profile overrides for an agent')
+  .option('--json', 'Output as JSON')
+  .action(async (name, opts) => {
+    requireLogin();
+    const agentType = resolveAgentType(name);
+    const spinner = ora(`Loading profile for ${name}...`).start();
+    try {
+      const res = await apiClient.get(`/api/v1/agent-profiles/${agentType}`);
+      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      spinner.succeed(chalk.green(`Profile — ${name}`));
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { catchError(spinner, 'Failed to load profile')(e); }
+  });
+
+agentCommand
+  .command('clone <name>')
+  .description('Create a per-company customized fork of an existing agent')
+  .requiredOption('--display-name <name>', 'New display name for this company\'s fork')
+  .option('--prompt <text>', 'Override system prompt')
+  .option('--personality <text>', 'Override personality blurb')
+  .option('--model <model>', 'Override model')
+  .option('--temperature <n>', 'Override temperature')
+  .action(async (name, opts) => {
+    requireLogin();
+    const agentType = resolveAgentType(name);
+    const body: Record<string, unknown> = { display_name: opts.displayName };
+    if (opts.prompt) body.system_prompt = opts.prompt;
+    if (opts.personality) body.personality = opts.personality;
+    if (opts.model) body.model = opts.model;
+    if (opts.temperature) body.temperature = parseFloat(opts.temperature);
+    const spinner = ora(`Cloning ${name} → ${opts.displayName}...`).start();
+    try {
+      await apiClient.put(`/api/v1/agent-profiles/${agentType}`, body);
+      spinner.succeed(chalk.green(`Agent ${name} cloned for this company`));
+      console.log(chalk.dim(`  Override base: ${agentType}`));
+      console.log(chalk.dim(`  Display name:  ${opts.displayName}`));
+    } catch (e) { catchError(spinner, 'Failed to clone')(e); }
+  });
+
+agentCommand
+  .command('sync')
+  .description('Sync company agent profiles with the latest registry defaults')
+  .action(async () => {
+    requireLogin();
+    const spinner = ora('Syncing agent profiles...').start();
+    try {
+      await apiClient.post('/api/v1/agent-profiles/sync');
+      spinner.succeed(chalk.green('Profiles synced'));
+    } catch (e) { catchError(spinner, 'Failed to sync')(e); }
+  });
