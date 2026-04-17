@@ -93,6 +93,10 @@ import { productsCommand } from './commands/products';
 import { ordersCommand } from './commands/orders';
 import { ecommerceCommand } from './commands/ecommerce';
 import { marketplaceCommand } from './commands/marketplace';
+import { usersCommand } from './commands/users';
+import { keysCommand } from './commands/keys';
+import { storageCommand } from './commands/storage';
+import { onboardingCommand } from './commands/onboarding';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -113,6 +117,9 @@ program
   });
 
 // Register commands — grouped by purpose
+// Onboarding (programmatic client provisioning)
+program.addCommand(onboardingCommand);
+
 // Core workflow
 program.addCommand(authCommand);
 program.addCommand(statusCommand);
@@ -142,6 +149,13 @@ program.addCommand(crmCommand);
 program.addCommand(leadsCommand);
 program.addCommand(inboxCommand);
 program.addCommand(scheduleCommand);
+
+// Team & access
+program.addCommand(usersCommand);
+program.addCommand(keysCommand);
+
+// Storage / files
+program.addCommand(storageCommand);
 
 // AI
 program.addCommand(vibeCommand);

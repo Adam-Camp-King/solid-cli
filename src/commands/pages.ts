@@ -316,3 +316,92 @@ pagesCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+// Lookup by slug
+pagesCommand
+  .command('slug <slug>')
+  .description('Get a page by slug (path)')
+  .option('--json', 'Output as JSON')
+  .action(async (slug: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const spinner = ora(`Looking up /${slug}...`).start();
+    try {
+      const res = await apiClient.get(`/api/v1/cms/pages/slug/${slug}`);
+      const p = res.data as Record<string, any>;
+      if (options.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      spinner.succeed(chalk.green(`Page: ${p.title}`));
+      console.log('');
+      console.log(`  ${chalk.dim('ID:')}        ${p.id}`);
+      console.log(`  ${chalk.dim('Slug:')}      /${p.slug}`);
+      console.log(`  ${chalk.dim('Type:')}      ${p.page_type || '—'}`);
+      console.log(`  ${chalk.dim('Published:')} ${p.is_published ?? false}`);
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to look up page'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
+// Coming soon page
+pagesCommand
+  .command('coming-soon')
+  .description("Bootstrap a 'Coming Soon' placeholder page for the company website")
+  .action(async () => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const spinner = ora('Creating coming-soon page...').start();
+    try {
+      const res = await apiClient.post('/api/v1/cms/pages/coming-soon', {});
+      const p = res.data as Record<string, any>;
+      spinner.succeed(chalk.green(`Coming-soon page created: ${p.id || ''}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to create coming-soon page'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
+// Regenerate the entire website
+pagesCommand
+  .command('regenerate')
+  .description('Re-generate the entire website from current company KB + brand')
+  .action(async () => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const spinner = ora('Regenerating website (this can take a minute)...').start();
+    try {
+      const res = await apiClient.post('/api/v1/cms/pages/regenerate-website', {});
+      const r = res.data as Record<string, any>;
+      spinner.succeed(chalk.green('Website regenerated'));
+      if (r.pages_generated !== undefined) console.log(chalk.dim(`  ${r.pages_generated} pages generated`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to regenerate'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
+
+// Generate a whole website (vs single page)
+pagesCommand
+  .command('site-generate')
+  .description('Generate a complete multi-page website from a prompt')
+  .requiredOption('--prompt <text>', 'High-level description of the business and tone')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const spinner = ora('Generating website (1-2 minutes)...').start();
+    try {
+      const res = await apiClient.post('/api/v1/cms/pages/websites/generate', { prompt: options.prompt });
+      const r = res.data as Record<string, any>;
+      spinner.succeed(chalk.green(`Website generated: ${r.pages_count ?? r.pages?.length ?? '?'} pages`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to generate website'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+    }
+  });
