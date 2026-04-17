@@ -2,6 +2,10 @@
  * Authentication commands for Solid CLI
  */
 
+import * as http from 'http';
+import * as crypto from 'crypto';
+import { spawn } from 'child_process';
+import { URL } from 'url';
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import ora from 'ora';
@@ -10,15 +14,178 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
+// ---------------------------------------------------------------------------
+// Browser login (loopback OAuth — like `npm login`, `gh auth login`)
+// ---------------------------------------------------------------------------
+
+const BROWSER_LOGIN_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+
+function openBrowser(url: string): void {
+  const platform = process.platform;
+  const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args = platform === 'win32' ? ['/c', 'start', '""', url] : [url];
+  try {
+    spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+  } catch {
+    // Caller is expected to print the URL anyway as a fallback
+  }
+}
+
+function frontendUrlFor(apiUrl: string): string {
+  // Frontend lives on the same domain in production (app.solidnumber.com),
+  // and on a sibling host (api.solidnumber.com → solidnumber.com / app.solidnumber.com).
+  // Heuristic: strip an "api." prefix; otherwise return the host as-is.
+  // For local dev (http://localhost:8090) → http://localhost:3000.
+  try {
+    const u = new URL(apiUrl);
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+      return `${u.protocol}//${u.hostname}:3000`;
+    }
+    if (u.hostname.startsWith('api.')) {
+      return `${u.protocol}//app.${u.hostname.slice(4)}`;
+    }
+    return `${u.protocol}//${u.hostname}`;
+  } catch {
+    return 'https://app.solidnumber.com';
+  }
+}
+
+interface BrowserLoginResult {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+}
+
+async function browserLogin(onReady?: (url: string) => void): Promise<BrowserLoginResult> {
+  const state = crypto.randomBytes(32).toString('hex');
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        server.close();
+      } catch {
+        /* ignore */
+      }
+      fn();
+    };
+
+    const server = http.createServer((req, res) => {
+      try {
+        const reqUrl = new URL(req.url || '/', 'http://localhost');
+        if (reqUrl.pathname !== '/callback') {
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not found');
+          return;
+        }
+
+        const returnedState = reqUrl.searchParams.get('state') || '';
+        const token = reqUrl.searchParams.get('token') || '';
+        const refresh = reqUrl.searchParams.get('refresh_token') || undefined;
+        const expires = reqUrl.searchParams.get('expires_in');
+        const errorParam = reqUrl.searchParams.get('error');
+
+        if (errorParam) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(renderHtml('Login cancelled', `Error: ${escapeHtml(errorParam)}. You can close this tab.`, false));
+          finish(() => reject(new Error(`Browser auth error: ${errorParam}`)));
+          return;
+        }
+
+        // Constant-time state comparison
+        const a = Buffer.from(state);
+        const b = Buffer.from(returnedState);
+        const stateOk = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+        if (!stateOk || !token) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(renderHtml('Login failed', 'Invalid response. You can close this tab and try again.', false));
+          finish(() => reject(new Error('Browser auth failed: state mismatch or missing token')));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(renderHtml('You\'re signed in', 'You can close this tab and return to your terminal.', true));
+        finish(() => resolve({
+          accessToken: token,
+          refreshToken: refresh,
+          expiresIn: expires ? parseInt(expires, 10) : undefined,
+        }));
+      } catch (err) {
+        try {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Internal error');
+        } catch {
+          /* ignore */
+        }
+        finish(() => reject(err instanceof Error ? err : new Error(String(err))));
+      }
+    });
+
+    server.on('error', (err) => finish(() => reject(err)));
+
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error('Browser login timed out (no callback received)')));
+    }, BROWSER_LOGIN_TIMEOUT_MS);
+
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        finish(() => reject(new Error('Failed to bind local port')));
+        return;
+      }
+      const port = addr.port;
+      const url = `${frontendUrlFor(config.apiUrl)}/auth/cli-auth?port=${port}&state=${state}`;
+      if (onReady) onReady(url);
+      openBrowser(url);
+    });
+  });
+}
+
+function renderHtml(title: string, body: string, success: boolean): string {
+  const accent = success ? '#10b981' : '#ef4444';
+  const icon = success ? '✓' : '✕';
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:#0a0a0f;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif}
+  .wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+  .card{max-width:420px;width:100%;text-align:center;padding:40px 32px;border-radius:24px;
+        background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
+        border:1px solid rgba(255,255,255,.08)}
+  .icon{width:56px;height:56px;border-radius:50%;background:${accent};color:#000;font-size:28px;font-weight:800;
+        line-height:56px;margin:0 auto 20px}
+  h1{font-size:22px;font-weight:800;margin:0 0 8px}
+  p{font-size:14px;color:rgba(255,255,255,.6);margin:0;line-height:1.55}
+  .brand{margin-top:32px;font-size:12px;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase}
+  .brand b{color:#fff}.brand span{color:#10b981}
+</style></head>
+<body><div class="wrap"><div class="card">
+  <div class="icon">${icon}</div>
+  <h1>${escapeHtml(title)}</h1>
+  <p>${escapeHtml(body)}</p>
+  <div class="brand"><b>Solid<span>#</span></b> &nbsp;CLI</div>
+</div></div></body></html>`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c] as string));
+}
+
 export const authCommand = new Command('auth')
   .description('Authentication management');
 
 // Login command
 authCommand
   .command('login')
-  .description('Login to Solid#')
-  .option('-e, --email <email>', 'Email address')
+  .description('Login to Solid# (opens browser by default)')
+  .option('-e, --email <email>', 'Email address (forces password mode)')
   .option('-t, --token <token>', 'Login with API key (sk_solid_...)')
+  .option('-p, --password', 'Use email/password prompt instead of browser')
   .action(async (options) => {
     try {
       // API key login (for scripts/CI)
@@ -45,6 +212,98 @@ authCommand
           process.exit(1);
         }
         return;
+      }
+
+      // Browser login (default — no flags or only --email passed without --password)
+      // If --email or --password is set, fall through to email/password prompt
+      const usePassword = options.password || options.email;
+      if (!usePassword) {
+        let spinner: ReturnType<typeof ora> | null = null;
+        try {
+          const result = await browserLogin((url) => {
+            console.log('');
+            console.log(chalk.dim('  Opening browser to authenticate...'));
+            console.log(chalk.dim(`  If it does not open, visit: ${url}`));
+            console.log('');
+            spinner = ora('Waiting for browser authentication...').start();
+          });
+          if (spinner) (spinner as any).stop();
+          config.accessToken = result.accessToken;
+          if (result.refreshToken) config.refreshToken = result.refreshToken;
+          if (result.expiresIn) {
+            config.tokenExpiresAt = new Date(Date.now() + result.expiresIn * 1000);
+          }
+
+          const status = await apiClient.authStatus();
+          if (!status.data.authenticated || !status.data.user) {
+            console.error(chalk.red('Login failed — token did not validate'));
+            config.accessToken = undefined;
+            config.refreshToken = undefined;
+            process.exit(1);
+          }
+
+          config.userId = status.data.user.id;
+          config.userEmail = status.data.user.email;
+          config.companyId = status.data.user.company_id;
+
+          console.log(chalk.green(`✔ Authenticated as ${status.data.user.email}`));
+
+          // Multi-company picker (same as password flow)
+          try {
+            const companiesResponse = await apiClient.companiesList();
+            const { companies } = companiesResponse.data;
+            if (companies.length > 1) {
+              config.companies = companies.map((c: { id: number; name: string; role: string }) => ({
+                id: c.id, name: c.name, role: c.role,
+              }));
+              console.log('');
+              console.log(chalk.bold(`  ${companies.length} companies available:`));
+              console.log('');
+              const choices = companies.map((c: { id: number; name: string; role: string }) => ({
+                name: c.id === status.data.user!.company_id
+                  ? chalk.green(`${c.name} (ID: ${c.id}) — ${c.role} [default]`)
+                  : `${c.name} (ID: ${c.id}) — ${c.role}`,
+                value: c.id,
+              }));
+              const answer = await inquirer.prompt([{
+                type: 'list',
+                name: 'companyId',
+                message: 'Select company:',
+                choices,
+                default: status.data.user.company_id,
+              }]);
+              if (answer.companyId !== status.data.user.company_id) {
+                const switchSpinner = ora('Switching...').start();
+                const switchResponse = await apiClient.companySwitch(answer.companyId);
+                config.accessToken = switchResponse.data.access_token;
+                config.refreshToken = switchResponse.data.refresh_token;
+                config.companyId = switchResponse.data.company.id;
+                config.tokenExpiresAt = new Date(Date.now() + switchResponse.data.expires_in * 1000);
+                switchSpinner.succeed(chalk.green(`Switched to ${switchResponse.data.company.name}`));
+              }
+              console.log('');
+              console.log(chalk.dim('  Switch later: solid switch'));
+            } else {
+              console.log('');
+              console.log(ui.welcomeBox(status.data.user.email, config.companyId!));
+            }
+          } catch {
+            console.log('');
+            console.log(ui.welcomeBox(status.data.user.email, status.data.user.company_id));
+          }
+          console.log('');
+          return;
+        } catch (err) {
+          if (spinner) (spinner as any).fail(chalk.red('Browser login failed'));
+          else console.error(chalk.red('Browser login failed'));
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(chalk.red(`  ${msg}`));
+          console.log('');
+          console.log(chalk.dim('  Fallbacks:'));
+          console.log(chalk.dim('    solid auth login --password       # email/password prompt'));
+          console.log(chalk.dim('    solid auth login --token sk_...   # API key (CI/CD)'));
+          process.exit(1);
+        }
       }
 
       let email = options.email;
