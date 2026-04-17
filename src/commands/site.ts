@@ -1,11 +1,14 @@
 /**
  * Site management commands for Solid CLI
  *
- * solid site list                          → List all sites
- * solid site create my-shop --template shop → Create new site
- * solid site info 42                       → Site details
- * solid site delete 42                     → Delete site
- * solid site templates                     → Available templates + recommended
+ * solid site list                              → List all sites
+ * solid site create my-shop --template shop    → Create new site
+ * solid site info 42                           → Site details
+ * solid site delete 42                         → Delete site
+ * solid site templates                         → Available templates + recommended
+ * solid site guardrails 42                     → Show CMS guardrails for a site
+ * solid site set-guardrails 42 --mode locked   → Set mode (locked|open|copy-only|custom)
+ * solid site reset-guardrails 42               → Remove row, revert to default mode
  */
 
 import { Command } from 'commander';
@@ -226,6 +229,135 @@ siteCommand
       console.log('');
     } catch (error) {
       spinner.fail(chalk.red('Failed to load templates'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+// ── CMS Guardrails ──────────────────────────────────────────────────
+
+siteCommand
+  .command('guardrails <id>')
+  .description('Show CMS edit guardrails for a site')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const siteId = parseInt(id, 10);
+    if (isNaN(siteId)) {
+      console.error(chalk.red('Invalid site ID.'));
+      process.exit(1);
+    }
+    const spinner = options.json ? null : ora(`Loading guardrails for site #${siteId}...`).start();
+    try {
+      const res = await apiClient.get<Record<string, unknown>>(`/api/v1/cms/guardrails/sites/${siteId}`);
+      const data = res.data as Record<string, unknown>;
+      if (options.json) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+      spinner?.succeed(chalk.green(`Guardrails for site #${siteId}`));
+      console.log('');
+      console.log(`  ${chalk.bold('Mode:')}       ${chalk.cyan(String(data.mode))}${data.is_default ? chalk.dim(' (default, no row)') : ''}`);
+      const effFlags = (data.effective_flags || {}) as Record<string, boolean>;
+      console.log(`  ${chalk.bold('Effective flags:')}`);
+      for (const [k, v] of Object.entries(effFlags)) {
+        console.log(`    ${v ? chalk.green('✓') : chalk.red('✗')} ${k}`);
+      }
+      if (Array.isArray(data.editable_fields) && (data.editable_fields as unknown[]).length > 0) {
+        console.log(`  ${chalk.bold('Editable fields:')} ${(data.editable_fields as string[]).join(', ')}`);
+      }
+      console.log('');
+    } catch (error) {
+      spinner?.fail(chalk.red('Failed to load guardrails'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+siteCommand
+  .command('set-guardrails <id>')
+  .description('Set CMS edit guardrails for a site')
+  .requiredOption('--mode <mode>', 'One of: locked, open, copy-only, custom')
+  .option('--flags <json>', 'JSON object of custom flags (only used when --mode=custom)')
+  .option('--editable-fields <json>', 'JSON array of field path strings (custom mode)')
+  .action(async (id: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const siteId = parseInt(id, 10);
+    if (isNaN(siteId)) {
+      console.error(chalk.red('Invalid site ID.'));
+      process.exit(1);
+    }
+    const validModes = new Set(['locked', 'open', 'copy-only', 'custom']);
+    if (!validModes.has(options.mode)) {
+      console.error(chalk.red(`Invalid mode: ${options.mode}. Must be one of: locked, open, copy-only, custom`));
+      process.exit(1);
+    }
+    let flags: Record<string, boolean> | undefined;
+    let editableFields: string[] | undefined;
+    if (options.flags) {
+      try {
+        flags = JSON.parse(options.flags);
+      } catch {
+        console.error(chalk.red('Invalid JSON passed to --flags'));
+        process.exit(1);
+      }
+    }
+    if (options.editableFields) {
+      try {
+        editableFields = JSON.parse(options.editableFields);
+      } catch {
+        console.error(chalk.red('Invalid JSON passed to --editable-fields'));
+        process.exit(1);
+      }
+    }
+    const spinner = ora(`Setting guardrails for site #${siteId} → ${options.mode}...`).start();
+    try {
+      const res = await apiClient.put<Record<string, unknown>>(`/api/v1/cms/guardrails/sites/${siteId}`, {
+        mode: options.mode,
+        flags,
+        editable_fields: editableFields,
+      });
+      const data = res.data as Record<string, unknown>;
+      spinner.succeed(chalk.green(`Guardrails set: ${data.mode}`));
+      const effFlags = (data.effective_flags || {}) as Record<string, boolean>;
+      console.log('');
+      console.log(`  ${chalk.bold('Effective flags:')}`);
+      for (const [k, v] of Object.entries(effFlags)) {
+        console.log(`    ${v ? chalk.green('✓') : chalk.red('✗')} ${k}`);
+      }
+      console.log('');
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to set guardrails'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+siteCommand
+  .command('reset-guardrails <id>')
+  .description('Remove guardrails row for a site, reverting to default mode (copy-only)')
+  .action(async (id: string) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const siteId = parseInt(id, 10);
+    if (isNaN(siteId)) {
+      console.error(chalk.red('Invalid site ID.'));
+      process.exit(1);
+    }
+    const spinner = ora(`Resetting guardrails for site #${siteId}...`).start();
+    try {
+      await apiClient.delete(`/api/v1/cms/guardrails/sites/${siteId}`);
+      spinner.succeed(chalk.green(`Guardrails reset for site #${siteId} (now default: copy-only)`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to reset guardrails'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
     }
