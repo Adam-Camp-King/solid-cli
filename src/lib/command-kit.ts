@@ -152,12 +152,13 @@ export async function runListCommand(
 
   await run<{ items: Array<Record<string, unknown>>; count: number }>(
     async () => {
-      if (opts.all) {
-        const items = await fetchAllPages(spec.fetch, spec.extract, { limit: 100 });
-        return { items, count: items.length };
-      }
-      const body = await spec.fetch(parseInt(opts.offset, 10), parseInt(opts.limit, 10));
-      const items = spec.extract(body);
+      const items = opts.all
+        ? await fetchAllPages(spec.fetch, spec.extract, { limit: 100 })
+        : spec.extract(await spec.fetch(parseInt(opts.offset, 10), parseInt(opts.limit, 10)));
+      // Sort HERE, before the result is returned — so --json, --format csv,
+      // and the pretty renderer all see the same ordering. Prior impl only
+      // sorted inside `render`, which --json skipped.
+      applyListSort(items);
       return { items, count: items.length };
     },
     {
@@ -166,7 +167,6 @@ export async function runListCommand(
       quiet: opts.quiet,
       json: asJson,
       render: ({ items }) => {
-        applyListSort(items);
         const fmt = getListFormat();
         if (fmt === 'csv' || fmt === 'tsv') {
           process.stdout.write(renderDelimited(items, fmt));

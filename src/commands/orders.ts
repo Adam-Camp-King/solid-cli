@@ -24,37 +24,272 @@ function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
 }
 
 export const ordersCommand = new Command('orders')
-  .description('Order lifecycle (list, create, confirm, fulfill, cancel, refund)');
+  .description('Order lifecycle (list, create, confirm, fulfill, cancel, refund, import, watch)');
+
+// ── Shared CSV helpers ───────────────────────────────────────────────
+// Exported so `orders watch` can reuse the exact same parser + mapper.
+
+interface OrderImportRow {
+  row: number;
+  status: 'created' | 'failed' | 'skipped' | 'dry-run';
+  id?: number;
+  error?: string;
+}
+
+interface OrderImportResult {
+  total: number;
+  created: number;
+  failed: number;
+  skipped: number;
+  dry_run: boolean;
+  results: OrderImportRow[];
+}
+
+// Minimal RFC-4180 CSV — same parser as contacts/ecommerce imports, kept
+// local so we don't take a new dependency just for this.
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else field += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\r') { /* noop */ }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else field += ch;
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+
+const DEFAULT_ORDER_HEADER_MAP: Record<string, string> = {
+  'customer email': 'customer_email', 'customer_email': 'customer_email', 'email': 'customer_email',
+  'customer name': 'customer_name', 'customer': 'customer_name', 'name': 'customer_name',
+  'total': 'total', 'amount': 'total', 'subtotal': 'total',
+  'status': 'status',
+  'sku': 'sku', 'product sku': 'sku',
+  'quantity': 'quantity', 'qty': 'quantity',
+  'currency': 'currency',
+  'reference': 'reference', 'order ref': 'reference', 'external id': 'reference',
+};
+
+// Core import — file path in, structured result out. No console side-effects
+// beyond per-row logging the watcher wants. Returns the full summary.
+export async function importOrdersFromCSV(
+  absPath: string,
+  opts: { map?: string; dryRun?: boolean; stopOnError?: boolean; onProgress?: (row: number, total: number) => void } = {},
+): Promise<OrderImportResult> {
+  const fs = await import('fs');
+  const raw = fs.readFileSync(absPath, 'utf-8');
+  const rows = parseCSV(raw);
+  if (rows.length < 2) throw new Error('CSV needs a header row + at least one data row.');
+  const header = rows[0].map((h) => h.trim());
+
+  const overrides: Record<string, string> = {};
+  if (opts.map) {
+    for (const pair of opts.map.split(',')) {
+      const [k, v] = pair.split('=').map((s) => s.trim());
+      if (k && v) overrides[k.toLowerCase()] = v;
+    }
+  }
+  const headerField = header.map((h) => overrides[h.toLowerCase()] ?? DEFAULT_ORDER_HEADER_MAP[h.toLowerCase()] ?? null);
+
+  const total = rows.length - 1;
+  let created = 0, failed = 0, skipped = 0;
+  const results: OrderImportRow[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    if (opts.onProgress) opts.onProgress(i, total);
+
+    const body: Record<string, unknown> = {};
+    for (let c = 0; c < header.length; c++) {
+      const target = headerField[c];
+      if (!target) continue;
+      const val = rows[i][c]?.trim();
+      if (!val) continue;
+      if (target === 'total' || target === 'quantity') body[target] = parseFloat(val);
+      else body[target] = val;
+    }
+    if (!body.customer_email && !body.customer_name) {
+      skipped++;
+      results.push({ row: i + 1, status: 'skipped', error: 'no customer identifier' });
+      continue;
+    }
+    if (opts.dryRun) {
+      results.push({ row: i + 1, status: 'dry-run' });
+      continue;
+    }
+    try {
+      const res = await apiClient.post('/api/v1/orders/', body);
+      const d = res.data as Record<string, unknown>;
+      created++;
+      results.push({ row: i + 1, status: 'created', id: Number(d.id) });
+    } catch (e) {
+      failed++;
+      const msg = handleApiError(e).message;
+      results.push({ row: i + 1, status: 'failed', error: msg });
+      if (opts.stopOnError) break;
+    }
+  }
+
+  return { total, created, failed, skipped, dry_run: Boolean(opts.dryRun), results };
+}
 
 ordersCommand
-  .command('list')
-  .description('List orders')
-  .option('-l, --limit <n>', 'Max results', '100')
-  .option('--offset <n>', 'Offset', '0')
-  .option('--status <status>', 'Filter by status')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+  .command('import <file>')
+  .description('Bulk-import orders from a CSV (header row required)')
+  .option('--map <pairs>', 'Header→field overrides, e.g. "Customer=customer_email,Qty=quantity"')
+  .option('--preview', 'Parse + preview without creating anything (alias for --dry-run)')
+  .option('--stop-on-error', 'Abort on the first failed row (default: continue)')
+  .option('--json', 'Per-row result JSON plus summary')
+  .action(async (file: string, opts: { map?: string; preview?: boolean; stopOnError?: boolean; json?: boolean }) => {
     requireAuth();
-    const spinner = ora('Loading orders...').start();
+    const fs = await import('fs');
+    const path = await import('path');
+    const abs = path.resolve(file);
+    if (!fs.existsSync(abs)) { console.error(chalk.red(`File not found: ${abs}`)); process.exit(2); }
+
+    // Honor the root-level --dry-run (commander captures it there, not on
+    // this subcommand). --preview is a local alias that always means
+    // "don't write" even without the global flag.
+    const { isDryRun } = await import('../lib/dry-run');
+    const isPreview = Boolean(opts.preview) || isDryRun();
+
+    const spinner = ora({ text: 'Importing orders...', stream: process.stderr }).start();
+    let result: OrderImportResult;
     try {
-      const params: Record<string, unknown> = {
-        limit: parseInt(opts.limit, 10),
-        offset: parseInt(opts.offset, 10),
-      };
-      if (opts.status) params.status = opts.status;
-      const res = await apiClient.get('/api/v1/orders/', { params });
-      const data = res.data as Record<string, any>;
-      const items = data.items || data.orders || data;
-      const list = Array.isArray(items) ? items : (items.items || []);
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      spinner.succeed(chalk.green(`${list.length} order(s)`));
-      console.log('');
-      for (const o of list as Record<string, any>[]) {
-        const total = o.total !== undefined ? chalk.green(`$${Number(o.total).toFixed(2)}`) : chalk.dim('—');
-        console.log(`  ${chalk.bold(o.id)}  ${o.customer_name || o.customer_email || '—'}  ${total}  ${chalk.dim(o.status || '')}  ${chalk.dim(o.created_at?.split('T')[0] || '')}`);
-      }
-    } catch (e) { fail(spinner, 'Failed to load orders', e); }
+      result = await importOrdersFromCSV(abs, {
+        map: opts.map,
+        dryRun: isPreview,
+        stopOnError: opts.stopOnError,
+        onProgress: (i, total) => { spinner.text = `Importing ${total} orders... (${i}/${total})`; },
+      });
+    } catch (e) {
+      spinner.fail(chalk.red('Import aborted'));
+      console.error(chalk.red(`  ${(e as Error).message}`));
+      process.exit(1);
+    }
+
+    if (result.dry_run) spinner.succeed(chalk.yellow(`[dry-run] would import ${result.total - result.skipped} orders (${result.skipped} skipped)`));
+    else if (result.failed === 0) spinner.succeed(chalk.green(`Imported ${result.created} orders (${result.skipped} skipped)`));
+    else spinner.warn(chalk.yellow(`Imported ${result.created}/${result.total} (failed: ${result.failed}, skipped: ${result.skipped})`));
+
+    if (isJsonOutput(opts)) {
+      console.log(JSON.stringify({ summary: { total: result.total, created: result.created, failed: result.failed, skipped: result.skipped, dry_run: result.dry_run }, results: result.results }, null, 2));
+      return;
+    }
+    if (result.failed > 0) process.exit(1);
   });
+
+// ── Watch mode — auto-import CSVs dropped into a directory ────────────
+// Answers "what if the CLI could look at a file on a desktop?" — yes:
+// point it at a folder; every new *.csv triggers importOrdersFromCSV and
+// the file is moved to .processed/ or .failed/ based on the result.
+
+ordersCommand
+  .command('watch <dir>')
+  .description('Watch a directory for new CSVs and auto-import them as orders')
+  .option('--map <pairs>', 'Header→field overrides, same format as `orders import`')
+  .option('--preview', 'Parse + preview every file, never write (alias for --dry-run)')
+  .option('--no-move', 'Keep processed files in place instead of moving to .processed/ .failed/')
+  .option('--interval <sec>', 'Re-scan interval for new files', '5')
+  .action(async (dir: string, opts: { map?: string; preview?: boolean; move?: boolean; interval: string }) => {
+    requireAuth();
+    const { isDryRun } = await import('../lib/dry-run');
+    const isPreview = Boolean(opts.preview) || isDryRun();
+    const fs = await import('fs');
+    const path = await import('path');
+    const abs = path.resolve(dir);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) {
+      console.error(chalk.red(`Not a directory: ${abs}`));
+      process.exit(2);
+    }
+    const processedDir = path.join(abs, '.processed');
+    const failedDir = path.join(abs, '.failed');
+    fs.mkdirSync(processedDir, { recursive: true });
+    fs.mkdirSync(failedDir, { recursive: true });
+
+    const seen = new Set<string>();
+    const intervalMs = Math.max(1, parseInt(opts.interval, 10)) * 1000;
+
+    console.error(chalk.bold(`  Watching ${abs} for *.csv (poll every ${opts.interval}s)`));
+    console.error(chalk.dim(`  Processed → ${processedDir}`));
+    console.error(chalk.dim(`  Failed    → ${failedDir}`));
+    if (isPreview) console.error(chalk.yellow('  [dry-run] — nothing will be written server-side'));
+    console.error(chalk.dim('  Press Ctrl+C to stop.'));
+    console.error('');
+
+    const scan = async () => {
+      const entries = fs.readdirSync(abs);
+      for (const name of entries) {
+        if (!name.toLowerCase().endsWith('.csv')) continue;
+        const full = path.join(abs, name);
+        if (seen.has(full)) continue;
+        const stat = fs.statSync(full);
+        if (!stat.isFile()) continue;
+        seen.add(full);
+
+        const ts = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+        const spinner = ora({ text: `[${ts}] ${name} — importing...`, stream: process.stderr }).start();
+        try {
+          const result = await importOrdersFromCSV(full, { map: opts.map, dryRun: isPreview });
+          const summary = `${result.created} ok, ${result.failed} failed, ${result.skipped} skipped`;
+          if (result.failed === 0) {
+            spinner.succeed(chalk.green(`[${ts}] ${name} — ${summary}`));
+            if (opts.move && !isPreview) fs.renameSync(full, path.join(processedDir, name));
+          } else {
+            spinner.warn(chalk.yellow(`[${ts}] ${name} — ${summary}`));
+            if (opts.move && !isPreview) fs.renameSync(full, path.join(failedDir, name));
+          }
+        } catch (e) {
+          spinner.fail(chalk.red(`[${ts}] ${name} — ${(e as Error).message}`));
+          if (opts.move && !isPreview) fs.renameSync(full, path.join(failedDir, name));
+        }
+      }
+    };
+
+    await scan();
+    setInterval(scan, intervalMs);
+  });
+
+// List orders — full scripting contract (withListFlags + runListCommand)
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = ordersCommand.command('list').description('List orders');
+  withListFlags(listCmd, '100');
+  listCmd.option('--status <status>', 'Filter by status');
+  listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading orders...',
+      errorText: 'Failed to load orders',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/orders/', { params })).data;
+      },
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.items || d.orders || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No orders.')); return; }
+        console.log('');
+        for (const o of items) {
+          const total = o.total !== undefined ? chalk.green(`$${Number(o.total).toFixed(2)}`) : chalk.dim('—');
+          console.log(`  ${chalk.bold(String(o.id))}  ${o.customer_name || o.customer_email || '—'}  ${total}  ${chalk.dim(String(o.status || ''))}  ${chalk.dim(String(o.created_at || '').split('T')[0])}`);
+        }
+      },
+    });
+  });
+}
 
 ordersCommand
   .command('get <id>')
