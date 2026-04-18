@@ -43,11 +43,34 @@ function getToken(): string | null {
   return null;
 }
 
-async function apiCall(
+interface ErrorLike {
+  message?: string;
+  response?: { status?: number; data?: { detail?: string } };
+}
+
+interface StitchSection {
+  type: string;
+  title?: string;
+}
+
+interface StitchResponse {
+  sections: StitchSection[];
+  screen_id?: string;
+}
+
+interface StitchStatus {
+  enabled?: boolean;
+  api_configured?: boolean;
+  connected?: boolean;
+  project_count?: number;
+  error?: string;
+}
+
+async function apiCall<T = unknown>(
   method: string,
   endpoint: string,
-  body?: any
-): Promise<any> {
+  body?: unknown,
+): Promise<T> {
   const axios = (await import('axios')).default;
   const token = getToken();
   const headers: Record<string, string> = {
@@ -65,7 +88,7 @@ async function apiCall(
     headers,
     timeout: 60000,
   });
-  return response.data;
+  return response.data as T;
 }
 
 // ── Commands ───────────────────────────────────────────────────────
@@ -94,7 +117,7 @@ designCommand
   .action(async () => {
     const spinner = ora('Checking Stitch status...').start();
     try {
-      const data = await apiCall('GET', '/stitch/status');
+      const data = await apiCall<StitchStatus>('GET', '/stitch/status');
       spinner.stop();
 
       console.log('');
@@ -130,12 +153,13 @@ designCommand
         );
         console.log('');
       }
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as ErrorLike;
       spinner.fail('Could not check Stitch status');
-      if (err.response?.status === 401) {
+      if (e.response?.status === 401) {
         console.log(chalk.yellow('\n  Run `solid auth login` first.\n'));
       } else {
-        console.log(chalk.red(`\n  ${err.message}\n`));
+        console.log(chalk.red(`\n  ${e.message || 'request failed'}\n`));
       }
     }
   });
@@ -150,16 +174,16 @@ designCommand
   .option('-p, --project <id>', 'Stitch project ID', 'default')
   .option('-o, --output <file>', 'Save layout_json to file')
   .option('--page-id <id>', 'Apply to existing page ID')
-  .action(async (promptParts: string[], options: any) => {
+  .action(async (promptParts: string[], options: { device: string; project: string; output?: string; pageId?: string }) => {
     const prompt = promptParts.join(' ');
     const spinner = ora(`Generating design: "${prompt.substring(0, 60)}..."`).start();
 
     try {
-      const data = await apiCall('POST', '/stitch/generate', {
+      const data = await apiCall<StitchResponse>('POST', '/stitch/generate', {
         project_id: options.project,
         prompt,
         device_type: options.device.toUpperCase(),
-        page_id: options.pageId ? parseInt(options.pageId) : undefined,
+        page_id: options.pageId ? parseInt(options.pageId, 10) : undefined,
       });
 
       spinner.succeed(
@@ -195,16 +219,17 @@ designCommand
         );
       }
       console.log('');
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as ErrorLike;
       spinner.fail('Design generation failed');
-      if (err.response?.status === 503) {
+      if (e.response?.status === 503) {
         console.log(
           chalk.yellow(
-            '\n  Stitch is not configured. Run `solid design status` for details.\n'
-          )
+            '\n  Stitch is not configured. Run `solid design status` for details.\n',
+          ),
         );
       } else {
-        console.log(chalk.red(`\n  ${err.response?.data?.detail || err.message}\n`));
+        console.log(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
       }
     }
   });
@@ -217,7 +242,7 @@ designCommand
   .option('-f, --file <path>', 'HTML file to import')
   .option('--stdin', 'Read HTML from stdin')
   .option('-o, --output <file>', 'Save layout_json to file')
-  .action(async (options: any) => {
+  .action(async (options: { file?: string; stdin?: boolean; output?: string }) => {
     let html = '';
 
     if (options.file) {
@@ -246,7 +271,7 @@ designCommand
     ).start();
 
     try {
-      const data = await apiCall('POST', '/stitch/import-html', { html });
+      const data = await apiCall<StitchResponse>('POST', '/stitch/import-html', { html });
       spinner.succeed(
         `Converted to ${chalk.cyan(data.sections.length)} sections`
       );
@@ -274,9 +299,10 @@ designCommand
         );
       }
       console.log('');
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as ErrorLike;
       spinner.fail('HTML import failed');
-      console.log(chalk.red(`\n  ${err.response?.data?.detail || err.message}\n`));
+      console.log(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
     }
   });
 
@@ -288,15 +314,15 @@ designCommand
   .requiredOption('-p, --project <id>', 'Stitch project ID')
   .requiredOption('-s, --screen <id>', 'Stitch screen ID')
   .option('-o, --output <file>', 'Save layout_json to file')
-  .action(async (options: any) => {
+  .action(async (options: { project: string; screen: string; output?: string }) => {
     const spinner = ora(
-      `Pulling screen ${options.screen} from project ${options.project}...`
+      `Pulling screen ${options.screen} from project ${options.project}...`,
     ).start();
 
     try {
       // Use the generate endpoint with the screen's current state
       // (effectively a re-import of an existing screen)
-      const data = await apiCall('POST', '/stitch/edit', {
+      const data = await apiCall<StitchResponse>('POST', '/stitch/edit', {
         project_id: options.project,
         screen_id: options.screen,
         prompt: 'Return the current design as-is',
@@ -327,16 +353,17 @@ designCommand
         console.log(chalk.green(`  Saved to ${options.output}`));
       }
       console.log('');
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as ErrorLike;
       spinner.fail('Pull failed');
-      if (err.response?.status === 503) {
+      if (e.response?.status === 503) {
         console.log(
           chalk.yellow(
-            '\n  Stitch is not configured. Run `solid design status` for details.\n'
-          )
+            '\n  Stitch is not configured. Run `solid design status` for details.\n',
+          ),
         );
       } else {
-        console.log(chalk.red(`\n  ${err.response?.data?.detail || err.message}\n`));
+        console.log(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
       }
     }
   });

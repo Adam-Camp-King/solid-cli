@@ -45,6 +45,39 @@ function scoreBar(value: number, width = 15): string {
 function fmt(n: number): string { return n.toLocaleString(); }
 function trunc(s: string, max: number): string { return !s ? '' : s.length > max ? s.slice(0, max - 1) + '…' : s; }
 
+interface AgentSummary {
+  name?: string;
+  agent_type?: string;
+  autonomy_level?: number | null;
+  tool_count?: number;
+  description?: string;
+  status?: string;
+  tasks_today?: number;
+  last_active?: string;
+}
+
+interface ReflectionRecord {
+  created_at?: string;
+  score?: number | null;
+  passed?: boolean;
+  notes?: string;
+  tools_used?: string[];
+  criteria_scores?: Record<string, number>;
+}
+
+interface MissionStep {
+  step_index: number;
+  agent_name?: string;
+  task?: string;
+}
+
+interface MissionResult {
+  step_index: number;
+  agent_name?: string;
+  status: string;
+  response?: string;
+}
+
 function catchError(spinner: ReturnType<typeof ora>, label: string) {
   return (error: unknown) => {
     spinner.fail(chalk.red(label));
@@ -71,12 +104,12 @@ agentCommand
       const { data } = await apiClient.agentsList();
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const agents = (data as Record<string, any>).agents || [];
+      const agents = ((data as { agents?: AgentSummary[] }).agents) || [];
       console.log(ui.header(`Agents (${agents.length})`));
       if (!agents.length) { console.log(chalk.dim('  No agents found.\n')); return; }
       console.log(ui.table(
         ['Name', 'Type', 'Autonomy', 'Tools', 'Description'],
-        agents.map((a: any) => [
+        agents.map((a) => [
           chalk.hex('#818cf8')(a.name || a.agent_type), chalk.dim(a.agent_type),
           a.autonomy_level != null ? `L${a.autonomy_level}` : '-',
           String(a.tool_count ?? '-'), trunc(a.description || '', 40),
@@ -194,7 +227,7 @@ agentCommand
       console.log(ui.header('Reflection History'));
       console.log(ui.table(
         ['Date', 'Score', 'Status', 'Notes', 'Tools Used'],
-        reflections.map((r: any) => [
+        (reflections as ReflectionRecord[]).map((r) => [
           r.created_at ? new Date(r.created_at).toLocaleDateString() : '-',
           r.score != null ? `${(r.score * 100).toFixed(0)}%` : '-',
           r.passed ? chalk.green('pass') : chalk.red('fail'),
@@ -220,7 +253,7 @@ agentCommand
       const { data } = await apiClient.agentData(agentType);
       spinner.stop();
       if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
-      const reflections = (data as Record<string, any>).reflections || [];
+      const reflections: ReflectionRecord[] = (data as { reflections?: ReflectionRecord[] }).reflections || [];
       if (!reflections.length) { console.log(chalk.dim('\n  No reflections to extract patterns from.\n')); return; }
 
       console.log(ui.header(`Memory — ${name}`));
@@ -252,7 +285,7 @@ agentCommand
         console.log('');
       }
       // Recent notes
-      const notes = reflections.filter((r: any) => r.notes).slice(0, 5).map((r: any) => trunc(r.notes, 70));
+      const notes = reflections.filter((r) => r.notes).slice(0, 5).map((r) => trunc(r.notes || '', 70));
       if (notes.length) {
         console.log(ui.divider('Recent Notes') + '\n');
         for (const n of notes) console.log(`  ${chalk.dim('>')} ${n}`);
@@ -313,7 +346,7 @@ agentCommand
         console.log(ui.header('Agents'));
         console.log(ui.table(
           ['Agent', 'Status', 'Tasks Today', 'Last Active'],
-          agents.map((a: any) => {
+          (agents as AgentSummary[]).map((a) => {
             const dot = a.status === 'active' ? chalk.green('●') : a.status === 'idle' ? chalk.yellow('●') : chalk.dim('○');
             return [
               `${dot} ${a.name || a.agent_type}`, a.status || '-',
@@ -390,7 +423,7 @@ agentCommand
         if (result.results?.length) {
           console.log(ui.header('Results'));
           console.log(ui.table(['Step', 'Agent', 'Status', 'Response'],
-            result.results.map((r: any) => {
+            (result.results as MissionResult[]).map((r) => {
               const dot = r.status === 'completed' ? chalk.green('●') : r.status === 'failed' ? chalk.red('●') : chalk.yellow('●');
               return [`#${r.step_index}`, r.agent_name || '-', `${dot} ${r.status}`, trunc(r.response || '', 40)];
             })));
@@ -404,7 +437,7 @@ agentCommand
         if (mission.steps?.length) {
           console.log(ui.header('Planned Steps'));
           console.log(ui.table(['Step', 'Agent', 'Task'],
-            mission.steps.map((s: any) => [`#${s.step_index}`, s.agent_name || '-', trunc(s.task || '', 50)])));
+            (mission.steps as MissionStep[]).map((s) => [`#${s.step_index}`, s.agent_name || '-', trunc(s.task || '', 50)])));
         }
         console.log('\n' + chalk.dim(`  Run with --execute to dispatch immediately.`));
       }

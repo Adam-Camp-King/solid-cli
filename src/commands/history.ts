@@ -6,6 +6,45 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
 
+interface VersionRecord {
+  version: number;
+  slug?: string;
+  title?: string;
+  category?: string | null;
+  is_published?: boolean;
+  source?: string;
+  change_summary?: string | null;
+  created_at?: string | null;
+  layout_json?: { sections?: unknown[] } | null;
+}
+
+interface PageMetadata {
+  title?: string;
+  slug?: string;
+  current_version?: number;
+}
+
+interface KBEntryMetadata {
+  title?: string;
+  category?: string | null;
+}
+
+interface PagesHistoryResponse {
+  page?: PageMetadata;
+  versions: VersionRecord[];
+  count: number;
+}
+
+interface KBHistoryResponse {
+  entry?: KBEntryMetadata;
+  versions: VersionRecord[];
+  count: number;
+}
+
+interface RollbackResponse {
+  message: string;
+}
+
 function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
@@ -72,8 +111,8 @@ export const historyCommand = new Command('history')
         ]);
         spinner.succeed(chalk.green('Version history loaded'));
 
-        const pagesData = pagesRes.data as { versions: any[]; count: number };
-        const kbData = kbRes.data as { versions: any[]; count: number };
+        const pagesData = pagesRes.data as PagesHistoryResponse;
+        const kbData = kbRes.data as KBHistoryResponse;
 
         if (options.json) {
           console.log(JSON.stringify({ pages: pagesData, kb: kbData }, null, 2));
@@ -86,12 +125,12 @@ export const historyCommand = new Command('history')
         if (pagesData.versions.length > 0) {
           console.log(chalk.bold('  Pages'));
           console.log(ui.divider());
-          const rows = pagesData.versions.map((v: any) => [
+          const rows = pagesData.versions.map((v) => [
             chalk.dim(`v${v.version}`),
-            v.slug,
+            v.slug || '',
             v.change_summary || chalk.dim('—'),
-            sourceLabel(v.source),
-            formatDate(v.created_at),
+            sourceLabel(v.source || ''),
+            formatDate(v.created_at || null),
           ]);
           console.log(ui.table(['Ver', 'Slug', 'Change', 'Source', 'When'], rows));
         } else {
@@ -105,12 +144,12 @@ export const historyCommand = new Command('history')
         if (kbData.versions.length > 0) {
           console.log(chalk.bold('  Knowledge Base'));
           console.log(ui.divider());
-          const rows = kbData.versions.map((v: any) => [
+          const rows = kbData.versions.map((v) => [
             chalk.dim(`v${v.version}`),
-            v.title,
+            v.title || '',
             v.change_summary || chalk.dim('—'),
-            sourceLabel(v.source),
-            formatDate(v.created_at),
+            sourceLabel(v.source || ''),
+            formatDate(v.created_at || null),
           ]);
           console.log(ui.table(['Ver', 'Title', 'Change', 'Source', 'When'], rows));
         } else {
@@ -137,7 +176,7 @@ export const historyCommand = new Command('history')
         try {
           const res = await apiClient.historyPageVersion(identifier, parseInt(options.version, 10));
           spinner.succeed(chalk.green(`Version ${options.version} loaded`));
-          const v = res.data as any;
+          const v = res.data as VersionRecord;
 
           if (options.json) {
             console.log(JSON.stringify(v, null, 2));
@@ -169,7 +208,7 @@ export const historyCommand = new Command('history')
       try {
         const res = await apiClient.historyPages(identifier, limit);
         spinner.succeed(chalk.green('History loaded'));
-        const data = res.data as any;
+        const data = res.data as PagesHistoryResponse;
 
         if (options.json) {
           console.log(JSON.stringify(data, null, 2));
@@ -184,13 +223,13 @@ export const historyCommand = new Command('history')
         }
 
         if (data.versions.length > 0) {
-          const rows = data.versions.map((v: any) => [
+          const rows = data.versions.map((v) => [
             chalk.bold(`v${v.version}`),
-            v.title,
+            v.title || '',
             v.is_published ? chalk.green('✓') : chalk.dim('—'),
             v.change_summary || chalk.dim('—'),
-            sourceLabel(v.source),
-            formatDate(v.created_at),
+            sourceLabel(v.source || ''),
+            formatDate(v.created_at || null),
           ]);
           console.log(ui.table(['Ver', 'Title', 'Pub', 'Change', 'Source', 'When'], rows));
         } else {
@@ -218,7 +257,7 @@ export const historyCommand = new Command('history')
       try {
         const res = await apiClient.historyKB(entryId, limit);
         spinner.succeed(chalk.green('History loaded'));
-        const data = res.data as any;
+        const data = res.data as KBHistoryResponse;
 
         if (options.json) {
           console.log(JSON.stringify(data, null, 2));
@@ -233,13 +272,13 @@ export const historyCommand = new Command('history')
         }
 
         if (data.versions.length > 0) {
-          const rows = data.versions.map((v: any) => [
+          const rows = data.versions.map((v) => [
             chalk.bold(`v${v.version}`),
-            v.title,
+            v.title || '',
             v.category || chalk.dim('—'),
             v.change_summary || chalk.dim('—'),
-            sourceLabel(v.source),
-            formatDate(v.created_at),
+            sourceLabel(v.source || ''),
+            formatDate(v.created_at || null),
           ]);
           console.log(ui.table(['Ver', 'Title', 'Category', 'Change', 'Source', 'When'], rows));
         } else {
@@ -291,7 +330,7 @@ export const rollbackCommand = new Command('rollback')
       try {
         const versionRes = await apiClient.historyPageVersion(identifier, targetVersion);
         spinner.succeed(chalk.green(`Found v${targetVersion}`));
-        const v = versionRes.data as any;
+        const v = versionRes.data as VersionRecord;
 
         console.log('');
         console.log(ui.infoBox(`Rollback Preview — ${identifier}`, [
@@ -315,7 +354,7 @@ export const rollbackCommand = new Command('rollback')
         const rollbackSpinner = ora('Rolling back...').start();
         const res = await apiClient.rollbackPage(identifier, targetVersion);
         rollbackSpinner.succeed(chalk.green('Rollback complete'));
-        const data = res.data as any;
+        const data = res.data as RollbackResponse;
 
         if (options.json) {
           console.log(JSON.stringify(data, null, 2));
@@ -357,7 +396,7 @@ export const rollbackCommand = new Command('rollback')
       try {
         const res = await apiClient.rollbackKB(entryId, targetVersion);
         spinner.succeed(chalk.green('Rollback complete'));
-        const data = res.data as any;
+        const data = res.data as RollbackResponse;
 
         if (options.json) {
           console.log(JSON.stringify(data, null, 2));
