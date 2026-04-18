@@ -9,10 +9,55 @@ export const auditCommand = new Command('audit')
   .option('--limit <n>', 'Number of entries', '20')
   .option('--user <email>', 'Filter by user email')
   .option('--action <type>', 'Filter by action (create, update, delete)')
+  .option('--by-key <id>', 'T11 — filter to one API key (what did Claude do?)')
+  .option('--since <duration>', 'T11 — relative window: 15m, 1h, 24h, 7d')
+  .option('--method <verb>', 'T11 — filter by HTTP method: GET/POST/PUT/PATCH/DELETE')
+  .option('--status <code>', 'T11 — filter by HTTP status code (e.g. 200, 403)')
   .option('--json', 'JSON output')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
+
+    // ── T11.6 — by-key mode: hit the per-key audit endpoint ────────────
+    if (options.byKey) {
+      const keyId = parseInt(options.byKey, 10);
+      if (!keyId) {
+        console.error(chalk.red('--by-key must be a numeric API key id. Use `solid auth token list` to see ids.'));
+        process.exit(1);
+      }
+      const params: Record<string, unknown> = { limit: options.limit };
+      if (options.since) params.since = options.since;
+      if (options.method) params.method = options.method;
+      if (options.status) params.status_code = options.status;
+
+      const spinner = ora(`Loading audit for key #${keyId}...`).start();
+      try {
+        const res = await apiClient.get(`/api/v1/cli/api-keys/${keyId}/audit`, { params });
+        spinner.stop();
+        const data = res.data as Record<string, any>;
+        if (options.json) { console.log(JSON.stringify(data, null, 2)); return; }
+        const events: any[] = data.events || [];
+        console.log('');
+        console.log(ui.header(`Audit — key "${data.api_key_name}" (id=${data.api_key_id})`));
+        if (data.since) console.log(chalk.dim(`  Since: ${data.since}`));
+        if (events.length === 0) {
+          console.log(chalk.dim('  No events in this window.'));
+        } else {
+          for (const e of events) {
+            const color = e.status_code >= 500 ? chalk.red
+              : e.status_code >= 400 ? chalk.yellow
+              : e.status_code >= 300 ? chalk.blue
+              : chalk.green;
+            console.log(`  ${chalk.dim(e.created_at)}  ${color(String(e.status_code).padEnd(3))}  ${(e.method || '').padEnd(6)}  ${chalk.cyan(e.path)}  ${chalk.dim(`${e.response_time_ms ?? '?'}ms`)}`);
+          }
+        }
+        console.log('');
+        console.log(chalk.dim(`  ${events.length} event(s) shown.`));
+        console.log('');
+      } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+      return;
+    }
+
     const spinner = ora('Loading audit log...').start();
     try {
       const params: Record<string, unknown> = { limit: options.limit };

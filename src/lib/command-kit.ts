@@ -11,7 +11,13 @@
  * `run()` collapses that into one call so every migrated command handles
  * auth, JSON output, spinner lifecycle, and error reporting the same way.
  *
- * See migration examples in insights.ts, reports.ts, agent.ts.
+ * Design rules enforced here (so `solid X --json | jq` just works):
+ *   - Spinner writes to stderr, never stdout.
+ *   - `--json` output: *only* the JSON on stdout. No spinner chrome.
+ *   - `--quiet`: no spinner, no success text; errors still to stderr.
+ *   - Errors always on stderr, exit 1.
+ *
+ * See migration examples in insights.ts, reports.ts.
  */
 
 import chalk from 'chalk';
@@ -30,6 +36,11 @@ export interface RunOptions<T> {
   skipAuth?: boolean;
   /** Emit `JSON.stringify(result, null, 2)` instead of calling `render`. */
   json?: boolean;
+  /**
+   * Suppress spinner, success text, and any chrome — just data on stdout
+   * (via `render` or `--json`) and errors on stderr. Ideal for scripting.
+   */
+  quiet?: boolean;
   /** Pretty-print the result. Not called when `json` is true. */
   render?: (result: T) => void;
 }
@@ -57,7 +68,9 @@ export function __setSpinnerFactoryForTest(fn: SpinnerFactory | null): void {
 async function buildSpinner(text: string): Promise<SpinnerLike> {
   if (spinnerFactory) return spinnerFactory(text);
   const ora = (await import('ora')).default;
-  return ora(text).start() as unknown as SpinnerLike;
+  // CRITICAL: write to stderr, NOT stdout — otherwise spinner chars leak
+  // into `solid X --json | jq` and break every scripting use case.
+  return ora({ text, stream: process.stderr }).start() as unknown as SpinnerLike;
 }
 
 /**
@@ -72,6 +85,11 @@ export function requireAuth(): void {
   }
 }
 
+/** Returns true when any caller in the process explicitly asked for quiet mode. */
+export function quietFromEnv(): boolean {
+  return process.env.SOLID_QUIET === '1' || process.env.SOLID_QUIET === 'true';
+}
+
 /**
  * Execute an async task with the standard auth / spinner / JSON / error
  * lifecycle. Returns void — subcommands just `await run(...)` and exit.
@@ -82,10 +100,10 @@ export async function run<T>(
 ): Promise<void> {
   if (!options.skipAuth) requireAuth();
 
-  const useSpinner = options.spinner !== null && options.spinner !== undefined;
+  const quiet = Boolean(options.quiet) || quietFromEnv();
+  const useSpinner = !quiet && options.spinner !== null && options.spinner !== undefined;
   let spinner: SpinnerLike | null = null;
   if (useSpinner) {
-    // spinnerFactory case returns an already-started spinner; ora().start() does too.
     spinner = await buildSpinner(options.spinner as string);
   }
 
@@ -94,6 +112,7 @@ export async function run<T>(
 
     if (options.json) {
       if (spinner) spinner.stop();
+      // Only the JSON lands on stdout — no other output path touches it.
       console.log(JSON.stringify(result, null, 2));
       return;
     }
@@ -110,7 +129,8 @@ export async function run<T>(
       }
     }
 
-    if (options.render) options.render(result);
+    if (!quiet && options.render) options.render(result);
+    else if (quiet && options.render) options.render(result);
   } catch (error) {
     const errorText = options.errorText || 'Failed';
     if (spinner) spinner.fail(chalk.red(errorText));
