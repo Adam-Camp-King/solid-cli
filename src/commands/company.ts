@@ -333,21 +333,17 @@ membersCommand
       process.exit(1);
     }
 
-    if (!options.yes) {
-      const inquirer = await import('inquirer');
-      const { confirm } = await inquirer.default.prompt([{
-        type: 'confirm',
-        name: 'confirm',
-        message: chalk.yellow(`Remove user ${targetUserId} from company ${companyId}?`),
-        default: false,
-      }]);
-      if (!confirm) {
-        console.log(chalk.dim('  Cancelled.'));
-        return;
-      }
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Remove user ${targetUserId} from company ${companyId}?`,
+      { autoConfirm: Boolean(options.yes) },
+    );
+    if (!ok) {
+      console.error(chalk.dim('  Cancelled.'));
+      process.exit(1);
     }
 
-    const spinner = ora('Revoking member access...').start();
+    const spinner = ora({ text: 'Revoking member access...', stream: process.stderr }).start();
 
     try {
       await apiClient.companyMemberRevoke(companyId, targetUserId);

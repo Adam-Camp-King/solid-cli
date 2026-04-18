@@ -125,6 +125,20 @@ contactsCommand.command('update <id>').description('Update a contact')
     } catch (e) { spinner.fail(chalk.red('Failed to update contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
   });
 
+contactsCommand.command('delete <id>').description('Delete a contact (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
+    requireAuth();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Permanently delete contact ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora({ text: `Deleting contact ${id}...`, stream: process.stderr }).start();
+    try {
+      await apiClient.delete(`/api/v1/crm/contacts/${id}`);
+      spinner.succeed(chalk.green('Contact deleted'));
+    } catch (e) { spinner.fail(chalk.red('Failed to delete contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+  });
+
 contactsCommand.command('search <query>').description('Typeahead search for contacts').option('--json', 'Output as JSON')
   .action(async (query: string, opts) => {
     requireAuth();
@@ -267,6 +281,25 @@ dealsCommand.command('close <id>').description('Close a deal as won or lost')
       const color = outcome === 'won' ? chalk.green : chalk.red;
       spinner.succeed(color(`Deal ${id} closed as ${outcome.toUpperCase()}`));
     } catch (e) { spinner.fail(chalk.red('Failed to close deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
+  });
+
+dealsCommand.command('move-stage <id> <stage>').description('Move a deal to a new pipeline stage')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, stage: string, opts: { json?: boolean }) => {
+    requireAuth();
+    const spinner = ora({ text: `Moving deal ${id} → ${stage}...`, stream: process.stderr }).start();
+    try {
+      const res = await apiClient.patch(`/api/v1/crm/deals/${id}`, { stage });
+      spinner.succeed(chalk.green(`Deal ${id} moved to stage: ${stage}`));
+      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const d = res.data as Rec;
+      console.log(ui.successBox('Deal Moved', [
+        `ID: ${d.id || id}`,
+        `Stage: ${d.stage || stage}`,
+        `Value: ${d.value ? '$' + Number(d.value).toLocaleString() : '—'}`,
+      ]));
+      console.log('');
+    } catch (e) { spinner.fail(chalk.red('Failed to move deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
   });
 
 crmCommand.addCommand(dealsCommand);

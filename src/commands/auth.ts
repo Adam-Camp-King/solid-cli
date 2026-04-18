@@ -484,8 +484,22 @@ authCommand
 // Logout command
 authCommand
   .command('logout')
-  .description('Logout from Solid#')
-  .action(() => {
+  .description('Logout from Solid# (clears cached credentials)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (options: { yes?: boolean }) => {
+    const { confirm } = await import('../lib/command-kit');
+    if (!config.userEmail && !config.accessToken) {
+      console.error(chalk.dim('  Already logged out.'));
+      return;
+    }
+    const ok = await confirm(
+      `Log out ${config.userEmail || 'the cached session'} on ${config.apiUrl}?`,
+      { autoConfirm: Boolean(options.yes) },
+    );
+    if (!ok) {
+      console.error(chalk.dim('  Cancelled.'));
+      process.exit(1);
+    }
     config.logout();
     console.log(chalk.green('Logged out successfully'));
   });

@@ -283,11 +283,15 @@ ordersCmd
 
 ordersCmd
   .command('cancel <id>')
-  .description('Cancel a storefront order')
+  .description('Cancel a storefront order (prompts by default)')
   .option('--reason <text>', 'Reason')
-  .action(async (id, opts) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { reason?: string; yes?: boolean }) => {
     requireAuth();
-    const spinner = ora('Cancelling order...').start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Cancel order ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora({ text: 'Cancelling order...', stream: process.stderr }).start();
     try {
       await apiClient.post(`/api/v1/crm/ecommerce/orders/${id}/cancel`, { reason: opts.reason || '' });
       spinner.succeed(chalk.green('Order cancelled'));
@@ -296,15 +300,20 @@ ordersCmd
 
 ordersCmd
   .command('refund <id>')
-  .description('Refund a storefront order')
+  .description('Refund a storefront order (prompts by default)')
   .option('--amount <amount>', 'Partial amount')
   .option('--reason <text>', 'Reason')
-  .action(async (id, opts) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { amount?: string; reason?: string; yes?: boolean }) => {
     requireAuth();
+    const { confirm } = await import('../lib/command-kit');
+    const label = opts.amount ? `$${opts.amount}` : 'the full amount';
+    const ok = await confirm(`Refund ${label} on order ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
     const body: Record<string, unknown> = {};
     if (opts.amount) body.amount = parseFloat(opts.amount);
     if (opts.reason) body.reason = opts.reason;
-    const spinner = ora('Refunding order...').start();
+    const spinner = ora({ text: 'Refunding order...', stream: process.stderr }).start();
     try {
       await apiClient.post(`/api/v1/crm/ecommerce/orders/${id}/refund`, body);
       spinner.succeed(chalk.green('Order refunded'));

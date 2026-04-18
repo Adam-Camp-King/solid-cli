@@ -140,10 +140,14 @@ usersCommand
 
 usersCommand
   .command('delete <user_id>')
-  .description('Delete a user')
-  .action(async (id) => {
+  .description('Delete a user (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, options: { yes?: boolean }) => {
     requireAuth();
-    const spinner = ora(`Deleting user ${id}...`).start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Permanently delete user ${id}?`, { autoConfirm: Boolean(options.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora({ text: `Deleting user ${id}...`, stream: process.stderr }).start();
     try {
       await apiClient.delete(`/api/v1/users/${id}`);
       spinner.succeed(chalk.green('User deleted'));
