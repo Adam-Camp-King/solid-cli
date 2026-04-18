@@ -87,7 +87,12 @@ export function requireAuth(): void {
 
 /** Returns true when any caller in the process explicitly asked for quiet mode. */
 export function quietFromEnv(): boolean {
-  return process.env.SOLID_QUIET === '1' || process.env.SOLID_QUIET === 'true';
+  if (process.env.SOLID_QUIET === '1' || process.env.SOLID_QUIET === 'true') return true;
+  // --no-spinner / --raw are documented aliases (audit #3): same effect as
+  // --quiet for the spinner but more discoverable names. Detected via argv
+  // here so subcommands don't each need to thread the flag manually.
+  if (process.argv.includes('--no-spinner') || process.argv.includes('--raw')) return true;
+  return false;
 }
 
 /**

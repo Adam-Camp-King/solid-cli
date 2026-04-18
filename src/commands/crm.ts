@@ -124,6 +124,134 @@ contactsCommand.command('create').description('Create a new contact')
     } catch (e) { spinner.fail(chalk.red('Failed to create contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
   });
 
+contactsCommand.command('import <file>').description('Import contacts from a CSV (first row is a header)')
+  .option('--map <pairs>', 'Header→field overrides, e.g. "Full Name=name,Mobile=phone"')
+  .option('--dry-run', 'Parse + preview without creating anything (server-side --dry-run too)')
+  .option('--stop-on-error', 'Abort on the first failed row (default: continue)')
+  .option('--json', 'Emit a per-row result JSON instead of summary')
+  .action(async (file: string, opts: { map?: string; dryRun?: boolean; stopOnError?: boolean; json?: boolean }) => {
+    requireAuth();
+    const fs = await import('fs');
+    const path = await import('path');
+    const abs = path.resolve(file);
+    if (!fs.existsSync(abs)) { console.error(chalk.red(`File not found: ${abs}`)); process.exit(2); }
+    const raw = fs.readFileSync(abs, 'utf-8');
+
+    // Minimal inline CSV parser — handles quoted fields + escaped quotes.
+    // No new dependency for one small feature.
+    function parseCSV(text: string): string[][] {
+      const rows: string[][] = [];
+      let row: string[] = [];
+      let field = '';
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+          else if (ch === '"') inQuotes = false;
+          else field += ch;
+        } else {
+          if (ch === '"') inQuotes = true;
+          else if (ch === ',') { row.push(field); field = ''; }
+          else if (ch === '\r') { /* swallow */ }
+          else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+          else field += ch;
+        }
+      }
+      if (field !== '' || row.length) { row.push(field); rows.push(row); }
+      return rows.filter((r) => r.some((c) => c.trim() !== ''));
+    }
+
+    const rows = parseCSV(raw);
+    if (rows.length < 2) { console.error(chalk.red('CSV needs a header row + at least one data row.')); process.exit(2); }
+    const header = rows[0].map((h) => h.trim());
+
+    // Header → Contact field mapping. Hand-rolled so common export formats
+    // (GHL, HubSpot, "First Name,Last Name,Email,Phone,Company") map without
+    // the user supplying --map.
+    const DEFAULT_MAP: Record<string, string> = {
+      'name': 'name', 'full name': 'name', 'contact name': 'name',
+      'first name': 'first_name', 'firstname': 'first_name',
+      'last name': 'last_name', 'lastname': 'last_name',
+      'email': 'email', 'email address': 'email', 'email_address': 'email',
+      'phone': 'phone', 'phone number': 'phone', 'mobile': 'phone', 'cell': 'phone',
+      'company': 'company_name', 'company name': 'company_name', 'organization': 'company_name',
+    };
+    const overrides: Record<string, string> = {};
+    if (opts.map) {
+      for (const pair of opts.map.split(',')) {
+        const [k, v] = pair.split('=').map((s) => s.trim());
+        if (k && v) overrides[k.toLowerCase()] = v;
+      }
+    }
+    const headerField = header.map((h) => overrides[h.toLowerCase()] ?? DEFAULT_MAP[h.toLowerCase()] ?? null);
+
+    const total = rows.length - 1;
+    let created = 0, failed = 0, skipped = 0;
+    const results: Array<{ row: number; status: 'created' | 'failed' | 'skipped' | 'dry-run'; id?: number; error?: string }> = [];
+
+    const spinner = ora({ text: `Importing ${total} contacts...`, stream: process.stderr }).start();
+
+    for (let i = 1; i < rows.length; i++) {
+      const body: Rec = {};
+      for (let c = 0; c < header.length; c++) {
+        const target = headerField[c];
+        if (!target) continue;
+        const val = rows[i][c]?.trim();
+        if (!val) continue;
+        if (target === 'name') {
+          const parts = val.split(' ');
+          body.first_name = parts[0];
+          if (parts.length > 1) body.last_name = parts.slice(1).join(' ');
+        } else {
+          body[target] = val;
+        }
+      }
+      if (!body.first_name && !body.last_name && !body.email && !body.phone) {
+        skipped++;
+        results.push({ row: i + 1, status: 'skipped', error: 'no mappable fields' });
+        continue;
+      }
+      if (opts.dryRun) {
+        results.push({ row: i + 1, status: 'dry-run' });
+        continue;
+      }
+      try {
+        const res = await apiClient.post('/api/v1/crm/contacts', body);
+        const c = res.data as Rec;
+        created++;
+        results.push({ row: i + 1, status: 'created', id: Number(c.id) });
+        spinner.text = `Importing ${total} contacts... (${created + failed + skipped}/${total})`;
+      } catch (e) {
+        failed++;
+        const msg = handleApiError(e).message;
+        results.push({ row: i + 1, status: 'failed', error: msg });
+        if (opts.stopOnError) {
+          spinner.fail(chalk.red(`Aborted on row ${i + 1}: ${msg}`));
+          if (opts.json) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
+          process.exit(1);
+        }
+      }
+    }
+
+    if (opts.dryRun) spinner.succeed(chalk.yellow(`[dry-run] would import ${total - skipped} contacts (${skipped} skipped)`));
+    else if (failed === 0) spinner.succeed(chalk.green(`Imported ${created} contacts (${skipped} skipped)`));
+    else spinner.warn(chalk.yellow(`Imported ${created} / ${total}  (failed: ${failed}, skipped: ${skipped})`));
+
+    if (opts.json) {
+      console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!opts.dryRun }, results }, null, 2));
+      return;
+    }
+    if (failed > 0) {
+      console.error('');
+      for (const r of results.filter((r) => r.status === 'failed').slice(0, 10)) {
+        console.error(chalk.red(`  row ${r.row}: ${r.error}`));
+      }
+      if (failed > 10) console.error(chalk.dim(`  ...and ${failed - 10} more`));
+      process.exit(1);
+    }
+  });
+
 contactsCommand.command('update <id>').description('Update a contact')
   .option('--name <name>', 'Full name').option('--email <email>', 'Email').option('--phone <phone>', 'Phone')
   .option('--json', 'Output as JSON')

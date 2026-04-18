@@ -136,6 +136,8 @@ program
   .option('--dry-run', 'Preview every mutation without touching the server (T11). Global. Also: SOLID_DRY_RUN=1')
   .option('--json', 'Prefer JSON output (if the subcommand supports it). Also: SOLID_JSON=1')
   .option('--token <token>', 'Auth token for this invocation only (never persisted). Overrides env/config.')
+  .option('--no-spinner', 'Disable the progress spinner (same as --quiet)')
+  .option('--raw', 'Clean pipeline output: no spinner, no decoration (alias for --quiet)')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,

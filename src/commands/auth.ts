@@ -523,20 +523,36 @@ authCommand
   .command('logout')
   .description('Logout from Solid# (clears cached credentials)')
   .option('-y, --yes', 'Skip confirmation prompt')
-  .action(async (options: { yes?: boolean }) => {
+  .option('--all-devices', 'Revoke the refresh token server-side so every session signs out')
+  .action(async (options: { yes?: boolean; allDevices?: boolean }) => {
     const { confirm } = await import('../lib/command-kit');
     if (!config.userEmail && !config.accessToken) {
       console.error(chalk.dim('  Already logged out.'));
       return;
     }
-    const ok = await confirm(
-      `Log out ${config.userEmail || 'the cached session'} on ${config.apiUrl}?`,
-      { autoConfirm: Boolean(options.yes) },
-    );
+    const message = options.allDevices
+      ? `Log ${config.userEmail || 'this user'} out of EVERY device? (revokes the refresh token server-side)`
+      : `Log out ${config.userEmail || 'the cached session'} on ${config.apiUrl}?`;
+    const ok = await confirm(message, { autoConfirm: Boolean(options.yes) });
     if (!ok) {
       console.error(chalk.dim('  Cancelled.'));
       process.exit(1);
     }
+
+    if (options.allDevices) {
+      const spinner = ora({ text: 'Revoking all sessions...', stream: process.stderr }).start();
+      try {
+        // Backend endpoint; falls through to local logout either way so we
+        // never leave stale creds on the machine.
+        await apiClient.post('/api/v1/auth/logout', { all_devices: true });
+        spinner.succeed(chalk.green('All sessions revoked server-side'));
+      } catch (error) {
+        spinner.warn(chalk.yellow('Server-side revoke failed — clearing local session anyway'));
+        const apiError = handleApiError(error);
+        console.error(chalk.dim(`  ${apiError.message}`));
+      }
+    }
+
     config.logout();
     console.log(chalk.green('Logged out successfully'));
   });
