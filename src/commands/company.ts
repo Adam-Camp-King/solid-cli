@@ -369,3 +369,235 @@ companyCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+// ════════════════════════════════════════════════════════════════════
+// T10 — Agency-managed companies + design-lock
+//   solid company create-for-client  — provision + lock all + invite
+//   solid company lock-status        — read current lock map
+//   solid company lock               — lock areas
+//   solid company unlock             — unlock areas (or --all)
+//   solid company request-unlock     — client asks agency to unlock
+// ════════════════════════════════════════════════════════════════════
+
+const LOCK_AREAS = ['pages', 'brand', 'domains', 'modules', 'design', 'billing_lock'] as const;
+
+function parseAreas(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function validateAreas(areas: string[]): string | null {
+  const invalid = areas.filter((a) => !(LOCK_AREAS as readonly string[]).includes(a));
+  if (invalid.length > 0) {
+    return `Unknown lock area(s): ${invalid.join(', ')}. Valid: ${LOCK_AREAS.join(', ')}`;
+  }
+  return null;
+}
+
+function printLocks(locks: Record<string, boolean>): void {
+  console.log('');
+  LOCK_AREAS.forEach((area) => {
+    const locked = locks[area] === true;
+    const badge = locked ? chalk.red('🔒 locked  ') : chalk.green('✔ unlocked');
+    console.log(`  ${badge}  ${chalk.dim(area)}`);
+  });
+}
+
+// Create a company for a client, locked by default
+companyCommand
+  .command('create-for-client')
+  .description('Provision a new company for a client — all areas locked by default')
+  .requiredOption('-n, --name <name>', 'Client company name (e.g. "Joe\'s Plumbing")')
+  .requiredOption('--client-email <email>', 'Client email — receives owner invite')
+  .option('--client-name <name>', 'Client contact name')
+  .option('--industry <industry>', 'Industry slug (e.g. "plumber", "hvac")')
+  .option('--template <template>', 'KB template name (usually same as industry)')
+  .option('--unlock <areas>', `Comma-separated areas to leave UNLOCKED at creation (valid: ${LOCK_AREAS.join(', ')})`)
+  .action(async (options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const unlocked = options.unlock ? parseAreas(options.unlock) : undefined;
+    if (unlocked) {
+      const err = validateAreas(unlocked);
+      if (err) {
+        console.error(chalk.red(err));
+        process.exit(1);
+      }
+    }
+
+    const spinner = ora(`Provisioning "${options.name}" for ${options.clientEmail}...`).start();
+    try {
+      const res = await apiClient.companyCreateForClient({
+        name: options.name,
+        client_email: options.clientEmail,
+        client_name: options.clientName,
+        industry: options.industry,
+        template: options.template,
+        initial_unlocked_areas: unlocked,
+      });
+      spinner.succeed(chalk.green(`Company #${res.data.company.id} created`));
+      console.log('');
+      console.log(`  ${chalk.bold('Name:')}         ${res.data.company.name}`);
+      console.log(`  ${chalk.bold('Slug:')}         ${res.data.company.slug}`);
+      console.log(`  ${chalk.bold('Agency owner:')} user_id=${res.data.agency.agency_owner_user_id}`);
+      console.log(chalk.bold('\n  Lock state:'));
+      printLocks(res.data.agency.locks);
+      if (res.data.invitation?.sent) {
+        console.log('');
+        console.log(chalk.green(`  ✔ Invite sent to ${options.clientEmail}`));
+        if (res.data.invitation.token) {
+          console.log(chalk.dim(`    Token: ${res.data.invitation.token}`));
+          console.log(chalk.dim(`    Expires: ${res.data.invitation.expires_at ?? 'n/a'}`));
+        }
+      } else {
+        console.log(chalk.yellow(`\n  ⚠ Invite was NOT sent (non-fatal). Forward the invite manually.`));
+      }
+      if (res.data.next_steps?.length) {
+        console.log(chalk.bold('\n  Next steps:'));
+        res.data.next_steps.forEach((s) => console.log(chalk.dim(`    • ${s}`)));
+      }
+    } catch (error) {
+      spinner.fail(chalk.red('Provisioning failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+companyCommand
+  .command('lock-status [company_id]')
+  .description('Show which areas are locked on a company')
+  .option('--json', 'Output as JSON')
+  .action(async (companyIdArg, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const companyId = companyIdArg ? parseInt(companyIdArg, 10) : config.companyId;
+    if (!companyId) {
+      console.error(chalk.red('No company selected.'));
+      process.exit(1);
+    }
+    try {
+      const res = await apiClient.companyLockStatus(companyId);
+      if (options.json) {
+        console.log(JSON.stringify(res.data, null, 2));
+        return;
+      }
+      console.log('');
+      console.log(`  ${chalk.bold('Company:')}        #${res.data.company_id}`);
+      console.log(`  ${chalk.bold('Agency managed:')} ${res.data.agency_managed ? chalk.green('yes') : chalk.dim('no (self-serve)')}`);
+      if (res.data.agency_owner_user_id) {
+        console.log(`  ${chalk.bold('Agency owner:')}   user_id=${res.data.agency_owner_user_id}`);
+      }
+      console.log(chalk.bold('\n  Lock state:'));
+      printLocks(res.data.locks);
+    } catch (error) {
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+companyCommand
+  .command('lock <company_id>')
+  .description('Lock one or more areas — agency owner only')
+  .requiredOption('--area <areas>', `Comma-separated areas to lock (valid: ${LOCK_AREAS.join(', ')})`)
+  .action(async (companyIdArg, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const companyId = parseInt(companyIdArg, 10);
+    const areas = parseAreas(options.area);
+    const err = validateAreas(areas);
+    if (err) {
+      console.error(chalk.red(err));
+      process.exit(1);
+    }
+    const spinner = ora(`Locking ${areas.join(', ')} on company #${companyId}...`).start();
+    try {
+      const res = await apiClient.companyLock(companyId, areas);
+      spinner.succeed(chalk.green(`Locked: ${areas.join(', ')}`));
+      printLocks(res.data.locks);
+    } catch (error) {
+      spinner.fail(chalk.red('Lock failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+companyCommand
+  .command('unlock <company_id>')
+  .description('Unlock one or more areas — agency owner only')
+  .option('--area <areas>', 'Comma-separated areas to unlock')
+  .option('--all', 'Unlock every area (full handoff)', false)
+  .action(async (companyIdArg, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const companyId = parseInt(companyIdArg, 10);
+    const all = Boolean(options.all);
+    const areas = options.area ? parseAreas(options.area) : [];
+    if (!all && areas.length === 0) {
+      console.error(chalk.red('Provide either --area <list> or --all.'));
+      process.exit(1);
+    }
+    if (areas.length) {
+      const err = validateAreas(areas);
+      if (err) {
+        console.error(chalk.red(err));
+        process.exit(1);
+      }
+    }
+    const label = all ? 'ALL areas' : areas.join(', ');
+    const spinner = ora(`Unlocking ${label} on company #${companyId}...`).start();
+    try {
+      const res = await apiClient.companyUnlock(companyId, areas, all);
+      spinner.succeed(chalk.green(`Unlocked: ${label}`));
+      printLocks(res.data.locks);
+    } catch (error) {
+      spinner.fail(chalk.red('Unlock failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+companyCommand
+  .command('request-unlock <company_id>')
+  .description('Ask your agency to unlock one or more areas (client-side)')
+  .requiredOption('--area <areas>', 'Comma-separated areas to request (e.g. "pages")')
+  .requiredOption('--reason <reason>', 'Why you need this unlocked')
+  .action(async (companyIdArg, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const companyId = parseInt(companyIdArg, 10);
+    const areas = parseAreas(options.area);
+    const err = validateAreas(areas);
+    if (err) {
+      console.error(chalk.red(err));
+      process.exit(1);
+    }
+    const spinner = ora(`Sending unlock request...`).start();
+    try {
+      const res = await apiClient.companyRequestUnlock(companyId, areas, options.reason);
+      spinner.succeed(chalk.green('Request sent'));
+      console.log(chalk.dim(`  Agency owner: user_id=${res.data.agency_owner_user_id}`));
+      console.log(chalk.dim(`  Areas: ${res.data.areas.join(', ')}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Request failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
