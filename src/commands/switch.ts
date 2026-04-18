@@ -16,19 +16,41 @@ import { apiClient, handleApiError } from '../lib/api-client';
 export const switchCommand = new Command('switch')
   .description('Switch active company')
   .argument('[target]', 'Company ID or name to switch to')
-  .action(async (target?: string) => {
+  .option('--list', 'List accessible companies without switching')
+  .option('--json', 'JSON output (use with --list)')
+  .action(async (target: string | undefined, options: { list?: boolean; json?: boolean }) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
 
-    const spinner = ora('Loading companies...').start();
+    const spinner = ora({ text: 'Loading companies...', stream: process.stderr }).start();
 
     try {
       const response = await apiClient.companiesList();
       spinner.stop();
 
       const { companies, active_company_id } = response.data;
+
+      // --list: enumerate and exit without switching
+      if (options.list) {
+        if (options.json) {
+          console.log(JSON.stringify({ active_company_id, companies }, null, 2));
+          return;
+        }
+        if (companies.length === 0) {
+          console.log(chalk.yellow('  No companies found.'));
+          return;
+        }
+        console.log('');
+        for (const c of companies as Array<{ id: number; name: string; role: string }>) {
+          const marker = c.id === active_company_id ? chalk.green('●') : chalk.dim('○');
+          const tail = c.id === active_company_id ? chalk.dim(' [current]') : '';
+          console.log(`  ${marker} ${c.name} (ID: ${c.id}) — ${c.role}${tail}`);
+        }
+        console.log('');
+        return;
+      }
 
       if (companies.length === 0) {
         console.log(chalk.yellow('  No companies found.'));

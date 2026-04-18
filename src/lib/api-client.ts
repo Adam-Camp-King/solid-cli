@@ -48,8 +48,10 @@ class ApiClient {
         throw err;
       }
 
-      // CLI API key from env var takes priority (CI/CD, LLM agents)
-      const envApiKey = process.env.SOLID_API_KEY;
+      // CLI API key from env var takes priority (CI/CD, LLM agents).
+      // SOLID_TOKEN is accepted as an alias for SOLID_API_KEY so scripts
+      // that assume the usual `*_TOKEN` naming just work.
+      const envApiKey = process.env.SOLID_API_KEY || process.env.SOLID_TOKEN;
       if (envApiKey) {
         requestConfig.headers.Authorization = `Bearer ${envApiKey}`;
       } else {

@@ -194,6 +194,28 @@ companyCommand
     }
   });
 
+// ── Company current (quick active-company lookup, no network) ─────
+companyCommand
+  .command('current')
+  .description('Print the currently active company ID (fast, no network)')
+  .option('--json', 'Output as JSON')
+  .action((options: { json?: boolean }) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const id = config.companyId;
+    if (options.json) {
+      console.log(JSON.stringify({ company_id: id ?? null, email: config.userEmail ?? null }, null, 2));
+      return;
+    }
+    if (!id) {
+      console.error(chalk.yellow('No active company. Run `solid switch`.'));
+      process.exit(1);
+    }
+    console.log(String(id));
+  });
+
 // ── Company info ───────────────────────────────────────────────────
 companyCommand
   .command('info')
