@@ -16,7 +16,7 @@ jest.mock('../../lib/config', () => {
   };
 });
 
-import { run, requireAuth, __setSpinnerFactoryForTest, SpinnerLike } from '../../lib/command-kit';
+import { run, requireAuth, confirm, __setSpinnerFactoryForTest, SpinnerLike } from '../../lib/command-kit';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { __setLoggedIn } = require('../../lib/config');
 
@@ -189,6 +189,26 @@ describe('command-kit', () => {
       await run(async () => 'hi', { spinner: null });
 
       expect(factory).not.toHaveBeenCalled();
+    });
+
+    describe('confirm()', () => {
+      it('returns true immediately when autoConfirm is set', async () => {
+        const result = await confirm('Delete it?', { autoConfirm: true });
+        expect(result).toBe(true);
+      });
+
+      it('returns false and warns when stdin is not a TTY', async () => {
+        // stdin is not a TTY in jest, so this is the default path
+        const prev = process.stdin.isTTY;
+        Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+        try {
+          const result = await confirm('Delete it?');
+          expect(result).toBe(false);
+          expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('Refusing to run destructive op'));
+        } finally {
+          Object.defineProperty(process.stdin, 'isTTY', { value: prev, configurable: true });
+        }
+      });
     });
 
     describe('quiet mode', () => {

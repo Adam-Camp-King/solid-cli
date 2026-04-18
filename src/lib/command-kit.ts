@@ -91,6 +91,39 @@ export function quietFromEnv(): boolean {
 }
 
 /**
+ * Interactive y/N confirmation for destructive operations.
+ *
+ * Call order matters:
+ *   - `--yes` / `autoConfirm=true` → returns true immediately, no prompt.
+ *   - stdin is not a TTY (piped / CI / agent) → returns `false` with a
+ *     helpful hint. Scripts MUST pass `--yes` explicitly, never fall through.
+ *   - otherwise, prompt once; answers starting with 'y' (case-insensitive)
+ *     confirm; everything else denies.
+ *
+ * Intended for commands that delete/destroy/cancel/revoke/purge. Compose
+ * with a `--dry-run` branch before this to let the user preview the call
+ * without firing it.
+ */
+export async function confirm(
+  message: string,
+  options: { autoConfirm?: boolean } = {},
+): Promise<boolean> {
+  if (options.autoConfirm) return true;
+  if (!process.stdin.isTTY) {
+    console.error(chalk.red('  Refusing to run destructive op with no TTY — pass --yes to proceed.'));
+    return false;
+  }
+  const readline = await import('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+  return new Promise<boolean>((resolve) => {
+    rl.question(`  ${message} (y/N) `, (answer: string) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase().startsWith('y'));
+    });
+  });
+}
+
+/**
  * Execute an async task with the standard auth / spinner / JSON / error
  * lifecycle. Returns void — subcommands just `await run(...)` and exit.
  */
