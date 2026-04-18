@@ -57,6 +57,7 @@ import { inventoryCommand } from './commands/inventory';
 import { blogCommand } from './commands/blog';
 import { exploreCommand } from './commands/explore';
 import { designCommand } from './commands/design';
+import { visualCommand } from './commands/visual';
 import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
 import { analyticsCommand } from './commands/analytics';
@@ -207,6 +208,7 @@ program.addCommand(subscriptionsCommand);
 
 // Design
 program.addCommand(designCommand);
+program.addCommand(visualCommand);
 
 // Platform
 program.addCommand(cloneCommand);
