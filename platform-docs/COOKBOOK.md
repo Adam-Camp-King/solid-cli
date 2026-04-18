@@ -4,6 +4,23 @@ Real scenarios. Copy-paste-runnable. All examples assume `@solidnumber/cli` is i
 
 Every recipe obeys the [Scripting Contract](https://github.com/Adam-Camp-King/solid-cli/blob/main/README.md#security) — stdout is data, stderr is chrome, exit codes mean "did it work."
 
+## Verification status (2026-04-18, v1.9.16)
+
+Each scenario below lists what's been run end-to-end on the installed binary:
+
+| # | Scenario | Verified |
+|---|---|---|
+| 1 | Agency onboarding | Shape only (destructive — creates a real company) |
+| 2 | Bulk migrate contacts | ✅ Full flow with `--dry-run` + real import |
+| 3 | CI/CD pipeline | Commands individually, not the full pipeline |
+| 4 | Claude Code context | ✅ `solid context --tools-only --json` verified |
+| 5 | Safe production playbook | ✅ `--dry-run`, `--preview`, `SOLID_DRY_RUN=1` verified |
+| 6 | Cross-company reporting | ✅ `solid switch --list --json` pipes correctly |
+| 7 | Incident response | Commands verified (`audit --since`, `auth token list`). `logout --all-devices` + `members revoke` not run — destructive. |
+| 8 | Export to spreadsheet | ✅ `--format csv`, `--output <file>` verified |
+| 9 | Chain execute + poll | `chains list --json` ✅. Full poll loop requires a real chain. |
+| 10 | Wrapping from other languages | Syntax only — no runtime execution |
+
 ---
 
 ## Table of contents
