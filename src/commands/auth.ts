@@ -481,6 +481,43 @@ authCommand
     }
   });
 
+// Force-refresh the cached access token without waiting for a 401.
+authCommand
+  .command('refresh')
+  .description('Force-rotate the cached access token using the stored refresh token')
+  .option('--json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    if (!config.refreshToken) {
+      if (options.json) {
+        console.log(JSON.stringify({ refreshed: false, reason: 'no_refresh_token' }, null, 2));
+      } else {
+        console.error(chalk.red('No refresh token cached. Run `solid auth login` first.'));
+      }
+      process.exit(1);
+    }
+    const spinner = ora({ text: 'Refreshing token...', stream: process.stderr }).start();
+    const ok = await apiClient.forceRefreshToken();
+    if (!ok) {
+      spinner.fail(chalk.red('Refresh failed — your refresh token may be expired.'));
+      if (options.json) {
+        console.log(JSON.stringify({ refreshed: false, reason: 'refresh_rejected' }, null, 2));
+      } else {
+        console.error(chalk.dim('  Run `solid auth login` to re-authenticate.'));
+      }
+      process.exit(1);
+    }
+    spinner.succeed(chalk.green('Token refreshed'));
+    if (options.json) {
+      console.log(JSON.stringify({
+        refreshed: true,
+        token_expires_at: config.tokenExpiresAt ? config.tokenExpiresAt.toISOString() : null,
+      }, null, 2));
+      return;
+    }
+    const ttl = formatTokenTTL();
+    if (ttl) console.log(chalk.dim(`  ${ttl}`));
+  });
+
 // Logout command
 authCommand
   .command('logout')

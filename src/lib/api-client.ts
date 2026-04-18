@@ -18,6 +18,15 @@ interface ApiError {
   status: number;
 }
 
+// Global override for per-invocation auth. Set by `--token <val>` on the
+// root program before any command runs; takes precedence over SOLID_API_KEY,
+// SOLID_TOKEN, and the cached session.
+let overrideToken: string | null = null;
+
+export function setOverrideToken(token: string | null): void {
+  overrideToken = token;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -48,17 +57,17 @@ class ApiClient {
         throw err;
       }
 
-      // CLI API key from env var takes priority (CI/CD, LLM agents).
-      // SOLID_TOKEN is accepted as an alias for SOLID_API_KEY so scripts
-      // that assume the usual `*_TOKEN` naming just work.
-      const envApiKey = process.env.SOLID_API_KEY || process.env.SOLID_TOKEN;
-      if (envApiKey) {
-        requestConfig.headers.Authorization = `Bearer ${envApiKey}`;
-      } else {
-        const token = config.accessToken;
-        if (token) {
-          requestConfig.headers.Authorization = `Bearer ${token}`;
-        }
+      // Auth precedence (highest → lowest):
+      //   1. `--token <x>` flag (per-invocation, never persisted to disk)
+      //   2. SOLID_API_KEY / SOLID_TOKEN env vars (CI/CD, LLM agents)
+      //   3. cached session from ~/.solid/config.json
+      const chosen =
+        overrideToken ||
+        process.env.SOLID_API_KEY ||
+        process.env.SOLID_TOKEN ||
+        config.accessToken;
+      if (chosen) {
+        requestConfig.headers.Authorization = `Bearer ${chosen}`;
       }
       const companyId = config.companyId;
       if (companyId) {
@@ -104,6 +113,11 @@ class ApiClient {
         throw error;
       }
     );
+  }
+
+  // Public so `solid auth refresh` can force-rotate on demand.
+  async forceRefreshToken(): Promise<boolean> {
+    return this.refreshToken();
   }
 
   private async refreshToken(): Promise<boolean> {

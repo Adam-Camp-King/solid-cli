@@ -91,6 +91,40 @@ export function quietFromEnv(): boolean {
 }
 
 /**
+ * Auto-paginate a backend list endpoint.
+ *
+ * Calls `fetchPage(offset, limit)` with a rising offset until the page
+ * returns fewer items than requested (the standard terminator for our
+ * offset-based APIs). Returns the concatenated item array.
+ *
+ * Safety caps:
+ *   - `maxPages` (default 40) prevents runaway loops if the server lies
+ *     about page sizes.
+ *   - `limit` (default 100) keeps each request small enough to stream.
+ *
+ * `extract` is run on every page's response; if your endpoint nests the
+ * list under a key other than `items`, pass a custom extractor.
+ */
+export async function fetchAllPages<TItem, TPage>(
+  fetchPage: (offset: number, limit: number) => Promise<TPage>,
+  extract: (page: TPage) => TItem[],
+  options: { limit?: number; maxPages?: number } = {},
+): Promise<TItem[]> {
+  const limit = options.limit ?? 100;
+  const maxPages = options.maxPages ?? 40;
+  const all: TItem[] = [];
+  let offset = 0;
+  for (let page = 0; page < maxPages; page++) {
+    const body = await fetchPage(offset, limit);
+    const items = extract(body) || [];
+    all.push(...items);
+    if (items.length < limit) break;
+    offset += limit;
+  }
+  return all;
+}
+
+/**
  * Interactive y/N confirmation for destructive operations.
  *
  * Call order matters:

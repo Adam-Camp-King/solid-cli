@@ -16,7 +16,7 @@ jest.mock('../../lib/config', () => {
   };
 });
 
-import { run, requireAuth, confirm, __setSpinnerFactoryForTest, SpinnerLike } from '../../lib/command-kit';
+import { run, requireAuth, confirm, fetchAllPages, __setSpinnerFactoryForTest, SpinnerLike } from '../../lib/command-kit';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { __setLoggedIn } = require('../../lib/config');
 
@@ -189,6 +189,51 @@ describe('command-kit', () => {
       await run(async () => 'hi', { spinner: null });
 
       expect(factory).not.toHaveBeenCalled();
+    });
+
+    describe('fetchAllPages', () => {
+      it('concatenates multiple full pages and stops on a short page', async () => {
+        const pages = [
+          { items: [1, 2, 3] },
+          { items: [4, 5, 6] },
+          { items: [7, 8] }, // short → terminator
+        ];
+        let call = 0;
+        const fetch = jest.fn(async (_offset: number, _limit: number) => pages[call++]);
+        const all = await fetchAllPages<number, { items: number[] }>(
+          fetch,
+          (p) => p.items,
+          { limit: 3 },
+        );
+        expect(all).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+        expect(fetch).toHaveBeenCalledTimes(3);
+      });
+
+      it('stops at maxPages even if the server returns full pages forever', async () => {
+        let calls = 0;
+        const fetch = jest.fn(async () => {
+          calls++;
+          return { items: [calls * 10, calls * 10 + 1] };
+        });
+        const all = await fetchAllPages<number, { items: number[] }>(
+          fetch,
+          (p) => p.items,
+          { limit: 2, maxPages: 3 },
+        );
+        expect(fetch).toHaveBeenCalledTimes(3);
+        expect(all).toHaveLength(6);
+      });
+
+      it('handles the empty-first-page case without calling extract twice', async () => {
+        const fetch = jest.fn(async () => ({ items: [] as number[] }));
+        const all = await fetchAllPages<number, { items: number[] }>(
+          fetch,
+          (p) => p.items,
+          { limit: 50 },
+        );
+        expect(all).toEqual([]);
+        expect(fetch).toHaveBeenCalledTimes(1);
+      });
     });
 
     describe('confirm()', () => {

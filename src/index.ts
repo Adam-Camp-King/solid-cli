@@ -135,10 +135,27 @@ program
   .version(pkg.version)
   .option('--dry-run', 'Preview every mutation without touching the server (T11). Global. Also: SOLID_DRY_RUN=1')
   .option('--json', 'Prefer JSON output (if the subcommand supports it). Also: SOLID_JSON=1')
+  .option('--token <token>', 'Auth token for this invocation only (never persisted). Overrides env/config.')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
   });
+
+// Pre-parse --token before any subcommand runs so the api-client sees it
+// on the first request. Same trick as --dry-run / --json above.
+{
+  const i = process.argv.findIndex((a) => a === '--token' || a.startsWith('--token='));
+  if (i !== -1) {
+    const val = process.argv[i].includes('=')
+      ? process.argv[i].split('=')[1]
+      : process.argv[i + 1];
+    if (val) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { setOverrideToken } = require('./lib/api-client');
+      setOverrideToken(val);
+    }
+  }
+}
 
 // Register commands — grouped by purpose
 // Onboarding (programmatic client provisioning)

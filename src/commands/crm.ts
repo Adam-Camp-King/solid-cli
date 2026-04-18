@@ -39,29 +39,49 @@ const contactsCommand = new Command('contacts')
   .option('--status <status>', 'Filter by status')
   .option('--source <source>', 'Filter by source')
   .option('--type <type>', 'Filter by contact type')
-  .option('-l, --limit <n>', 'Max results', '25')
+  .option('-l, --limit <n>', 'Page size (max results per request)', '25')
+  .option('--offset <n>', 'Start offset for pagination', '0')
+  .option('--all', 'Auto-paginate until the server runs out')
   .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+  .action(async (opts: { search?: string; status?: string; source?: string; type?: string; limit: string; offset: string; all?: boolean; json?: boolean }) => {
     requireAuth();
-    const spinner = ora('Loading contacts...').start();
+    const spinner = ora({ text: 'Loading contacts...', stream: process.stderr }).start();
     try {
-      const params: Rec = { page_size: parseInt(opts.limit, 10) };
-      if (opts.search) params.search = opts.search;
-      if (opts.status) params.status = opts.status;
-      if (opts.source) params.source = opts.source;
-      if (opts.type) params.contact_type = opts.type;
-      const res = await apiClient.get('/api/v1/crm/contacts', { params });
-      spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const items = asList(res.data);
+      const baseParams: Rec = {};
+      if (opts.search) baseParams.search = opts.search;
+      if (opts.status) baseParams.status = opts.status;
+      if (opts.source) baseParams.source = opts.source;
+      if (opts.type) baseParams.contact_type = opts.type;
+
+      let items: Rec[];
+      if (opts.all) {
+        const { fetchAllPages } = await import('../lib/command-kit');
+        items = await fetchAllPages<Rec, unknown>(
+          async (offset, limit) => (await apiClient.get('/api/v1/crm/contacts', {
+            params: { ...baseParams, page_size: limit, offset },
+          })).data,
+          (page) => asList(page),
+          { limit: 100 },
+        );
+        spinner.stop();
+        if (opts.json) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+      } else {
+        const res = await apiClient.get('/api/v1/crm/contacts', {
+          params: { ...baseParams, page_size: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
+        });
+        spinner.stop();
+        if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+        items = asList(res.data);
+      }
+
       if (items.length === 0) { console.log(chalk.yellow('  No contacts found.')); return; }
-      console.log(ui.header(`Contacts (${items.length})`));
+      console.log(ui.header(`Contacts (${items.length}${opts.all ? '' : ` — page from offset ${opts.offset}`})`));
       console.log(ui.table(['ID', 'Name', 'Email', 'Phone', 'Status'], items.map((c) => [
         String(c.id), contactName(c), String(c.email || chalk.dim('—')),
         String(c.phone || chalk.dim('—')), String(c.status || chalk.dim('—')),
       ])));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load contacts')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
+    } catch (e) { spinner.fail(chalk.red('Failed to load contacts')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
   });
 
 contactsCommand.command('get <id>').description('Get contact details').option('--json', 'Output as JSON')
