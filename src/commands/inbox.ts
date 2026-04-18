@@ -122,25 +122,53 @@ inboxCommand
 // ── Send Message ─────────────────────────────────────────────────────
 
 inboxCommand
-  .command('send <contact_id> <message>')
-  .description('Send a message to a contact (auto-selects best channel)')
-  .action(async (contactId: string, message: string) => {
+  .command('send <recipient> <message>')
+  .description('Send a message — recipient is a contact ID, email address, or E.164 phone')
+  .option('--channel <channel>', 'Force channel: email | sms | auto', 'auto')
+  .action(async (recipient: string, message: string, opts: { channel: string }) => {
     requireAuth();
-    const spinner = ora('Sending message...').start();
+    const spinner = ora({ text: 'Sending message...', stream: process.stderr }).start();
+
+    // Classify the recipient. Contact id → numeric. Email → has '@'.
+    // E.164 phone → starts with '+' and the rest is digits. Anything else
+    // falls back to a typeahead lookup so users can pass a name.
+    const body: Record<string, unknown> = { message };
+    if (opts.channel && opts.channel !== 'auto') body.channel = opts.channel;
+
+    if (/^\d+$/.test(recipient)) {
+      body.contact_id = parseInt(recipient, 10);
+    } else if (recipient.includes('@')) {
+      body.to_email = recipient;
+    } else if (/^\+\d{6,}$/.test(recipient)) {
+      body.to_phone = recipient;
+    } else {
+      // Name-style lookup — hit the typeahead endpoint and take the first hit.
+      try {
+        const lookup = await apiClient.get('/api/v1/crm/contacts/search/typeahead', { params: { q: recipient } });
+        const hits = (lookup.data as Record<string, unknown>).items as Array<Record<string, unknown>> || (lookup.data as Array<Record<string, unknown>>);
+        if (Array.isArray(hits) && hits.length > 0 && hits[0].id !== undefined) {
+          body.contact_id = Number(hits[0].id);
+          spinner.text = `Resolved "${recipient}" → contact ${body.contact_id}`;
+        } else {
+          spinner.fail(chalk.red(`No contact matched "${recipient}"`));
+          process.exit(1);
+        }
+      } catch {
+        spinner.fail(chalk.red(`Could not resolve "${recipient}" to a contact`));
+        process.exit(1);
+      }
+    }
 
     try {
-      const response = await apiClient.post('/api/v1/communications/send', {
-        contact_id: parseInt(contactId),
-        message,
-      });
-
-      const result = response.data as Record<string, any> || {};
-      const channel = result.channel || 'auto';
+      const response = await apiClient.post('/api/v1/communications/send', body);
+      const result = (response.data as Record<string, unknown>) || {};
+      const channel = (result.channel as string) || opts.channel || 'auto';
       spinner.succeed(chalk.green(`Message sent via ${channel}`));
     } catch (error) {
       spinner.fail(chalk.red('Failed to send message'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
     }
   });
 

@@ -101,6 +101,72 @@ export function quietFromEnv(): boolean {
   return false;
 }
 
+// Global hints set by the root program BEFORE parsing, so subcommands
+// don't each need to wire these flags through their action() signatures.
+// Captured here and exported so commands can read them without coupling
+// to the argv shape.
+let globalOutputFile: string | null = null;
+let globalListFormat: string | null = null;
+let globalListSortBy: string | null = null;
+let globalListOrder: string | null = null;
+
+export function setOutputFile(path: string | null): void { globalOutputFile = path; }
+export function getOutputFile(): string | null { return globalOutputFile; }
+export function setListFormat(fmt: string | null): void { globalListFormat = fmt; }
+export function getListFormat(): string | null { return globalListFormat; }
+export function setListSortBy(field: string | null): void { globalListSortBy = field; }
+export function getListSortBy(): string | null { return globalListSortBy; }
+export function setListOrder(order: string | null): void { globalListOrder = (order === 'desc' ? 'desc' : 'asc'); }
+export function getListOrder(): 'asc' | 'desc' { return globalListOrder === 'desc' ? 'desc' : 'asc'; }
+
+/**
+ * Render an array of records as CSV or TSV. Row 0 is the header — union
+ * of all keys across items so sparse rows still line up. Values are CSV-
+ * escaped (quotes doubled, embedded quote/comma/newline triggers quoting).
+ */
+export function renderDelimited(items: Array<Record<string, unknown>>, format: 'csv' | 'tsv'): string {
+  if (!items.length) return '';
+  const delim = format === 'tsv' ? '\t' : ',';
+  const cols = Array.from(items.reduce<Set<string>>((acc, item) => {
+    Object.keys(item).forEach((k) => acc.add(k));
+    return acc;
+  }, new Set()));
+  const esc = (v: unknown): string => {
+    if (v === null || v === undefined) return '';
+    const s = typeof v === 'string' ? v : JSON.stringify(v);
+    if (format === 'csv' && /[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    if (format === 'tsv') return s.replace(/\t/g, ' ').replace(/\n/g, ' ');
+    return s;
+  };
+  const rows = [cols.join(delim), ...items.map((item) => cols.map((c) => esc(item[c])).join(delim))];
+  return rows.join('\n') + '\n';
+}
+
+/**
+ * Apply global --sort-by / --order to an array in place (returns the
+ * same array). Does nothing if no sort hint is set.
+ */
+export function applyListSort<T extends Record<string, unknown>>(items: T[]): T[] {
+  const field = getListSortBy();
+  if (!field) return items;
+  const order = getListOrder();
+  items.sort((a, b) => {
+    const av = a[field], bv = b[field];
+    if (av === bv) return 0;
+    if (av === undefined || av === null) return 1;
+    if (bv === undefined || bv === null) return -1;
+    // numeric if both numeric-ish
+    const an = Number(av), bn = Number(bv);
+    if (!Number.isNaN(an) && !Number.isNaN(bn)) {
+      return order === 'desc' ? bn - an : an - bn;
+    }
+    return order === 'desc'
+      ? String(bv).localeCompare(String(av))
+      : String(av).localeCompare(String(bv));
+  });
+  return items;
+}
+
 /**
  * Auto-paginate a backend list endpoint.
  *
@@ -191,12 +257,13 @@ export async function run<T>(
     if (options.json) {
       if (spinner) spinner.stop();
       const payload = JSON.stringify(result, null, 2);
-      if (options.outputFile) {
+      const targetFile = options.outputFile || globalOutputFile;
+      if (targetFile) {
         const fs = await import('fs');
         const path = await import('path');
-        fs.mkdirSync(path.dirname(path.resolve(options.outputFile)), { recursive: true });
-        fs.writeFileSync(options.outputFile, payload);
-        if (!quiet) console.error(chalk.green(`  Wrote ${payload.length} bytes to ${options.outputFile}`));
+        fs.mkdirSync(path.dirname(path.resolve(targetFile)), { recursive: true });
+        fs.writeFileSync(targetFile, payload);
+        if (!quiet) console.error(chalk.green(`  Wrote ${payload.length} bytes to ${targetFile}`));
       } else {
         // Only the JSON lands on stdout — no other output path touches it.
         console.log(payload);

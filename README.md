@@ -241,6 +241,69 @@ Add to your Claude Code or Cursor MCP config:
 }
 ```
 
+## Security
+
+### Credential storage
+
+`solid auth login` writes your access token, refresh token, and company
+context to `~/.solid/config.json` in **plaintext**. The file is `chmod 600`
+(owner-readable only), but that's the only protection — anything running
+as your UID can read it.
+
+**On a shared or unattended machine:**
+
+- Don't run `solid auth login` on it. Use an API key instead:
+  ```bash
+  export SOLID_TOKEN=sk_solid_xxx...   # (or SOLID_API_KEY)
+  solid kb list
+  ```
+- Or pass per-invocation and never touch disk:
+  ```bash
+  solid --token sk_solid_xxx kb list
+  ```
+- Create short-lived, scoped keys for anything automated:
+  ```bash
+  solid auth token create -n "CI readonly" -s kb:read,pages:read -e 30
+  ```
+
+**On a dev laptop that might leak:**
+
+- Rotate your token any time with `solid auth refresh`, or revoke all
+  sessions with `solid auth logout --all-devices`.
+- For agency operators: a compromised laptop is a multi-tenant breach —
+  your CLI can touch every client company you've been invited to.
+  Inventory your access with `solid company list` and drop what you
+  don't need via the dashboard.
+
+### Exit codes
+
+| Code | Meaning |
+|---:|---|
+| `0` | Success — data is on stdout. |
+| `1` | Runtime/user error — auth failed, server returned 4xx/5xx, target not found, user cancelled a confirmation. |
+| `2` | Usage error — unknown flag, missing required argument, malformed value. |
+
+### Stream discipline for scripts
+
+- **stdout** = data only (`--json` payloads, command output).
+- **stderr** = spinners, progress, warnings, errors.
+- `solid X --json | jq` is always safe — the spinner writes to stderr.
+
+Full contract: see the [Scripting Contract doc](https://github.com/Adam-Camp-King/solid-cli/blob/main/docs/SCRIPTING-CONTRACT.md) (or `Owners-Manual/45-Developer-CLI/21-SCRIPTING-CONTRACT.md` in the Solid# platform repo).
+
+## Update notifier
+
+The CLI checks npm once every **4 hours** for a newer release and prints
+a boxed notice on the next run. Suppress it:
+
+```bash
+NO_UPDATE_NOTIFIER=1 solid …     # whole shell session
+solid … --no-update-notifier     # single invocation
+```
+
+The check runs in a detached process, never blocks your command, and
+writes to stderr so pipelines are unaffected.
+
 ## Requirements
 
 - Node.js >= 18.0.0

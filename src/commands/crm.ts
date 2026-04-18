@@ -75,6 +75,18 @@ const contactsCommand = new Command('contacts')
       }
 
       if (items.length === 0) { console.log(chalk.yellow('  No contacts found.')); return; }
+
+      // Honor global --sort-by / --order (command-kit applyListSort).
+      const { applyListSort, renderDelimited, getListFormat } = await import('../lib/command-kit');
+      applyListSort(items as Record<string, unknown>[]);
+
+      // Honor global --format csv|tsv.
+      const fmt = getListFormat();
+      if (fmt === 'csv' || fmt === 'tsv') {
+        process.stdout.write(renderDelimited(items as Record<string, unknown>[], fmt));
+        return;
+      }
+
       console.log(ui.header(`Contacts (${items.length}${opts.all ? '' : ` — page from offset ${opts.offset}`})`));
       console.log(ui.table(['ID', 'Name', 'Email', 'Phone', 'Status'], items.map((c) => [
         String(c.id), contactName(c), String(c.email || chalk.dim('—')),
@@ -332,19 +344,47 @@ crmCommand.addCommand(contactsCommand);
 const dealsCommand = new Command('deals')
   .description('List deals')
   .option('--stage <stage>', 'Filter by stage')
-  .option('-l, --limit <n>', 'Max results', '25')
+  .option('-l, --limit <n>', 'Page size', '25')
+  .option('--offset <n>', 'Pagination offset', '0')
+  .option('--all', 'Auto-paginate until the server runs out')
   .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+  .action(async (opts: { stage?: string; limit: string; offset: string; all?: boolean; json?: boolean }) => {
     requireAuth();
-    const spinner = ora('Loading deals...').start();
+    const spinner = ora({ text: 'Loading deals...', stream: process.stderr }).start();
     try {
-      const params: Rec = { limit: parseInt(opts.limit, 10) };
-      if (opts.stage) params.stage = opts.stage;
-      const res = await apiClient.get('/api/v1/crm/deals', { params });
-      spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const items = asList(res.data);
+      const base: Rec = {};
+      if (opts.stage) base.stage = opts.stage;
+      let items: Rec[];
+      if (opts.all) {
+        const { fetchAllPages } = await import('../lib/command-kit');
+        items = await fetchAllPages<Rec, unknown>(
+          async (offset, limit) => (await apiClient.get('/api/v1/crm/deals', {
+            params: { ...base, limit, offset },
+          })).data,
+          (page) => asList(page),
+          { limit: 100 },
+        );
+        spinner.stop();
+        if (opts.json) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+      } else {
+        const res = await apiClient.get('/api/v1/crm/deals', {
+          params: { ...base, limit: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
+        });
+        spinner.stop();
+        if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+        items = asList(res.data);
+      }
+
       if (!items.length) { console.log(chalk.yellow('  No deals found.')); return; }
+
+      const { applyListSort, renderDelimited, getListFormat } = await import('../lib/command-kit');
+      applyListSort(items as Record<string, unknown>[]);
+      const fmt = getListFormat();
+      if (fmt === 'csv' || fmt === 'tsv') {
+        process.stdout.write(renderDelimited(items as Record<string, unknown>[], fmt));
+        return;
+      }
+
       console.log(ui.header(`Deals (${items.length})`));
       console.log(ui.table(['ID', 'Title', 'Value', 'Stage', 'Contact'], items.map((d) => [
         String(d.id), String(d.title || chalk.dim('—')),
@@ -352,7 +392,7 @@ const dealsCommand = new Command('deals')
         String(d.stage || chalk.dim('—')), String(d.contact_name || d.contact_id || chalk.dim('—')),
       ])));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load deals')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
+    } catch (e) { spinner.fail(chalk.red('Failed to load deals')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
   });
 
 dealsCommand.command('get <id>').description('Get deal details').option('--json', 'Output as JSON')

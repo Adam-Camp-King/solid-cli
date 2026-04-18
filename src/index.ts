@@ -138,10 +138,63 @@ program
   .option('--token <token>', 'Auth token for this invocation only (never persisted). Overrides env/config.')
   .option('--no-spinner', 'Disable the progress spinner (same as --quiet)')
   .option('--raw', 'Clean pipeline output: no spinner, no decoration (alias for --quiet)')
+  .option('--no-color', 'Disable all ANSI colors (also: NO_COLOR=1)')
+  .option('--output <file>', 'Write JSON output to this file instead of stdout (creates parent dirs)')
+  .option('--format <fmt>', 'Output format for lists: json | csv | tsv (subcommand must support it)')
+  .option('--sort-by <field>', 'Sort list output by this field (subcommand must support it)')
+  .option('--order <asc|desc>', 'Sort direction — asc (default) or desc')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
   });
+
+// Honor --no-color / NO_COLOR by disabling chalk globally BEFORE any
+// command runs. chalk already honors NO_COLOR env var, but the --no-color
+// flag needs this explicit hook since we consume it before parsing.
+if (process.argv.includes('--no-color') || process.env.NO_COLOR) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const chalkMod = require('chalk');
+  if (chalkMod && typeof chalkMod === 'object') {
+    // chalk v4: set level on the default export; chalk v5: same API.
+    if ('level' in chalkMod) chalkMod.level = 0;
+    if (chalkMod.default && 'level' in chalkMod.default) chalkMod.default.level = 0;
+  }
+}
+
+// Pre-capture --output so command-kit run() can stream JSON payloads to
+// a file instead of stdout. Per-subcommand --output also works when the
+// subcommand wires it explicitly.
+{
+  const outIdx = process.argv.findIndex((a) => a === '--output' || a.startsWith('--output='));
+  if (outIdx !== -1) {
+    const val = process.argv[outIdx].includes('=')
+      ? process.argv[outIdx].split('=')[1]
+      : process.argv[outIdx + 1];
+    if (val) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ck = require('./lib/command-kit');
+      if (ck && typeof ck.setOutputFile === 'function') ck.setOutputFile(val);
+    }
+  }
+}
+
+// Same for --format / --sort-by / --order (list-UX hints; subcommands
+// opt in via helpers in command-kit).
+{
+  const grab = (flag: string): string | null => {
+    const i = process.argv.findIndex((a) => a === flag || a.startsWith(flag + '='));
+    if (i === -1) return null;
+    return process.argv[i].includes('=') ? process.argv[i].split('=')[1] : process.argv[i + 1] ?? null;
+  };
+  const format = grab('--format');
+  const sortBy = grab('--sort-by');
+  const order = grab('--order');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const ck = require('./lib/command-kit');
+  if (format && typeof ck.setListFormat === 'function') ck.setListFormat(format);
+  if (sortBy && typeof ck.setListSortBy === 'function') ck.setListSortBy(sortBy);
+  if (order && typeof ck.setListOrder === 'function') ck.setListOrder(order);
+}
 
 // Pre-parse --token before any subcommand runs so the api-client sees it
 // on the first request. Same trick as --dry-run / --json above.
