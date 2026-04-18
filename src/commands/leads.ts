@@ -193,7 +193,7 @@ leadsCommand
       const body: Record<string, unknown> = { activity_type: opts.activity };
       if (opts.points) body.points = parseInt(opts.points, 10);
       const res = await apiClient.post(`/api/v1/crm/leads/${contactId}/score`, body);
-      spinner.succeed(chalk.green(`Score updated to ${(res.data as any).score ?? '?'}`));
+      spinner.succeed(chalk.green(`Score updated to ${(res.data as Record<string, any>).score ?? '?'}`));
     } catch (e) { fail(spinner, 'Failed to update score', e); }
   });
 
@@ -393,7 +393,7 @@ leadsCommand
       const raw = p.stages ?? p.pipeline ?? p;
       let rows: Array<{ name: string; count: unknown; value?: unknown }> = [];
       if (Array.isArray(raw)) {
-        rows = raw.map((s: any) => ({ name: s.name || s.stage, count: s.count ?? 0, value: s.value }));
+        rows = raw.map((s: Record<string, any>) => ({ name: s.name || s.stage, count: s.count ?? 0, value: s.value }));
       } else if (raw && typeof raw === 'object') {
         rows = Object.entries(raw).map(([name, v]: [string, any]) => {
           if (v && typeof v === 'object') return { name, count: v.count ?? 0, value: v.value };

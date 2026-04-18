@@ -146,8 +146,8 @@ llmsCommand
       if (products.length === 0) {
         console.log(chalk.yellow('  ○ No products — AI shopping agents have nothing to recommend'));
       } else {
-        const withPrice = products.filter((p: any) => p.price).length;
-        const withDesc = products.filter((p: any) => p.description).length;
+        const withPrice = products.filter((p: Record<string, any>) => p.price).length;
+        const withDesc = products.filter((p: Record<string, any>) => p.description).length;
         console.log(ui.label('Total', chalk.green(String(products.length))));
         console.log(ui.label('With Price', withPrice === products.length ? chalk.green(`${withPrice}/${products.length}`) : chalk.yellow(`${withPrice}/${products.length}`)));
         console.log(ui.label('With Desc', withDesc === products.length ? chalk.green(`${withDesc}/${products.length}`) : chalk.yellow(`${withDesc}/${products.length}`)));
@@ -159,7 +159,7 @@ llmsCommand
       if (services.length === 0) {
         console.log(chalk.yellow('  ○ No services — AI can\'t tell users what you offer'));
       } else {
-        const withPrice = services.filter((s: any) => s.price).length;
+        const withPrice = services.filter((s: Record<string, any>) => s.price).length;
         console.log(ui.label('Total', chalk.green(String(services.length))));
         console.log(ui.label('With Price', withPrice === services.length ? chalk.green(`${withPrice}/${services.length}`) : chalk.yellow(`${withPrice}/${services.length}`)));
       }
@@ -173,7 +173,7 @@ llmsCommand
       if (hasEmail) score += 5;
       if (products.length > 0) score += 20;
       if (services.length > 0) score += 20;
-      if (products.filter((p: any) => p.price).length === products.length && products.length > 0) score += 10;
+      if (products.filter((p: Record<string, any>) => p.price).length === products.length && products.length > 0) score += 10;
 
       console.log('');
       const scoreColor = score >= 80 ? chalk.green : score >= 50 ? chalk.yellow : chalk.red;

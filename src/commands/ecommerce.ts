@@ -528,7 +528,7 @@ shippingCmd
     const spinner = ora('Adding address...').start();
     try {
       const res = await apiClient.post('/api/v1/crm/ecommerce/shipping/addresses', body);
-      spinner.succeed(chalk.green(`Address added: ${(res.data as any).id}`));
+      spinner.succeed(chalk.green(`Address added: ${(res.data as Record<string, any>).id}`));
     } catch (e) { fail(spinner, 'Failed to add address', e); }
   });
 
@@ -626,7 +626,7 @@ reviewsCmd
     const spinner = ora('Submitting review...').start();
     try {
       const res = await apiClient.post('/api/v1/crm/ecommerce/reviews', body);
-      spinner.succeed(chalk.green(`Review created: ${(res.data as any).id}`));
+      spinner.succeed(chalk.green(`Review created: ${(res.data as Record<string, any>).id}`));
     } catch (e) { fail(spinner, 'Failed to submit review', e); }
   });
 

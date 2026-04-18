@@ -178,42 +178,41 @@ demoCommand
 
 // ── List demos ───────────────────────────────────────────────────
 
-demoCommand
-  .command('list')
-  .description('List all companies (find your demos)')
-  .action(async () => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = demoCommand.command('list').description('List all companies (find your demos)');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
-
-    const ora = (await import('ora')).default;
-    const spinner = ora('Loading companies...').start();
-
-    try {
-      const res = await apiClient.companiesList();
-      const companies = res.data.companies || [];
-      spinner.stop();
-
-      console.log('');
-      console.log(ui.header(`${companies.length} Companies`));
-      console.log('');
-
-      for (const c of companies) {
-        const isActive = c.id === config.companyId;
-        const marker = isActive ? chalk.green('● ') : '  ';
-        console.log(`${marker}${chalk.bold(c.name)}  ${chalk.dim('ID:' + c.id)}  ${chalk.dim(c.role)}`);
-      }
-
-      console.log('');
-      console.log(chalk.dim('  Convert: solid demo convert <id> --tier starter'));
-      console.log(chalk.dim('  Delete:  solid demo delete <id>'));
-      console.log('');
-    } catch (error) {
-      spinner.fail(chalk.red('Failed'));
-      console.error(handleApiError(error).message);
-    }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading companies...',
+      errorText: 'Failed to list companies',
+      fetch: async () => (await apiClient.companiesList()).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.companies || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (companies) => {
+        console.log('');
+        console.log(ui.header(`${companies.length} Companies`));
+        console.log('');
+        for (const c of companies) {
+          const isActive = c.id === config.companyId;
+          const marker = isActive ? chalk.green('● ') : '  ';
+          console.log(`${marker}${chalk.bold(String(c.name))}  ${chalk.dim('ID:' + c.id)}  ${chalk.dim(String(c.role || ''))}`);
+        }
+        console.log('');
+        console.log(chalk.dim('  Convert: solid demo convert <id> --tier starter'));
+        console.log(chalk.dim('  Delete:  solid demo delete <id>'));
+        console.log('');
+      },
+    });
   });
+}
 
 // ── Delete demo ──────────────────────────────────────────────────
 

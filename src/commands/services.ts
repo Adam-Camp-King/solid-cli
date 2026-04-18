@@ -14,65 +14,48 @@ import { isJsonOutput } from '../lib/json-output';
 export const servicesCommand = new Command('services')
   .description('Service catalog management');
 
-// List services
-servicesCommand
-  .command('list')
-  .description('List your services')
-  .option('--category <category>', 'Filter by category')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    const spinner = ora('Loading services...').start();
-
-    try {
-      const response = await apiClient.servicesList();
-
-      if (isJsonOutput(options)) {
-        spinner.stop();
-        console.log(JSON.stringify(response.data, null, 2));
-        return;
-      }
-
-      let items = (response.data as Record<string, any>).items || [];
-
-      if (options.category) {
-        items = items.filter((s: any) =>
-          s.category && s.category.toLowerCase() === options.category.toLowerCase()
-        );
-      }
-
-      spinner.succeed(chalk.green(`${items.length} services`));
-
-      if (items.length === 0) {
-        console.log(chalk.dim('  No services in your catalog yet.'));
-        return;
-      }
-
-      console.log('');
-      let currentCategory = '';
-      for (const svc of items) {
-        if (svc.category && svc.category !== currentCategory) {
-          currentCategory = svc.category;
-          console.log(chalk.cyan(`  [${currentCategory}]`));
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = servicesCommand.command('list').description('List your services');
+  withListFlags(listCmd);
+  listCmd.option('--category <category>', 'Filter by category');
+  listCmd.action(async (opts: { category?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading services...',
+      errorText: 'Failed to load services',
+      fetch: async () => (await apiClient.servicesList()).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        let items = (d.items || d.services || []) as Array<Record<string, unknown>>;
+        if (opts.category) {
+          items = items.filter((s) =>
+            typeof s.category === 'string' && s.category.toLowerCase() === opts.category!.toLowerCase(),
+          );
         }
-        const price = svc.price ? chalk.green(`$${svc.price}`) : chalk.dim('no price');
-        const duration = svc.duration_minutes ? chalk.dim(`${svc.duration_minutes} min`) : '';
-        console.log(`    ${chalk.bold(svc.title)} — ${price} ${duration}`);
-        if (svc.description) {
-          const preview = svc.description.substring(0, 60).replace(/\n/g, ' ');
-          console.log(chalk.dim(`      ${preview}${svc.description.length > 60 ? '...' : ''}`));
+        return items;
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No services in your catalog yet.')); return; }
+        console.log('');
+        let currentCategory = '';
+        for (const svc of items) {
+          if (svc.category && svc.category !== currentCategory) {
+            currentCategory = String(svc.category);
+            console.log(chalk.cyan(`  [${currentCategory}]`));
+          }
+          const price = svc.price ? chalk.green(`$${svc.price}`) : chalk.dim('no price');
+          const duration = svc.duration_minutes ? chalk.dim(`${svc.duration_minutes} min`) : '';
+          console.log(`    ${chalk.bold(String(svc.title))} — ${price} ${duration}`);
+          if (svc.description) {
+            const preview = String(svc.description).substring(0, 60).replace(/\n/g, ' ');
+            console.log(chalk.dim(`      ${preview}${String(svc.description).length > 60 ? '...' : ''}`));
+          }
         }
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load services'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+      },
+    });
   });
+}
 
 // Create service
 servicesCommand

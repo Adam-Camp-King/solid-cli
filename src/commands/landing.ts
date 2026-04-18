@@ -22,24 +22,28 @@ export const landingCommand = new Command('landing')
   .alias('landing-pages')
   .description('Landing pages — CRUD, templates, publish, analytics');
 
-landingCommand
-  .command('list')
-  .description('List landing pages')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const s = ora('Loading...').start();
-    try {
-      const res = await apiClient.get('/api/v1/landing-pages/');
-      const items = (res.data as Record<string, any>[]) ?? [];
-      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(items, null, 2)); return; }
-      s.succeed(chalk.green(`${items.length} landing page(s)`));
-      for (const p of items) {
-        const dot = p.is_published ? chalk.green('●') : chalk.dim('○');
-        console.log(`  ${dot} ${chalk.bold(p.id)}  ${p.title}  ${chalk.dim('/' + (p.slug || ''))}`);
-      }
-    } catch (e) { fail(s, 'Failed', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = landingCommand.command('list').description('List landing pages');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading landing pages...',
+      errorText: 'Failed to load landing pages',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/landing-pages/', { params: { limit, offset } })).data,
+      extract: (page) => (Array.isArray(page) ? page : []) as Array<Record<string, unknown>>,
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No landing pages.')); return; }
+        for (const p of items) {
+          const dot = p.is_published ? chalk.green('●') : chalk.dim('○');
+          console.log(`  ${dot} ${chalk.bold(String(p.id))}  ${p.title}  ${chalk.dim('/' + (p.slug || ''))}`);
+        }
+      },
+    });
   });
+}
 
 landingCommand
   .command('get <id>')

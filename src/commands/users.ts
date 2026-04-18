@@ -27,30 +27,37 @@ export const usersCommand = new Command('users')
 
 // ── List / get / stats ────────────────────────────────────────────────
 
-usersCommand
-  .command('list')
-  .description('List users (defaults to all roles)')
-  .option('--role <role>', 'Filter by role')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const spinner = ora('Loading users...').start();
-    try {
-      const params: Record<string, unknown> = {};
-      if (opts.role) params.role = opts.role;
-      const res = await apiClient.get('/api/v1/users/company', { params });
-      const data = res.data as Record<string, any>;
-      const items = data.users || data.items || data;
-      const list = Array.isArray(items) ? items : (items.users || []);
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      spinner.succeed(chalk.green(`${list.length} user(s)`));
-      console.log('');
-      for (const u of list as Record<string, any>[]) {
-        const dot = u.is_blocked ? chalk.red('●') : chalk.green('●');
-        console.log(`  ${dot} ${chalk.bold(u.id)}  ${u.email}  ${chalk.dim(u.role || '—')}  ${u.full_name || ''}`);
-      }
-    } catch (e) { fail(spinner, 'Failed to load users', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = usersCommand.command('list').description('List users (defaults to all roles)');
+  withListFlags(listCmd);
+  listCmd.option('--role <role>', 'Filter by role');
+  listCmd.action(async (opts: { role?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading users...',
+      errorText: 'Failed to load users',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.role) params.role = opts.role;
+        return (await apiClient.get('/api/v1/users/company', { params })).data;
+      },
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.users || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No users.')); return; }
+        console.log('');
+        for (const u of items) {
+          const dot = u.is_blocked ? chalk.red('●') : chalk.green('●');
+          console.log(`  ${dot} ${chalk.bold(String(u.id))}  ${u.email}  ${chalk.dim(String(u.role || '—'))}  ${u.full_name || ''}`);
+        }
+      },
+    });
   });
+}
 
 usersCommand
   .command('get <user_id>')

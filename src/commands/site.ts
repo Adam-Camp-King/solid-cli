@@ -22,53 +22,39 @@ import { isJsonOutput } from '../lib/json-output';
 export const siteCommand = new Command('site')
   .description('Website management');
 
-// List sites
-siteCommand
-  .command('list')
-  .description('List all sites for your company')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = siteCommand.command('list').description('List all sites for your company');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
-
-    const spinner = ora('Loading sites...').start();
-
-    try {
-      const response = await apiClient.sitesList();
-
-      if (isJsonOutput(options)) {
-        spinner.stop();
-        console.log(JSON.stringify(response.data, null, 2));
-        return;
-      }
-
-      const sites = (response.data as Record<string, any>).sites || [];
-      spinner.succeed(chalk.green(`${sites.length} sites`));
-
-      if (sites.length === 0) {
-        console.log(chalk.dim('  No sites yet. Create one: solid site create my-site'));
-        return;
-      }
-
-      console.log('');
-      for (const site of sites) {
-        const live = site.is_live ? chalk.green('● LIVE') : chalk.dim('○ draft');
-        const template = site.template ? chalk.cyan(`[${site.template}]`) : '';
-        console.log(`  ${chalk.bold(site.name || site.slug)} ${template} ${live}`);
-        console.log(chalk.dim(`    ID: ${site.id}  Slug: ${site.slug}  Type: ${site.site_type || 'site'}`));
-        if (site.url) {
-          console.log(chalk.dim(`    URL: ${site.url}`));
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading sites...',
+      errorText: 'Failed to load sites',
+      fetch: async () => (await apiClient.sitesList()).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.sites || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (sites) => {
+        if (!sites.length) { console.log(chalk.dim('  No sites yet. Create one: solid site create my-site')); return; }
+        console.log('');
+        for (const site of sites) {
+          const live = site.is_live ? chalk.green('● LIVE') : chalk.dim('○ draft');
+          const template = site.template ? chalk.cyan(`[${site.template}]`) : '';
+          console.log(`  ${chalk.bold(String(site.name || site.slug))} ${template} ${live}`);
+          console.log(chalk.dim(`    ID: ${site.id}  Slug: ${site.slug}  Type: ${site.site_type || 'site'}`));
+          if (site.url) console.log(chalk.dim(`    URL: ${site.url}`));
         }
-      }
-      console.log('');
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load sites'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+        console.log('');
+      },
+    });
   });
+}
 
 // Create site
 siteCommand

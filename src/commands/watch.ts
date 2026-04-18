@@ -148,7 +148,7 @@ export const watchCommand = new Command('watch')
 
 // ─── Push helpers ───────────────────────────────────────────────────
 
-async function pushPage(filePath: string, relative: string, manifest: any, dryRun: boolean) {
+async function pushPage(filePath: string, relative: string, manifest: Record<string, any>, dryRun: boolean) {
   const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   const fileName = path.basename(filePath);
   const existing = manifest.pages?.[fileName];
@@ -190,7 +190,7 @@ async function pushPage(filePath: string, relative: string, manifest: any, dryRu
   }
 }
 
-async function pushKb(filePath: string, relative: string, manifest: any, dryRun: boolean) {
+async function pushKb(filePath: string, relative: string, manifest: Record<string, any>, dryRun: boolean) {
   const content = fs.readFileSync(filePath, 'utf-8');
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!fmMatch) {

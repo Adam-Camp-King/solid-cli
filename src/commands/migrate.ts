@@ -44,7 +44,16 @@ export const migrateCommand = new Command('migrate')
       return;
     }
 
-    const migrateOptions: any = {
+    const migrateOptions: {
+      source_company_id: number;
+      target_company_id: number;
+      include_pages?: boolean;
+      include_kb?: boolean;
+      include_settings?: boolean;
+      page_slugs?: string[];
+      kb_ids?: number[];
+      overwrite_existing?: boolean;
+    } = {
       source_company_id: sourceId,
       target_company_id: targetId,
       include_pages: !options.kbOnly,
@@ -65,7 +74,7 @@ export const migrateCommand = new Command('migrate')
     try {
       const previewRes = await apiClient.migratePreview(migrateOptions);
       spinner.succeed(chalk.green('Migration analyzed'));
-      const data = previewRes.data as any;
+      const data = previewRes.data as Record<string, any>;
       const summary = data.summary;
 
       if (options.json && options.yes) {
@@ -161,7 +170,7 @@ export const migrateCommand = new Command('migrate')
       const execSpinner = ora('Executing migration...').start();
       const execRes = await apiClient.migrateExecute(migrateOptions);
       execSpinner.succeed(chalk.green('Migration complete'));
-      const results = (execRes.data as any).results;
+      const results = (execRes.data as Record<string, any>).results;
 
       if (isJsonOutput(options)) {
         console.log(JSON.stringify(execRes.data, null, 2));

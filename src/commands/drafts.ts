@@ -37,39 +37,44 @@ function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): voi
 export const draftsCommand = new Command('drafts')
   .description('Pending CMS page drafts — list, preview, discard (pair with `solid publish`)');
 
-draftsCommand
-  .command('list')
-  .description('List pages with a pending draft awaiting publish')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = draftsCommand.command('list').description('List pages with a pending draft awaiting publish');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();
-    const spinner = ora('Loading pending drafts...').start();
-    try {
-      const res = await apiClient.get('/api/v1/cms/pages/drafts/list');
-      const r = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
-      const count = r.count ?? 0;
-      spinner.succeed(chalk.green(`${count} pending draft(s)`));
-      if (count === 0) {
-        console.log(chalk.dim('  Nothing to publish. Run `solid pages update <id> --title ...` to create a draft.'));
-        return;
-      }
-      console.log('');
-      for (const d of (r.drafts as Record<string, any>[]) || []) {
-        const parts: string[] = [];
-        if (d.has_layout_draft) parts.push('layout');
-        if (d.has_meta_draft) parts.push('meta');
-        const fields = parts.join('+');
-        const when = d.draft_updated_at ? chalk.dim(d.draft_updated_at.split('.')[0].replace('T', ' ')) : '';
-        const who = d.draft_updated_by_user_id ? chalk.dim(`by user ${d.draft_updated_by_user_id}`) : '';
-        const live = d.is_published ? chalk.green('live') : chalk.yellow('unpublished');
-        console.log(`  ${chalk.bold(d.page_id)}  ${d.title || chalk.dim('(untitled)')}  /${d.slug || ''}  [${fields}]  ${live}  ${when} ${who}`);
-      }
-      console.log('');
-      console.log(chalk.dim(`  Publish one:  solid publish <page_id>`));
-      console.log(chalk.dim(`  Publish all:  solid publish --all`));
-    } catch (error) { fail(spinner, 'Failed to load drafts', error); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading pending drafts...',
+      errorText: 'Failed to load drafts',
+      fetch: async () => (await apiClient.get('/api/v1/cms/pages/drafts/list')).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.drafts || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) {
+          console.log(chalk.dim('  Nothing to publish. Run `solid pages update <id> --title ...` to create a draft.'));
+          return;
+        }
+        console.log('');
+        for (const d of items) {
+          const parts: string[] = [];
+          if (d.has_layout_draft) parts.push('layout');
+          if (d.has_meta_draft) parts.push('meta');
+          const fields = parts.join('+');
+          const when = d.draft_updated_at ? chalk.dim(String(d.draft_updated_at).split('.')[0].replace('T', ' ')) : '';
+          const who = d.draft_updated_by_user_id ? chalk.dim(`by user ${d.draft_updated_by_user_id}`) : '';
+          const live = d.is_published ? chalk.green('live') : chalk.yellow('unpublished');
+          console.log(`  ${chalk.bold(String(d.page_id))}  ${d.title || chalk.dim('(untitled)')}  /${d.slug || ''}  [${fields}]  ${live}  ${when} ${who}`);
+        }
+        console.log('');
+        console.log(chalk.dim(`  Publish one:  solid publish <page_id>`));
+        console.log(chalk.dim(`  Publish all:  solid publish --all`));
+      },
+    });
   });
+}
 
 draftsCommand
   .command('preview <page_id>')

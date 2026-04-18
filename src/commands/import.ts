@@ -418,11 +418,11 @@ ${truncated}`,
     if (!Array.isArray(parsed)) return [];
 
     // Validate each block
-    return parsed.filter((b: any) =>
+    return parsed.filter((b: Record<string, any>) =>
       b && typeof b.type === 'string' && typeof b.content === 'object'
     );
-  } catch (error: any) {
-    console.error(chalk.yellow(`  AI parsing failed: ${error.message || 'Unknown error'}`));
+  } catch (error) {
+    console.error(chalk.yellow(`  AI parsing failed: ${(error as Error).message || 'Unknown error'}`));
     console.error(chalk.dim('  Falling back to regex parser...'));
     return [];
   }

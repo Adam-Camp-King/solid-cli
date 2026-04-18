@@ -74,7 +74,7 @@ chainsCommand
     const s = ora('Creating chain...').start();
     try {
       const res = await apiClient.post('/api/v1/chains', body);
-      s.succeed(chalk.green(`Chain created: ${(res.data as any).id}`));
+      s.succeed(chalk.green(`Chain created: ${(res.data as Record<string, any>).id}`));
     } catch (e) { fail(s, 'Failed', e); }
   });
 
@@ -281,7 +281,7 @@ chainsCommand
     const s = ora('Creating from template...').start();
     try {
       const res = await apiClient.post('/api/v1/chains/from-template', body);
-      s.succeed(chalk.green(`Chain created: ${(res.data as any).id}`));
+      s.succeed(chalk.green(`Chain created: ${(res.data as Record<string, any>).id}`));
     } catch (e) { fail(s, 'Failed', e); }
   });
 

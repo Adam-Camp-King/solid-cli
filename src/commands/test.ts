@@ -62,7 +62,7 @@ export const testCommand = new Command('test')
       try {
         const res = await apiClient.agentTestResults(24, 50);
         spinner.succeed(chalk.green('Results loaded'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (options.json) {
           console.log(JSON.stringify(data, null, 2));
@@ -73,7 +73,7 @@ export const testCommand = new Command('test')
         if (data.results.length === 0) {
           console.log(chalk.dim('  No test results in the last 24h.'));
         } else {
-          const rows = data.results.map((r: any) => [
+          const rows = data.results.map((r: Record<string, any>) => [
             r.success ? chalk.green('PASS') : chalk.red('FAIL'),
             r.agent_type,
             r.latency_ms ? `${r.latency_ms}ms` : '—',
@@ -125,7 +125,7 @@ export const testCommand = new Command('test')
             not_assertions: tc.not_contains,
             timeout_seconds: tc.timeout || 30,
           });
-          const result = res.data as any;
+          const result = res.data as Record<string, any>;
 
           if (result.passed) {
             spinner.succeed(chalk.green(`${label} — PASS (${result.latency_ms}ms)`));
@@ -182,7 +182,7 @@ export const testCommand = new Command('test')
         not_assertions: notAssertions,
         timeout_seconds: parseInt(options.timeout, 10),
       });
-      const result = res.data as any;
+      const result = res.data as Record<string, any>;
 
       if (options.json) {
         spinner.stop();

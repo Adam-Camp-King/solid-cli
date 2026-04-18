@@ -28,29 +28,35 @@ export const keysCommand = new Command('keys')
   .alias('api-keys')
   .description('Issue and manage scoped API keys (agencies use this for client access)');
 
-keysCommand
-  .command('list')
-  .description('List API keys for the current company')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = keysCommand.command('list').description('List API keys for the current company');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();
-    const spinner = ora('Loading API keys...').start();
-    try {
-      const res = await apiClient.apiKeyList();
-      const data = res.data;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      spinner.succeed(chalk.green(`${data.api_keys.length} key(s)`));
-      console.log('');
-      for (const k of data.api_keys) {
-        const dot = k.is_active ? chalk.green('●') : chalk.dim('○');
-        const used = k.last_used_at ? chalk.dim(`(last used ${k.last_used_at.split('T')[0]})`) : chalk.dim('(never used)');
-        console.log(`  ${dot} ${chalk.bold(k.id)}  ${k.name}  ${chalk.cyan(k.key_prefix + '...')}  ${used}`);
-        if (k.scopes?.length) console.log(`    ${chalk.dim('scopes:')} ${k.scopes.join(', ')}`);
-      }
-      console.log('');
-      console.log(chalk.dim(`  Available scopes: ${data.available_scopes.join(', ')}`));
-    } catch (e) { fail(spinner, 'Failed to list keys', e); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading API keys...',
+      errorText: 'Failed to list keys',
+      fetch: async () => (await apiClient.apiKeyList()).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.api_keys || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No API keys yet.')); return; }
+        console.log('');
+        for (const k of items) {
+          const dot = k.is_active ? chalk.green('●') : chalk.dim('○');
+          const used = k.last_used_at ? chalk.dim(`(last used ${String(k.last_used_at).split('T')[0]})`) : chalk.dim('(never used)');
+          console.log(`  ${dot} ${chalk.bold(String(k.id))}  ${k.name}  ${chalk.cyan(k.key_prefix + '...')}  ${used}`);
+          if (Array.isArray(k.scopes) && k.scopes.length) console.log(`    ${chalk.dim('scopes:')} ${(k.scopes as string[]).join(', ')}`);
+        }
+        console.log('');
+      },
+    });
   });
+}
 
 keysCommand
   .command('create')

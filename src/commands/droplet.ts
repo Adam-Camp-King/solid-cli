@@ -21,47 +21,49 @@ function requireAuth(): void {
 export const dropletCommand = new Command('droplet')
   .description('Manage customer droplets (Type 2: Managed Instance)');
 
-// List all managed droplets
-dropletCommand
-  .command('list')
-  .description('List all managed customer droplets')
-  .option('--status <status>', 'Filter by status (active, inactive, maintenance)')
-  .action(async (options) => {
+// List all managed droplets — full scripting contract
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = dropletCommand.command('list').description('List all managed customer droplets');
+  withListFlags(listCmd);
+  listCmd.option('--status <status>', 'Filter by status (active, inactive, maintenance)');
+  listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {
     requireAuth();
-    const spinner = ora('Fetching droplets...').start();
-
-    try {
-      const response = await apiClient.get<any>('/api/v1/admin/droplets', {
-        params: { status: options.status }
-      });
-
-      spinner.stop();
-
-      console.log(chalk.bold('\nManaged Droplets:\n'));
-      console.log('┌─────────────────────┬──────────────────┬────────────┬─────────────┐');
-      console.log('│ Customer            │ IP Address       │ Status     │ Version     │');
-      console.log('├─────────────────────┼──────────────────┼────────────┼─────────────┤');
-
-      for (const droplet of response.data.droplets) {
-        const status = droplet.status === 'active'
-          ? chalk.green('● active')
-          : droplet.status === 'maintenance'
-            ? chalk.yellow('○ maint')
-            : chalk.red('○ inactive');
-
-        console.log(
-          `│ ${droplet.customer_name.padEnd(19)} │ ${droplet.ip.padEnd(16)} │ ${status.padEnd(10)} │ ${droplet.version.padEnd(11)} │`
-        );
-      }
-
-      console.log('└─────────────────────┴──────────────────┴────────────┴─────────────┘');
-      console.log(`\nTotal: ${response.data.droplets.length} droplets`);
-
-    } catch (error: any) {
-      spinner.fail('Failed to fetch droplets');
-      console.error(chalk.red(error.message));
-    }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Fetching droplets...',
+      errorText: 'Failed to fetch droplets',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/admin/droplets', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.droplets || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (droplets) => {
+        if (!droplets.length) { console.log(chalk.dim('  No droplets.')); return; }
+        console.log(chalk.bold('\nManaged Droplets:\n'));
+        console.log('┌─────────────────────┬──────────────────┬────────────┬─────────────┐');
+        console.log('│ Customer            │ IP Address       │ Status     │ Version     │');
+        console.log('├─────────────────────┼──────────────────┼────────────┼─────────────┤');
+        for (const d of droplets) {
+          const status = d.status === 'active'
+            ? chalk.green('● active')
+            : d.status === 'maintenance'
+              ? chalk.yellow('○ maint')
+              : chalk.red('○ inactive');
+          console.log(
+            `│ ${String(d.customer_name || '').padEnd(19)} │ ${String(d.ip || '').padEnd(16)} │ ${status.padEnd(10)} │ ${String(d.version || '').padEnd(11)} │`,
+          );
+        }
+        console.log('└─────────────────────┴──────────────────┴────────────┴─────────────┘');
+        console.log(`\nTotal: ${droplets.length} droplets`);
+      },
+    });
   });
+}
 
 // Get droplet status
 dropletCommand
@@ -97,9 +99,9 @@ dropletCommand
       console.log(`  Memory:       ${d.resources.memory}%`);
       console.log(`  Disk:         ${d.resources.disk}%`);
 
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Failed to get status');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red((error as Error).message));
     }
   });
 
@@ -136,9 +138,9 @@ dropletCommand
       console.log(`  Deploy time: ${response.data.duration}`);
       console.log(`  Health: All checks passing`);
 
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Deployment failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red((error as Error).message));
       console.log(chalk.yellow('\nRun `solid droplet rollback ' + customer + '` to restore previous version'));
     }
   });
@@ -160,9 +162,9 @@ dropletCommand
       spinner.succeed('Rollback complete!');
       console.log(chalk.green(`\n✓ ${customer} rolled back to ${response.data.version}`));
 
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Rollback failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red((error as Error).message));
     }
   });
 
@@ -185,9 +187,9 @@ dropletCommand
       console.log(`  Size: ${response.data.size}`);
       console.log(`  Location: ${response.data.location}`);
 
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Backup failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red((error as Error).message));
     }
   });
 
@@ -269,9 +271,9 @@ dropletCommand
         console.log(chalk.yellow(`\nExit code: ${response.data.exit_code}`));
       }
 
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Command failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red((error as Error).message));
     }
   });
 
@@ -322,9 +324,9 @@ dropletCommand
       console.log(`\n  Dashboard: https://${response.data.ip}`);
       console.log(`  Manage: solid droplet status ${customer}`);
 
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Provisioning failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red((error as Error).message));
     }
   });
 

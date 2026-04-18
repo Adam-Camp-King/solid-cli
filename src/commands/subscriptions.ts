@@ -25,38 +25,40 @@ export const subscriptionsCommand = new Command('subscriptions')
   .alias('subs')
   .description('Recurring subscription products you sell to YOUR customers');
 
-subscriptionsCommand
-  .command('list')
-  .description('List active subscriptions for a customer (or all)')
-  .option('--customer <id>', 'Filter by customer ID')
-  .option('--status <status>', 'Filter by status (active, cancelled, past_due)')
-  .option('-l, --limit <n>', 'Page size', '50')
-  .option('--offset <n>', 'Pagination offset', '0')
-  .option('--json', 'Output as JSON')
-  .action(async (opts: { customer?: string; status?: string; limit: string; offset: string; json?: boolean }) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = subscriptionsCommand.command('list').description('List active subscriptions for a customer (or all)');
+  withListFlags(listCmd, '50');
+  listCmd.option('--customer <id>', 'Filter by customer ID');
+  listCmd.option('--status <status>', 'Filter by status (active, cancelled, past_due)');
+  listCmd.action(async (opts: { customer?: string; status?: string } & import('../lib/command-kit').ListFlags) => {
     requireAuth();
-    const params: Record<string, unknown> = {
-      page_size: parseInt(opts.limit, 10),
-      offset: parseInt(opts.offset, 10),
-    };
-    if (opts.customer) params.customer_id = parseInt(opts.customer, 10);
-    if (opts.status) params.status = opts.status;
-    const s = ora({ text: 'Loading subscriptions...', stream: process.stderr }).start();
-    try {
-      const res = await apiClient.get('/api/v1/subscriptions', { params });
-      s.stop();
-      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const d = res.data as Record<string, unknown>;
-      const items = (d.subscriptions || d.items || []) as Array<Record<string, unknown>>;
-      if (!items.length) { console.log(chalk.dim('  No subscriptions found.')); return; }
-      console.log('');
-      for (const sub of items) {
-        const status = sub.status === 'active' ? chalk.green('active') : chalk.yellow(String(sub.status || '?'));
-        console.log(`  #${sub.id}  ${sub.customer_name || sub.customer_id || '—'}  ${status}  ${sub.plan_name || sub.plan_slug || '—'}`);
-      }
-      console.log('');
-    } catch (e) { fail(s, 'Failed', e); process.exit(1); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading subscriptions...',
+      errorText: 'Failed to load subscriptions',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { page_size: limit, offset };
+        if (opts.customer) params.customer_id = parseInt(opts.customer, 10);
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/subscriptions', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.subscriptions || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No subscriptions found.')); return; }
+        console.log('');
+        for (const sub of items) {
+          const status = sub.status === 'active' ? chalk.green('active') : chalk.yellow(String(sub.status || '?'));
+          console.log(`  #${sub.id}  ${sub.customer_name || sub.customer_id || '—'}  ${status}  ${sub.plan_name || sub.plan_slug || '—'}`);
+        }
+        console.log('');
+      },
+    });
   });
+}
 
 subscriptionsCommand
   .command('get <id>')

@@ -22,26 +22,33 @@ export const paymentLinksCommand = new Command('payment-links')
   .alias('paylinks')
   .description('Pay-by-link — create, text-to-pay, mark paid');
 
-paymentLinksCommand
-  .command('list')
-  .description('List payment links')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = paymentLinksCommand.command('list').description('List payment links');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();
-    const s = ora('Loading...').start();
-    try {
-      const res = await apiClient.get('/api/v1/payment-links/');
-      const data = res.data as Record<string, any>;
-      const items = data.links || data.items || data;
-      const list = Array.isArray(items) ? items : (items.links || []);
-      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      s.succeed(chalk.green(`${list.length} link(s)`));
-      for (const l of list as Record<string, any>[]) {
-        const status = l.status === 'paid' ? chalk.green(l.status) : chalk.yellow(l.status);
-        console.log(`  ${chalk.bold(l.id)}  $${l.amount}  ${status}  ${chalk.dim(l.description || '')}`);
-      }
-    } catch (e) { fail(s, 'Failed', e); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading payment links...',
+      errorText: 'Failed to load payment links',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/payment-links/', { params: { limit, offset } })).data,
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.links || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No payment links.')); return; }
+        for (const l of items) {
+          const status = l.status === 'paid' ? chalk.green(String(l.status)) : chalk.yellow(String(l.status || ''));
+          console.log(`  ${chalk.bold(String(l.id))}  $${l.amount}  ${status}  ${chalk.dim(String(l.description || ''))}`);
+        }
+      },
+    });
   });
+}
 
 paymentLinksCommand
   .command('get <id>')

@@ -77,7 +77,7 @@ formsCommand
     const s = ora('Creating form...').start();
     try {
       const res = await apiClient.post('/api/v1/surveys/create', body);
-      s.succeed(chalk.green(`Form created: ${(res.data as any).id}`));
+      s.succeed(chalk.green(`Form created: ${(res.data as Record<string, any>).id}`));
     } catch (e) { fail(s, 'Failed', e); }
   });
 
@@ -119,7 +119,7 @@ formsCommand
     const s = ora('Generating form...').start();
     try {
       const res = await apiClient.post('/api/v1/surveys/generate', { prompt });
-      s.succeed(chalk.green(`Form generated: ${(res.data as any).id}`));
+      s.succeed(chalk.green(`Form generated: ${(res.data as Record<string, any>).id}`));
     } catch (e) { fail(s, 'Failed', e); }
   });
 

@@ -56,47 +56,41 @@ async function flowAction(flowId: string, action: string, verb: string, color: (
 export const flowsCommand = new Command('flow')
   .description('Commerce flows — payment flows and subscriptions');
 
-// List flows
-flowsCommand
-  .command('list')
-  .alias('ls')
-  .description('List payment flows')
-  .option('-s, --status <status>', 'Filter by status (active, paused, draft, archived)')
-  .option('-t, --type <type>', 'Filter by commerce type')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    requireAuth();
-    const spinner = ora('Loading flows...').start();
-    try {
-      const params: Record<string, unknown> = {};
-      if (options.status) params.status = options.status;
-      if (options.type) params.commerce_type = options.type;
-
-      const response = await apiClient.get('/api/v1/cli/flows', { params });
-      const data = response.data as Record<string, any>;
-      const flows = data.flows || [];
-
-      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-
-      spinner.succeed(`${flows.length} flows`);
-      if (flows.length === 0) {
-        console.log(chalk.dim('  No flows found. Create one with `solid flow create <name>`'));
-        return;
-      }
-      console.log('');
-      console.log(ui.table(['ID', 'Name', 'Type', 'Price', 'Status'], flows.map((f: any) => [
-        String(f.id).substring(0, 10),
-        f.name.substring(0, 24),
-        f.commerce_type || f.type || '-',
-        f.price ? `$${f.price}` : '-',
-        statusColor(f.status),
-      ])));
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load flows'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = flowsCommand.command('list').alias('ls').description('List payment flows');
+  withListFlags(listCmd);
+  listCmd.option('-s, --status <status>', 'Filter by status (active, paused, draft, archived)');
+  listCmd.option('-t, --type <type>', 'Filter by commerce type');
+  listCmd.action(async (opts: { status?: string; type?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading flows...',
+      errorText: 'Failed to load flows',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.status) params.status = opts.status;
+        if (opts.type) params.commerce_type = opts.type;
+        return (await apiClient.get('/api/v1/cli/flows', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.flows || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No flows found. Create one with `solid flow create <name>`')); return; }
+        console.log('');
+        console.log(ui.table(['ID', 'Name', 'Type', 'Price', 'Status'], items.map((f) => [
+          String(f.id).substring(0, 10),
+          String(f.name || '').substring(0, 24),
+          String(f.commerce_type || f.type || '-'),
+          f.price ? `$${f.price}` : '-',
+          statusColor(String(f.status || '')),
+        ])));
+      },
+    });
   });
+}
 
 // Get flow details
 flowsCommand

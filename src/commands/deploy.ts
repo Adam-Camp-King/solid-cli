@@ -61,7 +61,7 @@ export const deployCommand = new Command('deploy')
           kb_only: options.kbOnly || false,
         });
         spinner.succeed(chalk.green('Preview deployment created'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
@@ -100,7 +100,7 @@ export const deployCommand = new Command('deploy')
       try {
         const res = await apiClient.previewList(options.status, parseInt(options.limit, 10));
         spinner.succeed(chalk.green('Previews loaded'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
@@ -112,7 +112,7 @@ export const deployCommand = new Command('deploy')
           console.log(chalk.dim('  No preview deployments found.'));
           console.log(chalk.dim('  Create one: solid deploy preview'));
         } else {
-          const rows = data.previews.map((p: any) => [
+          const rows = data.previews.map((p: Record<string, any>) => [
             statusBadge(p.status),
             p.title || chalk.dim('untitled'),
             `${p.page_count}p / ${p.kb_count}kb`,
@@ -143,7 +143,7 @@ export const deployCommand = new Command('deploy')
       try {
         const infoRes = await apiClient.previewGet(token);
         infoSpinner.succeed(chalk.green('Preview found'));
-        const preview = infoRes.data as any;
+        const preview = infoRes.data as Record<string, any>;
 
         console.log('');
         console.log(ui.infoBox('Promote to Live', [
@@ -167,7 +167,7 @@ export const deployCommand = new Command('deploy')
         const promoteSpinner = ora('Promoting to live...').start();
         const res = await apiClient.previewPromote(token);
         promoteSpinner.succeed(chalk.green('Preview promoted to live'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
@@ -223,7 +223,7 @@ export const deployCommand = new Command('deploy')
       try {
         const res = await apiClient.previewGet(token);
         spinner.succeed(chalk.green('Preview loaded'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));

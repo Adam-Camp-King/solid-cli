@@ -75,7 +75,7 @@ export const logsCommand = new Command('logs')
       try {
         const res = await apiClient.agentErrors(agentType, hours, limit);
         spinner.succeed(chalk.green('Errors loaded'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
@@ -113,7 +113,7 @@ export const logsCommand = new Command('logs')
           event_type: options.type,
         });
         if (spinner) spinner.succeed(chalk.green('Logs loaded'));
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
 
         if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
@@ -178,7 +178,7 @@ export const logsCommand = new Command('logs')
       setInterval(async () => {
         try {
           const res = await apiClient.agentLogs(agentType, { hours: 1, limit: 10, event_type: options.type });
-          const data = res.data as any;
+          const data = res.data as Record<string, any>;
 
           for (const log of (data.logs || []).reverse()) {
             const key = `${log.timestamp}-${log.event_type}-${log.action}`;

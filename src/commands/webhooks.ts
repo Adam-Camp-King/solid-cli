@@ -12,24 +12,40 @@ export const webhooksCommand = new Command('webhooks')
   .description('Custom webhook management')
   .action(async () => { webhooksCommand.outputHelp(); });
 
-webhooksCommand.command('list').description('List configured webhooks')
-  .option('--json', 'JSON output')
-  .action(async (options) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = webhooksCommand.command('list').description('List configured webhooks');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
-    const spinner = ora('Loading webhooks...').start();
-    try {
-      const res = await apiClient.get('/api/v1/developer/webhooks');
-      spinner.stop();
-      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const hooks = (res.data as Record<string, any>).webhooks || (res.data as Record<string, any>).items || [];
-      console.log('');
-      console.log(ui.header(`Webhooks (${hooks.length})`));
-      if (hooks.length === 0) { console.log(chalk.dim('  No webhooks. Use `solid webhooks create` to add one.')); }
-      else { for (const h of hooks) { const s = h.is_active ? chalk.green('●') : chalk.red('●'); console.log(`  ${s} ${chalk.bold(h.name || h.url)}`); console.log(chalk.dim(`    ${h.url}`)); if (h.events) console.log(chalk.dim(`    Events: ${Array.isArray(h.events) ? h.events.join(', ') : h.events}`)); } }
-      console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading webhooks...',
+      errorText: 'Failed to load webhooks',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/developer/webhooks', { params: { limit, offset } })).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.webhooks || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (hooks) => {
+        console.log('');
+        console.log(ui.header(`Webhooks (${hooks.length})`));
+        if (hooks.length === 0) {
+          console.log(chalk.dim('  No webhooks. Use `solid webhooks create` to add one.'));
+        } else {
+          for (const h of hooks) {
+            const s = h.is_active ? chalk.green('●') : chalk.red('●');
+            console.log(`  ${s} ${chalk.bold(String(h.name || h.url))}`);
+            console.log(chalk.dim(`    ${h.url}`));
+            if (h.events) console.log(chalk.dim(`    Events: ${Array.isArray(h.events) ? (h.events as string[]).join(', ') : h.events}`));
+          }
+        }
+        console.log('');
+      },
+    });
   });
+}
 
 webhooksCommand.command('create <url>').description('Create a webhook')
   .option('-n, --name <name>', 'Name').option('-e, --events <events>', 'Comma-separated events')
@@ -94,8 +110,8 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
       const listSpinner = ora('Finding webhook...').start();
       try {
         const listRes = await apiClient.get('/api/v1/developer/webhooks');
-        const hooks = (listRes.data as any).webhooks || (listRes.data as any).items || [];
-        const active = hooks.find((h: any) => h.is_active !== false);
+        const hooks = (listRes.data as Record<string, any>).webhooks || (listRes.data as Record<string, any>).items || [];
+        const active = hooks.find((h: Record<string, any>) => h.is_active !== false);
         if (!active) {
           listSpinner.fail(chalk.red('No active webhooks found'));
           console.log(chalk.dim('  Create one: solid webhooks create https://your-url.com'));
@@ -112,7 +128,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
 
     const spinner = ora(`Sending ${event} to webhook ${webhookId}...`).start();
     try {
-      const payload: any = { event_type: event };
+      const payload: Record<string, unknown> = { event_type: event };
       if (options.data) {
         try {
           payload.custom_data = JSON.parse(options.data);
@@ -123,7 +139,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
       }
       const res = await apiClient.post(`/api/v1/developer/webhooks/${webhookId}/test`, payload);
       spinner.succeed(chalk.green(`Event ${event} sent`));
-      const data = res.data as any;
+      const data = res.data as Record<string, any>;
 
       if (isJsonOutput(options)) {
         console.log(JSON.stringify(data, null, 2));

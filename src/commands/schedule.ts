@@ -15,46 +15,39 @@ function requireAuth() {
 export const scheduleCommand = new Command('schedule')
   .description('Appointment scheduling & calendar');
 
-// List appointments
-scheduleCommand
-  .command('list')
-  .description('List appointments')
-  .option('--date <date>', 'Filter by date (YYYY-MM-DD)')
-  .option('--status <status>', 'Filter by status (confirmed, pending, cancelled)')
-  .option('--limit <n>', 'Max results', '20')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    requireAuth();
-    const spinner = ora('Loading appointments...').start();
-
-    try {
-      const params: Record<string, unknown> = { limit: parseInt(options.limit) };
-      if (options.date) params.date = options.date;
-      if (options.status) params.status = options.status;
-
-      const response = await apiClient.get('/api/v1/schedule', { params });
-      const data = response.data as Record<string, any>;
-      const items = data.appointments || data.items || [];
-
-      if (isJsonOutput(options)) {
-        spinner.stop();
-        console.log(JSON.stringify(data, null, 2));
-        return;
-      }
-
-      spinner.succeed(chalk.green(`${items.length} appointment(s)`));
-      if (items.length === 0) { console.log(chalk.dim('  No appointments found.')); return; }
-      console.log('');
-      for (const apt of items) {
-        const sc = apt.status === 'confirmed' ? chalk.green : apt.status === 'cancelled' ? chalk.red : chalk.yellow;
-        console.log(`  ${chalk.bold(`#${apt.id}`)}  ${apt.date || ''} ${apt.time || apt.start_time || ''}  ${sc(apt.status || 'pending')}`);
-        if (apt.service_name || apt.contact_name) console.log(chalk.dim(`    ${apt.service_name || ''} ${apt.contact_name ? '- ' + apt.contact_name : ''}`));
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load appointments'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-    }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = scheduleCommand.command('list').description('List appointments');
+  withListFlags(listCmd, '20');
+  listCmd.option('--date <date>', 'Filter by date (YYYY-MM-DD)');
+  listCmd.option('--status <status>', 'Filter by status (confirmed, pending, cancelled)');
+  listCmd.action(async (opts: { date?: string; status?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading appointments...',
+      errorText: 'Failed to load appointments',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.date) params.date = opts.date;
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/schedule', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.appointments || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No appointments found.')); return; }
+        console.log('');
+        for (const apt of items) {
+          const sc = apt.status === 'confirmed' ? chalk.green : apt.status === 'cancelled' ? chalk.red : chalk.yellow;
+          console.log(`  ${chalk.bold(`#${apt.id}`)}  ${apt.date || ''} ${apt.time || apt.start_time || ''}  ${sc(String(apt.status || 'pending'))}`);
+          if (apt.service_name || apt.contact_name) console.log(chalk.dim(`    ${apt.service_name || ''} ${apt.contact_name ? '- ' + apt.contact_name : ''}`));
+        }
+      },
+    });
   });
+}
 
 // Get appointment details
 scheduleCommand

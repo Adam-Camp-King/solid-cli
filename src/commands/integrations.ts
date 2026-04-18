@@ -22,57 +22,46 @@ function requireAuth(): void {
   }
 }
 
-// List integrations
-integrationsCommand
-  .command('list')
-  .alias('ls')
-  .description('List integrations')
-  .option('-s, --status <status>', 'Filter by status (draft, deployed, disabled, etc.)')
-  .action(async (options) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = integrationsCommand.command('list').alias('ls').description('List integrations');
+  withListFlags(listCmd);
+  listCmd.option('-s, --status <status>', 'Filter by status (draft, deployed, disabled, etc.)');
+  listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {
     requireAuth();
-
-    const spinner = ora('Fetching integrations...').start();
-
-    try {
-      const response = await apiClient.integrationsList(options.status);
-
-      spinner.succeed(`Found ${response.data.total} integrations`);
-      console.log('');
-
-      if (response.data.integrations.length === 0) {
-        console.log(chalk.dim('  No integrations found. Create one with `solid integrations create`'));
-        return;
-      }
-
-      // Table header
-      console.log(
-        chalk.bold('  ID'.padEnd(12)) +
-        chalk.bold('NAME'.padEnd(30)) +
-        chalk.bold('TYPE'.padEnd(18)) +
-        chalk.bold('STATUS'.padEnd(12))
-      );
-      console.log(chalk.dim('  ' + '-'.repeat(70)));
-
-      // Table rows
-      for (const int of response.data.integrations) {
-        const statusColor = int.status === 'deployed' ? chalk.green :
-          int.status === 'validated' ? chalk.blue :
-          int.status === 'failed' ? chalk.red :
-          chalk.dim;
-
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Fetching integrations...',
+      errorText: 'Failed to list integrations',
+      fetch: async () => (await apiClient.integrationsList(opts.status)).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.integrations || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No integrations found. Create one with `solid integrations create`')); return; }
         console.log(
-          `  ${int.id.slice(0, 10).padEnd(12)}` +
-          `${int.name.slice(0, 28).padEnd(30)}` +
-          `${int.integration_type.padEnd(18)}` +
-          statusColor(int.status)
+          chalk.bold('  ID'.padEnd(12)) +
+          chalk.bold('NAME'.padEnd(30)) +
+          chalk.bold('TYPE'.padEnd(18)) +
+          chalk.bold('STATUS'.padEnd(12)),
         );
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to list integrations'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+        console.log(chalk.dim('  ' + '-'.repeat(70)));
+        for (const int of items) {
+          const statusColor = int.status === 'deployed' ? chalk.green :
+            int.status === 'validated' ? chalk.blue :
+              int.status === 'failed' ? chalk.red : chalk.dim;
+          console.log(
+            `  ${String(int.id).slice(0, 10).padEnd(12)}` +
+            `${String(int.name || '').slice(0, 28).padEnd(30)}` +
+            `${String(int.integration_type || '').padEnd(18)}` +
+            statusColor(String(int.status || '')),
+          );
+        }
+      },
+    });
   });
+}
 
 // Get catalog
 integrationsCommand

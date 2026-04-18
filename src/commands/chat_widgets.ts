@@ -24,25 +24,32 @@ function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.r
 export const chatWidgetsCommand = new Command('chat-widgets')
   .description('Chat widgets for external sites (CRUD + embed code)');
 
-chatWidgetsCommand
-  .command('list')
-  .description('List chat widgets')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = chatWidgetsCommand.command('list').description('List chat widgets');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();
-    const s = ora('Loading widgets...').start();
-    try {
-      const res = await apiClient.get('/api/v1/cms/chat-widgets');
-      const data = res.data as Record<string, any>;
-      const items = data.widgets || data.items || data;
-      const list = Array.isArray(items) ? items : (items.widgets || []);
-      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      s.succeed(chalk.green(`${list.length} widget(s)`));
-      for (const w of list as Record<string, any>[]) {
-        console.log(`  ${chalk.bold(w.id)}  ${w.name || w.title || '—'}  ${chalk.dim(w.chat_id || '')}`);
-      }
-    } catch (e) { fail(s, 'Failed', e); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading widgets...',
+      errorText: 'Failed to load widgets',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/cms/chat-widgets', { params: { limit, offset } })).data,
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.widgets || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No chat widgets.')); return; }
+        for (const w of items) {
+          console.log(`  ${chalk.bold(String(w.id))}  ${w.name || w.title || '—'}  ${chalk.dim(String(w.chat_id || ''))}`);
+        }
+      },
+    });
   });
+}
 
 chatWidgetsCommand
   .command('get <id>')

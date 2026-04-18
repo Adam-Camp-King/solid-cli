@@ -25,8 +25,8 @@ import * as http from 'http';
 
 interface Section {
   type: string;
-  content?: any;
-  props?: any;
+  content?: Record<string, any>;
+  props?: Record<string, any>;
   [key: string]: any;
 }
 
@@ -65,7 +65,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
         <section style="padding:60px 40px;max-width:1000px;margin:0 auto;">
           <h2 style="text-align:center;margin-bottom:40px;">${esc(content.title || 'Features')}</h2>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:24px;">
-            ${features.map((f: any) => `
+            ${features.map((f: Record<string, any>) => `
               <div style="padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
                 <h3 style="margin-bottom:8px;">${esc(f.title || f.name || '')}</h3>
                 <p style="color:#6b7280;font-size:0.9rem;">${esc(f.description || f.text || '')}</p>
@@ -80,12 +80,12 @@ function renderSection(section: Section, ctx: CompanyContext): string {
         <section style="padding:60px 40px;background:#f9fafb;">
           <h2 style="text-align:center;margin-bottom:40px;">${esc(content.title || 'Pricing')}</h2>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:1000px;margin:0 auto;">
-            ${plans.map((p: any) => `
+            ${plans.map((p: Record<string, any>) => `
               <div style="padding:32px;background:#fff;border-radius:12px;border:2px solid ${p.featured ? primary : '#e5e7eb'};text-align:center;">
                 <h3>${esc(p.name || p.title || '')}</h3>
                 <div style="font-size:2rem;font-weight:700;margin:16px 0;color:${primary};">${esc(p.price || '')}</div>
                 <p style="color:#6b7280;margin-bottom:16px;">${esc(p.description || '')}</p>
-                ${(p.features || []).map((f: any) => `<div style="padding:4px 0;font-size:0.9rem;">\u2713 ${esc(typeof f === 'string' ? f : f.text || f.name || '')}</div>`).join('')}
+                ${(p.features || []).map((f: Record<string, any>) => `<div style="padding:4px 0;font-size:0.9rem;">\u2713 ${esc(typeof f === 'string' ? f : f.text || f.name || '')}</div>`).join('')}
               </div>
             `).join('')}
           </div>
@@ -105,7 +105,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
         <section style="padding:60px 40px;max-width:900px;margin:0 auto;">
           <h2 style="text-align:center;margin-bottom:40px;">${esc(content.title || 'What Our Customers Say')}</h2>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;">
-            ${testimonials.map((t: any) => `
+            ${testimonials.map((t: Record<string, any>) => `
               <div style="padding:24px;background:#f9fafb;border-radius:12px;border-left:4px solid ${primary};">
                 <p style="font-style:italic;margin-bottom:12px;">"${esc(t.quote || t.text || '')}"</p>
                 <p style="font-weight:600;font-size:0.9rem;">— ${esc(t.name || t.author || '')}</p>
@@ -120,7 +120,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
       return `
         <section style="padding:60px 40px;max-width:800px;margin:0 auto;">
           <h2 style="text-align:center;margin-bottom:40px;">${esc(content.title || 'FAQ')}</h2>
-          ${faqs.map((q: any) => `
+          ${faqs.map((q: Record<string, any>) => `
             <div style="border-bottom:1px solid #e5e7eb;padding:16px 0;">
               <h3 style="font-size:1.1rem;margin-bottom:8px;">${esc(q.question || q.title || '')}</h3>
               <p style="color:#6b7280;">${esc(q.answer || q.content || q.text || '')}</p>
@@ -147,7 +147,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
       return `
         <section style="padding:60px 40px;background:#f9fafb;">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:24px;max-width:800px;margin:0 auto;text-align:center;">
-            ${stats.map((s: any) => `
+            ${stats.map((s: Record<string, any>) => `
               <div>
                 <div style="font-size:2.5rem;font-weight:700;color:${primary};">${esc(s.value || s.number || '')}</div>
                 <div style="color:#6b7280;font-size:0.9rem;">${esc(s.label || s.title || '')}</div>
@@ -168,7 +168,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
       return `
         <section style="padding:60px 40px;">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:1000px;margin:0 auto;">
-            ${images.map((img: any) => `
+            ${images.map((img: Record<string, any>) => `
               <div style="aspect-ratio:4/3;background:#e5e7eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af;">
                 ${typeof img === 'string' ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : esc(img.alt || 'Image')}
               </div>
@@ -182,7 +182,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
         <section style="padding:60px 40px;">
           <h2 style="text-align:center;margin-bottom:40px;">${esc(content.title || 'Our Team')}</h2>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:24px;max-width:1000px;margin:0 auto;text-align:center;">
-            ${members.map((m: any) => `
+            ${members.map((m: Record<string, any>) => `
               <div>
                 <div style="width:80px;height:80px;border-radius:50%;background:#e5e7eb;margin:0 auto 12px;"></div>
                 <h3 style="font-size:1rem;">${esc(m.name || '')}</h3>
@@ -217,7 +217,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
         <section style="padding:40px;text-align:center;">
           <p style="color:#6b7280;margin-bottom:16px;">${esc(content.title || 'Trusted By')}</p>
           <div style="display:flex;gap:32px;justify-content:center;flex-wrap:wrap;opacity:0.5;">
-            ${(content.logos || content.items || []).map((l: any) => `<span style="font-size:1.1rem;font-weight:600;">${esc(typeof l === 'string' ? l : l.name || 'Logo')}</span>`).join('')}
+            ${(content.logos || content.items || []).map((l: Record<string, any>) => `<span style="font-size:1.1rem;font-weight:600;">${esc(typeof l === 'string' ? l : l.name || 'Logo')}</span>`).join('')}
           </div>
         </section>`;
 
@@ -234,7 +234,7 @@ function renderSection(section: Section, ctx: CompanyContext): string {
       return `
         <section style="padding:60px 40px;max-width:800px;margin:0 auto;">
           <h2 style="text-align:center;margin-bottom:40px;">${esc(content.title || 'How It Works')}</h2>
-          ${steps.map((s: any, i: number) => `
+          ${steps.map((s: Record<string, any>, i: number) => `
             <div style="display:flex;gap:16px;margin-bottom:24px;align-items:flex-start;">
               <div style="width:36px;height:36px;border-radius:50%;background:${primary};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${i + 1}</div>
               <div>
@@ -262,7 +262,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function renderPage(page: any, ctx: CompanyContext, allPages: any[]): string {
+function renderPage(page: Record<string, any>, ctx: CompanyContext, allPages: Record<string, any>[]): string {
   const sections = page.layout_json?.sections || page.layout_json?.blocks || [];
   const title = page.title || 'Untitled Page';
   const primary = ctx.primary_color || '#4f46e5';
@@ -323,7 +323,7 @@ function renderPage(page: any, ctx: CompanyContext, allPages: any[]): string {
 
 // ─── Server ─────────────────────────────────────────────────────────
 
-function loadPages(dir: string): any[] {
+function loadPages(dir: string): Record<string, any>[] {
   const pagesDir = path.join(dir, 'pages');
   if (!fs.existsSync(pagesDir)) return [];
 
@@ -379,7 +379,7 @@ export const serveCommand = new Command('serve')
       const spinner = ora('Fetching preview data...').start();
       try {
         const res = await api.previewGet(options.preview);
-        const data = res.data as any;
+        const data = res.data as Record<string, any>;
         spinner.succeed(chalk.green(`Preview loaded: ${data.page_count} pages`));
 
         // Write preview pages to temp dir
@@ -527,7 +527,7 @@ export const serveCommand = new Command('serve')
   });
 
 // Index page listing all pages
-function renderIndex(pages: any[], ctx: CompanyContext): string {
+function renderIndex(pages: Record<string, any>[], ctx: CompanyContext): string {
   const primary = ctx.primary_color || '#4f46e5';
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">

@@ -12,27 +12,42 @@ export const supportCommand = new Command('support')
   .description('Customer support tickets')
   .action(async () => { supportCommand.outputHelp(); });
 
-supportCommand.command('list').description('List support tickets')
-  .option('--status <status>', 'Filter: open, closed, pending')
-  .option('--limit <n>', 'Count', '20').option('--json', 'JSON output')
-  .action(async (options) => {
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = supportCommand.command('list').description('List support tickets');
+  withListFlags(listCmd, '20');
+  listCmd.option('--status <status>', 'Filter: open, closed, pending');
+  listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
-    const spinner = ora('Loading tickets...').start();
-    try {
-      const params: Record<string, unknown> = { limit: options.limit };
-      if (options.status) params.status = options.status;
-      const res = await apiClient.get('/api/v1/support/tickets', { params });
-      spinner.stop();
-      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const tickets = (res.data as Record<string, any>).tickets || (res.data as Record<string, any>).items || [];
-      console.log('');
-      console.log(ui.header(`Support Tickets (${tickets.length})`));
-      if (tickets.length === 0) { console.log(chalk.dim('  No tickets.')); }
-      else { for (const t of tickets) { const s = t.status === 'open' ? chalk.green('●') : t.status === 'pending' ? chalk.yellow('●') : chalk.dim('●'); const p = t.priority === 'high' ? chalk.red(' [HIGH]') : ''; console.log(`  ${s} #${t.id}${p} ${t.subject || t.title}`); } }
-      console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading tickets...',
+      errorText: 'Failed to load tickets',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/support/tickets', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.tickets || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (tickets) => {
+        console.log('');
+        console.log(ui.header(`Support Tickets (${tickets.length})`));
+        if (!tickets.length) { console.log(chalk.dim('  No tickets.')); }
+        else {
+          for (const t of tickets) {
+            const s = t.status === 'open' ? chalk.green('●') : t.status === 'pending' ? chalk.yellow('●') : chalk.dim('●');
+            const p = t.priority === 'high' ? chalk.red(' [HIGH]') : '';
+            console.log(`  ${s} #${t.id}${p} ${t.subject || t.title}`);
+          }
+        }
+        console.log('');
+      },
+    });
   });
+}
 
 supportCommand.command('get <id>').description('View ticket details')
   .option('--json', 'JSON output')

@@ -308,7 +308,9 @@ authCommand
             console.log('');
             spinner = ora('Waiting for browser authentication...').start();
           });
-          if (spinner) (spinner as any).stop();
+          // TS narrows `spinner` to never because the closure assignment is
+          // invisible from the outer scope. Cast back to preserve typing.
+          if (spinner) (spinner as ReturnType<typeof ora>).stop();
           config.accessToken = result.accessToken;
           if (result.refreshToken) config.refreshToken = result.refreshToken;
           if (result.expiresIn) {
@@ -372,7 +374,7 @@ authCommand
           console.log('');
           return;
         } catch (err) {
-          if (spinner) (spinner as any).fail(chalk.red('Browser login failed'));
+          if (spinner) (spinner as ReturnType<typeof ora>).fail(chalk.red('Browser login failed'));
           else console.error(chalk.red('Browser login failed'));
           const msg = err instanceof Error ? err.message : String(err);
           console.error(chalk.red(`  ${msg}`));

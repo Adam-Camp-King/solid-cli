@@ -190,17 +190,18 @@ async function askPlatform(
     }
 
     return full;
-  } catch (error: any) {
+  } catch (error) {
     spinner.stop();
+    const e = error as { response?: { status?: number; data?: { detail?: string } }; message?: string };
 
-    if (error.response?.status === 429) {
+    if (e.response?.status === 429) {
       // Backend returns a friendly rate limit message — use it directly
-      const msg = error.response?.data?.detail || 'Taking a breather — try again in a couple minutes. Or hit up sales@solidnumber.com.';
+      const msg = e.response?.data?.detail || 'Taking a breather — try again in a couple minutes. Or hit up sales@solidnumber.com.';
       console.log(`\n  ${chalk.hex(BRAND.warm)('Solid#')} ${chalk.hex(BRAND.dim)('›')} ${msg}\n`);
       return msg;
     }
 
-    const errMsg = error.response?.data?.detail || error.message || 'Connection error';
+    const errMsg = e.response?.data?.detail || e.message || 'Connection error';
     console.log(`\n  ${chalk.red('Error')} ${chalk.hex(BRAND.dim)('›')} ${errMsg}\n`);
     return errMsg;
   }
@@ -212,7 +213,7 @@ export const exploreCommand = new Command('explore')
   .description('Platform Intelligence — ask anything about Solid#')
   .argument('[question...]', 'Ask a single question (or omit for interactive mode)')
   .option('--deep', 'Always use the deeper AI model')
-  .action(async (questionParts: string[], options: any) => {
+  .action(async (questionParts: string[], options: Record<string, unknown>) => {
     // Load platform docs
     const bundled = loadBundledDocs();
     const platformDocs = await fetchDocsIfNeeded(bundled);
