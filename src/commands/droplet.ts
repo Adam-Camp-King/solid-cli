@@ -331,31 +331,41 @@ dropletCommand
 // Destroy customer droplet
 dropletCommand
   .command('destroy <customer>')
-  .description('Destroy a customer droplet (DANGEROUS)')
-  .option('--force', 'Skip confirmation')
+  .description('Destroy a customer droplet (DANGEROUS — prompts by default)')
+  .option('-y, --yes', 'Skip confirmation (for CI / scripts)')
+  .option('--force', 'Alias for --yes (legacy)')
   .option('--keep-backups', 'Keep backups after destruction')
-  .action(async (customer, options) => {
+  .action(async (customer: string, options: { yes?: boolean; force?: boolean; keepBackups?: boolean }) => {
     requireAuth();
-    if (!options.force) {
-      console.log(chalk.red.bold(`\n⚠️  WARNING: This will permanently destroy ${customer}'s droplet!`));
-      console.log(chalk.red('   All data will be lost unless backed up.\n'));
-      console.log(chalk.yellow('   Run with --force to confirm, or Ctrl+C to cancel.'));
-      return;
+
+    console.error(chalk.red.bold(`\n⚠️  This will permanently destroy ${customer}'s droplet.`));
+    console.error(chalk.red(`   Backups will be ${options.keepBackups ? chalk.green('preserved') : chalk.red.bold('deleted')}.`));
+    console.error('');
+
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Destroy droplet "${customer}"?`,
+      { autoConfirm: Boolean(options.yes || options.force) },
+    );
+    if (!ok) {
+      console.error(chalk.dim('  Cancelled.'));
+      process.exit(1);
     }
 
-    const spinner = ora(`Destroying ${customer}...`).start();
+    const spinner = ora({ text: `Destroying ${customer}...`, stream: process.stderr }).start();
 
     try {
-      await apiClient.delete<any>(`/api/v1/admin/droplets/${customer}`, {
-        params: { keep_backups: options.keepBackups }
+      await apiClient.delete(`/api/v1/admin/droplets/${customer}`, {
+        params: { keep_backups: options.keepBackups },
       });
 
       spinner.succeed(`${customer} droplet destroyed`);
-      console.log(chalk.gray('\nBackups ' + (options.keepBackups ? 'preserved' : 'deleted')));
-
-    } catch (error: any) {
+      console.error(chalk.gray(`\nBackups ${options.keepBackups ? 'preserved' : 'deleted'}`));
+    } catch (error) {
       spinner.fail('Destruction failed');
-      console.error(chalk.red(error.message));
+      const { handleApiError } = await import('../lib/api-client');
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
