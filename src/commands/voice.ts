@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -44,7 +45,7 @@ const callsCmd = voiceCommand
       const response = await apiClient.get('/api/v1/voice/calls', { params });
       const d = response.data as Record<string, any>;
       const calls = Array.isArray(d?.calls) ? d.calls : Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : [];
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${calls.length} calls`));
       if (calls.length === 0) { console.log(chalk.dim('  No calls found.')); return; }
       console.log('');
@@ -69,7 +70,7 @@ callsCmd
     try {
       const response = await apiClient.get(`/api/v1/voice/calls/${callId}`);
       const c = response.data as Record<string, any>;
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
       spinner.succeed(chalk.green('Call details'));
       console.log('');
       console.log(`  ${chalk.bold('ID:')}        ${c.id}`);
@@ -99,7 +100,7 @@ voiceCommand
     try {
       const response = await apiClient.get('/api/v1/voice/stats');
       const s = response.data as Record<string, any>;
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Voice statistics'));
       console.log('');
       console.log(`  ${chalk.bold('Total calls:')}     ${s.total_calls ?? 'N/A'}`);
@@ -123,7 +124,7 @@ const numbersCmd = voiceCommand
     try {
       const response = await apiClient.get('/api/v1/phone-numbers');
       const numbers = (response.data as Record<string, any>).items || response.data || [];
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${numbers.length} phone numbers`));
       if (numbers.length === 0) { console.log(chalk.dim('  No phone numbers configured.')); return; }
       console.log('');
@@ -192,7 +193,7 @@ const voicemailCmd = voiceCommand
     try {
       const response = await apiClient.get('/api/v1/voicemails');
       const items = (response.data as Record<string, any>).items || response.data || [];
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} voicemails`));
       if (items.length === 0) { console.log(chalk.dim('  No voicemails.')); return; }
       console.log('');
@@ -221,7 +222,7 @@ voicemailCmd
     try {
       const response = await apiClient.get(`/api/v1/voicemails/${id}`);
       const vm = response.data as Record<string, any>;
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(vm, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(vm, null, 2)); return; }
       spinner.succeed(chalk.green('Voicemail details'));
       console.log('');
       console.log(`  ${chalk.bold('ID:')}       ${vm.id}`);
@@ -261,7 +262,7 @@ const personalityCmd = voiceCommand
     try {
       const response = await apiClient.get('/api/v1/voice-personality');
       const p = response.data as Record<string, any>;
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green('Voice personality'));
       console.log('');
       console.log(`  ${chalk.bold('Voice:')}      ${p.voice || 'default'}`);
@@ -320,7 +321,7 @@ voiceCommand
     try {
       const response = await apiClient.get('/api/v1/voice-personality/voices');
       const voices = (response.data as Record<string, any>).voices || response.data || [];
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${voices.length} voices available`));
       console.log('');
       for (const v of voices as Record<string, any>[]) {
@@ -344,7 +345,7 @@ voiceCommand
     try {
       const response = await apiClient.get(`/api/v1/voice/calls/${callId}/transcript`);
       const data = response.data as Record<string, any>;
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green('Call transcript'));
       console.log('');
       const entries = data.entries || data.messages || [];
@@ -374,7 +375,7 @@ voiceCommand
     try {
       const res = await apiClient.get('/api/v1/voice/twilio-audit');
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       spinner.succeed(chalk.green(`Twilio: ${r.twilio_count} number(s) | DB: ${r.db_count} number(s)`));
       console.log('');
       if (r.matched?.length) {
@@ -443,7 +444,7 @@ voiceCommand
     try {
       const res = await apiClient.get('/api/v1/voice/cost-summary', { params: { days } });
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       const t = r.totals;
       spinner.succeed(chalk.green(`Voice cost — last ${days} days`));
       console.log('');

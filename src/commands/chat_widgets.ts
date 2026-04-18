@@ -11,6 +11,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -35,7 +36,7 @@ chatWidgetsCommand
       const data = res.data as Record<string, any>;
       const items = data.widgets || data.items || data;
       const list = Array.isArray(items) ? items : (items.widgets || []);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       s.succeed(chalk.green(`${list.length} widget(s)`));
       for (const w of list as Record<string, any>[]) {
         console.log(`  ${chalk.bold(w.id)}  ${w.name || w.title || '—'}  ${chalk.dim(w.chat_id || '')}`);
@@ -52,7 +53,7 @@ chatWidgetsCommand
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/cms/chat-widgets/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green(`Widget ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }

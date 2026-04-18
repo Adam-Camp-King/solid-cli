@@ -1,6 +1,6 @@
 {
   "name": "@solidnumber/cli",
-  "version": "1.9.15",
+  "version": "1.9.16",
   "description": "AI business infrastructure from the terminal — CRM, payments, voice AI, 116 agents, 52 industry templates. solid clone plumber → instant business.",
   "main": "dist/index.js",
   "bin": {

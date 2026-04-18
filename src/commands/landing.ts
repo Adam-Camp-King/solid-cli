@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -31,7 +32,7 @@ landingCommand
     try {
       const res = await apiClient.get('/api/v1/landing-pages/');
       const items = (res.data as Record<string, any>[]) ?? [];
-      if (opts.json) { s.stop(); console.log(JSON.stringify(items, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(items, null, 2)); return; }
       s.succeed(chalk.green(`${items.length} landing page(s)`));
       for (const p of items) {
         const dot = p.is_published ? chalk.green('●') : chalk.dim('○');
@@ -49,7 +50,7 @@ landingCommand
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/landing-pages/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green(`Landing page ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -126,7 +127,7 @@ landingCommand
     const s = ora('Loading analytics...').start();
     try {
       const res = await apiClient.get(`/api/v1/landing-pages/${id}/analytics`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Analytics'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -144,7 +145,7 @@ landingCommand
       const res = await apiClient.get('/api/v1/landing-pages/templates');
       const items = (res.data as Record<string, any>[]) ?? [];
       const filtered = opts.category ? items.filter((t) => t.category === opts.category) : items;
-      if (opts.json) { s.stop(); console.log(JSON.stringify(filtered, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(filtered, null, 2)); return; }
       s.succeed(chalk.green(`${filtered.length} template(s)`));
       for (const t of filtered) console.log(`  ${chalk.bold(t.id)}  ${t.name}  ${chalk.dim(t.category || '')}`);
     } catch (e) { fail(s, 'Failed', e); }

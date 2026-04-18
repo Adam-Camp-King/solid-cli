@@ -13,6 +13,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -50,7 +51,7 @@ leadsCommand
       const res = await apiClient.get('/api/v1/crm/leads/submissions', { params });
       const data = res.data as Record<string, any>;
       const items = data.items || data.submissions || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} submission(s)`));
       if (!items.length) return;
       console.log('');
@@ -76,7 +77,7 @@ leadsCommand
       const res = await apiClient.get('/api/v1/crm/leads/forms', { params });
       const data = res.data as Record<string, any>;
       const items = data.forms || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} form(s)`));
       console.log('');
       for (const f of items as Record<string, any>[]) {
@@ -98,7 +99,7 @@ leadsCommand
     try {
       const res = await apiClient.get('/api/v1/crm/leads/stats');
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Lead stats'));
       console.log('');
       console.log(`  ${chalk.bold('Total leads:')}      ${s.total_leads ?? s.total ?? 'N/A'}`);
@@ -122,7 +123,7 @@ leadsCommand
       });
       const data = res.data as Record<string, any>;
       const items = data.leads || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} recent lead(s)`));
       console.log('');
       for (const l of items as Record<string, any>[]) {
@@ -144,7 +145,7 @@ leadsCommand
         params: { days: parseInt(opts.days, 10) },
       });
       const a = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(a, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(a, null, 2)); return; }
       spinner.succeed(chalk.green(`Lead analytics (${opts.days}d)`));
       console.log('');
       console.log(`  ${chalk.bold('Total:')}      ${a.total_leads ?? 'N/A'}`);
@@ -171,7 +172,7 @@ leadsCommand
     try {
       const res = await apiClient.get(`/api/v1/crm/leads/${contactId}/score`);
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green(`Score for contact #${contactId}`));
       console.log('');
       console.log(`  ${chalk.bold('Score:')}      ${s.score ?? s.lead_score ?? 'N/A'}`);
@@ -206,7 +207,7 @@ leadsCommand
     try {
       const res = await apiClient.get(`/api/v1/crm/leads/${contactId}/attribution`);
       const a = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(a, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(a, null, 2)); return; }
       spinner.succeed(chalk.green(`Attribution for contact #${contactId}`));
       console.log('');
       console.log(`  ${chalk.bold('First source:')}   ${a.first_source || 'N/A'}`);
@@ -230,7 +231,7 @@ leadsCommand
       });
       const data = res.data as Record<string, any>;
       const items = data.activities || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} activity(s) for contact #${contactId}`));
       console.log('');
       for (const a of items as Record<string, any>[]) {
@@ -259,7 +260,7 @@ leadsCommand
       if (opts.conversation) body.conversation_id = opts.conversation;
       const res = await apiClient.post('/api/v1/crm/leads/prospecting/chat', body);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       spinner.succeed(chalk.green('Marcus'));
       console.log('');
       console.log(`  ${r.response || r.message || JSON.stringify(r)}`);
@@ -278,7 +279,7 @@ leadsCommand
     try {
       const res = await apiClient.get(`/api/v1/crm/leads/prospecting/enrich/job/${jobId}`);
       const j = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(j, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(j, null, 2)); return; }
       spinner.succeed(chalk.green(`Job ${jobId}`));
       console.log('');
       console.log(`  ${chalk.bold('Status:')}     ${j.status || 'N/A'}`);
@@ -299,7 +300,7 @@ leadsCommand
     try {
       const res = await apiClient.get('/api/v1/crm/leads/prospecting/budget');
       const b = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(b, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(b, null, 2)); return; }
       spinner.succeed(chalk.green('Marketing budget'));
       console.log('');
       console.log(`  ${chalk.bold('Plan:')}        ${b.plan || 'N/A'}`);
@@ -335,7 +336,7 @@ leadsCommand
     try {
       const res = await apiClient.get('/api/v1/crm/leads/preferences');
       const p = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green('Lead preferences'));
       console.log('');
       console.log(`  ${chalk.bold('Target services:')}  ${(p.target_services || []).join(', ') || '—'}`);
@@ -382,7 +383,7 @@ leadsCommand
     try {
       const res = await apiClient.get('/api/v1/leads/pipeline');
       const p = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green('Pipeline'));
       console.log('');
       // Backend can return stages as either:
@@ -420,7 +421,7 @@ leadsCommand
     try {
       const res = await apiClient.get('/api/v1/leads/connections');
       const c = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
       spinner.succeed(chalk.green('Lead source connections'));
       const items = c.connections || c.sources || [];
       console.log('');
@@ -441,7 +442,7 @@ leadsCommand
     try {
       const res = await apiClient.get('/api/v1/leads/performance');
       const p = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green('Performance'));
       console.log('');
       console.log(`  ${chalk.bold('Response time (avg):')}  ${p.avg_response_time_minutes ?? 'N/A'} min`);
@@ -465,7 +466,7 @@ leadsCommand
       });
       const data = res.data as Record<string, any>;
       const items = data.activities || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} activity(s)`));
       console.log('');
       for (const a of items as Record<string, any>[]) {

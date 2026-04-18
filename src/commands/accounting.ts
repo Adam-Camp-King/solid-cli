@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const accountingCommand = new Command('accounting')
   .description('Accounting sync — QuickBooks, Xero')
@@ -20,7 +21,7 @@ accountingCommand.command('sync').description('Trigger a full accounting sync')
     try {
       const res = await apiClient.post('/api/v1/accounting/sync');
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.successBox('Sync Started', [`${chalk.dim('Status:')}  ${d.status || 'running'}`, `${chalk.dim('Sync ID:')} ${d.sync_id || d.id || 'n/a'}`]));
@@ -37,7 +38,7 @@ accountingCommand.command('status').description('Check sync status')
     try {
       const res = await apiClient.get('/api/v1/accounting/sync/status');
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Accounting Sync'));
@@ -58,7 +59,7 @@ accountingCommand.command('history').description('View sync history')
     try {
       const res = await apiClient.get('/api/v1/accounting/sync/history', { params: { limit: options.limit } });
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       const entries = d.history || d.syncs || [];
       console.log('');

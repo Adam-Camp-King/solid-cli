@@ -9,6 +9,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -36,7 +37,7 @@ marketplaceCommand
     try {
       const res = await apiClient.get('/api/v1/marketplace/status');
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Marketplace status'));
       console.log('');
       console.log(`  ${chalk.bold('Enabled:')}            ${s.enabled ?? false}`);
@@ -79,7 +80,7 @@ marketplaceCommand
     try {
       const res = await apiClient.get('/api/v1/marketplace/products');
       const items = (res.data as Record<string, any>[]) ?? [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} published product(s)`));
       console.log('');
       for (const p of items) {
@@ -99,7 +100,7 @@ marketplaceCommand
     try {
       const res = await apiClient.get('/api/v1/marketplace/services');
       const items = (res.data as Record<string, any>[]) ?? [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} published service(s)`));
       console.log('');
       for (const s of items) {

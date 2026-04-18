@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -62,7 +63,7 @@ productsCommand
     try {
       const res = await apiClient.get(`/api/v1/products/${id}`);
       const p = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green(`Product ${id}`));
       console.log('');
       console.log(`  ${chalk.bold('Name:')}    ${p.name || p.title}`);
@@ -159,7 +160,7 @@ productsCommand
       const res = await apiClient.get(`/api/v1/products/${id}/components`);
       const data = res.data as Record<string, any>;
       const items = data.components || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} component(s)`));
       console.log('');
       for (const c of items as Record<string, any>[]) {
@@ -177,7 +178,7 @@ productsCommand
     const spinner = ora('Loading catalog...').start();
     try {
       const res = await apiClient.get('/api/v1/products/catalog');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Catalog loaded'));
       const items = (res.data as Record<string, any>).items || (res.data as Record<string, any>).products || [];
       console.log(`  ${items.length} item(s)`);

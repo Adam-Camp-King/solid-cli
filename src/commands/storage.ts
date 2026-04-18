@@ -14,6 +14,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -42,7 +43,7 @@ storageCommand
     const spinner = ora('Loading config...').start();
     try {
       const res = await apiClient.get('/api/v1/storage/config');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Storage config'));
       console.log('');
       console.log(JSON.stringify(res.data, null, 2));
@@ -59,7 +60,7 @@ storageCommand
     try {
       const res = await apiClient.get('/api/v1/storage/usage');
       const u = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(u, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(u, null, 2)); return; }
       spinner.succeed(chalk.green('Storage usage'));
       console.log('');
       console.log(`  ${chalk.bold('Used:')}   ${u.used_mb ?? u.used_bytes ?? 'N/A'} MB`);
@@ -77,7 +78,7 @@ storageCommand
     const spinner = ora('Loading breakdown...').start();
     try {
       const res = await apiClient.get('/api/v1/storage/breakdown');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Breakdown'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
@@ -92,7 +93,7 @@ storageCommand
     const spinner = ora('Loading sources...').start();
     try {
       const res = await apiClient.get('/api/v1/storage/sources');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Sources'));
       const items = (res.data as Record<string, any>[]) ?? [];
       for (const s of items) console.log(`  ${chalk.bold(s.id)}  ${s.name}  ${chalk.dim(s.type || '')}`);
@@ -209,7 +210,7 @@ storageCommand
     try {
       const res = await apiClient.get(`/api/v1/storage/documents/${id}`);
       const d = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
       spinner.succeed(chalk.green(`Document ${id}`));
       console.log('');
       console.log(`  ${chalk.bold('Name:')}   ${d.filename || d.name}`);
@@ -278,7 +279,7 @@ storageCommand
       const res = await apiClient.post('/api/v1/storage/search', { query });
       const data = res.data as Record<string, any>;
       const items = data.results || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} match(es)`));
       for (const r of items as Record<string, any>[]) {
         console.log(`  ${chalk.bold(r.id)}  ${r.filename || r.name}`);
@@ -302,7 +303,7 @@ foldersCmd
       const data = res.data as Record<string, any>;
       const items = data.folders || data;
       const list = Array.isArray(items) ? items : (items.folders || []);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${list.length} folder(s)`));
       for (const f of list as Record<string, any>[]) {
         console.log(`  ${chalk.bold(f.id)}  ${f.icon || ''} ${f.name}  ${chalk.dim(`${f.file_count ?? 0} files`)}`);
@@ -413,7 +414,7 @@ storageCommand
     const spinner = ora('Loading packs...').start();
     try {
       const res = await apiClient.get('/api/v1/storage/packs');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Asset packs'));
       const items = (res.data as Record<string, any>).packs || res.data;
       const list = Array.isArray(items) ? items : (items.items || []);

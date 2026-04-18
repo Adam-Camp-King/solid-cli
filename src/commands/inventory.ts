@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -64,7 +65,7 @@ inventoryCommand
       const response = await apiClient.get(`/api/v1/Inventory/get`, { params: { sku } });
       const item = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(item, null, 2));
         return;

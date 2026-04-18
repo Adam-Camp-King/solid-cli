@@ -22,6 +22,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -50,7 +51,7 @@ inboundCommand
     try {
       const res = await apiClient.get('/api/v1/inbound/endpoints');
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       const items = r.endpoints || [];
       spinner.succeed(chalk.green(`${items.length} endpoint(s)`));
       console.log('');
@@ -117,7 +118,7 @@ inboundCommand
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/inbound/endpoints/${id}`);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(`Endpoint ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (error) { fail(spinner, 'Failed to load endpoint', error); }
@@ -206,7 +207,7 @@ inboundCommand
     try {
       const res = await apiClient.get('/api/v1/inbound/events', { params });
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       const items = r.events || [];
       spinner.succeed(chalk.green(`${items.length} of ${r.total} event(s)`));
       console.log('');
@@ -234,7 +235,7 @@ inboundCommand
     const spinner = ora('Loading event...').start();
     try {
       const res = await apiClient.get(`/api/v1/inbound/events/${id}`);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(`Event ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (error) { fail(spinner, 'Failed to load event', error); }

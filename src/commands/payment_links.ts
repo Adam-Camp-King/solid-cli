@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -33,7 +34,7 @@ paymentLinksCommand
       const data = res.data as Record<string, any>;
       const items = data.links || data.items || data;
       const list = Array.isArray(items) ? items : (items.links || []);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       s.succeed(chalk.green(`${list.length} link(s)`));
       for (const l of list as Record<string, any>[]) {
         const status = l.status === 'paid' ? chalk.green(l.status) : chalk.yellow(l.status);
@@ -51,7 +52,7 @@ paymentLinksCommand
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/payment-links/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green(`Payment link ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }

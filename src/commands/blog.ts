@@ -11,6 +11,7 @@ import inquirer from 'inquirer';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): boolean {
   if (!config.isLoggedIn()) {
@@ -74,7 +75,7 @@ blogCommand
       const response = await apiClient.get(`/api/v1/cms/blog/posts/${id}`);
       const post = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(post, null, 2));
         return;
@@ -249,7 +250,7 @@ seoCommand
       const response = await apiClient.post('/api/v1/local-seo/audit');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -292,7 +293,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/local-seo/profile');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -322,7 +323,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/local-seo/gaps');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -362,7 +363,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/local-seo/citations');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;

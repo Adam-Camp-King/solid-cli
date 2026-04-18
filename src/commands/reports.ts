@@ -9,6 +9,7 @@ import chalk from 'chalk';
 
 import { apiClient } from '../lib/api-client';
 import { run } from '../lib/command-kit';
+import { isJsonOutput } from '../lib/json-output';
 
 const REPORT_TYPES = [
   { key: 'sales_overview_daily', description: 'Daily sales breakdown' },
@@ -75,7 +76,7 @@ reportsCommand
       {
         spinner: 'Loading report definitions...',
         errorText: 'Failed to load report types',
-        json: options.json,
+        json: isJsonOutput(options),
         render: (data) => {
           const definitions: ReportDefinition[] = data.definitions || data.reports || REPORT_TYPES;
           console.log('');
@@ -105,7 +106,7 @@ reportsCommand
         {
           spinner: 'Loading report definitions...',
           errorText: 'Failed to load report types',
-          json: options.json,
+          json: isJsonOutput(options),
           render: (data) => {
             const defs: ReportDefinition[] = data.definitions || data.reports || REPORT_TYPES;
             console.log('');
@@ -138,7 +139,7 @@ reportsCommand
         spinner: `Running ${type} report...`,
         successText: `Report: ${type}`,
         errorText: 'Failed to run report',
-        json: options.json,
+        json: isJsonOutput(options),
         render: (data) => {
           console.log('');
           const rows = data.rows || data.data || data.results || [];
@@ -179,7 +180,7 @@ reportsCommand
         spinner: 'Loading revenue data...',
         successText: `Revenue — last ${options.days} days`,
         errorText: 'Failed to load revenue data',
-        json: options.json,
+        json: isJsonOutput(options),
         render: (d) => {
           console.log('');
           if (d.total_revenue !== undefined) console.log(`  ${chalk.bold('Total Revenue:')}  ${chalk.green('$' + Number(d.total_revenue).toFixed(2))}`);
@@ -208,7 +209,7 @@ reportsCommand
       {
         spinner: 'Loading top products...',
         errorText: 'Failed to load top products',
-        json: options.json,
+        json: isJsonOutput(options),
         render: (data) => {
           const items = data.products || data.items || [];
           if (items.length === 0) {

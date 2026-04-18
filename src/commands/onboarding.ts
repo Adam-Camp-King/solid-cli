@@ -13,6 +13,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -42,7 +43,7 @@ onboardingCommand
     try {
       const res = await apiClient.get('/api/v1/setup-wizard/status');
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Setup status'));
       console.log('');
       const dot = (b: any) => (b ? chalk.green('✓') : chalk.dim('○'));
@@ -80,7 +81,7 @@ emailCmd
     const spinner = ora('Loading email status...').start();
     try {
       const res = await apiClient.get('/api/v1/setup-wizard/email/status');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Email status'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
@@ -255,7 +256,7 @@ phoneCmd
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get('/api/v1/setup-wizard/phone/status');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Phone status'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
@@ -280,7 +281,7 @@ phoneCmd
       const res = await apiClient.post('/api/v1/setup-wizard/phone/search', body);
       const data = res.data as Record<string, any>;
       const items = data.numbers || data.results || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       // Surface backend's "Twilio not configured" message so users don't think
       // they got 0 real results — they got 0 because the account is unwired.
       if (data.message) {
@@ -519,7 +520,7 @@ onboardingCommand
     try {
       const res = await apiClient.post('/api/v1/onboarding-v2/discover', body);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       if (r.blocked) {
         spinner.warn(chalk.yellow(r.blocked_message || 'Discovery blocked'));
         return;
@@ -581,7 +582,7 @@ onboardingCommand
     const spinner = ora('Loading session...').start();
     try {
       const res = await apiClient.get('/api/v1/onboarding-v2/session');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Session'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }

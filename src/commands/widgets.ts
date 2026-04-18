@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -73,7 +74,7 @@ widgetsCommand
       const response = await apiClient.get(`/api/v1/cli/widgets/${widgetId}`);
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -179,7 +180,7 @@ widgetsCommand
     try {
       const response = await apiClient.patch(`/api/v1/cli/widgets/${widgetId}`, body);
       spinner.succeed(chalk.green('Widget updated'));
-      if (options.json) { console.log(JSON.stringify(response.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(response.data, null, 2)); return; }
     } catch (error) {
       spinner.fail(chalk.red('Failed to update widget'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));

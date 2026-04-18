@@ -17,6 +17,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const siteCommand = new Command('site')
   .description('Website management');
@@ -37,7 +38,7 @@ siteCommand
     try {
       const response = await apiClient.sitesList();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -141,7 +142,7 @@ siteCommand
     try {
       const response = await apiClient.siteGet(siteId);
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -254,7 +255,7 @@ siteCommand
     try {
       const res = await apiClient.get<Record<string, unknown>>(`/api/v1/cms/guardrails/sites/${siteId}`);
       const data = res.data as Record<string, unknown>;
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(data, null, 2));
         return;
       }

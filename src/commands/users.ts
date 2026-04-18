@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -41,7 +42,7 @@ usersCommand
       const data = res.data as Record<string, any>;
       const items = data.users || data.items || data;
       const list = Array.isArray(items) ? items : (items.users || []);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${list.length} user(s)`));
       console.log('');
       for (const u of list as Record<string, any>[]) {
@@ -61,7 +62,7 @@ usersCommand
     try {
       const res = await apiClient.get(`/api/v1/users/${id}`);
       const u = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(u, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(u, null, 2)); return; }
       spinner.succeed(chalk.green(`User ${id}`));
       console.log('');
       console.log(`  ${chalk.bold('Email:')}    ${u.email}`);
@@ -82,7 +83,7 @@ usersCommand
     try {
       const res = await apiClient.get('/api/v1/users/stats/summary');
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Team stats'));
       console.log('');
       console.log(`  ${chalk.bold('Total:')}     ${s.total ?? 'N/A'}`);
@@ -202,7 +203,7 @@ usersCommand
     try {
       const res = await apiClient.get(`/api/v1/users/${id}/features`);
       const data = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green('Per-user features'));
       const features = data.features || data;
       console.log('');
@@ -252,7 +253,7 @@ usersCommand
       const res = await apiClient.get('/api/v1/users/features/catalog');
       const data = res.data as Record<string, any>;
       const items = data.features || data.items || data;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       const list = Array.isArray(items) ? items : Object.keys(items);
       spinner.succeed(chalk.green(`${list.length} feature(s)`));
       console.log('');
@@ -294,7 +295,7 @@ usersCommand
       const data = res.data as Record<string, any>;
       const items = data.invitations || data.items || data;
       const list = Array.isArray(items) ? items : (items.invitations || []);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${list.length} pending invitation(s)`));
       console.log('');
       for (const i of list as Record<string, any>[]) {
@@ -349,7 +350,7 @@ usersCommand
     const spinner = ora('Loading defaults...').start();
     try {
       const res = await apiClient.get(`/api/v1/users/invitations/role-defaults/${role}`);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(`Defaults for role: ${role}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
@@ -366,7 +367,7 @@ usersCommand
     const spinner = ora('Loading AI permissions...').start();
     try {
       const res = await apiClient.get(`/api/v1/users/users/${id}/ai-permissions`);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('AI permissions'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
@@ -397,7 +398,7 @@ usersCommand
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/users/${id}/notification-settings`);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Notification settings'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }

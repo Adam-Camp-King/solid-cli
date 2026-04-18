@@ -10,6 +10,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -37,7 +38,7 @@ keysCommand
     try {
       const res = await apiClient.apiKeyList();
       const data = res.data;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${data.api_keys.length} key(s)`));
       console.log('');
       for (const k of data.api_keys) {

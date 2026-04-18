@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const healthCommand = new Command('health')
   .description('Health check commands')
@@ -22,7 +23,7 @@ export const healthCommand = new Command('health')
         // MCP health check
         const response = await apiClient.healthMcp();
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           spinner.stop();
           console.log(JSON.stringify(response.data, null, 2));
           return;
@@ -45,7 +46,7 @@ export const healthCommand = new Command('health')
         // Full health check — /api/v1/health
         const response = await apiClient.healthFull();
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           spinner.stop();
           console.log(JSON.stringify(response.data, null, 2));
           return;
@@ -107,7 +108,7 @@ export const healthCommand = new Command('health')
         // Quick health check
         const response = await apiClient.healthQuick();
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           spinner.stop();
           console.log(JSON.stringify(response.data, null, 2));
           return;

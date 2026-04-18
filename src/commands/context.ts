@@ -29,6 +29,7 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 type ContextSection = 'company' | 'content' | 'operations' | 'capabilities' | 'history' | 'tooling';
 
@@ -236,7 +237,7 @@ export const contextCommand = new Command('context')
       try {
         const s = await fetchSummary();
         spinner.stop();
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(s, null, 2));
           return;
         }
@@ -254,7 +255,7 @@ export const contextCommand = new Command('context')
       try {
         const m = await fetchTools();
         spinner.stop();
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(m, null, 2));
           return;
         }
@@ -290,7 +291,7 @@ export const contextCommand = new Command('context')
     let doc: string;
     let jsonDoc: string | null = null;
     try {
-      if (options.json) {
+      if (isJsonOutput(options)) {
         const data = await fetchContext('json', !!options.minimal);
         doc = JSON.stringify(data, null, 2);
       } else {

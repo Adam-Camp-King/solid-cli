@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -56,7 +57,7 @@ chainsCommand
     const s = ora(`Loading ${id}...`).start();
     try {
       const res = await apiClient.get(`/api/v1/chains/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green(`Chain ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -163,7 +164,7 @@ chainsCommand
       const res = await apiClient.post(`/api/v1/chains/${id}/execute`, body);
       const data = res.data as { execution_id?: string | number; id?: string | number; status?: string };
       const executionId = data.execution_id ?? data.id;
-      if (opts.json) {
+      if (isJsonOutput(opts)) {
         s.stop();
         console.log(JSON.stringify(res.data, null, 2));
         return;
@@ -185,7 +186,7 @@ chainsCommand
     const s = ora('Loading executions...').start();
     try {
       const res = await apiClient.get(`/api/v1/chains/${id}/executions`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Executions'));
       const items = (res.data as Record<string, any>).executions || res.data;
       const list = Array.isArray(items) ? items : (items.items || []);
@@ -202,7 +203,7 @@ chainsCommand
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/chains/executions/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green(`Execution ${id}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -245,7 +246,7 @@ chainsCommand
     const s = ora('Loading templates...').start();
     try {
       const res = await apiClient.get('/api/v1/chains/templates');
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Templates'));
       const items = (res.data as Record<string, any>).templates || res.data;
       const list = Array.isArray(items) ? items : (items.items || []);
@@ -262,7 +263,7 @@ chainsCommand
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/chains/templates/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Template'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -293,7 +294,7 @@ chainsCommand
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get('/api/v1/chains/pending-approvals');
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Pending approvals'));
       const items = (res.data as Record<string, any>).pending || res.data;
       const list = Array.isArray(items) ? items : (items.items || []);

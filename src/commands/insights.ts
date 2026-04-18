@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { apiClient } from '../lib/api-client';
 import { run } from '../lib/command-kit';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 interface InsightItem {
   insight_type?: string;
@@ -85,7 +86,7 @@ insightsCommand
       {
         spinner: 'Loading insight stats...',
         errorText: 'Failed to load insight stats',
-        json: options.json,
+        json: isJsonOutput(options),
         render: (d) => {
           console.log('');
           console.log(ui.header('Insight Statistics'));

@@ -16,6 +16,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ export const inboxCommand = new Command('inbox')
         params: { limit: parseInt(options.limit) },
       });
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -98,7 +99,7 @@ inboxCommand
     try {
       const response = await apiClient.get('/api/v1/communications/inbox/counts');
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -194,7 +195,7 @@ emailCmd
 
       const response = await apiClient.get('/api/v1/crm/emails', { params });
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -237,7 +238,7 @@ emailCmd
     try {
       const response = await apiClient.get(`/api/v1/crm/emails/${id}`);
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -315,7 +316,7 @@ emailCmd
     try {
       const response = await apiClient.get(`/api/v1/crm/emails/threads/${threadId}`);
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -357,7 +358,7 @@ const campaignsCmd = inboxCommand
 
       const response = await apiClient.get('/api/v1/crm/campaigns', { params });
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -443,7 +444,7 @@ campaignsCmd
     try {
       const response = await apiClient.get(`/api/v1/crm/campaigns/${id}/stats`);
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;

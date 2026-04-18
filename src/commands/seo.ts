@@ -9,6 +9,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const seoCommand = new Command('seo')
   .description('SEO — site audit, local SEO, rankings, citations')
@@ -86,7 +87,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/seo-audit/latest');
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -150,7 +151,7 @@ seoCommand
       const response = await apiClient.post('/api/v1/local-seo/audit', { company_id: config.companyId });
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -202,7 +203,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/local-seo/rank-map', { params: { company_id: config.companyId } });
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -245,7 +246,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/local-seo/citations', { params: { company_id: config.companyId } });
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -287,7 +288,7 @@ seoCommand
       const response = await apiClient.get('/api/v1/local-seo/gaps', { params: { company_id: config.companyId } });
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }

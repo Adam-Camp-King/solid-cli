@@ -11,6 +11,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -44,7 +45,7 @@ subscriptionsCommand
     try {
       const res = await apiClient.get('/api/v1/subscriptions', { params });
       s.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, unknown>;
       const items = (d.subscriptions || d.items || []) as Array<Record<string, unknown>>;
       if (!items.length) { console.log(chalk.dim('  No subscriptions found.')); return; }
@@ -67,7 +68,7 @@ subscriptionsCommand
     try {
       const res = await apiClient.get(`/api/v1/subscriptions/${id}`);
       s.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); process.exit(1); }
   });

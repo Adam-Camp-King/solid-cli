@@ -15,6 +15,7 @@ import ora from 'ora';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 const AGENT_NAME_MAP: Record<string, string> = {
   sarah: 'customer_service', marcus: 'growth_intelligence', devon: 'operations_monitor',
@@ -76,7 +77,7 @@ export const logsCommand = new Command('logs')
         spinner.succeed(chalk.green('Errors loaded'));
         const data = res.data as any;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -114,7 +115,7 @@ export const logsCommand = new Command('logs')
         if (spinner) spinner.succeed(chalk.green('Logs loaded'));
         const data = res.data as any;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }

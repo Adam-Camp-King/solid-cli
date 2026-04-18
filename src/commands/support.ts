@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const supportCommand = new Command('support')
   .description('Customer support tickets')
@@ -23,7 +24,7 @@ supportCommand.command('list').description('List support tickets')
       if (options.status) params.status = options.status;
       const res = await apiClient.get('/api/v1/support/tickets', { params });
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const tickets = (res.data as Record<string, any>).tickets || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Support Tickets (${tickets.length})`));
@@ -42,7 +43,7 @@ supportCommand.command('get <id>').description('View ticket details')
     try {
       const res = await apiClient.get(`/api/v1/support/tickets/${id}`);
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const t = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header(`Ticket #${t.id || id}`));

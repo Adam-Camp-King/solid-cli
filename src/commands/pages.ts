@@ -18,6 +18,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 export const pagesCommand = new Command('pages')
   .description('Website page management');
@@ -122,7 +123,7 @@ pagesCommand
     try {
       const response = await apiClient.pageGet(pageId);
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -388,7 +389,7 @@ pagesCommand
     try {
       const res = await apiClient.get(`/api/v1/cms/pages/slug/${slug}`);
       const p = res.data as Record<string, any>;
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(p, null, 2)); return; }
       spinner.succeed(chalk.green(`Page: ${p.title}`));
       console.log('');
       console.log(`  ${chalk.dim('ID:')}        ${p.id}`);

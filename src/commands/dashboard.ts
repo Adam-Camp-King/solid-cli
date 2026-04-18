@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const dashboardCommand = new Command('dashboard')
   .description('Agency dashboard — all companies at a glance')
@@ -63,7 +64,7 @@ export const dashboardCommand = new Command('dashboard')
 
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         const data = results.map((r) => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
         console.log(JSON.stringify(data, null, 2));
         return;

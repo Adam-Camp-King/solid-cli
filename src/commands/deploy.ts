@@ -5,6 +5,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
+import { isJsonOutput } from '../lib/json-output';
 
 function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -62,7 +63,7 @@ export const deployCommand = new Command('deploy')
         spinner.succeed(chalk.green('Preview deployment created'));
         const data = res.data as any;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -101,7 +102,7 @@ export const deployCommand = new Command('deploy')
         spinner.succeed(chalk.green('Previews loaded'));
         const data = res.data as any;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -168,7 +169,7 @@ export const deployCommand = new Command('deploy')
         promoteSpinner.succeed(chalk.green('Preview promoted to live'));
         const data = res.data as any;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -224,7 +225,7 @@ export const deployCommand = new Command('deploy')
         spinner.succeed(chalk.green('Preview loaded'));
         const data = res.data as any;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }

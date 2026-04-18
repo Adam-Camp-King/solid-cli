@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const domainsCommand = new Command('domains')
   .description('Custom domain management — list, add, verify, attach tenant subdomains')
@@ -31,7 +32,7 @@ domainsCommand.command('list').description('List configured domains')
       ]);
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify({ subdomain: subRes.data, custom: customRes.data }, null, 2));
         return;
       }

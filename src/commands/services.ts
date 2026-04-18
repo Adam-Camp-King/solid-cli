@@ -9,6 +9,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 export const servicesCommand = new Command('services')
   .description('Service catalog management');
@@ -30,7 +31,7 @@ servicesCommand
     try {
       const response = await apiClient.servicesList();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;
@@ -95,7 +96,7 @@ servicesCommand
 
       const res = await apiClient.post('/api/v1/services/catalog', body);
       spinner.succeed(chalk.green('Service created'));
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       console.log(`  ID: ${d.id || d.service?.id || 'created'}`);
       console.log(`  Title: ${options.title}`);

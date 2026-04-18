@@ -9,6 +9,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -45,7 +46,7 @@ ordersCommand
       const data = res.data as Record<string, any>;
       const items = data.items || data.orders || data;
       const list = Array.isArray(items) ? items : (items.items || []);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${list.length} order(s)`));
       console.log('');
       for (const o of list as Record<string, any>[]) {
@@ -65,7 +66,7 @@ ordersCommand
     try {
       const res = await apiClient.get(`/api/v1/orders/${id}`);
       const o = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(o, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(o, null, 2)); return; }
       spinner.succeed(chalk.green(`Order ${id}`));
       console.log('');
       console.log(`  ${chalk.bold('Status:')}    ${o.status || '—'}`);

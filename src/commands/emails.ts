@@ -9,6 +9,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -62,7 +63,7 @@ addrCmd
     const s = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/email/addresses/${id}`);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Address'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -158,7 +159,7 @@ addrCmd
         apiClient.get('/api/v1/email/limits'),
       ]);
       const payload = { usage: usage.data, limits: limits.data };
-      if (opts.json) { s.stop(); console.log(JSON.stringify(payload, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(payload, null, 2)); return; }
       s.succeed(chalk.green('Email usage / limits'));
       console.log(JSON.stringify(payload, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
@@ -177,7 +178,7 @@ emailsCommand
     const s = ora('Loading templates...').start();
     try {
       const res = await apiClient.get('/api/v1/EmailCommunication/templates');
-      if (opts.json) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       s.succeed(chalk.green('Templates'));
       const list = res.data as Record<string, any>[];
       for (const t of list ?? []) console.log(`  ${chalk.bold(t.template_name || t.name)}  ${chalk.dim(t.description || '')}`);

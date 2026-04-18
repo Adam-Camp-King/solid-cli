@@ -20,6 +20,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -46,7 +47,7 @@ draftsCommand
     try {
       const res = await apiClient.get('/api/v1/cms/pages/drafts/list');
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       const count = r.count ?? 0;
       spinner.succeed(chalk.green(`${count} pending draft(s)`));
       if (count === 0) {
@@ -82,7 +83,7 @@ draftsCommand
     try {
       const res = await apiClient.post(`/api/v1/cms/pages/${pageId}/preview-link?ttl_hours=${ttl}`);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       spinner.succeed(chalk.green('Preview link'));
       console.log('');
       console.log(`  ${chalk.bold('URL:')}        ${chalk.cyan(r.preview_url)}`);
