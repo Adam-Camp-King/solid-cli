@@ -222,23 +222,19 @@ blogCommand
 
 blogCommand
   .command('delete <id>')
-  .description('Delete a blog post')
-  .action(async (id) => {
+  .description('Delete a blog post (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     requireAuth();
 
-    const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: `Delete blog post #${id}? This cannot be undone.`,
-      default: false,
-    }]);
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Delete blog post #${id}? This cannot be undone.`,
+      { autoConfirm: Boolean(opts.yes) },
+    );
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
 
-    if (!confirm) {
-      console.log(chalk.dim('Cancelled.'));
-      return;
-    }
-
-    const spinner = ora(`Deleting post #${id}...`).start();
+    const spinner = ora({ text: `Deleting post #${id}...`, stream: process.stderr }).start();
 
     try {
       await apiClient.delete(`/api/v1/cms/blog/posts/${id}`);
@@ -247,6 +243,7 @@ blogCommand
       spinner.fail(chalk.red('Failed to delete blog post'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
     }
   });
 

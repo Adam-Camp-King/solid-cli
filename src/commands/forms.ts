@@ -90,10 +90,14 @@ formsCommand
 
 formsCommand
   .command('delete <id>')
-  .description('Delete a form')
-  .action(async (id) => {
+  .description('Delete a form (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     requireAuth();
-    const s = ora('Deleting...').start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Delete form ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const s = ora({ text: 'Deleting...', stream: process.stderr }).start();
     try {
       await apiClient.delete(`/api/v1/surveys/${id}`);
       s.succeed(chalk.green('Deleted'));

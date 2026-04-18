@@ -164,33 +164,30 @@ kbCommand
 // Delete KB entry
 kbCommand
   .command('delete <id>')
-  .description('Delete a knowledge base entry by ID')
-  .action(async (id) => {
+  .description('Delete a knowledge base entry by ID (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
 
-    const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: `Delete KB entry #${id}? This cannot be undone.`,
-      default: false,
-    }]);
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Delete KB entry #${id}? This cannot be undone.`,
+      { autoConfirm: Boolean(opts.yes) },
+    );
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
 
-    if (!confirm) {
-      console.log(chalk.dim('Cancelled.'));
-      return;
-    }
-
-    const spinner = ora('Deleting KB entry...').start();
+    const spinner = ora({ text: 'Deleting KB entry...', stream: process.stderr }).start();
 
     try {
-      await apiClient.kbDelete(parseInt(id));
+      await apiClient.kbDelete(parseInt(id, 10));
       spinner.succeed(chalk.green(`KB entry #${id} deleted`));
     } catch (error) {
       spinner.fail(chalk.red('Failed to delete KB entry'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
     }
   });

@@ -88,10 +88,14 @@ chainsCommand
 
 chainsCommand
   .command('delete <id>')
-  .description('Delete a chain')
-  .action(async (id) => {
+  .description('Delete a chain (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     requireAuth();
-    const s = ora(`Deleting ${id}...`).start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Delete chain ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const s = ora({ text: `Deleting ${id}...`, stream: process.stderr }).start();
     try {
       await apiClient.delete(`/api/v1/chains/${id}`);
       s.succeed(chalk.green('Deleted'));
@@ -202,10 +206,14 @@ chainsCommand
 
 chainsCommand
   .command('cancel <execution_id>')
-  .description('Cancel an execution')
-  .action(async (id) => {
+  .description('Cancel an execution (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     requireAuth();
-    const s = ora('Cancelling...').start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Cancel execution ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const s = ora({ text: 'Cancelling...', stream: process.stderr }).start();
     try {
       await apiClient.post(`/api/v1/chains/executions/${id}/cancel`);
       s.succeed(chalk.green('Cancelled'));

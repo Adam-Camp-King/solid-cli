@@ -150,10 +150,17 @@ inboundCommand
 
 inboundCommand
   .command('delete <id>')
-  .description('Delete an endpoint (cascades to all received events)')
-  .action(async (id) => {
+  .description('Delete an endpoint (prompts by default — cascades to all received events)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     requireAuth();
-    const spinner = ora(`Deleting endpoint ${id}...`).start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Delete endpoint ${id}? All received events for this endpoint will also be deleted.`,
+      { autoConfirm: Boolean(opts.yes) },
+    );
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora({ text: `Deleting endpoint ${id}...`, stream: process.stderr }).start();
     try {
       await apiClient.delete(`/api/v1/inbound/endpoints/${id}`);
       spinner.succeed(chalk.green(`Endpoint ${id} deleted`));

@@ -88,13 +88,39 @@ reportsCommand
   });
 
 reportsCommand
-  .command('run <type>')
-  .description('Run a report (sales_overview_daily, payments_by_tender, financial_summary, inventory_summary, top_items)')
+  .command('run [type]')
+  .description('Run a report. Use --list to discover valid types.')
+  .option('--list', 'List available report types and exit')
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
   .option('--days <n>', 'Shortcut: last N days')
   .option('--json', 'Output as JSON')
-  .action(async (type: string, options) => {
+  .action(async (type: string | undefined, options) => {
+    // --list: forward to the `list` action so `reports run --list` works the
+    // same as `reports list`. Matches intuition; doesn't require the user
+    // to know two commands.
+    if (options.list) {
+      await run<ReportDefinitionsResponse>(
+        async () => (await apiClient.get('/api/v1/Reports/definitions')).data as ReportDefinitionsResponse,
+        {
+          spinner: 'Loading report definitions...',
+          errorText: 'Failed to load report types',
+          json: options.json,
+          render: (data) => {
+            const defs: ReportDefinition[] = data.definitions || data.reports || REPORT_TYPES;
+            console.log('');
+            for (const r of defs) {
+              console.log(`  ${chalk.bold(r.key || r.name || '?')}  ${chalk.dim(r.description || '')}`);
+            }
+          },
+        },
+      );
+      return;
+    }
+    if (!type) {
+      console.error(chalk.red('Missing report type. Use `solid reports run --list` to see valid types.'));
+      process.exit(2);
+    }
     await run<ReportRunResponse>(
       async () => {
         const body: Record<string, unknown> = { key: type };

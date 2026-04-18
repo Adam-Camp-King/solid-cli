@@ -754,9 +754,22 @@ authCommand
 
     if (options.show || (!options.apiUrl && !options.environment)) {
       console.log(chalk.bold('\nCurrent Configuration:'));
-      console.log(chalk.dim('  API URL:'), config.apiUrl);
+      console.log(chalk.dim('  API URL:    '), config.apiUrl);
       console.log(chalk.dim('  Environment:'), config.environment);
-      console.log(chalk.dim('  Company ID:'), config.companyId || 'Not set');
-      console.log(chalk.dim('  User:'), config.userEmail || 'Not logged in');
+      console.log(chalk.dim('  Company ID: '), config.companyId || 'Not set');
+      console.log(chalk.dim('  User:       '), config.userEmail || 'Not logged in');
+      const ttl = formatTokenTTL();
+      if (ttl) console.log(chalk.dim('  Token:      '), ttl);
+      if (config.accessToken) {
+        // Plaintext-token warning (audit #28). Scripts + agents often log
+        // this output — they need to know the file is readable to any
+        // process running as this UID.
+        console.log('');
+        console.log(chalk.yellow(
+          '  ⚠ Credentials are stored in plaintext at ~/.solid/config.json (chmod 600).\n' +
+          '    On shared machines, prefer SOLID_API_KEY / SOLID_TOKEN env vars\n' +
+          '    or a short-lived automation key.',
+        ));
+      }
     }
   });
