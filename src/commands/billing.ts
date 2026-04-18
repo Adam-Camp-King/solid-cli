@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const billingCommand = new Command('billing')
   .description('Subscription, usage, and invoices')
@@ -17,7 +18,7 @@ billingCommand.command('status').description('Current subscription and usage')
     try {
       const res = await apiClient.get('/api/v1/billing/overview');
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Subscription'));
@@ -38,7 +39,7 @@ billingCommand.command('usage').description('Current period usage (tokens, stora
     try {
       const res = await apiClient.get('/api/v1/billing/current-statement');
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Record<string, any>;
       console.log('');
       console.log(ui.header('Usage This Period'));
@@ -60,7 +61,7 @@ billingCommand.command('invoices').description('List invoices')
     try {
       const res = await apiClient.get('/api/v1/billing/invoices', { params: { limit: options.limit } });
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const invoices = (res.data as Record<string, any>).invoices || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Invoices (${invoices.length})`));
@@ -171,7 +172,7 @@ billingCommand.command('methods').description('List saved payment methods')
       const res = await apiClient.get('/api/v1/billing/payment-methods');
       const data = res.data as Record<string, any>;
       const items = data.payment_methods || data.items || [];
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} payment method(s)`));
       console.log('');
       for (const m of items as Record<string, any>[]) {
@@ -241,7 +242,7 @@ billingCommand.command('charges').description('List charges')
       const res = await apiClient.get('/api/v1/billing/charges', { params: { limit: parseInt(options.limit, 10) } });
       const data = res.data as Record<string, any>;
       const items = data.charges || data.items || [];
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} charge(s)`));
       console.log('');
       for (const c of items as Record<string, any>[]) {
@@ -258,7 +259,7 @@ billingCommand.command('statement').description('Current billing statement')
     const spinner = ora('Loading statement...').start();
     try {
       const res = await apiClient.get('/api/v1/billing/current-statement');
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Current statement'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
@@ -272,7 +273,7 @@ billingCommand.command('subscription <customerId>').description('Subscription de
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/billing/subscription/${customerId}`);
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Subscription'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }

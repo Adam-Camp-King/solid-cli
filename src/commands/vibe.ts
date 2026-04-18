@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 export const vibeCommand = new Command('vibe')
   .description('Natural language integration commands')
@@ -38,7 +39,7 @@ export const vibeCommand = new Command('vibe')
     try {
       const response = await apiClient.vibeAnalyze(prompt);
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(response.data, null, 2));
         return;

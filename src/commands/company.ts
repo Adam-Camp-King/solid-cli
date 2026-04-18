@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const companyCommand = new Command('company')
   .description('Manage companies (agencies & multi-company developers)');
@@ -36,7 +37,7 @@ companyCommand
 
       const { companies, active_company_id } = response.data;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -131,7 +132,7 @@ companyCommand
 
         spinner.succeed(chalk.green('Dedicated droplet provisioned'));
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(response.data, null, 2));
           return;
         }
@@ -163,7 +164,7 @@ companyCommand
         const response = await apiClient.companyCreate(name, options.template, options.industry);
         spinner.succeed(chalk.green('Company created'));
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(response.data, null, 2));
           return;
         }
@@ -205,7 +206,7 @@ companyCommand
       process.exit(1);
     }
     const id = config.companyId;
-    if (options.json) {
+    if (isJsonOutput(options)) {
       console.log(JSON.stringify({ company_id: id ?? null, email: config.userEmail ?? null }, null, 2));
       return;
     }
@@ -233,7 +234,7 @@ companyCommand
       const response = await apiClient.companyInfo();
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -278,7 +279,7 @@ const membersCommand = new Command('members')
 
       const { members, count } = response.data;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -503,7 +504,7 @@ companyCommand
     }
     try {
       const res = await apiClient.companyLockStatus(companyId);
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(res.data, null, 2));
         return;
       }

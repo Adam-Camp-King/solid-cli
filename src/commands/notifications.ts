@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const notificationsCommand = new Command('notifications')
   .description('View and manage notifications')
@@ -19,7 +20,7 @@ notificationsCommand.command('list').description('List recent notifications')
       if (options.unread) params.unread_only = true;
       const res = await apiClient.get('/api/v1/notifications', { params });
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const items = (res.data as Record<string, any>).notifications || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Notifications (${items.length})`));

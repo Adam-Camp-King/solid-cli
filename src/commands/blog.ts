@@ -25,58 +25,42 @@ export const blogCommand = new Command('blog')
 
 // ── Blog Post Commands ──────────────────────────────────────────────
 
-blogCommand
-  .command('list')
-  .description('List blog posts')
-  .option('--status <status>', 'Filter by status (published, draft)')
-  .option('-l, --limit <limit>', 'Max results', '20')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    requireAuth();
-    const spinner = ora('Loading blog posts...').start();
-
-    try {
-      const params: Record<string, unknown> = {
-        page: 1,
-        page_size: parseInt(options.limit),
-      };
-      if (options.status) params.status = options.status;
-
-      const response = await apiClient.get('/api/v1/cms/blog/posts', { params });
-
-      if (options.json) {
-        spinner.stop();
-        console.log(JSON.stringify(response.data, null, 2));
-        return;
-      }
-
-      const data = response.data as Record<string, any>;
-      const posts = data.posts || data.items || [];
-      spinner.succeed(chalk.green(`${posts.length} blog posts`));
-
-      if (posts.length === 0) {
-        console.log(chalk.dim('  No blog posts yet. Use `solid blog create` to write one.'));
-        return;
-      }
-
-      console.log('');
-      for (const post of posts) {
-        const status = post.published
-          ? chalk.green('published')
-          : chalk.yellow('draft');
-        const category = post.category ? chalk.cyan(`[${post.category}]`) : '';
-        console.log(`  ${chalk.bold(post.title)} ${category} ${status}`);
-        const meta: string[] = [];
-        if (post.id) meta.push(`ID: ${post.id}`);
-        if (post.tags?.length) meta.push(`tags: ${post.tags.join(', ')}`);
-        if (meta.length) console.log(chalk.dim(`    ${meta.join('  ')}`));
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load blog posts'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+// List blog posts — full scripting contract
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = blogCommand.command('list').description('List blog posts');
+  withListFlags(listCmd, '20');
+  listCmd.option('--status <status>', 'Filter by status (published, draft)');
+  listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading blog posts...',
+      errorText: 'Failed to load blog posts',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { page_size: limit, page: Math.floor(offset / limit) + 1 };
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/cms/blog/posts', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.posts || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No blog posts yet. Use `solid blog create` to write one.')); return; }
+        console.log('');
+        for (const post of items) {
+          const status = post.published ? chalk.green('published') : chalk.yellow('draft');
+          const category = post.category ? chalk.cyan(`[${post.category}]`) : '';
+          console.log(`  ${chalk.bold(String(post.title))} ${category} ${status}`);
+          const meta: string[] = [];
+          if (post.id) meta.push(`ID: ${post.id}`);
+          if (Array.isArray(post.tags) && post.tags.length) meta.push(`tags: ${(post.tags as string[]).join(', ')}`);
+          if (meta.length) console.log(chalk.dim(`    ${meta.join('  ')}`));
+        }
+      },
+    });
   });
+}
 
 blogCommand
   .command('get <id>')

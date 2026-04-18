@@ -21,47 +21,35 @@ function requireAuth() {
 export const inventoryCommand = new Command('inventory')
   .description('Inventory & stock management');
 
-// List inventory items
-inventoryCommand
-  .command('list')
-  .description('List inventory items')
-  .option('--limit <n>', 'Max results', '50')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    requireAuth();
-    const spinner = ora('Loading inventory...').start();
-
-    try {
-      const params = { limit: parseInt(options.limit), offset: 0 };
-      const response = await apiClient.get('/api/v1/Inventory/list', { params });
-      const data = response.data as Record<string, any>;
-      const items = data.items || data.inventory || [];
-
-      if (options.json) {
-        spinner.stop();
-        console.log(JSON.stringify(data, null, 2));
-        return;
-      }
-
-      spinner.succeed(chalk.green(`${items.length} item(s)`));
-
-      if (items.length === 0) {
-        console.log(chalk.dim('  No inventory items found.'));
-        return;
-      }
-
-      console.log('');
-      for (const item of items as Record<string, any>[]) {
-        const qty = item.on_hand ?? item.quantity ?? 0;
-        const qtyColor = qty <= 0 ? chalk.red : qty < 10 ? chalk.yellow : chalk.green;
-        const price = item.price !== undefined ? chalk.green(`$${Number(item.price).toFixed(2)}`) : '';
-        console.log(`  ${chalk.bold(item.sku || item.id)}  ${item.name || item.title}  ${qtyColor(`qty: ${qty}`)}  ${price}`);
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load inventory'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-    }
+// List inventory items — full scripting contract
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = inventoryCommand.command('list').description('List inventory items');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading inventory...',
+      errorText: 'Failed to load inventory',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/Inventory/list', { params: { limit, offset } })).data,
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.items || d.inventory || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No inventory items found.')); return; }
+        console.log('');
+        for (const it of items) {
+          const qty = (it.on_hand ?? it.quantity ?? 0) as number;
+          const qtyColor = qty <= 0 ? chalk.red : qty < 10 ? chalk.yellow : chalk.green;
+          const price = it.price !== undefined ? chalk.green(`$${Number(it.price).toFixed(2)}`) : '';
+          console.log(`  ${chalk.bold(String(it.sku || it.id))}  ${it.name || it.title}  ${qtyColor(`qty: ${qty}`)}  ${price}`);
+        }
+      },
+    });
   });
+}
 
 // Get item by SKU
 inventoryCommand

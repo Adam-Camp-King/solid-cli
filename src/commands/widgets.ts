@@ -21,58 +21,43 @@ function requireAuth(): void {
 export const widgetsCommand = new Command('widget')
   .description('Widgets — embeddable business widgets');
 
-// List widgets
-widgetsCommand
-  .command('list')
-  .alias('ls')
-  .description('List widgets')
-  .option('-t, --type <type>', 'Filter by type (booking, chat, form, review, cta)')
-  .option('-s, --status <status>', 'Filter by status (active, inactive, draft)')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    requireAuth();
-
-    const spinner = ora('Loading widgets...').start();
-
-    try {
-      const params: Record<string, unknown> = {};
-      if (options.type) params.widget_type = options.type;
-      if (options.status) params.status = options.status;
-
-      const response = await apiClient.get('/api/v1/cli/widgets', { params });
-      const data = response.data as Record<string, any>;
-      const widgets = data.widgets || [];
-
-      if (options.json) {
-        spinner.stop();
-        console.log(JSON.stringify(data, null, 2));
-        return;
-      }
-
-      spinner.succeed(`${widgets.length} widgets`);
-
-      if (widgets.length === 0) {
-        console.log(chalk.dim('  No widgets found. Create one with `solid widget create <name>`'));
-        return;
-      }
-
-      console.log('');
-      const headers = ['ID', 'Name', 'Type', 'Status'];
-      const rows = widgets.map((w: any) => [
-        String(w.id).substring(0, 10),
-        w.name.substring(0, 28),
-        chalk.cyan(w.widget_type || w.type || '-'),
-        w.status === 'active' ? chalk.green(w.status) :
-          w.status === 'draft' ? chalk.dim(w.status) :
-          chalk.yellow(w.status),
-      ]);
-      console.log(ui.table(headers, rows));
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load widgets'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+// List widgets — full scripting contract
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = widgetsCommand.command('list').alias('ls').description('List widgets');
+  withListFlags(listCmd);
+  listCmd.option('-t, --type <type>', 'Filter by type (booking, chat, form, review, cta)');
+  listCmd.option('-s, --status <status>', 'Filter by status (active, inactive, draft)');
+  listCmd.action(async (opts: { type?: string; status?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading widgets...',
+      errorText: 'Failed to load widgets',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.type) params.widget_type = opts.type;
+        if (opts.status) params.status = opts.status;
+        return (await apiClient.get('/api/v1/cli/widgets', { params })).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.widgets || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No widgets found. Create one with `solid widget create <name>`')); return; }
+        console.log('');
+        const rows = items.map((w) => [
+          String(w.id).substring(0, 10),
+          String(w.name || '').substring(0, 28),
+          chalk.cyan(String(w.widget_type || w.type || '-')),
+          w.status === 'active' ? chalk.green(String(w.status)) :
+            w.status === 'draft' ? chalk.dim(String(w.status)) : chalk.yellow(String(w.status || '')),
+        ]);
+        console.log(ui.table(['ID', 'Name', 'Type', 'Status'], rows));
+      },
+    });
   });
+}
 
 // Get widget details
 widgetsCommand

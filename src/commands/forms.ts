@@ -21,25 +21,31 @@ export const formsCommand = new Command('forms')
   .alias('surveys')
   .description('Forms & surveys — CRUD, AI generate, export CSV/Excel/PDF');
 
-formsCommand
-  .command('list')
-  .description('List forms/surveys')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const s = ora('Loading...').start();
-    try {
-      const res = await apiClient.get('/api/v1/surveys');
-      const data = res.data as Record<string, any>;
-      const items = data.surveys || data.items || data;
-      const list = Array.isArray(items) ? items : (items.surveys || []);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      s.succeed(chalk.green(`${list.length} form(s)`));
-      for (const f of list as Record<string, any>[]) {
-        console.log(`  ${chalk.bold(f.id)}  ${f.title || f.name}  ${chalk.dim(f.created_at?.split('T')[0] || '')}`);
-      }
-    } catch (e) { fail(s, 'Failed', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = formsCommand.command('list').description('List forms/surveys');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading forms...',
+      errorText: 'Failed to load forms',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/surveys', { params: { limit, offset } })).data,
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.surveys || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No forms yet.')); return; }
+        for (const f of items) {
+          console.log(`  ${chalk.bold(String(f.id))}  ${f.title || f.name}  ${chalk.dim(String(f.created_at || '').split('T')[0])}`);
+        }
+      },
+    });
   });
+}
 
 formsCommand
   .command('get <id>')

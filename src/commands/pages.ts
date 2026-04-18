@@ -22,55 +22,39 @@ import { apiClient, handleApiError } from '../lib/api-client';
 export const pagesCommand = new Command('pages')
   .description('Website page management');
 
-// List pages
-pagesCommand
-  .command('list')
-  .description('List CMS pages')
-  .option('--type <type>', 'Filter by page type (website, landing, blog, booking)')
-  .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    const spinner = ora('Loading pages...').start();
-
-    try {
-      const params: any = {};
-      if (options.type) params.page_type = options.type;
-
-      const response = await apiClient.pagesList(params);
-
-      if (options.json) {
-        spinner.stop();
-        console.log(JSON.stringify(response.data, null, 2));
-        return;
-      }
-
-      const pages = (response.data as Record<string, any>).pages || [];
-      spinner.succeed(chalk.green(`${pages.length} pages`));
-
-      if (pages.length === 0) {
-        console.log(chalk.dim('  No pages yet. Use the website builder to create pages.'));
-        return;
-      }
-
-      console.log('');
-      for (const page of pages) {
-        const status = page.is_published
-          ? chalk.green('published')
-          : chalk.yellow('draft');
-        const type = page.page_type ? chalk.cyan(`[${page.page_type}]`) : '';
-        console.log(`  ${chalk.bold(page.title)} ${type} ${status}`);
-        console.log(chalk.dim(`    /${page.slug}  ID: ${page.id}`));
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load pages'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+// List pages — full scripting contract via withListFlags + runListCommand
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = pagesCommand.command('list').description('List CMS pages');
+  withListFlags(listCmd);
+  listCmd.option('--type <type>', 'Filter by page type (website, landing, blog, booking)');
+  listCmd.action(async (opts: { type?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading pages...',
+      errorText: 'Failed to load pages',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.type) params.page_type = opts.type;
+        return (await apiClient.pagesList(params)).data;
+      },
+      extract: (page) => {
+        const d = page as Record<string, unknown>;
+        return ((d.pages || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No pages yet. Use the website builder to create pages.')); return; }
+        console.log('');
+        for (const p of items) {
+          const status = p.is_published ? chalk.green('published') : chalk.yellow('draft');
+          const type = p.page_type ? chalk.cyan(`[${p.page_type}]`) : '';
+          console.log(`  ${chalk.bold(String(p.title))} ${type} ${status}`);
+          console.log(chalk.dim(`    /${p.slug}  ID: ${p.id}`));
+        }
+      },
+    });
   });
+}
 
 // Publish a page
 pagesCommand

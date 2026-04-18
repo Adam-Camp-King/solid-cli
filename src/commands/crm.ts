@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -64,13 +65,13 @@ const contactsCommand = new Command('contacts')
           { limit: 100 },
         );
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
       } else {
         const res = await apiClient.get('/api/v1/crm/contacts', {
           params: { ...baseParams, page_size: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
         });
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
         items = asList(res.data);
       }
 
@@ -103,7 +104,7 @@ contactsCommand.command('get <id>').description('Get contact details').option('-
     try {
       const res = await apiClient.get(`/api/v1/crm/contacts/${id}`);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const c = res.data as Rec;
       console.log(ui.successBox('Contact', [
         `ID:       ${c.id}`, `Name:     ${contactName(c)}`, `Email:    ${c.email || '—'}`,
@@ -129,7 +130,7 @@ contactsCommand.command('create').description('Create a new contact')
       if (opts.company) body.company_name = opts.company;
       const res = await apiClient.post('/api/v1/crm/contacts', body);
       spinner.succeed(chalk.green('Contact created'));
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const c = res.data as Rec;
       console.log(ui.successBox('Contact Created', [`ID: ${c.id}`, `Name: ${contactName(c)}`, `Email: ${c.email || '—'}`]));
       console.log('');
@@ -240,7 +241,7 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
         results.push({ row: i + 1, status: 'failed', error: msg });
         if (opts.stopOnError) {
           spinner.fail(chalk.red(`Aborted on row ${i + 1}: ${msg}`));
-          if (opts.json) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
+          if (isJsonOutput(opts)) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
           process.exit(1);
         }
       }
@@ -250,7 +251,7 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
     else if (failed === 0) spinner.succeed(chalk.green(`Imported ${created} contacts (${skipped} skipped)`));
     else spinner.warn(chalk.yellow(`Imported ${created} / ${total}  (failed: ${failed}, skipped: ${skipped})`));
 
-    if (opts.json) {
+    if (isJsonOutput(opts)) {
       console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!opts.dryRun }, results }, null, 2));
       return;
     }
@@ -278,7 +279,7 @@ contactsCommand.command('update <id>').description('Update a contact')
       if (!Object.keys(body).length) { spinner.fail(chalk.red('No fields to update. Use --name, --email, or --phone.')); return; }
       const res = await apiClient.patch(`/api/v1/crm/contacts/${id}`, body);
       spinner.succeed(chalk.green('Contact updated'));
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const c = res.data as Rec;
       console.log(ui.successBox('Updated', [`ID: ${c.id || id}`, `Name: ${contactName(c)}`]));
       console.log('');
@@ -306,7 +307,7 @@ contactsCommand.command('search <query>').description('Typeahead search for cont
     try {
       const res = await apiClient.get('/api/v1/crm/contacts/search/typeahead', { params: { q: query } });
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const items = asList(res.data);
       if (!items.length) { console.log(chalk.yellow(`  No matches for "${query}".`)); return; }
       console.log(ui.header(`Search: "${query}" (${items.length} results)`));
@@ -324,7 +325,7 @@ contactsCommand.command('timeline <id>').description('View contact activity time
     try {
       const res = await apiClient.get(`/api/v1/crm/contacts/${id}/timeline`);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const activities = asList(res.data);
       if (!activities.length) { console.log(chalk.yellow('  No activity yet.')); return; }
       console.log(ui.header(`Timeline — Contact ${id}`));
@@ -365,13 +366,13 @@ const dealsCommand = new Command('deals')
           { limit: 100 },
         );
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
       } else {
         const res = await apiClient.get('/api/v1/crm/deals', {
           params: { ...base, limit: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
         });
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
         items = asList(res.data);
       }
 
@@ -402,7 +403,7 @@ dealsCommand.command('get <id>').description('Get deal details').option('--json'
     try {
       const res = await apiClient.get(`/api/v1/crm/deals/${id}`);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Rec;
       console.log(ui.successBox('Deal', [
         `ID:      ${d.id}`, `Title:   ${d.title || '—'}`,
@@ -427,7 +428,7 @@ dealsCommand.command('create').description('Create a new deal')
       if (opts.stage) body.stage = opts.stage;
       const res = await apiClient.post('/api/v1/crm/deals', body);
       spinner.succeed(chalk.green('Deal created'));
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Rec;
       console.log(ui.successBox('Deal Created', [
         `ID: ${d.id}`, `Title: ${d.title}`, `Value: ${d.value ? '$' + Number(d.value).toLocaleString() : '—'}`,
@@ -448,7 +449,7 @@ dealsCommand.command('update <id>').description('Update a deal')
       if (!Object.keys(body).length) { spinner.fail(chalk.red('No fields to update. Use --stage or --value.')); return; }
       const res = await apiClient.patch(`/api/v1/crm/deals/${id}`, body);
       spinner.succeed(chalk.green('Deal updated'));
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Rec;
       console.log(ui.successBox('Deal Updated', [
         `ID: ${d.id || id}`, `Stage: ${d.stage || '—'}`, `Value: ${d.value ? '$' + Number(d.value).toLocaleString() : '—'}`,
@@ -479,7 +480,7 @@ dealsCommand.command('move-stage <id> <stage>').description('Move a deal to a ne
     try {
       const res = await apiClient.patch(`/api/v1/crm/deals/${id}`, { stage });
       spinner.succeed(chalk.green(`Deal ${id} moved to stage: ${stage}`));
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Rec;
       console.log(ui.successBox('Deal Moved', [
         `ID: ${d.id || id}`,
@@ -509,7 +510,7 @@ const tasksCommand = new Command('tasks')
       if (opts.overdue) params.overdue = true;
       const res = await apiClient.get('/api/v1/crm/tasks', { params });
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const items = asList(res.data);
       if (!items.length) { console.log(chalk.yellow('  No tasks found.')); return; }
       console.log(ui.header(`Tasks (${items.length})`));
@@ -537,7 +538,7 @@ tasksCommand.command('create').description('Create a new task')
       if (opts.due) body.due_date = opts.due;
       const res = await apiClient.post('/api/v1/crm/tasks', body);
       spinner.succeed(chalk.green('Task created'));
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const t = res.data as Rec;
       console.log(ui.successBox('Task Created', [
         `ID: ${t.id}`, `Title: ${t.title}`, `Priority: ${t.priority || '—'}`,
@@ -602,7 +603,7 @@ crmCommand.command('dashboard').description('CRM summary — contacts, deals, re
     try {
       const res = await apiClient.get('/api/v1/crm/dashboard/summary');
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const d = res.data as Rec;
       console.log(ui.header('CRM Dashboard'));
       console.log(ui.label('Contacts', String(d.total_contacts ?? d.contacts_count ?? '—')));

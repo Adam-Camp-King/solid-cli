@@ -8,6 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 export const integrationsCommand = new Command('integrations')
   .alias('int')
@@ -88,7 +89,7 @@ integrationsCommand
 
       spinner.succeed('Catalog retrieved');
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }

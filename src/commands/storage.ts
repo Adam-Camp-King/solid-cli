@@ -171,29 +171,33 @@ storageCommand
     if (failed > 0) process.exit(1);
   });
 
-storageCommand
-  .command('list')
-  .description('List documents')
-  .option('--folder <id>', 'Filter by folder ID')
-  .option('-l, --limit <n>', 'Limit', '100')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const spinner = ora('Loading documents...').start();
-    try {
-      const params: Record<string, unknown> = { limit: parseInt(opts.limit, 10) };
-      if (opts.folder) params.folder_id = parseInt(opts.folder, 10);
-      const res = await apiClient.get('/api/v1/storage/documents', { params });
-      const items = (res.data as Record<string, any>[]) ?? [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
-      spinner.succeed(chalk.green(`${items.length} document(s)`));
-      console.log('');
-      for (const d of items) {
-        const size = d.size_bytes ? `${Math.round((d.size_bytes / 1024) * 10) / 10} KB` : '—';
-        console.log(`  ${chalk.bold(d.id)}  ${d.filename || d.name}  ${chalk.dim(size)}  ${chalk.dim(d.created_at?.split('T')[0] || '')}`);
-      }
-    } catch (e) { fail(spinner, 'Failed to list documents', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = storageCommand.command('list').description('List documents');
+  withListFlags(listCmd, '100');
+  listCmd.option('--folder <id>', 'Filter by folder ID');
+  listCmd.action(async (opts: { folder?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading documents...',
+      errorText: 'Failed to list documents',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.folder) params.folder_id = parseInt(opts.folder, 10);
+        return (await apiClient.get('/api/v1/storage/documents', { params })).data;
+      },
+      extract: (page) => (Array.isArray(page) ? page : (page as { items?: unknown[] }).items || []) as Array<Record<string, unknown>>,
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No documents.')); return; }
+        console.log('');
+        for (const d of items) {
+          const size = d.size_bytes ? `${Math.round((Number(d.size_bytes) / 1024) * 10) / 10} KB` : '—';
+          console.log(`  ${chalk.bold(String(d.id))}  ${d.filename || d.name}  ${chalk.dim(size)}  ${chalk.dim(String(d.created_at || '').split('T')[0])}`);
+        }
+      },
+    });
   });
+}
 
 storageCommand
   .command('get <document_id>')

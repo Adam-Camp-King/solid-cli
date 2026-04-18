@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 // ---------------------------------------------------------------------------
 // Browser login (loopback OAuth — like `npm login`, `gh auth login`)
@@ -488,7 +489,7 @@ authCommand
   .option('--json', 'Output as JSON')
   .action(async (options: { json?: boolean }) => {
     if (!config.refreshToken) {
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify({ refreshed: false, reason: 'no_refresh_token' }, null, 2));
       } else {
         console.error(chalk.red('No refresh token cached. Run `solid auth login` first.'));
@@ -499,7 +500,7 @@ authCommand
     const ok = await apiClient.forceRefreshToken();
     if (!ok) {
       spinner.fail(chalk.red('Refresh failed — your refresh token may be expired.'));
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify({ refreshed: false, reason: 'refresh_rejected' }, null, 2));
       } else {
         console.error(chalk.dim('  Run `solid auth login` to re-authenticate.'));
@@ -507,7 +508,7 @@ authCommand
       process.exit(1);
     }
     spinner.succeed(chalk.green('Token refreshed'));
-    if (options.json) {
+    if (isJsonOutput(options)) {
       console.log(JSON.stringify({
         refreshed: true,
         token_expires_at: config.tokenExpiresAt ? config.tokenExpiresAt.toISOString() : null,
@@ -743,7 +744,7 @@ tokenCommand
       const response = await apiClient.apiKeyList();
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }

@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const llmsCommand = new Command('llms')
   .description('AI discovery — manage your llms.txt for AI shopping agents')
@@ -45,7 +46,7 @@ llmsCommand
       });
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }

@@ -27,6 +27,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 const BRAND = {
   primary: '#818cf8',
@@ -355,7 +356,7 @@ paymentCommand
       }
       const d = response.data as DashboardSummary;
 
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
       spinner.stop();
 
       const revenue = d.revenue || 0;

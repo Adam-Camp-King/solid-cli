@@ -26,26 +26,32 @@ export const emailsCommand = new Command('emails')
 
 const addrCmd = new Command('addresses').alias('addr').description('Manage company email addresses');
 
-addrCmd
-  .command('list')
-  .description('List company email addresses')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const s = ora('Loading addresses...').start();
-    try {
-      const res = await apiClient.get('/api/v1/email/addresses');
-      const data = res.data as Record<string, any>;
-      const items = data.addresses || data.items || data;
-      const list = Array.isArray(items) ? items : (items.addresses || []);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      s.succeed(chalk.green(`${list.length} address(es)`));
-      for (const a of list as Record<string, any>[]) {
-        const def = a.is_default ? chalk.cyan(' (default)') : '';
-        console.log(`  ${chalk.bold(a.id)}  ${a.email}${def}  ${chalk.dim(a.purpose || '')}`);
-      }
-    } catch (e) { fail(s, 'Failed', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = addrCmd.command('list').description('List company email addresses');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading addresses...',
+      errorText: 'Failed to load addresses',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/email/addresses', { params: { limit, offset } })).data,
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.addresses || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No addresses.')); return; }
+        for (const a of items) {
+          const def = a.is_default ? chalk.cyan(' (default)') : '';
+          console.log(`  ${chalk.bold(String(a.id))}  ${a.email}${def}  ${chalk.dim(String(a.purpose || ''))}`);
+        }
+      },
+    });
   });
+}
 
 addrCmd
   .command('get <id>')

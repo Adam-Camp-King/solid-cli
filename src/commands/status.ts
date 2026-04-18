@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const statusCommand = new Command('status')
   .description('Show your business status and setup overview')
@@ -30,7 +31,7 @@ export const statusCommand = new Command('status')
         const companies = companiesRes.data.companies || [];
         spinner.stop();
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(companies, null, 2));
           return;
         }
@@ -66,7 +67,7 @@ export const statusCommand = new Command('status')
         return;
       }
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(company, null, 2));
         return;

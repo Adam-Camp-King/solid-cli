@@ -17,6 +17,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
+import { isJsonOutput } from '../lib/json-output';
 
 type BlockDef = {
   type: string;
@@ -89,7 +90,7 @@ schemaCommand
         console.error(chalk.dim('  Run `solid schema pages` to list all available types.'));
         process.exit(1);
       }
-      if (opts.json) {
+      if (isJsonOutput(opts)) {
         console.log(JSON.stringify(block, null, 2));
         return;
       }
@@ -111,7 +112,7 @@ schemaCommand
     }
 
     // --json → full schema
-    if (opts.json) {
+    if (isJsonOutput(opts)) {
       console.log(JSON.stringify({ ...schema, blocks }, null, 2));
       return;
     }

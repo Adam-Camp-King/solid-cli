@@ -23,6 +23,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -61,7 +62,7 @@ moduleCmd
       if (opts.author) body.author = opts.author;
       const res = await apiClient.post('/api/v1/modules/scaffold', body);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       spinner.succeed(chalk.green(`Scaffolded ${r.folder_name}`));
       console.log('');
       console.log(`  ${chalk.bold('Folder:')}     ${r.folder_name}`);
@@ -92,7 +93,7 @@ moduleCmd
     try {
       const res = await apiClient.get('/api/v1/modules');
       const items = (res.data as Record<string, any>[]) ?? [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} module(s)`));
       if (!items.length) {
         console.log('');
@@ -120,7 +121,7 @@ moduleCmd
     try {
       const res = await apiClient.get(`/api/v1/modules/${moduleName}/routes`);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       spinner.succeed(chalk.green(`${r.count ?? 0} route(s)`));
       for (const route of r.routes || []) {
         const methods = (route.methods || []).join(',');
@@ -235,7 +236,7 @@ moduleCmd
     try {
       const res = await apiClient.get(`/api/v1/modules/admin/validate/${folder}`);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       if (r.valid) {
         spinner.succeed(chalk.green('Valid'));
       } else {
@@ -258,7 +259,7 @@ moduleCmd
     try {
       const res = await apiClient.post(`/api/v1/modules/${folder}/deploy`);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       if (!r.deployed) {
         spinner.fail(chalk.red(`Deploy blocked — ${(r.errors || []).length} validation error(s)`));
         for (const e of r.errors || []) console.log(`  ${chalk.red('✖')} ${chalk.dim(e.checkpoint)}: ${e.message}`);

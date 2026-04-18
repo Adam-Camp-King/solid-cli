@@ -9,6 +9,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const analyticsCommand = new Command('analytics')
   .description('Business analytics and insights')
@@ -58,7 +59,7 @@ analyticsCommand
       });
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }
@@ -102,7 +103,7 @@ analyticsCommand
       const response = await apiClient.get('/api/v1/analytics/mcp/traffic');
       spinner.stop();
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(response.data, null, 2));
         return;
       }

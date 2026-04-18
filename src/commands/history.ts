@@ -5,6 +5,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
+import { isJsonOutput } from '../lib/json-output';
 
 interface VersionRecord {
   version: number;
@@ -114,7 +115,7 @@ export const historyCommand = new Command('history')
         const pagesData = pagesRes.data as PagesHistoryResponse;
         const kbData = kbRes.data as KBHistoryResponse;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify({ pages: pagesData, kb: kbData }, null, 2));
           return;
         }
@@ -178,7 +179,7 @@ export const historyCommand = new Command('history')
           spinner.succeed(chalk.green(`Version ${options.version} loaded`));
           const v = res.data as VersionRecord;
 
-          if (options.json) {
+          if (isJsonOutput(options)) {
             console.log(JSON.stringify(v, null, 2));
             return;
           }
@@ -210,7 +211,7 @@ export const historyCommand = new Command('history')
         spinner.succeed(chalk.green('History loaded'));
         const data = res.data as PagesHistoryResponse;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -259,7 +260,7 @@ export const historyCommand = new Command('history')
         spinner.succeed(chalk.green('History loaded'));
         const data = res.data as KBHistoryResponse;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -356,7 +357,7 @@ export const rollbackCommand = new Command('rollback')
         rollbackSpinner.succeed(chalk.green('Rollback complete'));
         const data = res.data as RollbackResponse;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
@@ -398,7 +399,7 @@ export const rollbackCommand = new Command('rollback')
         spinner.succeed(chalk.green('Rollback complete'));
         const data = res.data as RollbackResponse;
 
-        if (options.json) {
+        if (isJsonOutput(options)) {
           console.log(JSON.stringify(data, null, 2));
           return;
         }

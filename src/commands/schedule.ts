@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in. Run `solid auth login` first.')); process.exit(1); }
@@ -35,7 +36,7 @@ scheduleCommand
       const data = response.data as Record<string, any>;
       const items = data.appointments || data.items || [];
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -68,7 +69,7 @@ scheduleCommand
       const response = await apiClient.get(`/api/v1/schedule/${id}`);
       const apt = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(apt, null, 2));
         return;
@@ -257,7 +258,7 @@ scheduleCommand
       const response = await apiClient.get('/api/v1/schedule/calendar');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -296,7 +297,7 @@ scheduleCommand
       const data = response.data as Record<string, any>;
       const slots = data.slots || data.available || [];
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;

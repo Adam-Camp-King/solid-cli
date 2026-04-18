@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const auditCommand = new Command('audit')
   .description('Activity log — who changed what, when')
@@ -35,7 +36,7 @@ export const auditCommand = new Command('audit')
         const res = await apiClient.get(`/api/v1/cli/api-keys/${keyId}/audit`, { params });
         spinner.stop();
         const data = res.data as Record<string, any>;
-        if (options.json) { console.log(JSON.stringify(data, null, 2)); return; }
+        if (isJsonOutput(options)) { console.log(JSON.stringify(data, null, 2)); return; }
         const events: any[] = data.events || [];
         console.log('');
         console.log(ui.header(`Audit — key "${data.api_key_name}" (id=${data.api_key_id})`));
@@ -65,7 +66,7 @@ export const auditCommand = new Command('audit')
       if (options.action) params.action_type = options.action;
       const res = await apiClient.get('/api/v1/security/audit/logs', { params });
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const entries = (res.data as Record<string, any>).entries || (res.data as Record<string, any>).logs || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Audit Log (${entries.length})`));
@@ -118,7 +119,7 @@ auditCommand.command('suspicious <userId>').description('Suspicious activity for
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/security/audit/suspicious/${userId}`);
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Suspicious activity'));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }

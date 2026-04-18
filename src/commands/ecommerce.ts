@@ -12,6 +12,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -47,7 +48,7 @@ cartsCmd
       if (opts.customer) params.customer_id = parseInt(opts.customer, 10);
       const res = await apiClient.get('/api/v1/crm/ecommerce/carts/active', { params });
       const c = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
       spinner.succeed(chalk.green(`Cart ${c.id}`));
       console.log('');
       console.log(`  ${chalk.bold('Items:')}     ${c.items?.length ?? 0}`);
@@ -67,7 +68,7 @@ cartsCmd
     try {
       const res = await apiClient.get(`/api/v1/crm/ecommerce/cart/${cartId}`, { params: { company_id: cid } });
       const c = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(c, null, 2)); return; }
       spinner.succeed(chalk.green(`Cart ${cartId}`));
       console.log('');
       const items = c.items || [];
@@ -202,14 +203,14 @@ ordersCmd
           { limit: 100 },
         );
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
       } else {
         const res = await apiClient.get('/api/v1/crm/ecommerce/orders', {
           params: { limit: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
         });
         const data = res.data as Record<string, unknown>;
         items = (data.orders || data.items || []) as Array<Record<string, unknown>>;
-        if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+        if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
         spinner.succeed(chalk.green(`${items.length} order(s)`));
       }
 
@@ -322,7 +323,7 @@ ordersCmd
         results.push({ row: i + 1, status: 'failed', error: msg });
         if (opts.stopOnError) {
           spinner.fail(chalk.red(`Aborted on row ${i + 1}: ${msg}`));
-          if (opts.json) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
+          if (isJsonOutput(opts)) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
           process.exit(1);
         }
       }
@@ -332,7 +333,7 @@ ordersCmd
     else if (failed === 0) spinner.succeed(chalk.green(`Imported ${created} orders (${skipped} skipped)`));
     else spinner.warn(chalk.yellow(`Imported ${created}/${total} (failed: ${failed}, skipped: ${skipped})`));
 
-    if (opts.json) {
+    if (isJsonOutput(opts)) {
       console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!opts.dryRun }, results }, null, 2));
       return;
     }
@@ -349,7 +350,7 @@ ordersCmd
     try {
       const res = await apiClient.get(`/api/v1/crm/ecommerce/orders/${id}`);
       const o = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(o, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(o, null, 2)); return; }
       spinner.succeed(chalk.green(`Order ${id}`));
       console.log('');
       console.log(`  ${chalk.bold('Customer:')}  ${o.customer_email || '—'}`);
@@ -469,7 +470,7 @@ ordersCmd
     try {
       const res = await apiClient.get('/api/v1/crm/ecommerce/orders/stats');
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Storefront stats'));
       console.log('');
       console.log(`  ${chalk.bold('Orders today:')}    ${s.orders_today ?? 'N/A'}`);
@@ -496,7 +497,7 @@ shippingCmd
       const res = await apiClient.get('/api/v1/crm/ecommerce/shipping/addresses');
       const data = res.data as Record<string, any>;
       const items = data.addresses || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} address(es)`));
       console.log('');
       for (const a of items as Record<string, any>[]) {
@@ -542,7 +543,7 @@ shippingCmd
       const res = await apiClient.get('/api/v1/crm/ecommerce/shipping/methods');
       const data = res.data as Record<string, any>;
       const items = data.methods || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} method(s)`));
       console.log('');
       for (const m of items as Record<string, any>[]) {
@@ -596,7 +597,7 @@ reviewsCmd
       const res = await apiClient.get('/api/v1/crm/ecommerce/reviews', { params });
       const data = res.data as Record<string, any>;
       const items = data.reviews || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} review(s)`));
       console.log('');
       for (const r of items as Record<string, any>[]) {
@@ -664,7 +665,7 @@ reviewsCmd
     try {
       const res = await apiClient.get(`/api/v1/crm/ecommerce/products/${productId}/rating`);
       const r = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       spinner.succeed(chalk.green(`Rating for product ${productId}`));
       console.log('');
       console.log(`  ${chalk.bold('Average:')} ${r.average_rating ?? 'N/A'} (${r.review_count ?? 0} reviews)`);
@@ -691,7 +692,7 @@ abandonedCmd
       });
       const data = res.data as Record<string, any>;
       const items = data.carts || data.items || [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} abandoned cart(s)`));
       console.log('');
       for (const c of items as Record<string, any>[]) {
@@ -710,7 +711,7 @@ abandonedCmd
     try {
       const res = await apiClient.get('/api/v1/crm/ecommerce/abandoned-carts/stats');
       const s = res.data as Record<string, any>;
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(s, null, 2)); return; }
       spinner.succeed(chalk.green('Abandoned-cart stats'));
       console.log('');
       console.log(`  ${chalk.bold('Count:')}      ${s.total_count ?? 'N/A'}`);
@@ -728,7 +729,7 @@ abandonedCmd
     const spinner = ora('Loading funnel...').start();
     try {
       const res = await apiClient.get('/api/v1/crm/ecommerce/abandoned-carts/funnel');
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Funnel'));
       const f = res.data as Record<string, any>;
       const stages = f.stages || [];

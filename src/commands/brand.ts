@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -34,7 +35,7 @@ brandCommand
       const response = await apiClient.get('/api/v1/cli/brand');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;
@@ -371,7 +372,7 @@ brandCommand
       const response = await apiClient.get('/api/v1/cli/brand/audit');
       const data = response.data as Record<string, any>;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         spinner.stop();
         console.log(JSON.stringify(data, null, 2));
         return;

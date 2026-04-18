@@ -38,19 +38,23 @@ export const insightsCommand = new Command('insights')
     insightsCommand.outputHelp();
   });
 
-insightsCommand
-  .command('list')
-  .description('List pending conversation insights')
-  .option('--json', 'JSON output')
-  .action(async (options) => {
-    await run<InsightListResponse>(
-      async () => (await apiClient.get('/api/v1/insights/pending')).data as InsightListResponse,
-      {
-        spinner: 'Loading insights...',
-        errorText: 'Failed to load insights',
-        json: options.json,
-        render: (data) => {
-          const insights = data.insights || data.items || [];
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = insightsCommand.command('list').description('List pending conversation insights');
+  withListFlags(listCmd);
+  listCmd.action(async (options: import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(options, {
+      spinnerText: 'Loading insights...',
+      errorText: 'Failed to load insights',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/insights/pending', { params: { limit, offset } })).data,
+      extract: (page) => {
+        const d = page as InsightListResponse;
+        return ((d.insights || d.items || []) as unknown as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+          const insights = items as unknown as InsightItem[];
           console.log('');
           console.log(ui.header(`Pending Insights (${insights.length})`));
           if (insights.length === 0) {
@@ -67,9 +71,9 @@ insightsCommand
           }
           console.log('');
         },
-      },
-    );
+    });
   });
+}
 
 insightsCommand
   .command('stats')

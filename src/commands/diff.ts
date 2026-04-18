@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput } from '../lib/json-output';
 
 // ─── Deep diff helpers ───────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ export const diffCommand = new Command('diff')
   .option('--json', 'Structured JSON output (exit 1 if changes present)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify({ ok: false, error: 'not_logged_in', message: 'Run `solid auth login` first.' }));
       } else {
         console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -147,7 +148,7 @@ export const diffCommand = new Command('diff')
     const manifestPath = path.join(dir, '.solid', 'manifest.json');
 
     if (!fs.existsSync(manifestPath)) {
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify({ ok: false, error: 'no_manifest', message: 'Run `solid pull` first.' }));
       } else {
         console.error(chalk.red('No .solid/manifest.json found. Run `solid pull` first.'));

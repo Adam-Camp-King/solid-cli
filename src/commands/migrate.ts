@@ -5,6 +5,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
+import { isJsonOutput } from '../lib/json-output';
 
 function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -162,7 +163,7 @@ export const migrateCommand = new Command('migrate')
       execSpinner.succeed(chalk.green('Migration complete'));
       const results = (execRes.data as any).results;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(execRes.data, null, 2));
         return;
       }

@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
   const apiKey = process.env.SOLID_API_KEY;
@@ -75,7 +76,7 @@ flowsCommand
       const data = response.data as Record<string, any>;
       const flows = data.flows || [];
 
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
 
       spinner.succeed(`${flows.length} flows`);
       if (flows.length === 0) {
@@ -109,7 +110,7 @@ flowsCommand
       const response = await apiClient.get(`/api/v1/cli/flows/${flowId}`);
       const data = response.data as Record<string, any>;
 
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
 
       spinner.succeed('Flow loaded');
       console.log(ui.header(data.name || 'Flow Details'));
@@ -220,7 +221,7 @@ flowsCommand
       const response = await apiClient.get(`/api/v1/cli/flows/${flowId}/metrics`);
       const data = response.data as Record<string, any>;
 
-      if (options.json) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
 
       spinner.succeed('Metrics loaded');
       console.log(ui.header(`Flow ${flowId} Metrics`));

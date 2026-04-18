@@ -20,26 +20,32 @@ function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.r
 export const chainsCommand = new Command('chains')
   .description('Agent chains — multi-step AI workflows (build, execute, approve)');
 
-chainsCommand
-  .command('list')
-  .description('List chains')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const s = ora('Loading chains...').start();
-    try {
-      const res = await apiClient.get('/api/v1/chains');
-      const data = res.data as Record<string, any>;
-      const items = data.chains || data.items || data;
-      const list = Array.isArray(items) ? items : (items.chains || []);
-      if (opts.json) { s.stop(); console.log(JSON.stringify(data, null, 2)); return; }
-      s.succeed(chalk.green(`${list.length} chain(s)`));
-      for (const c of list as Record<string, any>[]) {
-        const dot = c.status === 'active' ? chalk.green('●') : chalk.dim('○');
-        console.log(`  ${dot} ${chalk.bold(c.id)}  ${c.name || '—'}  ${chalk.dim(c.status || '')}`);
-      }
-    } catch (e) { fail(s, 'Failed', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = chainsCommand.command('list').description('List chains');
+  withListFlags(listCmd);
+  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading chains...',
+      errorText: 'Failed to load chains',
+      fetch: async (offset, limit) =>
+        (await apiClient.get('/api/v1/chains', { params: { limit, offset } })).data,
+      extract: (page) => {
+        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
+        const d = page as Record<string, unknown>;
+        return ((d.chains || d.items || []) as Array<Record<string, unknown>>);
+      },
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No chains.')); return; }
+        for (const c of items) {
+          const dot = c.status === 'active' ? chalk.green('●') : chalk.dim('○');
+          console.log(`  ${dot} ${chalk.bold(String(c.id))}  ${c.name || '—'}  ${chalk.dim(String(c.status || ''))}`);
+        }
+      },
+    });
   });
+}
 
 chainsCommand
   .command('get <id>')

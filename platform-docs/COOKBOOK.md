@@ -172,9 +172,14 @@ solid auth token create \
 export SOLID_TOKEN=$(jq -r .key /tmp/key.json)
 ```
 
-Now the agent has read-only access for a week. Agency tip: add
-`--require-approval` in the token request so every destructive call
-queues a human approval instead of firing.
+Now the agent has read-only access for a week. For scripted use, the
+CLI also honors `SOLID_TOKEN=<key>` and `SOLID_API_KEY=<key>` env vars —
+either takes precedence over the cached session for that process.
+
+**Not yet shipped (don't reference in agent code yet):** a per-key
+`require_approval` flag that queues every destructive call for a
+human OK before firing. It's on the roadmap but does NOT exist on
+`solid auth token create` today.
 
 ---
 

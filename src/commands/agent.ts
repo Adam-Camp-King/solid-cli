@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ agentCommand
     try {
       const { data } = await apiClient.agentsList();
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const agents = ((data as { agents?: AgentSummary[] }).agents) || [];
       console.log(ui.header(`Agents (${agents.length})`));
       if (!agents.length) { console.log(chalk.dim('  No agents found.\n')); return; }
@@ -137,7 +138,7 @@ agentCommand
       const detail = detailRes.status === 'fulfilled' ? (detailRes.value.data as Record<string, any>) : null;
       const data = dataRes.status === 'fulfilled' ? (dataRes.value.data as Record<string, any>) : null;
       if (!detail) { console.log(ui.errorBox('Not Found', [`Agent "${name}" (${agentType}) not found.`])); return; }
-      if (opts.json) { console.log(JSON.stringify({ detail, data }, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify({ detail, data }, null, 2)); return; }
 
       console.log(ui.header(detail.name || agentType));
       console.log(ui.label('Type', detail.agent_type));
@@ -185,7 +186,7 @@ agentCommand
     try {
       const { data } = await apiClient.agentTools(agentType);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const toolMap = (data as Record<string, any>).tools || {};
       console.log(ui.header(`Tools for ${name} (${(data as Record<string, any>).total || 0} total)`));
       const namespaces = Object.keys(toolMap).sort();
@@ -213,7 +214,7 @@ agentCommand
     try {
       const { data } = await apiClient.agentData(agentType);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const d = data as Record<string, any>;
       const perf = d.performance;
       if (perf) {
@@ -252,7 +253,7 @@ agentCommand
     try {
       const { data } = await apiClient.agentData(agentType);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const reflections: ReflectionRecord[] = (data as { reflections?: ReflectionRecord[] }).reflections || [];
       if (!reflections.length) { console.log(chalk.dim('\n  No reflections to extract patterns from.\n')); return; }
 
@@ -309,7 +310,7 @@ agentCommand
         `/api/v1/cli/agents/${agentType}/chat`, { message },
       );
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const reply = (data as Record<string, any>).response || (data as Record<string, any>).message || JSON.stringify(data);
       console.log('\n' + ui.infoBox(name, [reply]) + '\n');
     } catch (e) { catchError(spinner, 'Chat failed')(e); }
@@ -331,7 +332,7 @@ agentCommand
       spinner.stop();
       const dash = dashRes.status === 'fulfilled' ? (dashRes.value.data as Record<string, any>) : null;
       const tel = telRes.status === 'fulfilled' ? (telRes.value.data as Record<string, any>) : null;
-      if (opts.json) { console.log(JSON.stringify({ dashboard: dash, telemetry: tel }, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify({ dashboard: dash, telemetry: tel }, null, 2)); return; }
 
       console.log(ui.header('Agent Dashboard'));
       console.log(ui.label('Total Agents', String(dash?.total_agents || 0)));
@@ -383,7 +384,7 @@ agentCommand
       const { data } = await apiClient.telemetrySummary();
       spinner.stop();
       const t = data as Record<string, any>;
-      if (opts.json) { console.log(JSON.stringify(t, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(t, null, 2)); return; }
       const roi = t.estimated_cost > 0 && t.revenue_attributed > 0
         ? `${((t.revenue_attributed / t.estimated_cost) * 100).toFixed(0)}%` : '-';
       console.log('\n' + ui.infoBox('Agent Telemetry', [
@@ -415,7 +416,7 @@ agentCommand
         spinner.text = 'Executing mission...';
         const { data: result } = await apiClient.missionExecute(mission.mission_id) as Record<string, any>;
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify({ mission, execution: result }, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify({ mission, execution: result }, null, 2)); return; }
         console.log(ui.successBox('Mission Executed', [
           `${chalk.bold('ID:')}     ${mission.mission_id}`,
           `${chalk.bold('Steps:')}  ${result.steps_dispatched || 0} dispatched`,
@@ -430,7 +431,7 @@ agentCommand
         }
       } else {
         spinner.stop();
-        if (opts.json) { console.log(JSON.stringify(mission, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify(mission, null, 2)); return; }
         console.log(ui.successBox('Mission Created', [
           `${chalk.bold('ID:')}     ${mission.mission_id}`, `${chalk.bold('Status:')} ${mission.status}`,
         ]));
@@ -458,7 +459,7 @@ agentCommand
     try {
       const { data } = await apiClient.put(`/api/v1/cli/agents/${agentType}/prompt`, { custom_instructions: instructions });
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       console.log('\n' + ui.successBox('Instructions Updated', [
         `${chalk.bold('Agent:')}  ${name} (${agentType})`,
         `${chalk.bold('Prompt:')} ${trunc(instructions, 60)}`,
@@ -492,7 +493,7 @@ agentCommand
         const { data } = await apiClient.agentDetail(agentType);
         spinner.stop();
         const d = data as Record<string, any>;
-        if (opts.json) { console.log(JSON.stringify(d, null, 2)); return; }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify(d, null, 2)); return; }
         console.log(ui.header(`Settings — ${d.name || agentType}`));
         console.log(ui.label('Type', d.agent_type));
         console.log(ui.label('Autonomy', `Level ${d.autonomy_level ?? '-'}`));
@@ -510,7 +511,7 @@ agentCommand
     try {
       const { data } = await apiClient.put(`/api/v1/cli/agents/${agentType}/settings`, settings);
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const updated = Object.entries(settings).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
       console.log('\n' + ui.successBox('Settings Updated', [
         `${chalk.bold('Agent:')}    ${name} (${agentType})`, `${chalk.bold('Updated:')} ${updated}`,
@@ -535,7 +536,7 @@ agentCommand
     const spinner = ora(`Loading profile for ${name}...`).start();
     try {
       const res = await apiClient.get(`/api/v1/agent-profiles/${agentType}`);
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(`Profile — ${name}`));
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { catchError(spinner, 'Failed to load profile')(e); }
@@ -576,7 +577,7 @@ agentCommand
     try {
       const { data } = await apiClient.get('/api/v1/agent-profiles');
       spinner.stop();
-      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
       const body = data as { profiles?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> };
       const profiles = body.profiles || body.items || [];
       if (!profiles.length) { console.log(chalk.dim('\n  No cloned agents yet. Use `solid agent clone <base>` to create one.\n')); return; }

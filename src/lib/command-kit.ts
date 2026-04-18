@@ -120,6 +120,65 @@ export function setListOrder(order: string | null): void { globalListOrder = (or
 export function getListOrder(): 'asc' | 'desc' { return globalListOrder === 'desc' ? 'desc' : 'asc'; }
 
 /**
+ * One-call migration helper for "list" commands that want the full
+ * contract: --limit, --offset, --all, --quiet, --json, --sort-by,
+ * --order, --format csv|tsv, --output <file>.
+ *
+ * The caller provides:
+ *   - fetch(offset, limit): hits the backend, returns an opaque page body
+ *   - extract(body): pulls the Record<string, unknown>[] list out
+ *   - render(items): pretty-prints when neither --json nor --format is set
+ *
+ * Behaviors wired in for you:
+ *   - auth guard
+ *   - spinner on stderr (stopped in --quiet)
+ *   - single-page vs --all (via fetchAllPages)
+ *   - applyListSort (--sort-by, --order)
+ *   - renderDelimited (--format csv|tsv)
+ *   - JSON to stdout or file (run() handles --output)
+ *   - errorText + exit 1 on failure
+ */
+export async function runListCommand(
+  opts: ListFlags,
+  spec: {
+    fetch: (offset: number, limit: number) => Promise<unknown>;
+    extract: (page: unknown) => Array<Record<string, unknown>>;
+    render: (items: Array<Record<string, unknown>>) => void;
+    spinnerText?: string;
+    errorText?: string;
+  },
+): Promise<void> {
+  const asJson = (await import('./json-output')).isJsonOutput(opts) || Boolean(getOutputFile());
+
+  await run<{ items: Array<Record<string, unknown>>; count: number }>(
+    async () => {
+      if (opts.all) {
+        const items = await fetchAllPages(spec.fetch, spec.extract, { limit: 100 });
+        return { items, count: items.length };
+      }
+      const body = await spec.fetch(parseInt(opts.offset, 10), parseInt(opts.limit, 10));
+      const items = spec.extract(body);
+      return { items, count: items.length };
+    },
+    {
+      spinner: asJson || opts.quiet ? null : (spec.spinnerText || 'Loading...'),
+      errorText: spec.errorText || 'Failed',
+      quiet: opts.quiet,
+      json: asJson,
+      render: ({ items }) => {
+        applyListSort(items);
+        const fmt = getListFormat();
+        if (fmt === 'csv' || fmt === 'tsv') {
+          process.stdout.write(renderDelimited(items, fmt));
+          return;
+        }
+        spec.render(items);
+      },
+    },
+  );
+}
+
+/**
  * Render an array of records as CSV or TSV. Row 0 is the header — union
  * of all keys across items so sparse rows still line up. Values are CSV-
  * escaped (quotes doubled, embedded quote/comma/newline triggers quoting).
@@ -140,6 +199,36 @@ export function renderDelimited(items: Array<Record<string, unknown>>, format: '
   };
   const rows = [cols.join(delim), ...items.map((item) => cols.map((c) => esc(item[c])).join(delim))];
   return rows.join('\n') + '\n';
+}
+
+/**
+ * Shared options for list commands. Every list command that wants the
+ * full scripting contract accepts these — wire via `applyListOptions`.
+ */
+export interface ListFlags {
+  limit: string;
+  offset: string;
+  all?: boolean;
+  quiet?: boolean;
+  json?: boolean;
+}
+
+/**
+ * Drop the standard list-command flag set onto a commander Command.
+ * Returns the same command for chaining. Call this instead of writing
+ * the five .option() lines by hand so defaults stay consistent.
+ *
+ * Uses a structural type so we can accept commander's Command without
+ * importing its generic signature soup into this shared helper.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withListFlags<T extends { option: (...args: any[]) => T }>(cmd: T, defaultLimit = '50'): T {
+  return cmd
+    .option('-l, --limit <n>', 'Page size', defaultLimit)
+    .option('--offset <n>', 'Pagination offset', '0')
+    .option('--all', 'Auto-paginate every page')
+    .option('--quiet', 'Suppress spinner + success chrome')
+    .option('--json', 'Output as JSON');
 }
 
 /**

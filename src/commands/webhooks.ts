@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput } from '../lib/json-output';
 
 export const webhooksCommand = new Command('webhooks')
   .description('Custom webhook management')
@@ -20,7 +21,7 @@ webhooksCommand.command('list').description('List configured webhooks')
     try {
       const res = await apiClient.get('/api/v1/developer/webhooks');
       spinner.stop();
-      if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
       const hooks = (res.data as Record<string, any>).webhooks || (res.data as Record<string, any>).items || [];
       console.log('');
       console.log(ui.header(`Webhooks (${hooks.length})`));
@@ -124,7 +125,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
       spinner.succeed(chalk.green(`Event ${event} sent`));
       const data = res.data as any;
 
-      if (options.json) {
+      if (isJsonOutput(options)) {
         console.log(JSON.stringify(data, null, 2));
         return;
       }

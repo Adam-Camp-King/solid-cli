@@ -24,29 +24,33 @@ function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
 export const productsCommand = new Command('products')
   .description('Product catalog (CRUD, pricing, components)');
 
-productsCommand
-  .command('list')
-  .description('List products')
-  .option('--type <type>', 'Filter by product_type')
-  .option('--json', 'Output as JSON')
-  .action(async (opts) => {
-    requireAuth();
-    const spinner = ora('Loading products...').start();
-    try {
-      const params: Record<string, unknown> = {};
-      if (opts.type) params.product_type = opts.type;
-      const res = await apiClient.get('/api/v1/products/', { params });
-      const items = (res.data as Record<string, any>[]) ?? [];
-      if (opts.json) { spinner.stop(); console.log(JSON.stringify(items, null, 2)); return; }
-      spinner.succeed(chalk.green(`${items.length} product(s)`));
-      if (!items.length) return;
-      console.log('');
-      for (const p of items) {
-        const price = p.price !== undefined ? chalk.green(`$${Number(p.price).toFixed(2)}`) : chalk.dim('—');
-        console.log(`  ${chalk.bold(p.id)}  ${p.name || p.title || '—'}  ${price}  ${chalk.dim(p.product_type || '')}`);
-      }
-    } catch (e) { fail(spinner, 'Failed to load products', e); }
+{
+  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
+  const listCmd = productsCommand.command('list').description('List products');
+  withListFlags(listCmd);
+  listCmd.option('--type <type>', 'Filter by product_type');
+  listCmd.action(async (opts: { type?: string } & import('../lib/command-kit').ListFlags) => {
+    const { runListCommand } = await import('../lib/command-kit');
+    await runListCommand(opts, {
+      spinnerText: 'Loading products...',
+      errorText: 'Failed to load products',
+      fetch: async (offset, limit) => {
+        const params: Record<string, unknown> = { limit, offset };
+        if (opts.type) params.product_type = opts.type;
+        return (await apiClient.get('/api/v1/products/', { params })).data;
+      },
+      extract: (page) => (Array.isArray(page) ? page : []) as Array<Record<string, unknown>>,
+      render: (items) => {
+        if (!items.length) { console.log(chalk.dim('  No products found.')); return; }
+        console.log('');
+        for (const p of items) {
+          const price = p.price !== undefined ? chalk.green(`$${Number(p.price).toFixed(2)}`) : chalk.dim('—');
+          console.log(`  ${chalk.bold(String(p.id))}  ${p.name || p.title || '—'}  ${price}  ${chalk.dim(String(p.product_type || ''))}`);
+        }
+      },
+    });
   });
+}
 
 productsCommand
   .command('get <id>')
