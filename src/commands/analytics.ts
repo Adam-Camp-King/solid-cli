@@ -16,10 +16,32 @@ export const analyticsCommand = new Command('analytics')
     analyticsCommand.outputHelp();
   });
 
+// Shared window parser — accepts either `--period <days>` or
+// `--date-range <ISO..ISO>` / `--from X --to Y`. Returns the `period`
+// (backwards compat) plus explicit from/to when supplied.
+function resolveWindow(opts: { period?: string; dateRange?: string; from?: string; to?: string }): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (opts.dateRange) {
+    const [from, to] = opts.dateRange.split(/\.{2,}|,/).map((s) => s.trim());
+    if (from) out.date_from = from;
+    if (to) out.date_to = to;
+  } else {
+    if (opts.from) out.date_from = opts.from;
+    if (opts.to) out.date_to = opts.to;
+  }
+  if (opts.period) out.period = opts.period;
+  // If user passed a range without a period, the backend still wants a hint.
+  if (!out.period && (out.date_from || out.date_to)) out.period = '0';
+  return out;
+}
+
 analyticsCommand
   .command('dashboard')
   .description('Revenue, customers, transactions overview')
-  .option('--period <days>', 'Period in days', '30')
+  .option('--period <days>', 'Period in days (shortcut; used when --date-range is not given)', '30')
+  .option('--date-range <from..to>', 'Date range as ISO dates, e.g. 2026-01-01..2026-04-17')
+  .option('--from <date>', 'Start date (ISO)')
+  .option('--to <date>', 'End date (ISO)')
   .option('--json', 'JSON output')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
@@ -28,11 +50,11 @@ analyticsCommand
     }
 
     const ora = (await import('ora')).default;
-    const spinner = ora('Loading analytics...').start();
+    const spinner = ora({ text: 'Loading analytics...', stream: process.stderr }).start();
 
     try {
       const response = await apiClient.get('/api/v1/dashboard/summary', {
-        params: { period: options.period },
+        params: resolveWindow(options),
       });
       spinner.stop();
 

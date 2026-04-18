@@ -79,24 +79,47 @@ paymentLinksCommand
 
 paymentLinksCommand
   .command('text2pay')
-  .description('Send a payment link via SMS (text-to-pay)')
+  .description('Send a payment link via SMS (prompts + SMS preview by default)')
   .requiredOption('--phone <e164>', 'Phone number')
   .requiredOption('--amount <dollars>', 'Amount')
   .option('--description <text>', 'Description')
-  .action(async (opts) => {
+  .option('--preview', 'Render the SMS body without sending')
+  .option('-y, --yes', 'Skip confirmation prompt (for CI)')
+  .action(async (opts: { phone: string; amount: string; description?: string; preview?: boolean; yes?: boolean }) => {
     requireAuth();
-    const body: Record<string, unknown> = {
-      phone: opts.phone,
-      amount: parseFloat(opts.amount),
-    };
+    const amountNum = parseFloat(opts.amount);
+    const body: Record<string, unknown> = { phone: opts.phone, amount: amountNum };
     if (opts.description) body.description = opts.description;
-    const s = ora('Sending text-to-pay...').start();
+
+    // Preview mimics the server template so you see what the customer sees.
+    // Server may tweak copy; treat this as an approximation, not a contract.
+    const fauxSms = [
+      `You have a new payment request${opts.description ? ': ' + opts.description : ''}.`,
+      `Amount: $${amountNum.toFixed(2)}`,
+      'Pay: https://pay.solidnumber.com/…',
+    ].join('\n');
+
+    console.error('');
+    console.error(chalk.bold('  SMS preview'));
+    console.error(chalk.dim('  ──────────────────────────────────────'));
+    console.error(chalk.dim(`  To:  ${opts.phone}`));
+    console.error('');
+    fauxSms.split('\n').forEach((line) => console.error(`  ${line}`));
+    console.error('');
+
+    if (opts.preview) { console.error(chalk.yellow('  (preview only — nothing sent)')); return; }
+
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Send this SMS to ${opts.phone}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+
+    const s = ora({ text: 'Sending text-to-pay...', stream: process.stderr }).start();
     try {
       const res = await apiClient.post('/api/v1/payment-links/send-text2pay', body);
-      const r = res.data as Record<string, any>;
+      const r = res.data as Record<string, unknown>;
       s.succeed(chalk.green('SMS sent'));
       if (r.link_id) console.log(chalk.dim(`  link_id: ${r.link_id}`));
-    } catch (e) { fail(s, 'Failed', e); }
+    } catch (e) { fail(s, 'Failed', e); process.exit(1); }
   });
 
 paymentLinksCommand
@@ -107,7 +130,7 @@ paymentLinksCommand
     requireAuth();
     const body: Record<string, unknown> = { link_id: parseInt(id, 10) };
     if (opts.amount) body.amount = parseFloat(opts.amount);
-    const s = ora('Marking paid...').start();
+    const s = ora({ text: 'Marking paid...', stream: process.stderr }).start();
     try {
       await apiClient.post('/api/v1/payment-links/mark-paid', body);
       s.succeed(chalk.green('Marked paid'));
@@ -116,10 +139,14 @@ paymentLinksCommand
 
 paymentLinksCommand
   .command('delete <id>')
-  .description('Delete a payment link')
-  .action(async (id) => {
+  .description('Delete a payment link (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
     requireAuth();
-    const s = ora('Deleting...').start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Delete payment link ${id}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const s = ora({ text: 'Deleting...', stream: process.stderr }).start();
     try {
       await apiClient.delete(`/api/v1/payment-links/${id}`);
       s.succeed(chalk.green('Deleted'));
