@@ -98,6 +98,8 @@ import { keysCommand } from './commands/keys';
 import { storageCommand } from './commands/storage';
 import { onboardingCommand } from './commands/onboarding';
 import { chainsCommand } from './commands/chains';
+import { draftsCommand } from './commands/drafts';
+import { publishCommand } from './commands/publish';
 import { inboundCommand } from './commands/inbound';
 import { formsCommand } from './commands/forms';
 import { emailsCommand } from './commands/emails';
@@ -172,6 +174,8 @@ program.addCommand(vibeCommand);
 program.addCommand(trainCommand);
 program.addCommand(agentCommand);
 program.addCommand(chainsCommand);
+program.addCommand(draftsCommand);
+program.addCommand(publishCommand);
 program.addCommand(inboundCommand);
 
 // Voice

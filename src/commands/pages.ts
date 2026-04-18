@@ -251,7 +251,7 @@ pagesCommand
   .option('--title <title>', 'New title')
   .option('--slug <slug>', 'New slug')
   .option('--type <type>', 'New page type')
-  .option('--publish', 'Publish the page')
+  .option('--publish', 'Go instant-live on a published page (opt-out of T12 drafts). Default writes to draft.')
   .option('--unpublish', 'Unpublish the page')
   // T7 — accept either a file path OR inline HTML string
   .option('--custom-head <file-or-html>', 'Replace page <head> injection (path to .html file or inline string). Professional+.')
@@ -288,7 +288,12 @@ pagesCommand
     if (options.title) body.title = options.title;
     if (options.slug) body.slug = options.slug;
     if (options.type) body.page_type = options.type;
-    if (options.publish) body.is_published = true;
+    if (options.publish) {
+      // T12: --publish on a PATCH means both "mark as published" AND
+      // "bypass drafts, write live directly" (for the instant-live flow).
+      body.is_published = true;
+      body.publish = true;
+    }
     if (options.unpublish) body.is_published = false;
 
     if (options.customHead !== undefined) body.custom_head = await resolveInjection(options.customHead);
