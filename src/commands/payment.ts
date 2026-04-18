@@ -36,6 +36,36 @@ const BRAND = {
   green: '#10b981',
 };
 
+interface Product {
+  id?: number | string;
+  name?: string;
+  sku?: string;
+  upc?: string;
+  isbn?: string;
+  commodity_code?: string;
+  price?: number;
+}
+
+interface ProductsResponse {
+  items?: Product[];
+  products?: Product[];
+}
+
+interface CompanyInfo {
+  name?: string;
+  kb_sub_code?: string;
+  mcc_code?: string;
+  business_type?: string;
+  industry_name?: string;
+}
+
+interface BillingOverview {
+  processor?: string;
+  active?: boolean;
+  mcc_code?: string;
+  industry?: string;
+}
+
 function requireAuth() {
   if (!config.isLoggedIn()) {
     console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -60,7 +90,7 @@ paymentCommand
       const response = await apiClient.get('/api/v1/billing/overview');
       spinner.stop();
 
-      const data = response.data as Record<string, any>;
+      const data = response.data as BillingOverview;
       console.log('');
       console.log(chalk.bold('  Payment Processing Status'));
       console.log(chalk.hex(BRAND.dim)('  ─────────────────────────────'));
@@ -70,7 +100,7 @@ paymentCommand
       console.log(`  Industry:      ${data.industry || 'Unknown'}`);
       console.log(`  L3 Enabled:    ${chalk.hex(BRAND.success)('Yes — automatic on all transactions')}`);
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Failed to load payment status'));
       console.error(handleApiError(error).message);
     }
@@ -96,13 +126,14 @@ l3Command
       const response = await apiClient.get('/api/v1/products?limit=100');
       spinner.stop();
 
-      const products = (response.data as Record<string, any>)?.items || (response.data as Record<string, any>)?.products || [];
+      const body = response.data as ProductsResponse;
+      const products: Product[] = body.items || body.products || [];
       const total = products.length;
-      const withSku = products.filter((p: any) => p.sku).length;
-      const withUpc = products.filter((p: any) => p.upc).length;
-      const withIsbn = products.filter((p: any) => p.isbn).length;
-      const withCode = products.filter((p: any) => p.commodity_code).length;
-      const l3Ready = products.filter((p: any) => p.sku || p.upc || p.isbn || p.commodity_code).length;
+      const withSku = products.filter((p) => p.sku).length;
+      const withUpc = products.filter((p) => p.upc).length;
+      const withIsbn = products.filter((p) => p.isbn).length;
+      const withCode = products.filter((p) => p.commodity_code).length;
+      const l3Ready = products.filter((p) => p.sku || p.upc || p.isbn || p.commodity_code).length;
 
       console.log('');
       console.log(chalk.bold('  Level 3 Interchange Optimization'));
@@ -125,7 +156,7 @@ l3Command
       console.log('');
 
       if (l3Ready < total && total > 0) {
-        const missing = products.filter((p: any) => !p.sku && !p.upc && !p.isbn && !p.commodity_code);
+        const missing = products.filter((p) => !p.sku && !p.upc && !p.isbn && !p.commodity_code);
         if (missing.length > 0) {
           console.log(chalk.hex(BRAND.warning)(`  ⚠ ${missing.length} product(s) missing identifiers:`));
           for (const p of missing.slice(0, 5)) {
@@ -142,7 +173,7 @@ l3Command
       console.log(chalk.hex(BRAND.dim)('  Rate: 1.90% + $0.10 (L3) vs 2.70% + $0.10 (L1)'));
       console.log(chalk.hex(BRAND.dim)('  Details: solidnumber.com/why/level3-payments'));
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
     }
@@ -161,9 +192,10 @@ l3Command
       const response = await apiClient.get(`/api/v1/products?search=${encodeURIComponent(sku)}&limit=5`);
       spinner.stop();
 
-      const products = (response.data as Record<string, any>)?.items || (response.data as Record<string, any>)?.products || [];
-      const match = products.find((p: any) =>
-        p.sku === sku || p.upc === sku || p.isbn === sku
+      const body = response.data as ProductsResponse;
+      const products: Product[] = body.items || body.products || [];
+      const match = products.find((p) =>
+        p.sku === sku || p.upc === sku || p.isbn === sku,
       );
 
       if (!match) {
@@ -186,7 +218,7 @@ l3Command
       console.log(`  L3 Qualified:  ${chalk.hex(BRAND.success)('✓ Yes')}`);
       console.log(`  Price:         $${(match.price || 0).toFixed(2)}`);
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
     }
@@ -197,10 +229,10 @@ l3Command
   .command('report')
   .description('Interchange savings estimate based on your product catalog')
   .option('--volume <amount>', 'Annual B2B card volume in dollars', '500000')
-  .action(async (options: any) => {
+  .action(async (options: { volume: string }) => {
     requireAuth();
 
-    const volume = parseInt(options.volume) || 500000;
+    const volume = parseInt(options.volume, 10) || 500000;
     const l1Cost = volume * 0.027 + (volume / 100) * 0.10;
     const l3Cost = volume * 0.019 + (volume / 100) * 0.10;
     const savings = l1Cost - l3Cost;
@@ -237,7 +269,8 @@ paymentCommand
       const response = await apiClient.companyInfo();
       spinner.stop();
 
-      const company = (response.data as Record<string, any>).company || response.data as Record<string, any>;
+      const body = response.data as { company?: CompanyInfo } & CompanyInfo;
+      const company: CompanyInfo = body.company || body;
       const kbSub = company.kb_sub_code;
 
       console.log('');
@@ -252,7 +285,7 @@ paymentCommand
       console.log(chalk.hex(BRAND.dim)('  When your SKUs match your MCC, L3 qualification improves.'));
       console.log(chalk.hex(BRAND.dim)('  237 MCC codes mapped across 52 industries in Solid#.'));
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
     }
@@ -264,17 +297,18 @@ paymentCommand
   .command('products')
   .description('List products with their L3-ready identifiers')
   .option('--limit <n>', 'Number of products to show', '20')
-  .action(async (options: any) => {
+  .action(async (options: { limit: string }) => {
     requireAuth();
     const ora = (await import('ora')).default;
-    const limit = parseInt(options.limit) || 20;
+    const limit = parseInt(options.limit, 10) || 20;
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Loading products...'), spinner: 'dots' }).start();
 
     try {
       const response = await apiClient.get(`/api/v1/products?limit=${limit}`);
       spinner.stop();
 
-      const products = (response.data as Record<string, any>)?.items || (response.data as Record<string, any>)?.products || [];
+      const body = response.data as ProductsResponse;
+      const products: Product[] = body.items || body.products || [];
 
       console.log('');
       console.log(chalk.bold(`  Products — L3 Identifier Status (${products.length} shown)`));
@@ -292,7 +326,7 @@ paymentCommand
       }
 
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
     }
@@ -305,7 +339,7 @@ paymentCommand
   .description('Payment volume, transactions, and interchange savings')
   .option('--period <days>', 'Period in days', '30')
   .option('--json', 'JSON output')
-  .action(async (options: any) => {
+  .action(async (options: { period: string; json?: boolean }) => {
     requireAuth();
     const ora = (await import('ora')).default;
     const spinner = ora('Loading payment analytics...').start();
@@ -314,7 +348,12 @@ paymentCommand
       const response = await apiClient.get('/api/v1/dashboard/summary', {
         params: { period: options.period },
       });
-      const d = response.data as Record<string, any>;
+      interface DashboardSummary {
+        revenue?: number;
+        transactions?: number;
+        chargebacks?: number;
+      }
+      const d = response.data as DashboardSummary;
 
       if (options.json) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
       spinner.stop();
@@ -336,7 +375,7 @@ paymentCommand
       }
       console.log(`  Chargebacks        ${(d.chargebacks || 0) === 0 ? chalk.hex(BRAND.success)('0') : chalk.red(String(d.chargebacks))}`);
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
     }
@@ -348,7 +387,7 @@ paymentCommand
   .command('connect <processor>')
   .description('Connect a payment processor (stripe, square)')
   .option('--account <id>', 'Stripe Connect account ID')
-  .action(async (processor: string, options: any) => {
+  .action(async (processor: string, options: { account?: string }) => {
     requireAuth();
     const ora = (await import('ora')).default;
     const spinner = ora(`Connecting ${processor}...`).start();
@@ -363,7 +402,7 @@ paymentCommand
         console.log(chalk.dim(`  Account: ${options.account} — L3 enabled.`));
       }
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red(`Failed to connect ${processor}`));
       console.error(handleApiError(error).message);
     }
@@ -376,7 +415,7 @@ paymentCommand
   .description('Start a point-of-sale terminal charge')
   .requiredOption('--amount <amount>', 'Charge amount in dollars')
   .option('--reader <name>', 'Terminal reader name', 'Default Reader')
-  .action(async (options: any) => {
+  .action(async (options: { amount: string; reader: string }) => {
     requireAuth();
     const ora = (await import('ora')).default;
     const amount = parseFloat(options.amount);
@@ -395,11 +434,15 @@ paymentCommand
         amount: Math.round(amount * 100),
         reader_name: options.reader,
       });
-      const data = response.data as Record<string, any>;
+      interface TerminalChargeResponse {
+        card_brand?: string;
+        last4?: string;
+      }
+      const data = response.data as TerminalChargeResponse;
       spinner.succeed(chalk.hex(BRAND.success)(`Payment approved: $${amount.toFixed(2)}`));
       if (data.card_brand) console.log(chalk.dim(`  ${data.card_brand} ••••${data.last4 || '****'}`));
       console.log('');
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail(chalk.red('Payment failed'));
       console.error(handleApiError(error).message);
     }

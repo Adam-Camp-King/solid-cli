@@ -140,6 +140,25 @@ billingCommand.command('invoice <companyIdOrEmail>')
     } catch (e) { spinner.fail(chalk.red('Failed to send invoice')); console.error(handleApiError(e).message); }
   });
 
+// Download an invoice PDF
+billingCommand.command('invoice-pdf <invoiceId>')
+  .description('Download an invoice as PDF (accepts Stripe in_... id or internal numeric id)')
+  .option('--out <file>', 'Output file path (default: invoice-<id>.pdf)')
+  .action(async (invoiceId: string, options: { out?: string }) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora(`Fetching invoice ${invoiceId} PDF...`).start();
+    try {
+      const fs = await import('fs');
+      const res = await apiClient.get(`/api/v1/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+        responseType: 'arraybuffer',
+      });
+      const filename = options.out || `invoice-${invoiceId}.pdf`;
+      fs.writeFileSync(filename, Buffer.from(res.data as ArrayBuffer));
+      spinner.succeed(chalk.green(`Saved: ${filename}`));
+    } catch (e) { spinner.fail(chalk.red('Failed to download invoice PDF')); console.error(handleApiError(e).message); }
+  });
+
 // ── Payment methods ──────────────────────────────────────────────────
 
 billingCommand.command('methods').description('List saved payment methods')

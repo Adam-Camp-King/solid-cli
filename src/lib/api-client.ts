@@ -98,7 +98,14 @@ class ApiClient {
   }
 
   // Generic HTTP methods (used by droplet, dev, etc.)
-  async get<T = unknown>(url: string, options?: { params?: Record<string, unknown> }): Promise<ApiResponse<T>> {
+  async get<T = unknown>(
+    url: string,
+    options?: {
+      params?: Record<string, unknown>;
+      // arraybuffer → for binary downloads (PDFs, images). Others pass-through to axios.
+      responseType?: 'arraybuffer' | 'blob' | 'document' | 'json' | 'text' | 'stream';
+    },
+  ): Promise<ApiResponse<T>> {
     const response = await this.client.get(url, options);
     return { data: response.data, status: response.status, success: true };
   }
@@ -539,6 +546,71 @@ class ApiClient {
     token?: string;
   }>> {
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/invite`, { email, role });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // ── T10 — Agency-managed companies + design-lock ─────────────────
+  async companyCreateForClient(payload: {
+    name: string;
+    client_email: string;
+    client_name?: string;
+    industry?: string;
+    template?: string;
+    initial_unlocked_areas?: string[];
+  }): Promise<ApiResponse<{
+    status: string;
+    company: { id: number; name: string; slug: string };
+    agency: { company_id: number; agency_managed: boolean; agency_owner_user_id: number; locks: Record<string, boolean> };
+    invitation: { sent: boolean; invitation_id?: number; token?: string; expires_at?: string };
+    next_steps: string[];
+  }>> {
+    const response = await this.client.post('/api/v1/cli/companies/for-client', payload);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyLockStatus(companyId: number): Promise<ApiResponse<{
+    company_id: number;
+    agency_managed: boolean;
+    agency_owner_user_id: number | null;
+    locks: Record<string, boolean>;
+  }>> {
+    const response = await this.client.get(`/api/v1/cli/companies/${companyId}/lock-status`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyLock(companyId: number, areas: string[]): Promise<ApiResponse<{
+    company_id: number;
+    agency_managed: boolean;
+    agency_owner_user_id: number;
+    locks: Record<string, boolean>;
+  }>> {
+    const response = await this.client.post(`/api/v1/cli/companies/${companyId}/lock`, { areas });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyUnlock(companyId: number, areas: string[], all = false): Promise<ApiResponse<{
+    company_id: number;
+    agency_managed: boolean;
+    agency_owner_user_id: number;
+    locks: Record<string, boolean>;
+  }>> {
+    const body: Record<string, unknown> = { all };
+    if (!all) body.areas = areas;
+    const response = await this.client.post(`/api/v1/cli/companies/${companyId}/unlock`, body);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async companyRequestUnlock(companyId: number, areas: string[], reason: string): Promise<ApiResponse<{
+    status: string;
+    company_id: number;
+    areas: string[];
+    agency_owner_user_id: number;
+    message: string;
+  }>> {
+    const response = await this.client.post(`/api/v1/cli/companies/${companyId}/request-unlock`, {
+      areas,
+      reason,
+    });
     return { data: response.data, status: response.status, success: true };
   }
 
