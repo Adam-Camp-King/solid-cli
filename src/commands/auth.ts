@@ -574,8 +574,18 @@ function formatTokenTTL(): string | null {
 }
 
 async function runAuthStatus(options: { json?: boolean } = {}): Promise<void> {
+  // Detect --json from any of: local option, root --json, SOLID_JSON env.
+  // Detect --output from the root-level global. The prior impl only read
+  // options.json and ignored the root + env + output flags — that silently
+  // broke `solid whoami --json`, `solid auth status --output file`, and
+  // `SOLID_JSON=1 solid whoami`.
+  const { isJsonOutput } = await import('../lib/json-output');
+  const { getOutputFile } = await import('../lib/command-kit');
+  const asJson = isJsonOutput(options) || Boolean(getOutputFile());
+  const outputFile = getOutputFile();
+
   // JSON path: machine-readable, no spinner chrome
-  if (options.json) {
+  if (asJson) {
     const payload: Record<string, unknown> = {
       authenticated: config.isLoggedIn(),
       email: config.userEmail || null,
@@ -584,7 +594,10 @@ async function runAuthStatus(options: { json?: boolean } = {}): Promise<void> {
       api_url: config.apiUrl,
       token_expires_at: config.tokenExpiresAt ? config.tokenExpiresAt.toISOString() : null,
     };
-    if (config.isLoggedIn()) {
+    // If --token was passed, try the server even without a cached session
+    // — the api-client interceptor uses the override automatically.
+    const hasOverride = Boolean(process.argv.find((a) => a === '--token' || a.startsWith('--token=')));
+    if (config.isLoggedIn() || hasOverride) {
       try {
         const response = await apiClient.authStatus();
         payload.authenticated = response.data.authenticated;
@@ -597,7 +610,16 @@ async function runAuthStatus(options: { json?: boolean } = {}): Promise<void> {
         payload.authenticated = config.userEmail || config.companyId ? 'offline' : false;
       }
     }
-    console.log(JSON.stringify(payload, null, 2));
+    const serialized = JSON.stringify(payload, null, 2);
+    if (outputFile) {
+      const fs = await import('fs');
+      const path = await import('path');
+      fs.mkdirSync(path.dirname(path.resolve(outputFile)), { recursive: true });
+      fs.writeFileSync(outputFile, serialized);
+      console.error(chalk.green(`  Wrote ${serialized.length} bytes to ${outputFile}`));
+    } else {
+      console.log(serialized);
+    }
     return;
   }
 

@@ -27,6 +27,10 @@ export function setOverrideToken(token: string | null): void {
   overrideToken = token;
 }
 
+export function hasOverrideToken(): boolean {
+  return overrideToken !== null;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -373,9 +377,9 @@ class ApiClient {
   }
 
   // KB endpoints (via REST API)
-  async kbSearch(query: string, limit = 20): Promise<ApiResponse<{ results: unknown[]; total: number }>> {
+  async kbSearch(query: string, limit = 20, offset = 0): Promise<ApiResponse<{ results: unknown[]; total: number }>> {
     const response = await this.client.get('/api/v1/kb/company', {
-      params: { search: query, limit },
+      params: { search: query, limit, offset },
     });
     const data = response.data as Record<string, unknown>;
     return {

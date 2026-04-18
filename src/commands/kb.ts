@@ -20,51 +20,64 @@ kbCommand
   .command('list')
   .description('List knowledge base entries')
   .option('-q, --query <query>', 'Search query', '*')
-  .option('-l, --limit <limit>', 'Max results', '20')
+  .option('-l, --limit <limit>', 'Page size', '20')
+  .option('--offset <n>', 'Pagination offset', '0')
+  .option('--all', 'Auto-paginate every page')
+  .option('--quiet', 'Suppress spinner and success chrome')
   .option('--json', 'Output as JSON')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
+  .action(async (options: { query: string; limit: string; offset: string; all?: boolean; quiet?: boolean; json?: boolean }) => {
+    const { run, applyListSort, renderDelimited, getListFormat, fetchAllPages } = await import('../lib/command-kit');
+    const { isJsonOutput } = await import('../lib/json-output');
 
-    const spinner = ora('Loading KB entries...').start();
-
-    try {
-      const response = await apiClient.kbSearch(options.query, parseInt(options.limit));
-
-      if (options.json) {
-        spinner.stop();
-        console.log(JSON.stringify(response.data, null, 2));
-        return;
-      }
-
-      const results = response.data.results || [];
-      spinner.succeed(chalk.green(`${results.length} entries found`));
-
-      if (results.length === 0) {
-        console.log(chalk.dim('  No KB entries yet. Run `solid kb add` to create one.'));
-        return;
-      }
-
-      console.log('');
-      for (const entry of results as Record<string, string>[]) {
-        const category = entry.category ? chalk.cyan(`[${entry.category}]`) : '';
-        console.log(`  ${chalk.bold(entry.title || 'Untitled')} ${category}`);
-        if (entry.content) {
-          const preview = entry.content.substring(0, 80).replace(/\n/g, ' ');
-          console.log(chalk.dim(`    ${preview}${entry.content.length > 80 ? '...' : ''}`));
+    await run<{ results: Record<string, unknown>[] }>(
+      async () => {
+        if (options.all) {
+          const items = await fetchAllPages<Record<string, unknown>, unknown>(
+            async (offset, limit) => (await apiClient.kbSearch(options.query, limit, offset)).data as unknown,
+            (page) => (page as { results?: Record<string, unknown>[] }).results || [],
+            { limit: 100 },
+          );
+          return { results: items };
         }
-        if (entry.id) {
-          console.log(chalk.dim(`    ID: ${entry.id}`));
-        }
-        console.log('');
-      }
-    } catch (error) {
-      spinner.fail(chalk.red('Failed to load KB entries'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
+        const res = await apiClient.kbSearch(
+          options.query,
+          parseInt(options.limit, 10),
+          parseInt(options.offset, 10),
+        );
+        return { results: (res.data.results || []) as Record<string, unknown>[] };
+      },
+      {
+        spinner: 'Loading KB entries...',
+        errorText: 'Failed to load KB entries',
+        quiet: options.quiet,
+        json: isJsonOutput(options),
+        render: (data) => {
+          const fmt = getListFormat();
+          const items = data.results;
+          applyListSort(items);
+          if (fmt === 'csv' || fmt === 'tsv') {
+            process.stdout.write(renderDelimited(items, fmt));
+            return;
+          }
+          if (!items.length) {
+            console.log(chalk.dim('  No KB entries yet. Run `solid kb add` to create one.'));
+            return;
+          }
+          console.log('');
+          for (const entry of items) {
+            const category = entry.category ? chalk.cyan(`[${entry.category}]`) : '';
+            console.log(`  ${chalk.bold((entry.title as string) || 'Untitled')} ${category}`);
+            if (entry.content) {
+              const content = String(entry.content);
+              const preview = content.substring(0, 80).replace(/\n/g, ' ');
+              console.log(chalk.dim(`    ${preview}${content.length > 80 ? '...' : ''}`));
+            }
+            if (entry.id !== undefined) console.log(chalk.dim(`    ID: ${entry.id}`));
+            console.log('');
+          }
+        },
+      },
+    );
   });
 
 // Add KB entry
