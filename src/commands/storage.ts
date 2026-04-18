@@ -103,30 +103,72 @@ storageCommand
 
 storageCommand
   .command('upload <path>')
-  .description('Upload a local file')
+  .description('Upload a local file or directory (use -r for recursive)')
   .option('--folder <id>', 'Folder ID')
   .option('--description <text>', 'Description')
-  .action(async (filePath, opts) => {
+  .option('-r, --recursive', 'Walk directories and upload every file inside')
+  .option('--ignore <globs>', 'Comma-separated patterns to skip (e.g. "node_modules,*.log")')
+  .action(async (filePath: string, opts: { folder?: string; description?: string; recursive?: boolean; ignore?: string }) => {
     requireAuth();
     const fs = await import('fs');
     const path = await import('path');
     const abs = path.resolve(filePath);
     if (!fs.existsSync(abs)) {
-      console.error(chalk.red(`File not found: ${abs}`));
+      console.error(chalk.red(`Path not found: ${abs}`));
       process.exit(1);
     }
-    const spinner = ora(`Uploading ${path.basename(abs)}...`).start();
-    try {
-      const FormData = (await import('form-data')).default;
-      const form = new FormData();
-      form.append('file', fs.createReadStream(abs));
-      if (opts.folder) form.append('folder_id', opts.folder);
-      if (opts.description) form.append('description', opts.description);
-      const res = await apiClient.post('/api/v1/storage/upload', form);
-      const r = res.data as Record<string, any>;
-      spinner.succeed(chalk.green(`Uploaded: ${r.id || r.document_id || r.file_id}`));
-      if (r.url) console.log(chalk.dim(`  ${r.url}`));
-    } catch (e) { fail(spinner, 'Upload failed', e); }
+
+    const stat = fs.statSync(abs);
+    const ignorePatterns = (opts.ignore || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const shouldIgnore = (p: string) =>
+      ignorePatterns.some((pat) => {
+        if (pat.startsWith('*')) return p.endsWith(pat.slice(1));
+        return p.includes(pat);
+      });
+
+    // Gather upload targets (1 file in single mode, walk tree in recursive mode)
+    const files: string[] = [];
+    if (stat.isDirectory()) {
+      if (!opts.recursive) {
+        console.error(chalk.red(`${abs} is a directory — pass -r / --recursive to upload its contents.`));
+        process.exit(2);
+      }
+      const walk = (dir: string) => {
+        for (const name of fs.readdirSync(dir)) {
+          const full = path.join(dir, name);
+          if (shouldIgnore(full)) continue;
+          const s = fs.statSync(full);
+          if (s.isDirectory()) walk(full);
+          else if (s.isFile()) files.push(full);
+        }
+      };
+      walk(abs);
+    } else {
+      files.push(abs);
+    }
+
+    if (!files.length) { console.error(chalk.yellow('No files to upload.')); return; }
+
+    const FormData = (await import('form-data')).default;
+    let uploaded = 0, failed = 0;
+    const spinner = ora({ text: `Uploading ${files.length} file(s)...`, stream: process.stderr }).start();
+    for (const f of files) {
+      try {
+        const form = new FormData();
+        form.append('file', fs.createReadStream(f));
+        if (opts.folder) form.append('folder_id', opts.folder);
+        if (opts.description) form.append('description', opts.description);
+        await apiClient.post('/api/v1/storage/upload', form);
+        uploaded++;
+        spinner.text = `Uploaded ${uploaded}/${files.length}...`;
+      } catch (e) {
+        failed++;
+        console.error(chalk.red(`  ${path.relative(abs, f) || path.basename(f)}: ${handleApiError(e).message}`));
+      }
+    }
+    if (failed === 0) spinner.succeed(chalk.green(`Uploaded ${uploaded} file(s)`));
+    else spinner.warn(chalk.yellow(`Uploaded ${uploaded}/${files.length} (${failed} failed)`));
+    if (failed > 0) process.exit(1);
   });
 
 storageCommand

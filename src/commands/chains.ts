@@ -140,24 +140,34 @@ chainsCommand
 
 chainsCommand
   .command('execute <id>')
-  .description('Execute a chain')
+  .description('Execute a chain — prints execution_id (a.k.a. job id) for follow-up')
   .option('--input <json>', 'Input payload as JSON')
-  .action(async (id, opts) => {
+  .option('--json', 'Output as JSON (full execution response)')
+  .action(async (id: string, opts: { input?: string; json?: boolean }) => {
     requireAuth();
     let body: unknown = {};
     if (opts.input) {
-      try {
-        body = JSON.parse(opts.input);
-      } catch {
+      try { body = JSON.parse(opts.input); } catch {
         console.error(chalk.red('Invalid JSON passed to --input'));
-        process.exit(1);
+        process.exit(2);
       }
     }
-    const s = ora(`Executing ${id}...`).start();
+    const s = ora({ text: `Executing ${id}...`, stream: process.stderr }).start();
     try {
       const res = await apiClient.post(`/api/v1/chains/${id}/execute`, body);
-      s.succeed(chalk.green(`Execution started: ${(res.data as any).execution_id || (res.data as any).id}`));
-    } catch (e) { fail(s, 'Failed', e); }
+      const data = res.data as { execution_id?: string | number; id?: string | number; status?: string };
+      const executionId = data.execution_id ?? data.id;
+      if (opts.json) {
+        s.stop();
+        console.log(JSON.stringify(res.data, null, 2));
+        return;
+      }
+      s.succeed(chalk.green(`Execution started: ${executionId}`));
+      // Explicit handle for follow-up commands (audit #43)
+      console.log(String(executionId));
+      console.error(chalk.dim(`  Status:  solid chains execution ${executionId}`));
+      console.error(chalk.dim(`  Cancel:  solid chains cancel ${executionId}`));
+    } catch (e) { fail(s, 'Failed', e); process.exit(1); }
   });
 
 chainsCommand

@@ -5,7 +5,16 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
 export const domainsCommand = new Command('domains')
-  .description('Custom domain management')
+  .description('Custom domain management — list, add, verify, attach tenant subdomains')
+  .addHelpText('after', `
+Examples:
+  $ solid domains list
+  $ solid domains add my-client.com
+  $ solid domains verify my-client.com
+  $ solid domains remove my-client.com --yes
+
+On-demand TLS is issued automatically by Caddy after verification.
+See: Owners-Manual/09-Core-Innovations/CUSTOM-DOMAINS-ON-DEMAND-TLS.md`)
   .action(async () => { domainsCommand.outputHelp(); });
 
 domainsCommand.command('list').description('List configured domains')

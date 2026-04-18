@@ -191,6 +191,29 @@ describe('command-kit', () => {
       expect(factory).not.toHaveBeenCalled();
     });
 
+    describe('outputFile', () => {
+      it('writes JSON to a file instead of stdout', async () => {
+        const fs = require('fs');
+        const path = require('path');
+        const os = require('os');
+        const tmp = path.join(os.tmpdir(), `ck-out-${Date.now()}.json`);
+        __setSpinnerFactoryForTest(() => makeStubSpinner().api);
+        try {
+          await run(
+            async () => ({ hello: 'world' }),
+            { spinner: null, json: true, outputFile: tmp },
+          );
+          expect(fs.existsSync(tmp)).toBe(true);
+          expect(JSON.parse(fs.readFileSync(tmp, 'utf-8'))).toEqual({ hello: 'world' });
+          // stdout payload should NOT include the JSON
+          const stdoutCalls = logSpy.mock.calls.map((c) => c.join(' '));
+          expect(stdoutCalls.some((c) => c.includes('world'))).toBe(false);
+        } finally {
+          if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+        }
+      });
+    });
+
     describe('fetchAllPages', () => {
       it('concatenates multiple full pages and stops on a short page', async () => {
         const pages = [

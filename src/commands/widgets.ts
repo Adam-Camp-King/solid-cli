@@ -170,6 +170,59 @@ widgetsCommand
     }
   });
 
+// Update widget
+widgetsCommand
+  .command('update <widget_id>')
+  .description('Update a widget (patch fields — unspecified fields are untouched)')
+  .option('--name <name>', 'Widget name')
+  .option('--config <json>', 'New config as JSON')
+  .option('--agents <ids>', 'Comma-separated agent IDs')
+  .option('--status <status>', 'active, paused, draft')
+  .option('--json', 'Output as JSON')
+  .action(async (widgetId: string, options: { name?: string; config?: string; agents?: string; status?: string; json?: boolean }) => {
+    requireAuth();
+    const body: Record<string, unknown> = {};
+    if (options.name) body.name = options.name;
+    if (options.config) body.config = JSON.parse(options.config);
+    if (options.agents) body.agents = options.agents.split(',').map((id) => parseInt(id.trim(), 10));
+    if (options.status) body.status = options.status;
+    if (!Object.keys(body).length) {
+      console.error(chalk.red('No fields to update. Use --name, --config, --agents, or --status.'));
+      process.exit(2);
+    }
+    const spinner = ora({ text: `Updating widget ${widgetId}...`, stream: process.stderr }).start();
+    try {
+      const response = await apiClient.patch(`/api/v1/cli/widgets/${widgetId}`, body);
+      spinner.succeed(chalk.green('Widget updated'));
+      if (options.json) { console.log(JSON.stringify(response.data, null, 2)); return; }
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to update widget'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
+    }
+  });
+
+// Delete widget
+widgetsCommand
+  .command('delete <widget_id>')
+  .description('Delete a widget (prompts by default)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (widgetId: string, options: { yes?: boolean }) => {
+    requireAuth();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Delete widget ${widgetId}?`, { autoConfirm: Boolean(options.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora({ text: `Deleting widget ${widgetId}...`, stream: process.stderr }).start();
+    try {
+      await apiClient.delete(`/api/v1/cli/widgets/${widgetId}`);
+      spinner.succeed(chalk.green('Widget deleted'));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to delete widget'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
+    }
+  });
+
 // Get embed code
 widgetsCommand
   .command('embed <widget_id>')

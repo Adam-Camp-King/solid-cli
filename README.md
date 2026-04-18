@@ -1,7 +1,7 @@
 # @solidnumber/cli
 
 Run an AI-powered business from your terminal.
-62 commands. 52 industries. 116 AI agents. One CLI.
+86 top-level commands, 200+ subcommands, 52 industries, 116 AI agents. One CLI.
 
 ```bash
 npx @solidnumber/cli clone plumber

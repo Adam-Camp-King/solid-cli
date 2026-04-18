@@ -100,11 +100,20 @@ const INDUSTRY_BENEFITS: Record<string, string[]> = {
 };
 
 export const proposalCommand = new Command('proposal')
-  .description('Generate a branded client proposal')
+  .description('Generate a branded PDF pitch deck for a prospect (agency sales tool)')
   .argument('<business-name>', 'Client business name')
   .option('-t, --template <industry>', 'Industry template (plumber, dentist, hvac, etc.)')
   .option('--tier <tier>', 'Recommended tier (starter, builder, professional, enterprise)', 'starter')
   .option('--json', 'JSON output')
+  .addHelpText('after', `
+Examples:
+  $ solid proposal "Joe's Plumbing" --template plumber
+  $ solid proposal "City Dental" --template dentist --tier professional
+  $ solid proposal "Acme Corp" --template hvac --json > proposal.json
+
+Output: a hosted PDF URL + the tier recommendation. The PDF is rendered
+server-side and cached; the same URL is reusable. For a LIVE demo where
+the prospect can interact with the AI, use \`solid demo create\` instead.`)
   .action(async (businessName, options) => {
     const industry = options.template || 'default';
     const tier = options.tier;

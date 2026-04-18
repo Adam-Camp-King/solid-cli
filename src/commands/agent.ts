@@ -567,11 +567,40 @@ agentCommand
   });
 
 agentCommand
+  .command('clones')
+  .description('List all per-company cloned agents (forks of the registry defaults)')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    requireLogin();
+    const spinner = ora({ text: 'Loading agent clones...', stream: process.stderr }).start();
+    try {
+      const { data } = await apiClient.get('/api/v1/agent-profiles');
+      spinner.stop();
+      if (opts.json) { console.log(JSON.stringify(data, null, 2)); return; }
+      const body = data as { profiles?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> };
+      const profiles = body.profiles || body.items || [];
+      if (!profiles.length) { console.log(chalk.dim('\n  No cloned agents yet. Use `solid agent clone <base>` to create one.\n')); return; }
+      console.log(ui.header(`Cloned Agents (${profiles.length})`));
+      console.log(ui.table(
+        ['Base', 'Display', 'Model', 'Temp', 'Last Active'],
+        profiles.map((p) => [
+          chalk.dim(String(p.agent_type || '?')),
+          chalk.hex('#818cf8')(String(p.display_name || '?')),
+          String(p.model || '-'),
+          p.temperature != null ? String(p.temperature) : '-',
+          p.last_active ? new Date(String(p.last_active)).toLocaleDateString() : chalk.dim('never'),
+        ]),
+      ));
+      console.log('');
+    } catch (e) { catchError(spinner, 'Failed to list clones')(e); }
+  });
+
+agentCommand
   .command('sync')
   .description('Sync company agent profiles with the latest registry defaults')
   .action(async () => {
     requireLogin();
-    const spinner = ora('Syncing agent profiles...').start();
+    const spinner = ora({ text: 'Syncing agent profiles...', stream: process.stderr }).start();
     try {
       await apiClient.post('/api/v1/agent-profiles/sync');
       spinner.succeed(chalk.green('Profiles synced'));

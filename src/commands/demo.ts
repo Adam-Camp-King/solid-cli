@@ -15,7 +15,17 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
 export const demoCommand = new Command('demo')
-  .description('Create live demo companies for prospects — AI answers the phone');
+  .description('Create live demo companies for prospects — AI answers the phone')
+  .addHelpText('after', `
+Examples:
+  $ solid demo create plumber "Joe's Plumbing"        # live in ~20s, real AI + fake phone #
+  $ solid demo create hvac "Northwind" --expires 72h  # auto-destroys after 72h (default)
+  $ solid demo list                                   # all active demos for this agency
+  $ solid demo convert 47 --tier starter              # turn demo 47 into a paid tenant
+  $ solid demo delete 47 --yes                        # tear it down early
+
+Output: each demo prints a dashboard URL (hosted on *.solidnumber.com) and
+a test phone number. Use in a sales meeting — call the number, the AI answers.`);
 
 // ── Create demo ──────────────────────────────────────────────────
 

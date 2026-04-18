@@ -25,6 +25,54 @@ export const subscriptionsCommand = new Command('subscriptions')
   .description('Recurring subscription products you sell to YOUR customers');
 
 subscriptionsCommand
+  .command('list')
+  .description('List active subscriptions for a customer (or all)')
+  .option('--customer <id>', 'Filter by customer ID')
+  .option('--status <status>', 'Filter by status (active, cancelled, past_due)')
+  .option('-l, --limit <n>', 'Page size', '50')
+  .option('--offset <n>', 'Pagination offset', '0')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { customer?: string; status?: string; limit: string; offset: string; json?: boolean }) => {
+    requireAuth();
+    const params: Record<string, unknown> = {
+      page_size: parseInt(opts.limit, 10),
+      offset: parseInt(opts.offset, 10),
+    };
+    if (opts.customer) params.customer_id = parseInt(opts.customer, 10);
+    if (opts.status) params.status = opts.status;
+    const s = ora({ text: 'Loading subscriptions...', stream: process.stderr }).start();
+    try {
+      const res = await apiClient.get('/api/v1/subscriptions', { params });
+      s.stop();
+      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const d = res.data as Record<string, unknown>;
+      const items = (d.subscriptions || d.items || []) as Array<Record<string, unknown>>;
+      if (!items.length) { console.log(chalk.dim('  No subscriptions found.')); return; }
+      console.log('');
+      for (const sub of items) {
+        const status = sub.status === 'active' ? chalk.green('active') : chalk.yellow(String(sub.status || '?'));
+        console.log(`  #${sub.id}  ${sub.customer_name || sub.customer_id || '—'}  ${status}  ${sub.plan_name || sub.plan_slug || '—'}`);
+      }
+      console.log('');
+    } catch (e) { fail(s, 'Failed', e); process.exit(1); }
+  });
+
+subscriptionsCommand
+  .command('get <id>')
+  .description('Get subscription detail by ID')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, opts: { json?: boolean }) => {
+    requireAuth();
+    const s = ora({ text: `Loading subscription ${id}...`, stream: process.stderr }).start();
+    try {
+      const res = await apiClient.get(`/api/v1/subscriptions/${id}`);
+      s.stop();
+      if (opts.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      console.log(JSON.stringify(res.data, null, 2));
+    } catch (e) { fail(s, 'Failed', e); process.exit(1); }
+  });
+
+subscriptionsCommand
   .command('upgrade')
   .description('Upgrade a customer subscription')
   .requiredOption('--customer <id>', 'Customer ID')
@@ -60,18 +108,22 @@ subscriptionsCommand
 
 subscriptionsCommand
   .command('cancel')
-  .description('Cancel a customer subscription')
+  .description('Cancel a customer subscription (prompts by default)')
   .requiredOption('--customer <id>', 'Customer ID')
   .option('--reason <text>', 'Reason')
-  .action(async (opts) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (opts: { customer: string; reason?: string; yes?: boolean }) => {
     requireAuth();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(`Cancel subscription for customer ${opts.customer}?`, { autoConfirm: Boolean(opts.yes) });
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
     const body: Record<string, unknown> = { customer_id: parseInt(opts.customer, 10) };
     if (opts.reason) body.reason = opts.reason;
-    const s = ora('Cancelling...').start();
+    const s = ora({ text: 'Cancelling...', stream: process.stderr }).start();
     try {
       await apiClient.post('/api/v1/subscriptions/cancel', body);
       s.succeed(chalk.green('Cancelled'));
-    } catch (e) { fail(s, 'Failed', e); }
+    } catch (e) { fail(s, 'Failed', e); process.exit(1); }
   });
 
 subscriptionsCommand

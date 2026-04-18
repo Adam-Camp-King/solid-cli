@@ -182,20 +182,48 @@ inventoryCommand
     }
   });
 
-// Archive (soft-delete) inventory item
+// Archive (soft-delete) inventory item. `delete` is kept as an alias but
+// archive is the actual semantic — data is retained, the item is hidden.
+// Use `unarchive` to restore. There is no hard-delete path in the API.
 inventoryCommand
   .command('archive <sku>')
   .alias('delete')
-  .description('Archive (soft-delete) an inventory item')
-  .action(async (sku) => {
+  .description('Archive (soft-delete) an inventory item — data is retained, restore with unarchive')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (sku: string, opts: { yes?: boolean }) => {
     requireAuth();
-    const spinner = ora(`Archiving ${sku}...`).start();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Archive inventory item "${sku}"? (restore with: solid inventory unarchive ${sku})`,
+      { autoConfirm: Boolean(opts.yes) },
+    );
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora({ text: `Archiving ${sku}...`, stream: process.stderr }).start();
     try {
       await apiClient.post('/api/v1/Inventory/archive', { sku });
       spinner.succeed(chalk.green(`Item ${sku} archived`));
     } catch (error) {
       spinner.fail(chalk.red(`Failed to archive ${sku}`));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
+    }
+  });
+
+// Restore an archived item. Mirror of `archive`.
+inventoryCommand
+  .command('unarchive <sku>')
+  .alias('restore')
+  .description('Restore a previously archived inventory item')
+  .action(async (sku: string) => {
+    requireAuth();
+    const spinner = ora({ text: `Restoring ${sku}...`, stream: process.stderr }).start();
+    try {
+      await apiClient.post('/api/v1/Inventory/unarchive', { sku });
+      spinner.succeed(chalk.green(`Item ${sku} restored`));
+    } catch (error) {
+      spinner.fail(chalk.red(`Failed to restore ${sku}`));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 

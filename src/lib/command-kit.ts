@@ -41,6 +41,12 @@ export interface RunOptions<T> {
    * (via `render` or `--json`) and errors on stderr. Ideal for scripting.
    */
   quiet?: boolean;
+  /**
+   * Write the payload (JSON when `json: true`, otherwise nothing — pretty
+   * output still goes to stdout) to this file path instead of stdout.
+   * Parent dirs are created if they don't exist.
+   */
+  outputFile?: string;
   /** Pretty-print the result. Not called when `json` is true. */
   render?: (result: T) => void;
 }
@@ -184,8 +190,17 @@ export async function run<T>(
 
     if (options.json) {
       if (spinner) spinner.stop();
-      // Only the JSON lands on stdout — no other output path touches it.
-      console.log(JSON.stringify(result, null, 2));
+      const payload = JSON.stringify(result, null, 2);
+      if (options.outputFile) {
+        const fs = await import('fs');
+        const path = await import('path');
+        fs.mkdirSync(path.dirname(path.resolve(options.outputFile)), { recursive: true });
+        fs.writeFileSync(options.outputFile, payload);
+        if (!quiet) console.error(chalk.green(`  Wrote ${payload.length} bytes to ${options.outputFile}`));
+      } else {
+        // Only the JSON lands on stdout — no other output path touches it.
+        console.log(payload);
+      }
       return;
     }
 
