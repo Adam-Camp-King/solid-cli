@@ -491,47 +491,103 @@ authCommand
   });
 
 // Status command
+// Formats the stored tokenExpiresAt into a humane "expires in 2h 14m" string.
+// Returns null if no expiry is tracked.
+function formatTokenTTL(): string | null {
+  const exp = config.tokenExpiresAt;
+  if (!exp) return null;
+  const ms = exp.getTime() - Date.now();
+  if (ms <= 0) return chalk.red('expired');
+  const mins = Math.floor(ms / 60000);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+  if (days > 0) return `expires in ${days}d ${hrs % 24}h`;
+  if (hrs > 0) return `expires in ${hrs}h ${mins % 60}m`;
+  return `expires in ${mins}m`;
+}
+
+async function runAuthStatus(options: { json?: boolean } = {}): Promise<void> {
+  // JSON path: machine-readable, no spinner chrome
+  if (options.json) {
+    const payload: Record<string, unknown> = {
+      authenticated: config.isLoggedIn(),
+      email: config.userEmail || null,
+      company_id: config.companyId || null,
+      environment: config.environment,
+      api_url: config.apiUrl,
+      token_expires_at: config.tokenExpiresAt ? config.tokenExpiresAt.toISOString() : null,
+    };
+    if (config.isLoggedIn()) {
+      try {
+        const response = await apiClient.authStatus();
+        payload.authenticated = response.data.authenticated;
+        if (response.data.user) {
+          payload.email = response.data.user.email;
+          payload.company_id = response.data.user.company_id;
+          payload.user_id = response.data.user.id;
+        }
+      } catch {
+        payload.authenticated = config.userEmail || config.companyId ? 'offline' : false;
+      }
+    }
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
+
+  const spinner = ora({ text: 'Checking authentication...', stream: process.stderr }).start();
+
+  if (!config.isLoggedIn()) {
+    spinner.fail(chalk.yellow('Not logged in'));
+    console.log(chalk.dim('  Run `solid auth login` to authenticate'));
+    return;
+  }
+
+  try {
+    const response = await apiClient.authStatus();
+
+    if (response.data.authenticated && response.data.user) {
+      spinner.succeed(chalk.green('Authenticated'));
+      console.log(chalk.dim(`  Email:       ${response.data.user.email}`));
+      console.log(chalk.dim(`  Company ID:  ${response.data.user.company_id}`));
+      console.log(chalk.dim(`  Environment: ${config.environment}`));
+      console.log(chalk.dim(`  API URL:     ${config.apiUrl}`));
+      const ttl = formatTokenTTL();
+      if (ttl) console.log(chalk.dim(`  Token:       ${ttl}`));
+    } else {
+      spinner.fail(chalk.yellow('Session expired'));
+      console.log(chalk.dim('  Run `solid auth login` to re-authenticate'));
+    }
+  } catch (error) {
+    // Network failed — fall back to local config
+    if (config.userEmail || config.companyId) {
+      spinner.succeed(chalk.green('Authenticated (offline)'));
+      console.log(chalk.dim(`  Email:       ${config.userEmail || 'unknown'}`));
+      console.log(chalk.dim(`  Company ID:  ${config.companyId || 'unknown'}`));
+      console.log(chalk.dim(`  Environment: ${config.environment}`));
+      console.log(chalk.dim(`  API URL:     ${config.apiUrl}`));
+      const ttl = formatTokenTTL();
+      if (ttl) console.log(chalk.dim(`  Token:       ${ttl}`));
+      console.log(chalk.dim('  (Could not verify with server)'));
+    } else {
+      spinner.fail(chalk.red('Failed to check status'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  }
+}
+
 authCommand
   .command('status')
   .description('Check authentication status')
-  .action(async () => {
-    const spinner = ora('Checking authentication...').start();
+  .option('--json', 'JSON output')
+  .action(runAuthStatus);
 
-    if (!config.isLoggedIn()) {
-      spinner.fail(chalk.yellow('Not logged in'));
-      console.log(chalk.dim('  Run `solid auth login` to authenticate'));
-      return;
-    }
-
-    try {
-      const response = await apiClient.authStatus();
-
-      if (response.data.authenticated && response.data.user) {
-        spinner.succeed(chalk.green('Authenticated'));
-        console.log(chalk.dim(`  Email: ${response.data.user.email}`));
-        console.log(chalk.dim(`  Company ID: ${response.data.user.company_id}`));
-        console.log(chalk.dim(`  Environment: ${config.environment}`));
-        console.log(chalk.dim(`  API URL: ${config.apiUrl}`));
-      } else {
-        spinner.fail(chalk.yellow('Session expired'));
-        console.log(chalk.dim('  Run `solid auth login` to re-authenticate'));
-      }
-    } catch (error) {
-      // Network failed — fall back to local config
-      if (config.userEmail || config.companyId) {
-        spinner.succeed(chalk.green('Authenticated (offline)'));
-        console.log(chalk.dim(`  Email: ${config.userEmail || 'unknown'}`));
-        console.log(chalk.dim(`  Company ID: ${config.companyId || 'unknown'}`));
-        console.log(chalk.dim(`  Environment: ${config.environment}`));
-        console.log(chalk.dim(`  API URL: ${config.apiUrl}`));
-        console.log(chalk.dim('  (Could not verify with server)'));
-      } else {
-        spinner.fail(chalk.red('Failed to check status'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
-      }
-    }
-  });
+// Top-level alias: `solid whoami` → `solid auth status`.
+// Exported so the entrypoint can register it on the root program.
+export const whoamiCommand = new Command('whoami')
+  .description('Show who you are logged in as (alias for `solid auth status`)')
+  .option('--json', 'JSON output')
+  .action(runAuthStatus);
 
 // Token management (API keys for CI/CD, LLM agents, scripts)
 const tokenCommand = authCommand

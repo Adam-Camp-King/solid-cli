@@ -33,7 +33,7 @@ activateDryRunIfRequested(process.argv);
 // don't explicitly declare their own --json option.
 import { activateProgramJsonIfRequested } from './lib/json-output';
 activateProgramJsonIfRequested(process.argv);
-import { authCommand } from './commands/auth';
+import { authCommand, whoamiCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
 import { kbCommand } from './commands/kb';
 import { pagesCommand } from './commands/pages';
@@ -146,6 +146,7 @@ program.addCommand(onboardingCommand);
 
 // Core workflow
 program.addCommand(authCommand);
+program.addCommand(whoamiCommand);
 program.addCommand(statusCommand);
 program.addCommand(pullCommand);
 program.addCommand(pushCommand);

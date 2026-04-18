@@ -190,5 +190,49 @@ describe('command-kit', () => {
 
       expect(factory).not.toHaveBeenCalled();
     });
+
+    describe('quiet mode', () => {
+      it('suppresses the spinner when quiet=true', async () => {
+        const factory = jest.fn();
+        __setSpinnerFactoryForTest(factory);
+
+        await run(async () => 'hi', { spinner: 'loading', quiet: true });
+
+        expect(factory).not.toHaveBeenCalled();
+      });
+
+      it('still calls render in quiet mode (data goes through)', async () => {
+        __setSpinnerFactoryForTest(() => makeStubSpinner().api);
+        const render = jest.fn();
+
+        await run(async () => ({ v: 1 }), { spinner: 'loading', quiet: true, render });
+
+        expect(render).toHaveBeenCalledWith({ v: 1 });
+      });
+
+      it('still emits JSON in quiet mode', async () => {
+        __setSpinnerFactoryForTest(() => makeStubSpinner().api);
+
+        await run(async () => ({ x: 2 }), { spinner: 'loading', quiet: true, json: true });
+
+        expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ x: 2 }, null, 2));
+      });
+
+      it('SOLID_QUIET=1 env var engages quiet mode', async () => {
+        const prev = process.env.SOLID_QUIET;
+        process.env.SOLID_QUIET = '1';
+        try {
+          const factory = jest.fn();
+          __setSpinnerFactoryForTest(factory);
+
+          await run(async () => 'hi', { spinner: 'loading' });
+
+          expect(factory).not.toHaveBeenCalled();
+        } finally {
+          if (prev === undefined) delete process.env.SOLID_QUIET;
+          else process.env.SOLID_QUIET = prev;
+        }
+      });
+    });
   });
 });
