@@ -278,20 +278,6 @@ billingCommand.command('subscription <customerId>').description('Subscription de
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
 
-billingCommand.command('invoice-pdf <invoiceId>').description('Download an invoice PDF URL')
-  .action(async (invoiceId) => {
-    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
-    const spinner = ora('Loading PDF URL...').start();
-    try {
-      const res = await apiClient.get(`/api/v1/billing/invoices/${invoiceId}/pdf`);
-      const r = res.data as Record<string, any>;
-      spinner.succeed(chalk.green('PDF URL'));
-      if (r.url || r.pdf_url) console.log(chalk.cyan(`  ${r.url || r.pdf_url}`));
-      else console.log(JSON.stringify(r, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
-  });
-
 billingCommand.command('trial').description('Trial status')
   .action(async () => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }

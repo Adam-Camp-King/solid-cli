@@ -4,6 +4,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from './config';
+import { isDryRun, makeDryRunResult } from './dry-run';
 
 interface ApiResponse<T = unknown> {
   data: T;
@@ -29,8 +30,24 @@ class ApiClient {
       },
     });
 
-    // Add auth interceptor
+    // Add auth interceptor + T11.2 dry-run short-circuit
     this.client.interceptors.request.use((requestConfig) => {
+      // T11.2 — dry-run: block mutations before they leave the process.
+      // The flag is global (set by --dry-run or SOLID_DRY_RUN env var).
+      // We signal "intercepted" via a special error shape the response
+      // error-interceptor converts into a success result. No network I/O.
+      const method = (requestConfig.method || 'get').toLowerCase();
+      const isMutation = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
+      if (isMutation && isDryRun()) {
+        // Tag the config so the error interceptor can recognize it.
+        (requestConfig as any).__solid_dry_run = true;
+        // Throwing from a request interceptor cancels the request.
+        const err = new Error('SOLID_DRY_RUN_INTERCEPT') as AxiosError & { __solid_dry_run?: true };
+        (err as any).__solid_dry_run = true;
+        (err as any).config = requestConfig;
+        throw err;
+      }
+
       // CLI API key from env var takes priority (CI/CD, LLM agents)
       const envApiKey = process.env.SOLID_API_KEY;
       if (envApiKey) {
@@ -48,10 +65,25 @@ class ApiClient {
       return requestConfig;
     });
 
-    // Add response interceptor — retry once on 401 with token refresh
+    // Add response interceptor — retry once on 401 with token refresh,
+    // and synthesize a success response for dry-run-intercepted requests.
     this.client.interceptors.response.use(
       (response) => response,
-      async (error: AxiosError) => {
+      async (error: AxiosError & { __solid_dry_run?: true }) => {
+        // Dry-run synthetic response — the mutation never left the process.
+        if ((error as any).__solid_dry_run) {
+          const cfg = (error as any).config || {};
+          const method = (cfg.method || 'POST').toUpperCase();
+          const body = cfg.data;
+          const parsed = typeof body === 'string' ? (() => { try { return JSON.parse(body); } catch { return body; } })() : body;
+          return {
+            data: makeDryRunResult(method, cfg.url || '', parsed),
+            status: 200,
+            statusText: 'DRY_RUN',
+            headers: {},
+            config: cfg,
+          } as any;
+        }
         const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean };
         // Only attempt refresh if: 401, not already retried, not a login/refresh request itself
         if (
@@ -110,6 +142,8 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
+  // Dry-run interception happens at the request-interceptor layer —
+  // every mutation (incl. those using this.client.* directly) is caught.
   async post<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
     const response = await this.client.post(url, data);
     return { data: response.data, status: response.status, success: true };

@@ -23,6 +23,16 @@ import * as path from 'path';
 
 // Single source of truth for version — always reads from package.json
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+
+// T11.2 — activate global --dry-run BEFORE command parsing so the api-client
+// interceptor sees the flag on the very first API call.
+import { activateDryRunIfRequested, dryRunSummary, isDryRun } from './lib/dry-run';
+activateDryRunIfRequested(process.argv);
+
+// T11.3 — program-level --json flag that cascades to subcommands which
+// don't explicitly declare their own --json option.
+import { activateProgramJsonIfRequested } from './lib/json-output';
+activateProgramJsonIfRequested(process.argv);
 import { authCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
 import { kbCommand } from './commands/kb';
@@ -123,6 +133,8 @@ program
   .name('solid')
   .description('Solid# CLI — AI Business Infrastructure')
   .version(pkg.version)
+  .option('--dry-run', 'Preview every mutation without touching the server (T11). Global. Also: SOLID_DRY_RUN=1')
+  .option('--json', 'Prefer JSON output (if the subcommand supports it). Also: SOLID_JSON=1')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
@@ -349,6 +361,14 @@ program.addHelpText('after', () => {
 
 // Parse arguments
 program.parse(process.argv);
+
+// T11.2 — on exit, print a dry-run summary if any mutations were intercepted.
+process.on('beforeExit', () => {
+  if (isDryRun()) {
+    const summary = dryRunSummary();
+    if (summary) process.stderr.write(summary);
+  }
+});
 
 // Show branded help if no command provided
 if (!process.argv.slice(2).length) {

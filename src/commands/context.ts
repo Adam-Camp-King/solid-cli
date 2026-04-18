@@ -1,16 +1,24 @@
 /**
- * Context command for Solid CLI
+ * Context command for Solid CLI (T11 — Agency-AI Mode)
  *
- * Generates a complete AI context package (SOLID-CONTEXT.md) that any AI
- * (Claude, GPT, Cursor, Windsurf, etc.) can ingest to understand
- * the Solid# platform and this specific company.
+ * Single-round-trip, full-picture context dump for AI coding agents.
+ * The heavy lifting lives on the backend (`GET /api/v1/cli/context`) so
+ * Claude Code / Cursor / any MCP client get the same data as the CLI.
  *
- * Usage:
- *   solid context                    # Print to stdout
- *   solid context > SOLID-CONTEXT.md # Save to file
- *   solid context --clipboard        # Copy to clipboard
- *   solid context --save             # Save to ./SOLID-CONTEXT.md
- *   solid context --claude           # Save to ./.claude/CLAUDE.md
+ * Output modes:
+ *   solid context                     → markdown to stdout
+ *   solid context --json              → JSON to stdout
+ *   solid context --claude            → writes BOTH
+ *                                         .claude/CLAUDE.md          (markdown, human-readable)
+ *                                         .claude/solid-context.json (raw JSON for agents)
+ *   solid context --cursor            → .cursorrules
+ *   solid context --save              → ./SOLID-CONTEXT.md
+ *   solid context --section <name>    → one section only (cheap refresh)
+ *   solid context --tools-only        → just the CLI tool manifest
+ *   solid context --summary           → lightweight counts
+ *   solid context --watch             → auto-refresh every N seconds
+ *
+ * Sections: company, content, operations, capabilities, history, tooling
  */
 
 import { Command } from 'commander';
@@ -22,532 +30,353 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 
-interface CompanyData {
-  name: string;
-  slug: string;
+type ContextSection = 'company' | 'content' | 'operations' | 'capabilities' | 'history' | 'tooling';
+
+interface ContextResponse {
+  platform: string;
+  version: string;
+  generated_at: string;
+  company: Record<string, unknown>;
+  content: Record<string, unknown>;
+  operations: Record<string, unknown>;
+  capabilities: Record<string, unknown>;
+  history: Record<string, unknown>;
+  tooling: Record<string, unknown>;
+}
+
+interface MarkdownResponse {
+  content: string;
+  format: 'markdown';
+}
+
+interface SectionResponse {
+  section: string;
+  data: unknown;
+  generated_at: string;
+}
+
+interface SummaryResponse {
+  company_name: string;
   industry: string;
   tier: string;
-  contact_phone?: string;
-  contact_email?: string;
-  location?: string;
-  business_hours?: Record<string, unknown>;
-  website_settings?: Record<string, unknown>;
+  kb_count: number;
+  page_count: number;
+  pending_drafts: number;
+  service_count: number;
+  product_count: number;
+  agent_count: number;
+  chain_count: number;
+  module_count: number;
+  custom_domain_count: number;
+  agency_managed: boolean;
+  recent_activity_count: number;
+  generated_at: string;
 }
 
-interface KBEntry {
-  id: number;
-  title: string;
-  category: string;
-  content: string;
-}
-
-interface ServiceItem {
-  title: string;
-  slug: string;
-  description?: string;
-  price?: number;
-  currency?: string;
-  duration_minutes?: number;
-}
-
-interface PageItem {
-  id: number;
-  title: string;
-  slug: string;
-  is_published: boolean;
-  page_type?: string;
-}
-
-interface AgentItem {
-  agent_type: string;
-  name: string;
+interface ToolEntry {
+  command: string;
+  scope: string;
+  mutates: boolean;
   description: string;
-  autonomy_level: number;
-  tool_count: number;
 }
 
-export const contextCommand = new Command('context')
-  .description('Generate AI context package for this company')
-  .option('--save', 'Save to ./SOLID-CONTEXT.md')
-  .option('--claude', 'Save to ./.claude/CLAUDE.md (for Claude Code)')
-  .option('--cursor', 'Save to ./.cursorrules (for Cursor)')
-  .option('--json', 'Output as JSON instead of markdown')
-  .option('--minimal', 'Compact version (no command reference)')
-  .option('--watch', 'Auto-refresh context file when data changes')
-  .option('--interval <seconds>', 'Watch interval in seconds (default: 30)', '30')
-  .action(async (options) => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
+interface ToolManifestResponse {
+  tools: ToolEntry[];
+  total: number;
+  mutating: number;
+  read_only: number;
+  scopes_in_use: string[];
+}
 
-    const companyId = config.companyId;
-    if (!companyId) {
-      console.error(chalk.red('No company selected. Run `solid auth login` first.'));
-      process.exit(1);
-    }
+async function fetchContext(format: 'markdown' | 'json', minimal: boolean, section?: ContextSection): Promise<string | ContextResponse | SectionResponse> {
+  const params: Record<string, string> = { format, minimal: String(minimal) };
+  if (section) params.section = section;
+  const qs = new URLSearchParams(params).toString();
+  const url = `/api/v1/cli/context?${qs}`;
 
-    const isSaving = options.save || options.claude || options.cursor;
-    const spinner = isSaving ? ora('Building AI context package...').start() : null;
-
-    // Gather all data in parallel
-    const [companyResult, kbResult, pagesResult, servicesResult, productsResult, agentsResult] =
-      await Promise.allSettled([
-        apiClient.companyInfo(),
-        apiClient.kbSearch('', 100),
-        apiClient.pagesList(),
-        apiClient.servicesList(),
-        apiClient.productsList(),
-        apiClient.agentsList(),
-      ]);
-
-    // Extract data safely
-    const company: CompanyData | null =
-      companyResult.status === 'fulfilled'
-        ? ((companyResult.value.data as Record<string, any>).company as CompanyData)
-        : null;
-
-    const kbEntries: KBEntry[] =
-      kbResult.status === 'fulfilled'
-        ? ((kbResult.value.data as Record<string, any>).results || [])
-        : [];
-
-    const pages: PageItem[] =
-      pagesResult.status === 'fulfilled'
-        ? ((pagesResult.value.data as Record<string, any>).pages || [])
-        : [];
-
-    const services: ServiceItem[] =
-      servicesResult.status === 'fulfilled'
-        ? ((servicesResult.value.data as Record<string, any>).items || [])
-        : [];
-
-    const products: any[] =
-      productsResult.status === 'fulfilled'
-        ? ((productsResult.value.data as Record<string, any>).items || [])
-        : [];
-
-    const agents: AgentItem[] =
-      agentsResult.status === 'fulfilled'
-        ? ((agentsResult.value.data as Record<string, any>).agents || [])
-        : [];
-
-    if (!company) {
-      if (spinner) spinner.fail(chalk.red('Failed to load company data'));
-      else console.error(chalk.red('Failed to load company data'));
-      process.exit(1);
-    }
-
-    // Build the context document
-    const doc = options.json
-      ? buildJsonContext(company, companyId, kbEntries, pages, services, products, agents)
-      : buildMarkdownContext(company, companyId, kbEntries, pages, services, products, agents, !!options.minimal);
-
-    // Determine output file path
-    let outputPath: string | null = null;
-    let outputMode: string = 'stdout';
-
-    if (options.claude) {
-      const claudeDir = path.resolve('.claude');
-      if (!fs.existsSync(claudeDir)) {
-        fs.mkdirSync(claudeDir, { recursive: true });
-      }
-      outputPath = path.join(claudeDir, 'CLAUDE.md');
-      outputMode = 'claude';
-    } else if (options.cursor) {
-      outputPath = path.resolve('.cursorrules');
-      outputMode = 'cursor';
-    } else if (options.save || options.watch) {
-      outputPath = path.resolve('SOLID-CONTEXT.md');
-      outputMode = 'file';
-    }
-
-    // Write output
-    if (outputPath) {
-      fs.writeFileSync(outputPath, doc);
-      spinner?.succeed(chalk.green(`Saved to ${outputPath}`));
-      printNextSteps(outputMode, company.name);
-    } else {
-      process.stdout.write(doc);
-    }
-
-    // Watch mode — re-generate on interval
-    if (options.watch && outputPath) {
-      const intervalSec = Math.max(10, parseInt(options.interval) || 30);
-      let lastHash = simpleHash(doc);
-
-      console.log(chalk.dim(`  Watching for changes every ${intervalSec}s... (Ctrl+C to stop)`));
-      console.log('');
-
-      const tick = async () => {
-        try {
-          const [compRes, kbRes, pgRes, svcRes, prodRes, agRes] =
-            await Promise.allSettled([
-              apiClient.companyInfo(),
-              apiClient.kbSearch('', 100),
-              apiClient.pagesList(),
-              apiClient.servicesList(),
-              apiClient.productsList(),
-              apiClient.agentsList(),
-            ]);
-
-          const co = compRes.status === 'fulfilled' ? ((compRes.value.data as Record<string, any>).company as CompanyData) : null;
-          if (!co) return;
-
-          const freshDoc = options.json
-            ? buildJsonContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as Record<string, any>).results || []) : [],
-                pgRes.status === 'fulfilled' ? ((pgRes.value.data as Record<string, any>).pages || []) : [],
-                svcRes.status === 'fulfilled' ? ((svcRes.value.data as Record<string, any>).items || []) : [],
-                prodRes.status === 'fulfilled' ? ((prodRes.value.data as Record<string, any>).items || []) : [],
-                agRes.status === 'fulfilled' ? ((agRes.value.data as Record<string, any>).agents || []) : [])
-            : buildMarkdownContext(co, companyId!, kbRes.status === 'fulfilled' ? ((kbRes.value.data as Record<string, any>).results || []) : [],
-                pgRes.status === 'fulfilled' ? ((pgRes.value.data as Record<string, any>).pages || []) : [],
-                svcRes.status === 'fulfilled' ? ((svcRes.value.data as Record<string, any>).items || []) : [],
-                prodRes.status === 'fulfilled' ? ((prodRes.value.data as Record<string, any>).items || []) : [],
-                agRes.status === 'fulfilled' ? ((agRes.value.data as Record<string, any>).agents || []) : [], !!options.minimal);
-
-          const newHash = simpleHash(freshDoc);
-          if (newHash !== lastHash) {
-            fs.writeFileSync(outputPath!, freshDoc);
-            lastHash = newHash;
-            const time = new Date().toLocaleTimeString();
-            console.log(chalk.green(`  [${time}] Context updated — changes detected`));
-          }
-        } catch {
-          // Silently skip failed polls
-        }
-      };
-
-      setInterval(tick, intervalSec * 1000);
-
-      // Keep process alive
-      await new Promise(() => {});
-    }
-  });
-
-function printNextSteps(mode: string, companyName: string): void {
-  console.log('');
-  const lines: string[] = [
-    `${chalk.dim('Company:')}  ${companyName}`,
-    `${chalk.dim('Updated:')} ${new Date().toISOString().split('T')[0]}`,
-    '',
-  ];
-
-  if (mode === 'claude') {
-    lines.push(`${chalk.dim('Claude Code will auto-read .claude/CLAUDE.md')}`);
-    lines.push(`${chalk.dim('Run')} ${chalk.cyan('solid context --claude')} ${chalk.dim('again to refresh')}`);
-  } else if (mode === 'cursor') {
-    lines.push(`${chalk.dim('Cursor will auto-read .cursorrules')}`);
-    lines.push(`${chalk.dim('Run')} ${chalk.cyan('solid context --cursor')} ${chalk.dim('again to refresh')}`);
-  } else {
-    lines.push(`${chalk.dim('Paste into any AI project context, or:')}`)
-    lines.push(`  ${chalk.cyan('solid context --claude')}   ${chalk.dim('→ .claude/CLAUDE.md')}`);
-    lines.push(`  ${chalk.cyan('solid context --cursor')}   ${chalk.dim('→ .cursorrules')}`);
+  if (section) {
+    const res = await apiClient.get<SectionResponse>(url);
+    return res.data;
   }
-
-  console.log(ui.successBox('AI Context Ready', lines));
-  console.log('');
+  if (format === 'json') {
+    const res = await apiClient.get<ContextResponse>(url);
+    return res.data;
+  }
+  const res = await apiClient.get<MarkdownResponse>(url);
+  return res.data.content;
 }
 
-function buildJsonContext(
-  company: CompanyData,
-  companyId: number,
-  kb: KBEntry[],
-  pages: PageItem[],
-  services: ServiceItem[],
-  products: any[],
-  agents: AgentItem[],
-): string {
-  return JSON.stringify({
-    platform: 'solid',
-    version: '1.0',
-    generated_at: new Date().toISOString(),
-    company: {
-      id: companyId,
-      name: company.name,
-      slug: company.slug,
-      industry: company.industry,
-      tier: company.tier,
-      phone: company.contact_phone,
-      email: company.contact_email,
-      address: company.location,
-      hours: company.business_hours,
-    },
-    knowledge_base: kb.map((e) => ({ title: e.title, category: e.category, content: e.content })),
-    pages: pages.map((p) => ({ title: p.title, slug: p.slug, published: p.is_published })),
-    services: services.map((s) => ({ title: s.title, slug: s.slug, price: s.price, duration: s.duration_minutes })),
-    products: products.map((p) => ({ name: p.name, category: p.category, price: p.price })),
-    agents: agents.map((a) => ({ name: a.name, type: a.agent_type, description: a.description })),
-    api_base: config.apiUrl,
-    cli_version: '1.3.1',
-  }, null, 2);
+async function fetchSummary(): Promise<SummaryResponse> {
+  const res = await apiClient.get<SummaryResponse>('/api/v1/cli/context/summary');
+  return res.data;
+}
+
+async function fetchTools(): Promise<ToolManifestResponse> {
+  const res = await apiClient.get<ToolManifestResponse>('/api/v1/cli/context/tools');
+  return res.data;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function simpleHash(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
-    const chr = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + chr;
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
     hash |= 0;
   }
   return hash;
 }
 
-function buildMarkdownContext(
-  company: CompanyData,
-  companyId: number,
-  kb: KBEntry[],
-  pages: PageItem[],
-  services: ServiceItem[],
-  products: any[],
-  agents: AgentItem[],
-  minimal: boolean,
-): string {
-  const lines: string[] = [];
-
-  // Header
-  lines.push(`# Solid# AI Context — ${company.name}`);
-  lines.push('');
-  lines.push(`> Auto-generated by \`solid context\` on ${new Date().toISOString().split('T')[0]}`);
-  lines.push(`> Run \`solid context --save\` to refresh this file.`);
-  lines.push('');
-
-  // Platform overview
-  lines.push('## Platform');
-  lines.push('');
-  lines.push('Solid# is AI Business Infrastructure. You are working on a business that runs on the Solid# platform.');
-  lines.push('The platform provides: CMS/website builder, CRM, booking, invoicing, AI agents, voice AI, and knowledge base management.');
-  lines.push('Everything is multi-tenant — all operations are scoped to this company.');
-  lines.push('');
-
-  // Company
-  lines.push('## This Company');
-  lines.push('');
-  lines.push(`| Field | Value |`);
-  lines.push(`|-------|-------|`);
-  lines.push(`| **Name** | ${company.name} |`);
-  lines.push(`| **ID** | ${companyId} |`);
-  lines.push(`| **Slug** | ${company.slug || 'not set'} |`);
-  lines.push(`| **Industry** | ${company.industry || 'not set'} |`);
-  lines.push(`| **Tier** | ${company.tier || 'starter'} |`);
-  if (company.contact_phone) lines.push(`| **Phone** | ${company.contact_phone} |`);
-  if (company.contact_email) lines.push(`| **Email** | ${company.contact_email} |`);
-  if (company.location) lines.push(`| **Address** | ${company.location} |`);
-  lines.push('');
-
-  if (company.business_hours && Object.keys(company.business_hours).length > 0) {
-    lines.push('### Business Hours');
-    lines.push('');
-    lines.push('```json');
-    lines.push(JSON.stringify(company.business_hours, null, 2));
-    lines.push('```');
-    lines.push('');
-  }
-
-  // Knowledge Base
-  if (kb.length > 0) {
-    lines.push('## Knowledge Base');
-    lines.push('');
-    lines.push(`This company has ${kb.length} KB entries. The AI agents use these to answer questions and make decisions.`);
-    lines.push('');
-
-    // Group by category
-    const byCategory: Record<string, KBEntry[]> = {};
-    for (const entry of kb) {
-      const cat = entry.category || 'general';
-      if (!byCategory[cat]) byCategory[cat] = [];
-      byCategory[cat].push(entry);
-    }
-
-    for (const [category, entries] of Object.entries(byCategory)) {
-      lines.push(`### ${category}`);
-      lines.push('');
-      for (const entry of entries) {
-        lines.push(`**${entry.title}**`);
-        // Truncate very long content for context efficiency
-        const content = entry.content || '';
-        if (content.length > 500) {
-          lines.push(content.substring(0, 500) + '...');
-          lines.push(`*(${content.length} chars total — use \`solid kb get ${entry.id}\` for full text)*`);
-        } else {
-          lines.push(content);
-        }
-        lines.push('');
-      }
-    }
-  }
-
-  // Pages
-  if (pages.length > 0) {
-    lines.push('## Website Pages');
-    lines.push('');
-    lines.push('| Page | Slug | Published |');
-    lines.push('|------|------|-----------|');
-    for (const page of pages) {
-      lines.push(`| ${page.title} | /${page.slug} | ${page.is_published ? 'Yes' : 'No'} |`);
-    }
-    lines.push('');
-  }
-
-  // Services
-  if (services.length > 0) {
-    lines.push('## Services');
-    lines.push('');
-    lines.push('| Service | Price | Duration |');
-    lines.push('|---------|-------|----------|');
-    for (const svc of services) {
-      const price = svc.price ? `$${svc.price}` : 'Quote';
-      const duration = svc.duration_minutes ? `${svc.duration_minutes} min` : '-';
-      lines.push(`| ${svc.title} | ${price} | ${duration} |`);
-    }
-    lines.push('');
-  }
-
-  // Products
-  if (products.length > 0) {
-    lines.push('## Products');
-    lines.push('');
-    lines.push('| Product | Category | Price |');
-    lines.push('|---------|----------|-------|');
-    for (const prod of products) {
-      lines.push(`| ${prod.name} | ${prod.category || '-'} | ${prod.price ? '$' + prod.price : '-'} |`);
-    }
-    lines.push('');
-  }
-
-  // Agents
-  if (agents.length > 0) {
-    lines.push('## AI Agents');
-    lines.push('');
-    lines.push('These AI personas work for this company:');
-    lines.push('');
-    for (const agent of agents) {
-      lines.push(`- **${agent.name}** (${agent.agent_type}) — ${agent.description}`);
-    }
-    lines.push('');
-  }
-
-  // CLI Command Reference
-  if (!minimal) {
-    lines.push('## CLI Commands');
-    lines.push('');
-    lines.push('Use these commands to manage this company. All commands are scoped to the current company automatically.');
-    lines.push('');
-
-    lines.push('### Core Workflow');
-    lines.push('```bash');
-    lines.push('solid pull                    # Download pages, KB, services, products as local files');
-    lines.push('solid push                    # Push local changes back to Solid#');
-    lines.push('solid push --dry-run          # Preview what would change (ALWAYS do this first)');
-    lines.push('solid status                  # Show company overview');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### Knowledge Base');
-    lines.push('```bash');
-    lines.push('solid kb list                 # List all KB entries');
-    lines.push('solid kb search "plumbing"    # Search KB');
-    lines.push('solid kb create               # Create new KB entry');
-    lines.push('solid kb delete <id>          # Delete KB entry');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### Website Pages');
-    lines.push('```bash');
-    lines.push('solid pages list              # List all pages');
-    lines.push('solid pages publish <id>      # Publish a page');
-    lines.push('solid vibe "add a hero..."    # Natural language page edits');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### AI Agents');
-    lines.push('```bash');
-    lines.push('solid train chat sarah        # Chat with Sarah (customer service)');
-    lines.push('solid train chat marcus       # Chat with Marcus (growth)');
-    lines.push('solid agent dashboard         # Agent overview + telemetry');
-    lines.push('solid agent soul sarah        # View agent identity and config');
-    lines.push('solid agent mission "..."     # Multi-agent mission');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### CRM & Operations');
-    lines.push('```bash');
-    lines.push('solid crm contacts            # View contacts');
-    lines.push('solid crm deals               # View deals/pipeline');
-    lines.push('solid inbox                   # Unified inbox');
-    lines.push('solid schedule list           # Appointments');
-    lines.push('solid voice calls             # Call logs');
-    lines.push('solid reports revenue          # Revenue analytics');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### Content & Commerce');
-    lines.push('```bash');
-    lines.push('solid blog list               # Blog posts');
-    lines.push('solid brand get               # Brand identity');
-    lines.push('solid services list           # Service catalog');
-    lines.push('solid inventory list          # Inventory');
-    lines.push('solid payment list            # Payment history');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### Multi-Company (Agencies)');
-    lines.push('```bash');
-    lines.push('solid company list            # List all companies you manage');
-    lines.push('solid switch <id or name>     # Switch to another company');
-    lines.push('solid company create "Name" --template plumber  # New client from template');
-    lines.push('```');
-    lines.push('');
-
-    lines.push('### API Access');
-    lines.push('```bash');
-    lines.push('# For CI/CD or AI agent integration:');
-    lines.push('export SOLID_API_KEY=your_api_key_here');
-    lines.push('solid status  # Now uses API key instead of login token');
-    lines.push('```');
-    lines.push('');
-  }
-
-  // File structure
-  lines.push('## Local File Structure');
-  lines.push('');
-  lines.push('After running `solid pull`, your directory looks like:');
-  lines.push('');
-  lines.push('```');
-  lines.push('├── solid.config.json        # Company settings (name, industry, tier, hours)');
-  lines.push('├── pages/');
-  lines.push('│   ├── home.json            # Page layout (title, slug, layout_json, is_published)');
-  lines.push('│   └── about.json');
-  lines.push('├── kb/');
-  lines.push('│   ├── services.md          # KB entry (YAML frontmatter + markdown content)');
-  lines.push('│   └── faq.md');
-  lines.push('├── services/');
-  lines.push('│   └── plumbing.json        # Service (title, price, duration_minutes)');
-  lines.push('├── products/');
-  lines.push('│   └── widget.json          # Product (name, price, category)');
-  lines.push('└── .solid/');
-  lines.push('    └── manifest.json        # Sync metadata (DO NOT EDIT)');
-  lines.push('```');
-  lines.push('');
-
-  // Rules
-  lines.push('## Rules');
-  lines.push('');
-  lines.push('1. **Always `solid push --dry-run` before `solid push`** — preview changes before deploying');
-  lines.push('2. **Never edit `.solid/manifest.json`** — this tracks sync state');
-  lines.push('3. **KB entries are markdown** with YAML frontmatter (id, title, category)');
-  lines.push('4. **Pages are JSON** with `layout_json` containing the page builder blocks');
-  lines.push('5. **All data is scoped to this company** — you cannot accidentally affect other businesses');
-  lines.push('6. **To refresh this context**, run `solid context --save` (or `--claude` / `--cursor`)');
-  lines.push('');
-
-  // API info
-  lines.push('## API');
-  lines.push('');
-  lines.push(`- **Base URL:** ${config.apiUrl}`);
-  lines.push(`- **Auth:** Bearer token (via \`solid auth login\`) or \`SOLID_API_KEY\` env var`);
-  lines.push(`- **Company scope:** All requests include \`X-Company-ID: ${companyId}\` header`);
-  lines.push('');
-
-  return lines.join('\n');
+function printClaudeNextSteps(markdownPath: string, jsonPath: string, markdownBytes: number, jsonBytes: number): void {
+  console.log('');
+  const lines: string[] = [
+    `${chalk.dim('Markdown:')} ${markdownPath} (${formatBytes(markdownBytes)})`,
+    `${chalk.dim('JSON:')}     ${jsonPath} (${formatBytes(jsonBytes)})`,
+    '',
+    `${chalk.dim('Claude Code auto-reads .claude/CLAUDE.md.')}`,
+    `${chalk.dim('For programmatic access:')} ${chalk.cyan('cat .claude/solid-context.json')}`,
+    `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude')}`,
+    `${chalk.dim('Watch mode:')} ${chalk.cyan('solid context --claude --watch')}`,
+  ];
+  console.log(ui.successBox('AI Context Ready', lines));
+  console.log('');
 }
+
+function printCursorNextSteps(outputPath: string, bytes: number): void {
+  console.log('');
+  console.log(ui.successBox('AI Context Ready', [
+    `${chalk.dim('Saved:')} ${outputPath} (${formatBytes(bytes)})`,
+    `${chalk.dim('Cursor auto-reads .cursorrules.')}`,
+    `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --cursor')}`,
+  ]));
+  console.log('');
+}
+
+function printGenericNextSteps(outputPath: string, bytes: number): void {
+  console.log('');
+  console.log(ui.successBox('Context Saved', [
+    `${chalk.dim('Saved:')} ${outputPath} (${formatBytes(bytes)})`,
+    `${chalk.dim('For Claude Code:')} ${chalk.cyan('solid context --claude')}`,
+    `${chalk.dim('For Cursor:')}      ${chalk.cyan('solid context --cursor')}`,
+  ]));
+  console.log('');
+}
+
+function renderSummary(s: SummaryResponse): void {
+  console.log('');
+  console.log(chalk.bold('  Company'));
+  console.log(`    Name:     ${s.company_name}`);
+  console.log(`    Industry: ${s.industry}`);
+  console.log(`    Tier:     ${s.tier}`);
+  console.log('');
+  console.log(chalk.bold('  Content'));
+  console.log(`    Pages:             ${s.page_count} ${s.pending_drafts > 0 ? chalk.yellow(`(${s.pending_drafts} with pending drafts)`) : ''}`);
+  console.log(`    KB entries:        ${s.kb_count}`);
+  console.log(`    Services:          ${s.service_count}`);
+  console.log(`    Products:          ${s.product_count}`);
+  console.log(`    Agents:            ${s.agent_count}`);
+  console.log(`    Chains:            ${s.chain_count}`);
+  console.log(`    Custom modules:    ${s.module_count}`);
+  console.log(`    Custom domains:    ${s.custom_domain_count}`);
+  console.log('');
+  if (s.agency_managed) {
+    console.log(chalk.yellow(`  🔒 Agency-managed — check locks with: solid company lock-status`));
+    console.log('');
+  }
+  console.log(chalk.dim(`  API calls last 24h: ${s.recent_activity_count}`));
+  console.log(chalk.dim(`  Generated: ${s.generated_at}`));
+  console.log('');
+}
+
+function renderTools(m: ToolManifestResponse): void {
+  console.log('');
+  console.log(chalk.bold(`  CLI tool manifest — ${m.total} verbs (${m.read_only} read, ${m.mutating} mutate)`));
+  console.log(chalk.dim(`  Scopes in use: ${m.scopes_in_use.join(', ')}`));
+  console.log('');
+  const maxCmd = Math.max(...m.tools.map((t) => t.command.length));
+  const maxScope = Math.max(...m.tools.map((t) => t.scope.length));
+  m.tools.forEach((t) => {
+    const mark = t.mutates ? chalk.yellow('✏️ ') : chalk.dim('👁 ');
+    const cmd = t.command.padEnd(maxCmd);
+    const scope = t.scope.padEnd(maxScope);
+    console.log(`  ${mark} ${chalk.cyan(cmd)}  ${chalk.dim(scope)}  ${t.description}`);
+  });
+  console.log('');
+}
+
+export const contextCommand = new Command('context')
+  .description('One-shot AI context dump (company state, locks, drafts, tools) — T11 agency mode')
+  .option('--save', 'Save to ./SOLID-CONTEXT.md')
+  .option('--claude', 'Save BOTH .claude/CLAUDE.md + .claude/solid-context.json')
+  .option('--cursor', 'Save to ./.cursorrules')
+  .option('--json', 'Output JSON to stdout')
+  .option('--minimal', 'Compact markdown (drops the tool manifest table)')
+  .option('--section <name>', 'Return only one section: company, content, operations, capabilities, history, tooling')
+  .option('--tools-only', 'Just the CLI tool manifest (for MCP servers / AI harnesses)')
+  .option('--summary', 'Lightweight counts (fast)')
+  .option('--watch', 'Auto-refresh the output file on change (use with --claude/--cursor/--save)')
+  .option('--interval <seconds>', 'Watch interval in seconds (default: 30)', '30')
+  .action(async (options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` or export SOLID_API_KEY.'));
+      process.exit(1);
+    }
+    if (!config.companyId) {
+      console.error(chalk.red('No company selected. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    // ── Fast paths ────────────────────────────────────────────────
+    if (options.summary) {
+      const spinner = ora('Loading summary...').start();
+      try {
+        const s = await fetchSummary();
+        spinner.stop();
+        if (options.json) {
+          console.log(JSON.stringify(s, null, 2));
+          return;
+        }
+        renderSummary(s);
+      } catch (error) {
+        spinner.fail(chalk.red('Failed'));
+        console.error(chalk.red(handleApiError(error).message));
+        process.exit(1);
+      }
+      return;
+    }
+
+    if (options.toolsOnly) {
+      const spinner = ora('Loading tool manifest...').start();
+      try {
+        const m = await fetchTools();
+        spinner.stop();
+        if (options.json) {
+          console.log(JSON.stringify(m, null, 2));
+          return;
+        }
+        renderTools(m);
+      } catch (error) {
+        spinner.fail(chalk.red('Failed'));
+        console.error(chalk.red(handleApiError(error).message));
+        process.exit(1);
+      }
+      return;
+    }
+
+    if (options.section) {
+      const valid = ['company', 'content', 'operations', 'capabilities', 'history', 'tooling'];
+      if (!valid.includes(options.section)) {
+        console.error(chalk.red(`Unknown section. Valid: ${valid.join(', ')}`));
+        process.exit(1);
+      }
+      try {
+        const res = await fetchContext('json', false, options.section as ContextSection);
+        console.log(JSON.stringify(res, null, 2));
+      } catch (error) {
+        console.error(chalk.red(handleApiError(error).message));
+        process.exit(1);
+      }
+      return;
+    }
+
+    // ── Full context paths ────────────────────────────────────────
+    const isSaving = Boolean(options.save || options.claude || options.cursor || options.watch);
+    const spinner = isSaving ? ora('Building AI context package...').start() : null;
+
+    let doc: string;
+    let jsonDoc: string | null = null;
+    try {
+      if (options.json) {
+        const data = await fetchContext('json', !!options.minimal);
+        doc = JSON.stringify(data, null, 2);
+      } else {
+        const md = await fetchContext('markdown', !!options.minimal);
+        doc = md as string;
+        // --claude also writes JSON alongside; fetch it now
+        if (options.claude) {
+          const data = await fetchContext('json', !!options.minimal);
+          jsonDoc = JSON.stringify(data, null, 2);
+        }
+      }
+    } catch (error) {
+      if (spinner) spinner.fail(chalk.red('Failed to build context'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(apiError.message));
+      process.exit(1);
+    }
+
+    // ── Write files ───────────────────────────────────────────────
+    let markdownPath: string | null = null;
+    let jsonPath: string | null = null;
+    let outputMode: 'claude' | 'cursor' | 'file' | 'stdout' = 'stdout';
+
+    if (options.claude) {
+      outputMode = 'claude';
+      const claudeDir = path.resolve('.claude');
+      if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
+      markdownPath = path.join(claudeDir, 'CLAUDE.md');
+      jsonPath = path.join(claudeDir, 'solid-context.json');
+      fs.writeFileSync(markdownPath, doc);
+      if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+    } else if (options.cursor) {
+      outputMode = 'cursor';
+      markdownPath = path.resolve('.cursorrules');
+      fs.writeFileSync(markdownPath, doc);
+    } else if (options.save || options.watch) {
+      outputMode = 'file';
+      markdownPath = path.resolve('SOLID-CONTEXT.md');
+      fs.writeFileSync(markdownPath, doc);
+    }
+
+    spinner?.succeed(chalk.green('AI context ready'));
+
+    if (outputMode === 'claude' && markdownPath && jsonPath) {
+      const mdBytes = fs.statSync(markdownPath).size;
+      const jsonBytes = jsonDoc ? fs.statSync(jsonPath).size : 0;
+      printClaudeNextSteps(markdownPath, jsonPath, mdBytes, jsonBytes);
+    } else if (outputMode === 'cursor' && markdownPath) {
+      printCursorNextSteps(markdownPath, fs.statSync(markdownPath).size);
+    } else if (outputMode === 'file' && markdownPath) {
+      printGenericNextSteps(markdownPath, fs.statSync(markdownPath).size);
+    } else {
+      process.stdout.write(doc);
+      if (!doc.endsWith('\n')) process.stdout.write('\n');
+    }
+
+    // ── Watch mode ────────────────────────────────────────────────
+    if (options.watch && markdownPath) {
+      const intervalSec = Math.max(10, parseInt(options.interval, 10) || 30);
+      let lastHash = simpleHash(doc);
+
+      console.log(chalk.dim(`  Watching every ${intervalSec}s (Ctrl+C to stop)`));
+      console.log('');
+
+      const tick = async () => {
+        try {
+          const freshMd = options.json
+            ? JSON.stringify(await fetchContext('json', !!options.minimal), null, 2)
+            : ((await fetchContext('markdown', !!options.minimal)) as string);
+          const h = simpleHash(freshMd);
+          if (h !== lastHash) {
+            fs.writeFileSync(markdownPath!, freshMd);
+            if (outputMode === 'claude' && jsonPath) {
+              const freshJson = JSON.stringify(await fetchContext('json', !!options.minimal), null, 2);
+              fs.writeFileSync(jsonPath, freshJson);
+            }
+            lastHash = h;
+            const t = new Date().toLocaleTimeString();
+            console.log(chalk.green(`  [${t}] context refreshed`));
+          }
+        } catch {
+          // Silently skip transient failures — don't kill the watch loop
+        }
+      };
+
+      setInterval(tick, intervalSec * 1000);
+      await new Promise(() => {}); // keep alive
+    }
+  });
