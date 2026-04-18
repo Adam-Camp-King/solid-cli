@@ -247,12 +247,19 @@ pagesCommand
 // Update page
 pagesCommand
   .command('update <id>')
-  .description('Update page metadata (title, slug, type, publish state)')
+  .description('Update page metadata + optional custom <head>/<body> injection (Professional+ tier)')
   .option('--title <title>', 'New title')
   .option('--slug <slug>', 'New slug')
   .option('--type <type>', 'New page type')
   .option('--publish', 'Publish the page')
   .option('--unpublish', 'Unpublish the page')
+  // T7 — accept either a file path OR inline HTML string
+  .option('--custom-head <file-or-html>', 'Replace page <head> injection (path to .html file or inline string). Professional+.')
+  .option('--custom-body-start <file-or-html>', 'Replace start-of-<body> injection. Professional+.')
+  .option('--custom-body-end <file-or-html>', 'Replace end-of-<body> injection (late scripts). Professional+.')
+  .option('--clear-custom-head', 'Remove existing <head> injection')
+  .option('--clear-custom-body-start', 'Remove start-of-<body> injection')
+  .option('--clear-custom-body-end', 'Remove end-of-<body> injection')
   .action(async (id: string, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -264,6 +271,19 @@ pagesCommand
       process.exit(1);
     }
 
+    // Resolve --custom-* value: if the value is an existing file path,
+    // read it; otherwise treat it as a literal HTML string.
+    const resolveInjection = async (value: string | undefined): Promise<string | undefined> => {
+      if (value === undefined) return undefined;
+      const fs = await import('fs');
+      const path = await import('path');
+      const abs = path.resolve(value);
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+        return fs.readFileSync(abs, 'utf-8');
+      }
+      return value; // inline string
+    };
+
     const body: Record<string, unknown> = {};
     if (options.title) body.title = options.title;
     if (options.slug) body.slug = options.slug;
@@ -271,8 +291,15 @@ pagesCommand
     if (options.publish) body.is_published = true;
     if (options.unpublish) body.is_published = false;
 
+    if (options.customHead !== undefined) body.custom_head = await resolveInjection(options.customHead);
+    if (options.customBodyStart !== undefined) body.custom_body_start = await resolveInjection(options.customBodyStart);
+    if (options.customBodyEnd !== undefined) body.custom_body_end = await resolveInjection(options.customBodyEnd);
+    if (options.clearCustomHead) body.custom_head = '';
+    if (options.clearCustomBodyStart) body.custom_body_start = '';
+    if (options.clearCustomBodyEnd) body.custom_body_end = '';
+
     if (Object.keys(body).length === 0) {
-      console.error(chalk.red('Provide at least one field (--title, --slug, --type, --publish, --unpublish).'));
+      console.error(chalk.red('Provide at least one field (--title/--slug/--type/--publish/--unpublish/--custom-head/...).'));
       process.exit(1);
     }
 
@@ -280,6 +307,9 @@ pagesCommand
     try {
       await apiClient.pageUpdate(pageId, body);
       spinner.succeed(chalk.green(`Page #${pageId} updated`));
+      if (body.custom_head || body.custom_body_start || body.custom_body_end) {
+        console.log(chalk.dim('  Custom injection applied — reload the page to see it live.'));
+      }
     } catch (error) {
       spinner.fail(chalk.red('Failed to update page'));
       const apiError = handleApiError(error);
