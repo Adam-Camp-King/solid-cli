@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { emit as emitTelemetry } from '../lib/telemetry';
 
 export const demoCommand = new Command('demo')
   .description('Create live demo companies for prospects — AI answers the phone')
@@ -35,6 +36,7 @@ demoCommand
   .option('--expires <duration>', 'Auto-destroy after duration (e.g., 72h, 7d)', '72h')
   .option('--password <pass>', 'Set a demo login password')
   .option('--open', 'Open in browser after creation')
+  .option('--no-open', "Don't auto-open the browser after creation")
   .action(async (template, name, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -43,30 +45,40 @@ demoCommand
 
     const ora = (await import('ora')).default;
     const originalCompanyId = config.companyId;
+    const startTime = Date.now();
 
+    // Compact header — no box art; optimized for 80-char terminals and recording
     console.log('');
-    console.log(ui.header(`Creating Demo — ${name}`));
+    console.log(chalk.bold.hex('#10b981')(`  ✨ Creating live AI business: ${chalk.white(name)}`));
+    console.log(chalk.dim(`  Template: ${template} · expires in ${options.expires} · hold tight...`));
     console.log('');
 
-    const spinner = ora('Provisioning company...').start();
+    const spinner = ora({ text: 'Provisioning company...', prefixText: ' ' }).start();
+    let step = 0;
+    const updateStep = (text: string) => {
+      step += 1;
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      spinner.text = `[${step}/3 · ${elapsed}s] ${text}`;
+    };
 
     try {
       // Step 1: Create company
+      updateStep('Provisioning company...');
       const createRes = await apiClient.companyCreate(name);
       const company = (createRes.data as Record<string, any>).company || createRes.data;
       const companyId = company.id || company.company_id;
       const slug = company.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
       // Step 2: Switch and apply template
-      spinner.text = 'Applying industry template...';
+      updateStep('Cloning industry template...');
       await apiClient.companySwitch(companyId);
       await apiClient.templateClone(template);
 
       // Step 3: Configure demo mode + auto-provision phone via backend
-      spinner.text = 'Setting up demo (provisioning AI phone)...';
+      updateStep('Wiring up AI + phone number...');
       const expiresHours = parseExpires(options.expires);
       const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000);
-      let phoneNumber = null;
+      let phoneNumber: string | null = null;
 
       try {
         const demoRes = await apiClient.post(`/api/v1/cli/companies/${companyId}/demo-setup`);
@@ -93,33 +105,77 @@ demoCommand
         config.companyId = originalCompanyId;
       }
 
-      spinner.succeed(chalk.green('Demo ready'));
+      const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+      spinner.succeed(chalk.green(`Demo live in ${elapsedSec}s`));
+
+      const url = `https://${slug}.solidnumber.com`;
+      const divider = chalk.hex('#10b981')('━'.repeat(56));
+
+      // The "receipt moment" — big + scannable + recording-friendly.
       console.log('');
-      console.log(`  ${chalk.bold('Company ID:')}  ${companyId}`);
-      console.log(`  ${chalk.bold('Template:')}    ${template}`);
-      console.log(`  ${chalk.bold('URL:')}         ${chalk.cyan(`https://${slug}.solidnumber.com`)}`);
+      console.log('  ' + divider);
+      console.log('');
+      console.log(chalk.bold.hex('#10b981')(`  🎉 ${name} is LIVE.`));
+      console.log('');
       if (phoneNumber) {
-        console.log(`  ${chalk.bold('AI Phone:')}    ${chalk.green(phoneNumber)} ${chalk.dim('— call it live')}`);
+        // Phone number gets the biggest emphasis — it's the wow moment.
+        console.log(chalk.dim('  Call the AI right now:'));
+        console.log('');
+        console.log(chalk.bold.green(`      📞  ${phoneNumber}`));
+        console.log('');
+        console.log(chalk.dim('  A real AI receptionist will answer as your business.'));
+      } else {
+        console.log(chalk.yellow('  ⚠  Phone provisioning pending — check back in a minute with:'));
+        console.log(chalk.cyan(`    solid voice status --company ${companyId}`));
       }
-      console.log(`  ${chalk.bold('Password:')}    ${options.password || chalk.dim('(auto-generated)')}`);
-      console.log(`  ${chalk.bold('Expires:')}     ${expiresAt.toLocaleDateString()} ${expiresAt.toLocaleTimeString()} ${chalk.dim(`(${options.expires})`)}`);
       console.log('');
-      console.log(chalk.dim('  Share the URL with your prospect.'));
+      console.log(chalk.dim('  Visit the site:'));
+      console.log(`      🌐  ${chalk.cyan(url)}`);
+      console.log('');
+      console.log('  ' + divider);
+      console.log('');
+      console.log(chalk.dim(`  Company ID: ${companyId}  ·  Expires: ${expiresAt.toLocaleDateString()} ${expiresAt.toLocaleTimeString()}`));
+      console.log('');
+      console.log(chalk.dim('  Next moves:'));
+      console.log(`    ${chalk.cyan(`solid demo convert ${companyId} --tier starter`)}   ${chalk.dim('# turn into a paid client')}`);
+      console.log(`    ${chalk.cyan(`solid demo delete ${companyId}`)}                    ${chalk.dim('# tear it down early')}`);
       if (phoneNumber) {
-        console.log(chalk.dim('  Have them call the number — AI answers as their business.'));
+        console.log(`    ${chalk.cyan(`solid voice train sarah --company ${companyId}`)}  ${chalk.dim('# teach the AI your business')}`);
       }
-      console.log('');
-      console.log(`  ${chalk.dim('Convert to paid:')}  ${chalk.cyan(`solid demo convert ${companyId} --tier starter`)}`);
-      console.log(`  ${chalk.dim('Clean up:')}         ${chalk.cyan(`solid demo delete ${companyId}`)}`);
       console.log('');
 
-      if (options.open) {
+      // Emit telemetry for funnel tracking
+      try {
+        emitTelemetry('demo_created', {
+          command: 'demo create',
+          extra: {
+            template,
+            company_id: companyId,
+            has_phone: !!phoneNumber,
+            elapsed_sec: elapsedSec,
+            expires: options.expires,
+          },
+        });
+      } catch {
+        /* telemetry is never fatal */
+      }
+
+      // Auto-open browser unless --no-open explicitly passed (default is to open)
+      if (options.open !== false) {
         const { exec } = await import('child_process');
-        exec(`open "https://${slug}.solidnumber.com"`);
+        exec(`open "${url}"`);
       }
     } catch (error) {
       spinner.fail(chalk.red('Failed to create demo'));
       console.error(handleApiError(error).message);
+      try {
+        emitTelemetry('demo_failed', {
+          command: 'demo create',
+          extra: { template, error: handleApiError(error).message.slice(0, 200) },
+        });
+      } catch {
+        /* noop */
+      }
       // Restore original company
       if (originalCompanyId) {
         await apiClient.companySwitch(originalCompanyId).catch(() => {});
