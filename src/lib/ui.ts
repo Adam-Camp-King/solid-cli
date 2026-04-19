@@ -16,15 +16,19 @@ const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package
 const BRAND_COLORS = ['#a5b4fc', '#818cf8', '#6366f1', '#4f46e5', '#4338ca'];
 
 // ── ASCII Logo ──────────────────────────────────────────────────────
-// ANSI Shadow font, 1-space letter gaps. Wordmark (`Solid#`) lives in the tagline.
+// Pure block-only font (`█` + space). Avoids box-drawing chars that render
+// inconsistently across terminals with narrow font coverage (Claude Code
+// transcript, legacy cmd.exe, some IDE consoles). `█` (U+2588) has the
+// widest glyph coverage of any non-ASCII char.
+// Letters: S O L I D  #  — spells "SOLID#"
 const LOGO_LINES = [
-  '  ███████╗  ██████╗  ██╗      ██╗ ██████╗ ',
-  '  ██╔════╝ ██╔═══██╗ ██║      ██║ ██╔══██╗',
-  '  ███████╗ ██║   ██║ ██║      ██║ ██║  ██║',
-  '  ╚════██║ ██║   ██║ ██║      ██║ ██║  ██║',
-  '  ███████║ ╚██████╔╝ ███████╗ ██║ ██████╔╝',
-  '  ╚══════╝  ╚═════╝  ╚══════╝ ╚═╝ ╚═════╝ ',
+  '  █████ █████ █     █████ ████   █ █ ',
+  '  █     █   █ █       █   █   █ █████',
+  '  █████ █   █ █       █   █   █  █ █ ',
+  '      █ █   █ █       █   █   █ █████',
+  '  █████ █████ █████ █████ ████   █ █ ',
 ];
+const LOGO_LINES_WIDTH = 37; // widest visible column (incl. 2-space left margin)
 
 const LOGO_SMALL = [
   '  ┏━━━┓ ┏━━━┓ ┏┓   ┏┓ ┏━━┓  ╻ ╻',
@@ -32,6 +36,17 @@ const LOGO_SMALL = [
   '  ┏━┛ ┃ ┃   ┃ ┃┃   ┃┃ ┃  ┃  ┣━┫',
   '  ┗━━━┛ ┗━━━┛ ┗┛   ┗┛ ┗━━┛  ╹ ╹',
 ];
+const LOGO_SMALL_WIDTH = 32;
+
+// ASCII-safe fallback for legacy / non-UTF8 terminals (Windows cmd, some CI)
+const LOGO_ASCII = [
+  '   ____        _ _     _  _   ',
+  '  / ___|  ___ | (_) __| |( )  ',
+  '  \\___ \\ / _ \\| | |/ _` ||/   ',
+  '   ___) | (_) | | | (_| |     ',
+  '  |____/ \\___/|_|_|\\__,_|     ',
+];
+const LOGO_ASCII_WIDTH = 32;
 
 // ── Gradient helper (pure chalk, no dependency issues) ──────────────
 function brandGradient(text: string): string {
@@ -96,20 +111,95 @@ function stripAnsi(str: string): string {
   return str.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
+// ── Environment probes ──────────────────────────────────────────────
+// Exported for tests; safe on any platform.
+
+export function termWidth(): number {
+  const c = process.stdout.columns;
+  return typeof c === 'number' && c > 0 ? c : 80;
+}
+
+export function isTTY(): boolean {
+  return !!process.stdout.isTTY;
+}
+
+export function isCI(): boolean {
+  // Covers GH Actions, CircleCI, GitLab, Buildkite, Jenkins, Vercel, Netlify.
+  return !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.BUILD_NUMBER);
+}
+
+export function supportsUnicode(): boolean {
+  if (process.platform === 'win32') {
+    // Modern Windows Terminal sets WT_SESSION; legacy cmd.exe does not.
+    if (process.env.WT_SESSION || process.env.TERM_PROGRAM === 'vscode') return true;
+    return false;
+  }
+  const locale = process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || '';
+  return /UTF-?8/i.test(locale) || locale === '' && process.platform === 'darwin';
+}
+
+/** Banner tier chosen for the current environment. Useful for tests + debugging. */
+export type BannerTier = 'silent' | 'wordmark' | 'small' | 'ascii' | 'full';
+
+export function bannerTier(): BannerTier {
+  if (!isTTY() || isCI()) return 'silent';
+  const w = termWidth();
+  if (!supportsUnicode()) return w >= LOGO_ASCII_WIDTH + 4 ? 'ascii' : 'wordmark';
+  if (w >= LOGO_LINES_WIDTH + 4) return 'full';
+  if (w >= LOGO_SMALL_WIDTH + 4) return 'small';
+  return 'wordmark';
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
-export function banner(): string {
-  const logo = gradientDiagonal(LOGO_LINES);
-  const dot = chalk.hex('#6366f1')(' · ');
+/**
+ * Wordmark: `Solid# · AI Business Infrastructure · v1.9.x`
+ * Collapses gracefully on narrow terminals.
+ */
+function wordmarkLine(): string {
+  const w = termWidth();
   const mark = chalk.bold.hex('#818cf8')('Solid') + chalk.bold.hex('#a5b4fc')('#');
+  const dot = chalk.hex('#6366f1')(' · ');
   const tagline = chalk.dim('AI Business Infrastructure');
   const version = chalk.dim(`v${pkg.version}`);
 
-  return `\n${logo}\n\n  ${mark}${dot}${tagline}${dot}${version}\n`;
+  // Widest form: Solid# · AI Business Infrastructure · v1.9.99  (~50 visible cols w/ margin)
+  if (w >= 52) return `  ${mark}${dot}${tagline}${dot}${version}`;
+  // Medium: Solid#  AI Business Infrastructure
+  if (w >= 36) return `  ${mark}  ${tagline}`;
+  // Tight: Solid# v1.9.99
+  return `  ${mark} ${version}`;
+}
+
+export function banner(): string {
+  const tier = bannerTier();
+
+  if (tier === 'silent') return '';
+
+  if (tier === 'wordmark') {
+    return `\n${wordmarkLine()}\n`;
+  }
+
+  if (tier === 'ascii') {
+    const logo = LOGO_ASCII.map((l) => brandGradient(l)).join('\n');
+    return `\n${logo}\n\n${wordmarkLine()}\n`;
+  }
+
+  if (tier === 'small') {
+    const logo = gradientLines(LOGO_SMALL);
+    return `\n${logo}\n\n${wordmarkLine()}\n`;
+  }
+
+  // full
+  const logo = gradientDiagonal(LOGO_LINES);
+  return `\n${logo}\n\n${wordmarkLine()}\n`;
 }
 
 export function bannerSmall(): string {
-  const logo = gradientLines(LOGO_SMALL);
+  if (!isTTY() || isCI()) return '';
+  const logo = supportsUnicode()
+    ? gradientLines(LOGO_SMALL)
+    : LOGO_ASCII.map((l) => brandGradient(l)).join('\n');
   return `\n${logo}\n`;
 }
 
@@ -205,6 +295,11 @@ export async function animatedBanner(): Promise<void> {
 export const ui = {
   banner,
   bannerSmall,
+  bannerTier,
+  termWidth,
+  isTTY,
+  isCI,
+  supportsUnicode,
   welcomeBox,
   successBox,
   errorBox,
