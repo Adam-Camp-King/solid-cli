@@ -19,6 +19,7 @@ import * as path from 'path';
 
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
+import { parseAgentMode, modeDescriptor, type AgentMode } from '../lib/agent-mode';
 
 type AiKind = 'claude' | 'cursor' | 'codex';
 
@@ -86,6 +87,7 @@ export const aiCommand = new Command('ai')
   .option('--as <tool>', 'Force a specific AI: claude | cursor | codex (default: auto-detect)')
   .option('--no-context', 'Skip the context refresh — just launch the AI')
   .option('--company <id>', 'Use a specific company for this session (overrides cached)')
+  .option('--mode <mode>', 'Cap the AI to a role: customer | developer | agency | full (default: full)')
   .action(async (options) => {
     // 1. Auth guard
     if (!config.isLoggedIn()) {
@@ -112,7 +114,13 @@ export const aiCommand = new Command('ai')
       process.env.SOLID_COMPANY_OVERRIDE = String(id);
     }
 
-    // 3. Pick the AI
+    // 3. Resolve agent mode — this scopes what the AI can call. Default
+    // is `full` (no cap) to preserve today's behavior for humans. When an
+    // agent session is explicit, the guard in index.ts enforces the
+    // allowlist on every subsequent `solid ...` invocation inside the AI.
+    const mode: AgentMode = parseAgentMode(options.mode) || 'full';
+
+    // 4. Pick the AI
     const kind = whichAi(options.as);
     if (!kind) {
       console.error(chalk.red('No AI detected on PATH.'));
@@ -124,14 +132,25 @@ export const aiCommand = new Command('ai')
       process.exit(1);
     }
 
-    // 4. Arrival: one clean line so the user (and any AI tail-ing) knows
+    // 5. Set the agent/human headers + mode env vars. Every `solid ...`
+    // invocation the AI spawns will inherit these via process.env, so the
+    // api-client attaches the right headers on every API call and the
+    // top-level mode guard refuses out-of-scope commands.
+    process.env.SOLID_AGENT = kind;
+    process.env.SOLID_AGENT_MODE = mode;
+    if (config.userEmail) process.env.SOLID_HUMAN_INITIATOR = config.userEmail;
+
+    // 6. Arrival: one clean line so the user (and any AI tail-ing) knows
     // exactly what's happening before the terminal hands off.
     const tool = kind === 'claude' ? 'Claude Code' : kind === 'cursor' ? 'Cursor' : 'Codex';
     console.log('');
     console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);
+    if (mode !== 'full') {
+      console.log(`  ${chalk.dim('Mode:')} ${chalk.yellow(modeDescriptor(mode))}`);
+    }
     console.log('');
 
-    // 5. Refresh context (unless --no-context)
+    // 7. Refresh context (unless --no-context)
     if (options.context !== false) {
       const ok = refreshContext(kind);
       if (!ok) {
@@ -139,7 +158,7 @@ export const aiCommand = new Command('ai')
       }
     }
 
-    // 6. Hand off. This replaces our process output with the AI's.
+    // 8. Hand off. This replaces our process output with the AI's.
     try {
       launchAi(kind);
     } catch (err) {

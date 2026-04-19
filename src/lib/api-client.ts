@@ -148,6 +148,23 @@ class ApiClient {
       // response headers to trigger the skew warning.
       requestConfig.headers['X-Solid-CLI-Version'] = CLI_VERSION;
       requestConfig.headers['User-Agent'] = `solid-cli/${CLI_VERSION} node/${process.version.slice(1)}`;
+
+      // Agent-aware headers — when an AI (Claude/Cursor/Codex) drives the
+      // CLI via `solid ai`, these tell the backend WHO is making the call
+      // and WHICH human started the session. Backend audit logs can then
+      // distinguish human-initiated vs agent-initiated mutations without
+      // trusting the client for enforcement (the user still owns the
+      // token; this is identification, not authentication).
+      //
+      //   X-Solid-Agent          claude | cursor | codex | <custom>
+      //   X-Solid-Agent-Mode     customer | developer | agency | full
+      //   X-Solid-Human-Initiator the email of the human who ran `solid ai`
+      //
+      // Set by `solid ai` via env vars so subprocesses inherit them.
+      if (process.env.SOLID_AGENT) requestConfig.headers['X-Solid-Agent'] = process.env.SOLID_AGENT;
+      if (process.env.SOLID_AGENT_MODE) requestConfig.headers['X-Solid-Agent-Mode'] = process.env.SOLID_AGENT_MODE;
+      if (process.env.SOLID_HUMAN_INITIATOR) requestConfig.headers['X-Solid-Human-Initiator'] = process.env.SOLID_HUMAN_INITIATOR;
+
       return requestConfig;
     });
 

@@ -228,6 +228,45 @@ program
     },
   });
 
+// Agent-mode guard — when SOLID_AGENT_MODE is set (by `solid ai --mode ...`
+// or the human operator explicitly), refuse commands not on that mode's
+// allowlist BEFORE commander even parses them. This is the client-side
+// safety net; the backend also sees the X-Solid-Agent header and can
+// enforce independently.
+{
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { parseAgentMode, isModeAllowed, modeDescriptor, requiresHumanConfirmation } = require('./lib/agent-mode');
+  const mode = parseAgentMode(process.env.SOLID_AGENT_MODE);
+  if (mode && mode !== 'full') {
+    // argv[0]=node, argv[1]=entry.js, argv[2]=top-level command
+    const topCmd = process.argv[2];
+    // Always let --help / --version / empty through — those are discovery.
+    const isDiscovery = !topCmd || topCmd.startsWith('-') || topCmd === 'help';
+    if (!isDiscovery && !isModeAllowed(mode, topCmd)) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ch = require('chalk');
+      process.stderr.write(
+        ch.red(`Refused: \`solid ${topCmd}\` is not available in ${modeDescriptor(mode)}.\n`) +
+        ch.dim(`  Agent mode caps this session. Unset with: unset SOLID_AGENT_MODE\n`) +
+        ch.dim(`  Or switch: solid ai --mode customer | developer | agency | full\n`),
+      );
+      process.exit(2);
+    }
+    // Destructive-op gate: require --yes when an agent drives delete/refund/etc.
+    const argvRest = process.argv.slice(2).join(' ');
+    if (!isDiscovery && requiresHumanConfirmation(argvRest) && !process.argv.includes('--yes')) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ch = require('chalk');
+      process.stderr.write(
+        ch.red(`Refused: destructive op detected (${topCmd}).\n`) +
+        ch.dim(`  Agent-driven sessions require human approval for delete / refund / cancel / revoke.\n`) +
+        ch.dim(`  Re-run with --yes if your human operator approves.\n`),
+      );
+      process.exit(2);
+    }
+  }
+}
+
 // Honor --no-color / NO_COLOR by disabling chalk globally BEFORE any
 // command runs. chalk already honors NO_COLOR env var, but the --no-color
 // flag needs this explicit hook since we consume it before parsing.
