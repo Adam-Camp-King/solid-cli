@@ -71,6 +71,8 @@ import { visualCommand } from './commands/visual';
 import { feedbackCommand } from './commands/feedback';
 import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
+import { aiCommand } from './commands/ai';
+import { installCommand } from './commands/install';
 import { analyticsCommand } from './commands/analytics';
 import { seoCommand } from './commands/seo';
 import { insightsCommand } from './commands/insights';
@@ -336,6 +338,8 @@ program.addCommand(exploreCommand);
 
 // AI Context & Discovery
 program.addCommand(contextCommand);
+program.addCommand(aiCommand);
+program.addCommand(installCommand);
 program.addCommand(llmsCommand);
 
 // Analytics & Insights
