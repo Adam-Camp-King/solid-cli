@@ -422,3 +422,10 @@ export const rollbackCommand = new Command('rollback')
 
     console.error(chalk.red(`Unknown type: ${type}. Use 'page' or 'kb'.`));
   });
+
+import { appendExamples as __ae_history } from '../lib/command-kit';
+__ae_history(historyCommand, [
+  { cmd: 'solid history pages <slug>', why: 'Version history for a page' },
+  { cmd: 'solid history kb <id>',      why: 'KB entry versions' },
+  { cmd: 'solid rollback pages <slug> --version 3', why: 'Rollback is a separate top-level cmd' },
+]);

@@ -143,3 +143,9 @@ schemaCommand
     console.log(chalk.dim(`  ${blocks.length} block types. Use --block <type> for props, --json for machine output.`));
     console.log('');
   });
+
+import { appendExamples as __ae_schema } from '../lib/command-kit';
+__ae_schema(schemaCommand, [
+  { cmd: 'solid schema pages',             why: 'Page block schema — feed this to AI coding agents' },
+  { cmd: 'solid schema pages --format yaml', why: 'YAML instead of JSON' },
+]);

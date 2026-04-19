@@ -170,3 +170,11 @@ marketplaceCommand
       spinner.succeed(chalk.green(`Published: ${r.products_published ?? 0} products, ${r.services_published ?? 0} services`));
     } catch (e) { fail(spinner, 'Failed bulk publish', e); }
   });
+
+import { appendExamples as __ae_mp } from '../lib/command-kit';
+__ae_mp(marketplaceCommand, [
+  { cmd: 'solid mp status',         why: 'Marketplace enrollment + listed items' },
+  { cmd: 'solid mp enable',         why: 'Opt in to the marketplace' },
+  { cmd: 'solid mp products',       why: 'Your listed products' },
+  { cmd: 'solid mp publish-all',    why: 'Publish every product/service' },
+]);

@@ -69,3 +69,10 @@ supportCommand.command('get <id>').description('View ticket details')
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __ae_support } from '../lib/command-kit';
+__ae_support(supportCommand, [
+  { cmd: 'solid support list',                   why: 'Open support tickets' },
+  { cmd: 'solid support list --status open',     why: 'Only open' },
+  { cmd: 'solid support get <id>',               why: 'Full ticket + conversation' },
+]);

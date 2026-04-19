@@ -56,3 +56,9 @@ notificationsCommand.command('read-all').description('Mark all as read')
       spinner.succeed(chalk.green('All notifications marked as read'));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __ae_notif } from '../lib/command-kit';
+__ae_notif(notificationsCommand, [
+  { cmd: 'solid notifications list',          why: 'Unread + recent alerts' },
+  { cmd: 'solid notifications read-all',      why: 'Mark everything read' },
+]);

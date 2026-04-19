@@ -132,3 +132,11 @@ export const dashboardCommand = new Command('dashboard')
       console.error(handleApiError(error).message);
     }
   });
+
+import { appendExamples as __ae_dashboard } from '../lib/command-kit';
+__ae_dashboard(dashboardCommand, [
+  { cmd: 'solid dashboard',            why: 'Agency overview — all companies at a glance' },
+  { cmd: 'solid dashboard --revenue',  why: 'Revenue column expanded' },
+  { cmd: 'solid dashboard --agents',   why: 'Agent activity per company' },
+  { cmd: 'solid dashboard --json',     why: 'Scriptable snapshot' },
+]);

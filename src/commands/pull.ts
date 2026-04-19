@@ -458,3 +458,11 @@ export const pullCommand = new Command('pull')
     ]));
     console.log('');
   });
+
+import { appendExamples as __ae_pull } from '../lib/command-kit';
+__ae_pull(pullCommand, [
+  { cmd: 'solid pull',                  why: 'Download your business (pages, KB, settings) as local files' },
+  { cmd: 'solid pull --pages-only',     why: 'Pages only — faster' },
+  { cmd: 'solid pull --kb-only',        why: 'KB only' },
+  { cmd: 'solid pull --out ./backup',   why: 'Choose target dir' },
+]);

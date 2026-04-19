@@ -620,3 +620,11 @@ companyCommand
       process.exit(1);
     }
   });
+
+import { appendExamples as __ae_company } from '../lib/command-kit';
+__ae_company(companyCommand, [
+  { cmd: 'solid company list',                            why: 'Companies you have access to' },
+  { cmd: 'solid company current',                         why: 'Active company (same as whoami)' },
+  { cmd: 'solid company info <id>',                       why: 'Settings, tier, domain' },
+  { cmd: 'solid company create-for-client --name "..."',  why: 'Agency: spin up a new tenant' },
+]);

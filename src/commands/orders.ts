@@ -97,7 +97,7 @@ export async function importOrdersFromCSV(
     stopOnError?: boolean;
     concurrency?: number;
     from?: number;
-    onProgress?: (row: number, total: number) => void;
+    onProgress?: (row: number, total: number) => void | Promise<void>;
   } = {},
 ): Promise<OrderImportResult> {
   const fs = await import('fs');
@@ -156,7 +156,7 @@ export async function importOrdersFromCSV(
       const idx = cursor++;
       if (idx >= tasks.length) return;
       const t = tasks[idx];
-      if (opts.onProgress) opts.onProgress(idx + 1, tasks.length);
+      if (opts.onProgress) await opts.onProgress(idx + 1, tasks.length);
 
       if (t.body === null) {
         skipped++;
@@ -211,7 +211,11 @@ ordersCommand
     const { isDryRun } = await import('../lib/dry-run');
     const isPreview = Boolean(opts.preview) || isDryRun();
 
-    const spinner = ora({ text: 'Importing orders...', stream: process.stderr }).start();
+    // Progress bar on TTY, silent hook off-TTY (no spam in CI logs).
+    const { progressBar } = await import('../lib/tui');
+    type Bar = Awaited<ReturnType<typeof progressBar>>;
+    const noopBar: Bar = { update: () => undefined, increment: () => undefined, stop: () => undefined };
+    let bar: Bar = noopBar;
     let result: OrderImportResult;
     try {
       result = await importOrdersFromCSV(abs, {
@@ -220,17 +224,25 @@ ordersCommand
         stopOnError: opts.stopOnError,
         concurrency: Math.max(1, parseInt(opts.concurrency, 10)),
         from: opts.from ? parseInt(opts.from, 10) : undefined,
-        onProgress: (i, total) => { spinner.text = `Importing ${total} orders... (${i}/${total})`; },
+        onProgress: async (i, total) => {
+          if (bar === noopBar) bar = await progressBar(total, { label: isPreview ? 'Preview' : 'Importing' });
+          bar.update(i);
+        },
       });
+      bar.stop();
     } catch (e) {
-      spinner.fail(chalk.red('Import aborted'));
-      console.error(chalk.red(`  ${(e as Error).message}`));
+      bar.stop();
+      console.error(chalk.red(`  Import aborted: ${(e as Error).message}`));
       process.exit(1);
     }
 
-    if (result.dry_run) spinner.succeed(chalk.yellow(`[dry-run] would import ${result.total - result.skipped} orders (${result.skipped} skipped)`));
-    else if (result.failed === 0) spinner.succeed(chalk.green(`Imported ${result.created} orders (${result.skipped} skipped)`));
-    else spinner.warn(chalk.yellow(`Imported ${result.created}/${result.total} (failed: ${result.failed}, skipped: ${result.skipped})`));
+    if (result.dry_run) {
+      console.error(chalk.yellow(`[dry-run] would import ${result.total - result.skipped} orders (${result.skipped} skipped)`));
+    } else if (result.failed === 0) {
+      console.error(chalk.green(`✓ Imported ${result.created} orders (${result.skipped} skipped)`));
+    } else {
+      console.error(chalk.yellow(`! Imported ${result.created}/${result.total} (failed: ${result.failed}, skipped: ${result.skipped})`));
+    }
 
     if (isJsonOutput(opts)) {
       console.log(JSON.stringify({ summary: { total: result.total, created: result.created, failed: result.failed, skipped: result.skipped, dry_run: result.dry_run }, results: result.results }, null, 2));

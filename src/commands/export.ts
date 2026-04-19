@@ -72,3 +72,10 @@ export const exportCommand = new Command('export')
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Export failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __ae_export } from '../lib/command-kit';
+__ae_export(exportCommand, [
+  { cmd: 'solid export',                why: 'Full backup of this company (pages, KB, settings, crm)' },
+  { cmd: 'solid export --out ./backup', why: 'Choose output dir' },
+  { cmd: 'solid export --gdpr <email>', why: 'Single-user GDPR export' },
+]);

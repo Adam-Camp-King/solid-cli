@@ -339,3 +339,10 @@ trainCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_train } from '../lib/command-kit';
+__ae_train(trainCommand, [
+  { cmd: 'solid train add --file ./notes.md',       why: 'Ingest a markdown file into agent training' },
+  { cmd: 'solid train status',                      why: 'What is in training + recency' },
+  { cmd: 'solid train chat sarah',                  why: 'Interactive chat to teach Sarah' },
+]);

@@ -363,3 +363,11 @@ export const diffCommand = new Command('diff')
       process.exit(2);
     }
   });
+
+import { appendExamples as __ae_diff } from '../lib/command-kit';
+__ae_diff(diffCommand, [
+  { cmd: 'solid diff',                 why: 'Local files vs production' },
+  { cmd: 'solid diff --pages',         why: 'Pages only' },
+  { cmd: 'solid diff --kb',            why: 'KB entries only' },
+  { cmd: 'solid diff --json',          why: 'Machine-readable diff' },
+]);

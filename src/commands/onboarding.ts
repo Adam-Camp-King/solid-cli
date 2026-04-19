@@ -587,3 +587,11 @@ onboardingCommand
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
   });
+
+import { appendExamples as __ae_onb } from '../lib/command-kit';
+__ae_onb(onboardingCommand, [
+  { cmd: 'solid onboarding status',                                   why: 'Onboarding progress per company' },
+  { cmd: 'solid onboarding health',                                   why: 'Onboarding service health' },
+  { cmd: 'solid onboarding connect-oauth <provider>',                 why: 'Link Google/Microsoft/etc.' },
+  { cmd: 'solid onboarding address-create --line1 ... --city ...',    why: 'Seed a company address' },
+]);

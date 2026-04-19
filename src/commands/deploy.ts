@@ -252,3 +252,10 @@ export const deployCommand = new Command('deploy')
 
     console.error(chalk.red(`Unknown action: ${action}. Use: preview, list, promote, expire, get`));
   });
+
+import { appendExamples as __ae_deploy } from '../lib/command-kit';
+__ae_deploy(deployCommand, [
+  { cmd: 'solid deploy',                   why: 'Preview deploy with shareable URL' },
+  { cmd: 'solid deploy --message "fix X"', why: 'Annotate deploy (shows in history)' },
+  { cmd: 'solid deploy --promote',         why: 'Promote preview → production' },
+]);

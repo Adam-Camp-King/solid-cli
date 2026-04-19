@@ -70,3 +70,10 @@ export const publishCommand = new Command('publish')
       console.log(chalk.dim(`  Pending draft (if any) was promoted to live.`));
     } catch (error) { fail(spinner, 'Publish failed', error); }
   });
+
+import { appendExamples as __ae_publish } from '../lib/command-kit';
+__ae_publish(publishCommand, [
+  { cmd: 'solid publish <id>',        why: 'Promote a pending draft to live' },
+  { cmd: 'solid publish --all',       why: 'Publish every pending draft' },
+  { cmd: 'solid drafts list',         why: 'See what pending drafts exist first' },
+]);

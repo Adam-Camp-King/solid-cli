@@ -158,14 +158,23 @@ export const doctorCommand = new Command('doctor')
     const concurrency = 4;
     const results: ProbeResult[] = new Array(battery.length);
     let cursor = 0;
+    // Progress bar on TTY only; JSON output suppresses it (would corrupt stdout).
+    const { progressBar } = await import('../lib/tui');
+    const bar = !isJsonOutput(opts)
+      ? await progressBar(battery.length, { label: 'Probing' })
+      : { update: () => undefined, increment: () => undefined, stop: () => undefined };
+    let done = 0;
     async function worker() {
       while (true) {
         const i = cursor++;
         if (i >= battery.length) return;
         results[i] = await runProbe(battery[i]);
+        done++;
+        bar.update(done);
       }
     }
     await Promise.all(Array.from({ length: concurrency }, worker));
+    bar.stop();
 
     const failed = results.filter((r) => !r.ok).length;
 

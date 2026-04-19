@@ -814,3 +814,10 @@ connectCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_connect } from '../lib/command-kit';
+__ae_connect(connectCommand, [
+  { cmd: 'solid connect figma <url>',           why: 'Import a Figma page into Solid#' },
+  { cmd: 'solid connect list',                  why: 'Active external connections' },
+  { cmd: 'solid connect history',               why: 'Recent imports' },
+]);

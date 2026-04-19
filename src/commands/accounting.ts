@@ -69,3 +69,10 @@ accountingCommand.command('history').description('View sync history')
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __ae_accounting } from '../lib/command-kit';
+__ae_accounting(accountingCommand, [
+  { cmd: 'solid accounting sync',          why: 'Sync orders → QuickBooks/Xero now' },
+  { cmd: 'solid accounting status',        why: 'Connected provider + last sync time' },
+  { cmd: 'solid accounting history',       why: 'Sync attempts + failures' },
+]);

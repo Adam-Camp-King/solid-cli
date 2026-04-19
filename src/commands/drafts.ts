@@ -110,3 +110,11 @@ draftsCommand
       spinner.succeed(chalk.green(`Draft discarded on page ${pageId}`));
     } catch (error) { fail(spinner, 'Discard failed', error); }
   });
+
+import { appendExamples as __ae_drafts } from '../lib/command-kit';
+__ae_drafts(draftsCommand, [
+  { cmd: 'solid drafts list',          why: 'Pages awaiting publish' },
+  { cmd: 'solid drafts preview <id>',  why: 'Shareable preview URL' },
+  { cmd: 'solid drafts discard <id>',  why: 'Throw away a draft' },
+  { cmd: 'solid publish <id>',         why: 'Promote draft → live (separate command)' },
+]);

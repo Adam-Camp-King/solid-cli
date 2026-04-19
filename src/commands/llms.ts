@@ -194,3 +194,9 @@ llmsCommand
       console.error(handleApiError(error).message);
     }
   });
+
+import { appendExamples as __ae_llms } from '../lib/command-kit';
+__ae_llms(llmsCommand, [
+  { cmd: 'solid llms preview',   why: 'What AI shopping agents see at /llms.txt' },
+  { cmd: 'solid llms check',     why: 'AI-commerce readiness score' },
+]);

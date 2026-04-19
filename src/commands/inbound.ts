@@ -256,3 +256,10 @@ inboundCommand
       if (r.chain_execution_id) console.log(`  New chain exec: ${r.chain_execution_id}`);
     } catch (error) { fail(spinner, 'Replay failed', error); }
   });
+
+import { appendExamples as __ae_inbound } from '../lib/command-kit';
+__ae_inbound(inboundCommand, [
+  { cmd: 'solid inbound list',                              why: 'Inbound webhook endpoints' },
+  { cmd: 'solid inbound create --name zapier --event *',    why: 'New inbound endpoint' },
+  { cmd: 'solid inbound events <id>',                       why: 'Recent received events' },
+]);

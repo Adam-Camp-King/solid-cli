@@ -257,3 +257,10 @@ function categorize(name: string): string {
   }
   return 'Other';
 }
+
+import { appendExamples as __ae_clone } from '../lib/command-kit';
+__ae_clone(cloneCommand, [
+  { cmd: 'solid clone plumber',        why: 'Scaffold from 52 industry templates' },
+  { cmd: 'solid clone --list',         why: 'All available industry templates' },
+  { cmd: 'solid clone --preview hvac', why: 'See what the template includes before cloning' },
+]);

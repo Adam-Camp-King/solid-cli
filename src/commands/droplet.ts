@@ -372,3 +372,10 @@ dropletCommand
   });
 
 export default dropletCommand;
+
+import { appendExamples as __ae_droplet } from '../lib/command-kit';
+__ae_droplet(dropletCommand, [
+  { cmd: 'solid droplet list',                  why: 'Customer droplets (Type 2)' },
+  { cmd: 'solid droplet status <id>',           why: 'Health, resources, last heartbeat' },
+  { cmd: 'solid droplet restart <id> --yes',    why: 'Restart (prompts without --yes)' },
+]);

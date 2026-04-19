@@ -236,3 +236,10 @@ async function pushSettings(filePath: string, dryRun: boolean) {
   await apiClient.updateWebsiteSettings(data.website_settings);
   console.log(chalk.green(`  [updated] website settings`));
 }
+
+import { appendExamples as __ae_watch } from '../lib/command-kit';
+__ae_watch(watchCommand, [
+  { cmd: 'solid watch',                 why: 'Watch local files; auto-push on save' },
+  { cmd: 'solid watch --dry-run',       why: 'Preview what would be pushed' },
+  { cmd: 'solid watch --pages-only',    why: 'Only re-push pages on change' },
+]);

@@ -478,3 +478,11 @@ export const pushCommand = new Command('push')
     }
     console.log('');
   });
+
+import { appendExamples as __ae_push } from '../lib/command-kit';
+__ae_push(pushCommand, [
+  { cmd: 'solid push',                  why: 'Upload local file changes to production' },
+  { cmd: 'solid push --dry-run',        why: 'Preview the diff before pushing' },
+  { cmd: 'solid push --pages-only',     why: 'Pages only' },
+  { cmd: 'solid push --kb-only',        why: 'KB only' },
+]);

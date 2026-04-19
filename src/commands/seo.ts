@@ -311,3 +311,12 @@ seoCommand
       console.error(handleApiError(error).message);
     }
   });
+
+import { appendExamples as __ae_seo } from '../lib/command-kit';
+__ae_seo(seoCommand, [
+  { cmd: 'solid seo audit',          why: 'Full on-site SEO audit' },
+  { cmd: 'solid seo site-audit',     why: 'Crawl + technical SEO report' },
+  { cmd: 'solid seo rank',           why: 'Your current search rankings' },
+  { cmd: 'solid seo citations',      why: 'Local directory citations (NAP)' },
+  { cmd: 'solid seo gaps',           why: 'Keyword gaps vs top 3 competitors' },
+]);

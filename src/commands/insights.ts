@@ -132,3 +132,10 @@ insightsCommand
       },
     );
   });
+
+import { appendExamples as __ae_insights } from '../lib/command-kit';
+__ae_insights(insightsCommand, [
+  { cmd: 'solid insights list',             why: 'AI-generated insights from conversations' },
+  { cmd: 'solid insights stats',            why: 'Insight volume + top themes' },
+  { cmd: 'solid insights approve <id>',     why: 'Send insight → KB' },
+]);

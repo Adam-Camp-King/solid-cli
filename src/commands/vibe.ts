@@ -190,3 +190,9 @@ vibeCommand
       }
     }
   });
+
+import { appendExamples as __ae_vibe } from '../lib/command-kit';
+__ae_vibe(vibeCommand, [
+  { cmd: 'solid vibe interactive',            why: 'Natural-language integration assistant' },
+  { cmd: 'solid vibe "connect my stripe"',    why: 'One-shot natural language command' },
+]);

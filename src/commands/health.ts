@@ -151,3 +151,11 @@ export const healthCommand = new Command('health')
 //   solid health          → quick check
 //   solid health --full   → 6-layer check (admin-only in prod)
 //   solid health --mcp    → MCP/agent check
+
+import { appendExamples as __ae_health } from '../lib/command-kit';
+__ae_health(healthCommand, [
+  { cmd: 'solid health',         why: 'Quick check (auth + backend)' },
+  { cmd: 'solid health quick',   why: 'Same as default — fast' },
+  { cmd: 'solid health full',    why: 'Full battery (use solid doctor for CI)' },
+  { cmd: 'solid health mcp',     why: 'MCP server reachability' },
+]);

@@ -138,3 +138,9 @@ chatWidgetsCommand
       }
     } catch (e) { fail(s, 'Failed', e); }
   });
+
+import { appendExamples as __ae_cw } from '../lib/command-kit';
+__ae_cw(chatWidgetsCommand, [
+  { cmd: 'solid chat-widgets list',               why: 'Chat widgets you have provisioned' },
+  { cmd: 'solid chat-widgets create --site main', why: 'Add a new chat widget + get embed snippet' },
+]);

@@ -409,3 +409,10 @@ integrationsCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_integrations } from '../lib/command-kit';
+__ae_integrations(integrationsCommand, [
+  { cmd: 'solid integrations list',           why: 'Your connected integrations' },
+  { cmd: 'solid integrations catalog',        why: 'All available integrations' },
+  { cmd: 'solid integrations health',         why: 'Last-sync status per integration' },
+]);

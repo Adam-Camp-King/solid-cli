@@ -959,3 +959,10 @@ export const docsCommand = new Command('docs')
     console.log(chalk.dim('    They contain no proprietary code — safe to share with your team.'));
     console.log('');
   });
+
+import { appendExamples as __ae_docs } from '../lib/command-kit';
+__ae_docs(docsCommand, [
+  { cmd: 'solid docs',            why: 'Pull developer docs into ./docs/' },
+  { cmd: 'solid docs --topic kb', why: 'Just the KB docs' },
+  { cmd: 'solid docs --open',     why: 'Open in browser instead of downloading' },
+]);

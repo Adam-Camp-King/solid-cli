@@ -167,3 +167,11 @@ landingCommand
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
   });
+
+import { appendExamples as __ae_landing } from '../lib/command-kit';
+__ae_landing(landingCommand, [
+  { cmd: 'solid landing list',                    why: 'Your landing pages' },
+  { cmd: 'solid landing templates',               why: 'Prebuilt templates' },
+  { cmd: 'solid landing template-categories',     why: 'Browse by category' },
+  { cmd: 'solid landing create --title "..." --template <id>', why: 'New landing from template' },
+]);

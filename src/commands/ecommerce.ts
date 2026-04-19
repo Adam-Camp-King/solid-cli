@@ -740,3 +740,12 @@ abandonedCmd
   });
 
 ecommerceCommand.addCommand(abandonedCmd);
+
+import { appendExamples as __ae_ec } from '../lib/command-kit';
+__ae_ec(ecommerceCommand, [
+  { cmd: 'solid ec active',               why: 'Active carts (not yet checked out)' },
+  { cmd: 'solid ec list',                 why: 'All ecommerce orders' },
+  { cmd: 'solid ec stats',                why: 'Storefront conversion metrics' },
+  { cmd: 'solid ec addresses',            why: 'Saved shipping/billing addresses' },
+  { cmd: 'solid ec methods',              why: 'Shipping methods you offer' },
+]);

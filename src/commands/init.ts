@@ -349,3 +349,10 @@ solid auth token create -n "${name}" -s "crm:read,pages:read,kb:read,agents:read
     console.log(`  ${chalk.cyan('npm start')}`);
     console.log('');
   });
+
+import { appendExamples as __ae_init } from '../lib/command-kit';
+__ae_init(initCommand, [
+  { cmd: 'solid init',                  why: 'Scaffold local app boilerplate (local-only, no cloud)' },
+  { cmd: 'solid init --type nextjs',    why: 'Specific template' },
+  { cmd: 'solid init --list',           why: 'Available templates' },
+]);

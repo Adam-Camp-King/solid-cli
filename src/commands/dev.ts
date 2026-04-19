@@ -302,3 +302,11 @@ moduleCmd
   });
 
 devCommand.addCommand(moduleCmd);
+
+import { appendExamples as __ae_dev } from '../lib/command-kit';
+__ae_dev(devCommand, [
+  { cmd: 'solid dev list',                       why: 'Your custom modules' },
+  { cmd: 'solid dev scaffold <name>',            why: 'New custom module boilerplate' },
+  { cmd: 'solid dev push',                       why: 'Upload local custom module code' },
+  { cmd: 'solid dev deploy',                     why: 'Build + activate custom module' },
+]);

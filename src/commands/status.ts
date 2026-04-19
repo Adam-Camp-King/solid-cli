@@ -128,3 +128,9 @@ export const statusCommand = new Command('status')
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_status } from '../lib/command-kit';
+__ae_status(statusCommand, [
+  { cmd: 'solid status',          why: 'Overall setup + progress' },
+  { cmd: 'solid status --json',   why: 'Scriptable snapshot' },
+]);

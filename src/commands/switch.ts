@@ -136,3 +136,10 @@ export const switchCommand = new Command('switch')
       process.exit(1);
     }
   });
+
+import { appendExamples as __ae_switch } from '../lib/command-kit';
+__ae_switch(switchCommand, [
+  { cmd: 'solid switch',                why: 'Interactive picker across your companies' },
+  { cmd: 'solid switch 61',             why: 'Switch to company_id=61' },
+  { cmd: 'solid whoami',                why: 'Confirm the switch' },
+]);

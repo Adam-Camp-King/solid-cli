@@ -290,3 +290,12 @@ flowsCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_flows } from '../lib/command-kit';
+__ae_flows(flowsCommand, [
+  { cmd: 'solid flow list',               why: 'Commerce flows + subscriptions' },
+  { cmd: 'solid flow create --file f.json', why: 'New flow from definition' },
+  { cmd: 'solid flow activate <id>',      why: 'Turn a flow on' },
+  { cmd: 'solid flow pause <id>',         why: 'Temporarily pause' },
+  { cmd: 'solid flow metrics <id>',       why: 'Conversion + revenue' },
+]);

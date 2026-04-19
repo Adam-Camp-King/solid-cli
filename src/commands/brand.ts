@@ -416,3 +416,11 @@ brandCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_brand } from '../lib/command-kit';
+__ae_brand(brandCommand, [
+  { cmd: 'solid brand get',                      why: 'Current logo, palette, fonts' },
+  { cmd: 'solid brand set --primary "#E30613"',  why: 'Override primary color' },
+  { cmd: 'solid brand audit',                    why: 'Site-wide consistency check' },
+  { cmd: 'solid brand export --format css',      why: 'Brand CSS for custom sites' },
+]);

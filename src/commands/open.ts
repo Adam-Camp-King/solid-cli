@@ -175,3 +175,11 @@ export const openCommand = new Command('open')
     console.log(chalk.dim(url));
     await openBrowser(url);
   });
+
+import { appendExamples as __ae_open } from '../lib/command-kit';
+__ae_open(openCommand, [
+  { cmd: 'solid open',              why: 'Open the dashboard in your browser' },
+  { cmd: 'solid open pages',        why: 'Pages list in the web builder' },
+  { cmd: 'solid open <slug>',       why: 'Edit a page in the web builder' },
+  { cmd: 'solid open site',         why: 'Open your live site' },
+]);

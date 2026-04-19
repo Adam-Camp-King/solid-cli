@@ -295,3 +295,11 @@ antCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_ant } from '../lib/command-kit';
+__ae_ant(antCommand, [
+  { cmd: 'solid ant import <code>',            why: 'Paste HTML/JSX code; Ant converts to CMS blocks' },
+  { cmd: 'solid ant import-url <url>',         why: 'Scrape a page into CMS blocks' },
+  { cmd: 'solid ant list',                     why: 'Recent imports' },
+  { cmd: 'solid ant execute <id>',             why: 'Commit a pending import to the database' },
+]);

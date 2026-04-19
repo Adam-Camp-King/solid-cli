@@ -381,3 +381,11 @@ export const contextCommand = new Command('context')
       await new Promise(() => {}); // keep alive
     }
   });
+
+import { appendExamples as __ae_context } from '../lib/command-kit';
+__ae_context(contextCommand, [
+  { cmd: 'solid context --claude',   why: 'Dump full company context into Claude (the killer workflow)' },
+  { cmd: 'solid context --cursor',   why: 'Dump into Cursor' },
+  { cmd: 'solid context --json',     why: 'Raw payload for any AI client' },
+  { cmd: 'solid context --lite',     why: 'Trim to core entities (faster, cheaper tokens)' },
+]);

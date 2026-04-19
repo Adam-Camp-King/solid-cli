@@ -233,3 +233,10 @@ export const testCommand = new Command('test')
       process.exit(1);
     }
   });
+
+import { appendExamples as __ae_test } from '../lib/command-kit';
+__ae_test(testCommand, [
+  { cmd: 'solid test sarah "When are you open?"',             why: 'Test an agent response' },
+  { cmd: 'solid test sarah "..." --expect "Mon-Fri 9-5"',     why: 'Assert substring in response' },
+  { cmd: 'solid test --file tests.json',                      why: 'Run a batch of assertions' },
+]);

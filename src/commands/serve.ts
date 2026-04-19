@@ -549,3 +549,10 @@ function renderIndex(pages: Record<string, any>[], ctx: CompanyContext): string 
   </div>
 </body></html>`;
 }
+
+import { appendExamples as __ae_serve } from '../lib/command-kit';
+__ae_serve(serveCommand, [
+  { cmd: 'solid serve',               why: 'Local preview server on :3131' },
+  { cmd: 'solid serve --port 4000',   why: 'Custom port' },
+  { cmd: 'solid serve --open',        why: 'Auto-open browser' },
+]);

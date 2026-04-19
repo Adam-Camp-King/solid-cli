@@ -204,3 +204,10 @@ export const logsCommand = new Command('logs')
 
     await fetchAndDisplay();
   });
+
+import { appendExamples as __ae_logs } from '../lib/command-kit';
+__ae_logs(logsCommand, [
+  { cmd: 'solid logs',              why: 'Live agent activity stream' },
+  { cmd: 'solid logs --agent sarah', why: 'Only Sarah (customer service)' },
+  { cmd: 'solid logs --tail 50',    why: 'Last 50 lines, then live-tail' },
+]);

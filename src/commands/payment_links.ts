@@ -160,3 +160,11 @@ paymentLinksCommand
       s.succeed(chalk.green('Deleted'));
     } catch (e) { fail(s, 'Failed', e); }
   });
+
+import { appendExamples as __ae_pl } from '../lib/command-kit';
+__ae_pl(paymentLinksCommand, [
+  { cmd: 'solid paylinks list',                                       why: 'Your payment links' },
+  { cmd: 'solid paylinks create --amount 99 --description "Consult"', why: 'Generate a new link' },
+  { cmd: 'solid paylinks text2pay --phone +15125550199 --amount 99',  why: 'Text-to-pay an invoice' },
+  { cmd: 'solid paylinks mark-paid <id>',                             why: 'Manual payment reconciliation' },
+]);

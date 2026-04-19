@@ -197,3 +197,10 @@ export const migrateCommand = new Command('migrate')
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __ae_migrate } from '../lib/command-kit';
+__ae_migrate(migrateCommand, [
+  { cmd: 'solid migrate --from 2 --to 61 --pages',              why: 'Copy pages between companies' },
+  { cmd: 'solid migrate --from 2 --to 61 --kb --overwrite',     why: 'Copy KB + overwrite conflicts' },
+  { cmd: 'solid migrate --from 2 --to 61 --settings',           why: 'Copy company settings only' },
+]);

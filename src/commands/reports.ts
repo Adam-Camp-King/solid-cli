@@ -260,3 +260,11 @@ reportsCommand
       },
     );
   });
+
+import { appendExamples as __ae_reports } from '../lib/command-kit';
+__ae_reports(reportsCommand, [
+  { cmd: 'solid reports list',                  why: 'Available reports' },
+  { cmd: 'solid reports revenue --range 30d',   why: 'Revenue — last 30 days' },
+  { cmd: 'solid reports top-products',          why: 'Best sellers' },
+  { cmd: 'solid reports revenue --format csv',  why: 'Export to CSV' },
+]);

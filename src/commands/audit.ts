@@ -191,3 +191,12 @@ auditCommand.command('gdpr-consent-set').description('Record a GDPR consent deci
       spinner.succeed(chalk.green('Consent recorded'));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __ae_audit } from '../lib/command-kit';
+__ae_audit(auditCommand, [
+  { cmd: 'solid audit export --since 30d',     why: 'Dump activity log (who changed what)' },
+  { cmd: 'solid audit compliance-report',      why: 'Auditor-ready PDF' },
+  { cmd: 'solid audit gdpr-export <email>',    why: 'GDPR subject access request' },
+  { cmd: 'solid audit gdpr-delete <email> -y', why: 'GDPR right-to-be-forgotten (prompts without -y)' },
+  { cmd: 'solid audit gdpr-consent-set <id>',  why: 'Record marketing consent' },
+]);

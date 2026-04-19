@@ -455,3 +455,12 @@ sandboxCommand
       console.error(handleApiError(error).message);
     }
   });
+
+import { appendExamples as __ae_sandbox } from '../lib/command-kit';
+__ae_sandbox(sandboxCommand, [
+  { cmd: 'solid sandbox create',               why: 'Isolated copy of your site for safe edits' },
+  { cmd: 'solid sandbox diff',                 why: 'What differs between sandbox and live' },
+  { cmd: 'solid sandbox push',                 why: 'Sync local changes into the sandbox' },
+  { cmd: 'solid sandbox promote --yes',        why: 'Merge sandbox → production (prompts by default)' },
+  { cmd: 'solid sandbox reset',                why: 'Throw away sandbox changes' },
+]);

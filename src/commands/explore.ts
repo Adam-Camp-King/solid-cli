@@ -270,3 +270,10 @@ export const exploreCommand = new Command('explore')
       process.exit(0);
     });
   });
+
+import { appendExamples as __ae_explore } from '../lib/command-kit';
+__ae_explore(exploreCommand, [
+  { cmd: 'solid explore "how do I add a new industry?"', why: 'Ask about the Solid# platform' },
+  { cmd: 'solid explore --topics',                       why: 'Browseable intelligence topics' },
+  { cmd: 'solid explore --refresh',                      why: 'Pull the latest intelligence bundle' },
+]);
