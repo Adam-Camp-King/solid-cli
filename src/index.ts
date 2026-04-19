@@ -454,6 +454,32 @@ program.addHelpText('after', () => {
   return sections.join('\n');
 });
 
+// ── Unknown command handler: "did you mean ...?" ───────────────────
+// Fires when the user types a command that commander doesn't recognize.
+// Suggests the nearest known top-level command, exits 1.
+import { suggest } from './lib/suggest';
+program.on('command:*', (operands: string[]) => {
+  const unknown = operands[0];
+  const available = program.commands.map((c) => c.name()).filter((n) => n !== '*');
+  const suggestions = suggest(unknown, available);
+
+  const line = (s: string) => process.stderr.write(s + '\n');
+  line('');
+  line(`  ${chalk.red('✗')} Unknown command: ${chalk.bold(unknown)}`);
+  line('');
+  if (suggestions.length === 1) {
+    line(`  ${chalk.dim('Did you mean')} ${chalk.cyan('solid ' + suggestions[0])}${chalk.dim('?')}`);
+  } else if (suggestions.length > 1) {
+    line(`  ${chalk.dim('Did you mean one of these?')}`);
+    for (const s of suggestions) line(`    ${chalk.cyan('solid ' + s)}`);
+  } else {
+    line(`  ${chalk.dim('Run')} ${chalk.cyan('solid --help')} ${chalk.dim('to see all commands.')}`);
+  }
+  line('');
+  try { emitTelemetry('unknown_command', { command: unknown, extra: { suggestions } }); } catch { /* noop */ }
+  process.exit(1);
+});
+
 // First-run welcome + identity capture (monetization layer 1).
 // Never blocks CI / non-TTY / SOLID_SKIP_WELCOME=1. Never throws. Fire-and-forget network.
 // Awaited so the prompt renders before the command output begins, then we parse.

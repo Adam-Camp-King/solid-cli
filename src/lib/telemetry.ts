@@ -46,7 +46,8 @@ export type TelemetryEventName =
   | 'command_error'
   | 'help_shown'
   | 'bare_invocation'
-  | 'feedback_sent';
+  | 'feedback_sent'
+  | 'unknown_command';
 
 function getApiBase(): string {
   return process.env.SOLID_API_URL || 'https://api.solidnumber.com';
