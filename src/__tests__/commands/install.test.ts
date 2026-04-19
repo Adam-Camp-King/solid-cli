@@ -39,6 +39,11 @@ describe('solid install — SessionStart hook', () => {
   let written: string | null;
 
   beforeEach(() => {
+    // Hard reset every test — clear BOTH call history AND implementations
+    // so a stubSettings() call from a prior test can't leak through.
+    // Every test re-establishes existsSync / writeFileSync below and must
+    // call stubSettings() explicitly to control readFileSync.
+    jest.resetAllMocks();
     written = null;
     mockedFs.existsSync.mockImplementation(((p: any) =>
       typeof p === 'string' && p.includes('.claude/settings.json')
@@ -47,6 +52,9 @@ describe('solid install — SessionStart hook', () => {
     mockedFs.writeFileSync.mockImplementation(((_p: any, contents: any) => {
       written = typeof contents === 'string' ? contents : contents.toString();
     }) as any);
+    // Default readFileSync: pass through to real fs. Any test that needs to
+    // control settings.json contents calls stubSettings() before runInstall.
+    mockedFs.readFileSync.mockImplementation(actualFs.readFileSync as any);
   });
 
   afterEach(() => jest.clearAllMocks());
