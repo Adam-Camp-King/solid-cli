@@ -157,6 +157,16 @@ function printCursorNextSteps(outputPath: string, bytes: number): void {
   console.log('');
 }
 
+function printCodexNextSteps(outputPath: string, bytes: number): void {
+  console.log('');
+  console.log(ui.successBox('AI Context Ready', [
+    `${chalk.dim('Saved:')} ${outputPath} (${formatBytes(bytes)})`,
+    `${chalk.dim('AGENTS.md is read by Codex, Claude Code, Cursor, and Gemini when present.')}`,
+    `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --codex')}`,
+  ]));
+  console.log('');
+}
+
 function printGenericNextSteps(outputPath: string, bytes: number): void {
   console.log('');
   console.log(ui.successBox('Context Saved', [
@@ -214,6 +224,7 @@ export const contextCommand = new Command('context')
   .option('--save', 'Save to ./SOLID-CONTEXT.md')
   .option('--claude', 'Save BOTH .claude/CLAUDE.md + .claude/solid-context.json')
   .option('--cursor', 'Save to ./.cursorrules')
+  .option('--codex', 'Save to ./AGENTS.md (the emerging cross-agent standard: Codex / Claude / Cursor / Gemini)')
   .option('--json', 'Output JSON to stdout')
   .option('--minimal', 'Compact markdown (drops the tool manifest table)')
   .option('--section <name>', 'Return only one section: company, content, operations, capabilities, history, tooling')
@@ -285,7 +296,7 @@ export const contextCommand = new Command('context')
     }
 
     // ── Full context paths ────────────────────────────────────────
-    const isSaving = Boolean(options.save || options.claude || options.cursor || options.watch);
+    const isSaving = Boolean(options.save || options.claude || options.cursor || options.codex || options.watch);
     const spinner = isSaving ? ora('Building AI context package...').start() : null;
 
     let doc: string;
@@ -313,7 +324,7 @@ export const contextCommand = new Command('context')
     // ── Write files ───────────────────────────────────────────────
     let markdownPath: string | null = null;
     let jsonPath: string | null = null;
-    let outputMode: 'claude' | 'cursor' | 'file' | 'stdout' = 'stdout';
+    let outputMode: 'claude' | 'cursor' | 'codex' | 'file' | 'stdout' = 'stdout';
 
     if (options.claude) {
       outputMode = 'claude';
@@ -326,6 +337,12 @@ export const contextCommand = new Command('context')
     } else if (options.cursor) {
       outputMode = 'cursor';
       markdownPath = path.resolve('.cursorrules');
+      fs.writeFileSync(markdownPath, doc);
+    } else if (options.codex) {
+      outputMode = 'codex';
+      // AGENTS.md is the emerging multi-agent convention — one file that
+      // Claude Code, Cursor, Codex, and Gemini all read when present.
+      markdownPath = path.resolve('AGENTS.md');
       fs.writeFileSync(markdownPath, doc);
     } else if (options.save || options.watch) {
       outputMode = 'file';
@@ -341,6 +358,8 @@ export const contextCommand = new Command('context')
       printClaudeNextSteps(markdownPath, jsonPath, mdBytes, jsonBytes);
     } else if (outputMode === 'cursor' && markdownPath) {
       printCursorNextSteps(markdownPath, fs.statSync(markdownPath).size);
+    } else if (outputMode === 'codex' && markdownPath) {
+      printCodexNextSteps(markdownPath, fs.statSync(markdownPath).size);
     } else if (outputMode === 'file' && markdownPath) {
       printGenericNextSteps(markdownPath, fs.statSync(markdownPath).size);
     } else {

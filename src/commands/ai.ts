@@ -20,17 +20,21 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 
-type AiKind = 'claude' | 'cursor';
+type AiKind = 'claude' | 'cursor' | 'codex';
 
 function whichAi(override?: string): AiKind | null {
   if (override) {
     const normalized = override.toLowerCase();
-    if (normalized === 'claude' || normalized === 'cursor') return normalized as AiKind;
+    if (normalized === 'claude' || normalized === 'cursor' || normalized === 'codex') {
+      return normalized as AiKind;
+    }
     return null;
   }
-  // Auto-detect: prefer claude if both are installed (it's the one we optimize for).
+  // Auto-detect. Preference order reflects what we ship first-class support
+  // for: claude > cursor > codex. Change this when product priorities shift.
   if (resolveBinary('claude')) return 'claude';
   if (resolveBinary('cursor')) return 'cursor';
+  if (resolveBinary('codex')) return 'codex';
   return null;
 }
 
@@ -53,14 +57,13 @@ function resolveBinary(name: string): string | null {
 }
 
 function refreshContext(kind: AiKind): boolean {
-  // Delegate to the existing context command so we reuse every write path
-  // (claude: .claude/CLAUDE.md + .claude/solid-context.json; cursor: .cursorrules).
-  // Using `process.argv[0]` + the CLI entry ensures we call our own bundled
-  // version, not whatever `solid` resolves to on PATH (which might be a
-  // different install during dev).
-  const args = kind === 'claude' ? ['context', '--claude'] : ['context', '--cursor'];
+  // Delegate to the existing context command so we reuse every write path:
+  //   claude → .claude/CLAUDE.md + .claude/solid-context.json
+  //   cursor → .cursorrules
+  //   codex  → AGENTS.md
+  const flag = kind === 'claude' ? '--claude' : kind === 'cursor' ? '--cursor' : '--codex';
   const solidBin = resolveBinary('solid') || 'solid';
-  const result = spawnSync(solidBin, args, { stdio: 'inherit' });
+  const result = spawnSync(solidBin, ['context', flag], { stdio: 'inherit' });
   return result.status === 0;
 }
 
@@ -69,15 +72,18 @@ function launchAi(kind: AiKind): void {
     // Hand the terminal over to Claude Code. stdio: 'inherit' makes this a
     // proper takeover — spinners, inquirer, etc. all work.
     execFileSync('claude', [], { stdio: 'inherit' });
-  } else {
+  } else if (kind === 'cursor') {
     // Cursor expects a path argument to open the current project.
     execFileSync('cursor', ['.'], { stdio: 'inherit' });
+  } else {
+    // Codex (OpenAI's CLI) launches in the current directory; no args needed.
+    execFileSync('codex', [], { stdio: 'inherit' });
   }
 }
 
 export const aiCommand = new Command('ai')
-  .description('Launch Claude Code / Cursor with this company\'s context pre-loaded (stupid easy)')
-  .option('--as <tool>', 'Force a specific AI: claude | cursor (default: auto-detect)')
+  .description('Launch Claude Code / Cursor / Codex with this company\'s context pre-loaded (stupid easy)')
+  .option('--as <tool>', 'Force a specific AI: claude | cursor | codex (default: auto-detect)')
   .option('--no-context', 'Skip the context refresh — just launch the AI')
   .option('--company <id>', 'Use a specific company for this session (overrides cached)')
   .action(async (options) => {
@@ -113,13 +119,14 @@ export const aiCommand = new Command('ai')
       console.error('');
       console.error(chalk.dim('  Install Claude Code:  https://claude.com/product/claude-code'));
       console.error(chalk.dim('  Install Cursor:       https://cursor.com'));
+      console.error(chalk.dim('  Install Codex CLI:    https://github.com/openai/codex'));
       console.error(chalk.dim('  Or pick explicitly:   solid ai --as claude'));
       process.exit(1);
     }
 
     // 4. Arrival: one clean line so the user (and any AI tail-ing) knows
     // exactly what's happening before the terminal hands off.
-    const tool = kind === 'claude' ? 'Claude Code' : 'Cursor';
+    const tool = kind === 'claude' ? 'Claude Code' : kind === 'cursor' ? 'Cursor' : 'Codex';
     console.log('');
     console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);
     console.log('');
