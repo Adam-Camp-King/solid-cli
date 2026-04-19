@@ -164,6 +164,9 @@ class ApiClient {
       if (process.env.SOLID_AGENT) requestConfig.headers['X-Solid-Agent'] = process.env.SOLID_AGENT;
       if (process.env.SOLID_AGENT_MODE) requestConfig.headers['X-Solid-Agent-Mode'] = process.env.SOLID_AGENT_MODE;
       if (process.env.SOLID_HUMAN_INITIATOR) requestConfig.headers['X-Solid-Human-Initiator'] = process.env.SOLID_HUMAN_INITIATOR;
+      // Sandbox flag — lets the backend record the event as dry-run so the
+      // activity dashboard counts sandboxed vs real mutations separately.
+      if (process.env.SOLID_AGENT_SANDBOX) requestConfig.headers['X-Solid-Agent-Sandbox'] = '1';
 
       return requestConfig;
     });

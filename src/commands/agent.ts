@@ -608,6 +608,93 @@ agentCommand
     } catch (e) { catchError(spinner, 'Failed to sync')(e); }
   });
 
+// ── activity ──────────────────────────────────────────────────────────
+// "Who's been driving my CLI?" The dashboard for agent-initiated API
+// requests — Claude Code, Cursor, Codex, whoever. Pairs with the
+// X-Solid-Agent headers that `solid ai` emits.
+
+agentCommand
+  .command('activity')
+  .description('Show what AI agents did on this company (24h by default)')
+  .option('--range <window>', 'Time range: 24h | 7d | 30d', '24h')
+  .option('--agent <name>', 'Filter to one agent (claude | cursor | codex)')
+  .option('--events', 'Raw event feed instead of summary')
+  .option('--limit <n>', 'Max events to return (with --events)', '50')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireLogin();
+    const spinner = ora('Loading agent activity...').start();
+    try {
+      if (opts.events) {
+        const params: Record<string, string> = {
+          range: opts.range,
+          limit: String(opts.limit),
+        };
+        if (opts.agent) params.agent = opts.agent;
+        const { data } = await apiClient.get<any>(
+          `/api/v1/agent-activity/events?${new URLSearchParams(params).toString()}`,
+        );
+        spinner.stop();
+        if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
+        const events = data.events || [];
+        console.log(ui.header(`Agent events (${data.range}) — ${events.length} rows`));
+        if (!events.length) { console.log(chalk.dim('  No agent activity in this window.\n')); return; }
+        const rows = events.map((e: any) => [
+          (e.created_at || '').slice(11, 19),
+          e.agent,
+          e.method,
+          e.path.length > 48 ? e.path.slice(0, 45) + '...' : e.path,
+          String(e.status_code),
+          e.was_sandboxed ? chalk.yellow('sbox') : (e.was_mutation ? chalk.green('mut') : chalk.dim('read')),
+        ]);
+        console.log(ui.table(['Time', 'Agent', 'Method', 'Path', 'Status', 'Type'], rows));
+        console.log('');
+        return;
+      }
+
+      const { data } = await apiClient.get<any>(
+        `/api/v1/agent-activity/summary?range=${encodeURIComponent(opts.range)}`,
+      );
+      spinner.stop();
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(data, null, 2)); return; }
+
+      console.log(ui.header(`Agent activity — last ${data.range}`));
+      console.log(ui.infoBox('Summary', [
+        `${chalk.dim('Total requests:')}     ${chalk.bold(data.total_requests)}`,
+        `${chalk.dim('Real mutations:')}     ${chalk.green(data.real_mutations)}`,
+        `${chalk.dim('Sandbox previews:')}   ${chalk.yellow(data.sandboxed_mutations)}`,
+        `${chalk.dim('Refusals / errors:')}  ${chalk.red(data.refusals)}`,
+      ]));
+      const byAgent = data.by_agent || [];
+      if (byAgent.length) {
+        console.log(chalk.bold('  By agent'));
+        console.log('');
+        console.log(ui.table(
+          ['Agent', 'Requests'],
+          byAgent.map((r: any) => [r.agent, String(r.count)]),
+        ));
+        console.log('');
+      }
+      const topPaths = data.top_paths || [];
+      if (topPaths.length) {
+        console.log(chalk.bold('  Top paths'));
+        console.log('');
+        console.log(ui.table(
+          ['Method', 'Path', 'Count'],
+          topPaths.slice(0, 10).map((r: any) => [
+            r.method,
+            r.path.length > 50 ? r.path.slice(0, 47) + '...' : r.path,
+            String(r.count),
+          ]),
+        ));
+        console.log('');
+      }
+      console.log(chalk.dim(`  Full event feed: solid agent activity --events`));
+      console.log('');
+    } catch (e) { catchError(spinner, 'Failed to load activity')(e); }
+  });
+
+
 import { appendExamples as __appendExamplesAgent } from '../lib/command-kit';
 __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent dashboard', why: 'All agents + telemetry' },
