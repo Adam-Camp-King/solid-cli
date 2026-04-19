@@ -378,7 +378,30 @@ export async function run<T>(
     const errorText = options.errorText || 'Failed';
     if (spinner) spinner.fail(chalk.red(errorText));
     const apiError = handleApiError(error);
-    console.error(chalk.red(`  ${apiError.message}`));
+
+    // Sprint 1 T1.1 — under --json AND SOLID_JSON_V2=1, emit a structured
+    // envelope to stdout so agents can branch on error.code. Humans (or
+    // legacy scripts) continue to see the prose box on stderr.
+    const { isJsonOutput } = require('./json-output');
+    const { jsonErrorEnvelopeEnabled, toErrorEnvelope } = require('./error-codes');
+    if (isJsonOutput() && jsonErrorEnvelopeEnabled()) {
+      const envelope = toErrorEnvelope(
+        {
+          code: apiError.code || 'SERVER_ERROR',
+          hint: apiError.hint,
+          docs_url: apiError.docs_url,
+          scope: apiError.scope,
+          feature: apiError.feature,
+          upgrade_to: apiError.upgrade_to,
+          request_id: apiError.request_id,
+        },
+        apiError.status,
+        apiError.message,
+      );
+      process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
+    } else {
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
     // eslint-disable-next-line no-process-exit
     process.exit(1);
   }

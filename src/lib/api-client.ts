@@ -29,6 +29,13 @@ interface ApiError {
   message: string;
   code?: string;
   status: number;
+  // Sprint 1 T1.1 — structured error surface for agents.
+  hint?: string;
+  docs_url?: string;
+  scope?: string;
+  feature?: string;
+  upgrade_to?: string;
+  request_id?: string;
 }
 
 // Global override for per-invocation auth. Set by `--token <val>` on the
@@ -1192,11 +1199,15 @@ function flattenValidation(detail: unknown): string {
     .join('; ');
 }
 
+// Sprint 1 T1.1 — pure structured classifier + envelope.
+import { classifyError, type ClassifiedError } from './error-codes';
+
 export function handleApiError(error: unknown): ApiError {
   // Non-axios errors: plain Error or unknown. Return as-is with light redaction.
   if (!axios.isAxiosError(error)) {
     const raw = error instanceof Error ? error.message : 'Unknown error';
-    return { message: redactSecrets(raw), status: 500 };
+    const classified = classifyError({ status: 500 });
+    return enrichApiError({ message: redactSecrets(raw), status: 500 }, classified);
   }
 
   const axiosError = error as AxiosError<{
@@ -1309,5 +1320,27 @@ export function handleApiError(error: unknown): ApiError {
     message += `\n  [debug] ${method} ${url} → ${status}${bodyPreview}`;
   }
 
-  return { message, status };
+  // T1.1 — attach structured classification for agents / --json consumers.
+  const requestId =
+    (axiosError.response?.headers?.['x-request-id'] as string | undefined) ||
+    (axiosError.response?.headers?.['X-Request-ID'] as string | undefined);
+  const classified = classifyError({
+    status,
+    data: axiosError.response?.data,
+    networkErrorCode: axiosError.code,
+    requestId,
+  });
+  return enrichApiError({ message, status }, classified);
+}
+
+/** Copy structured fields from a ClassifiedError onto an ApiError. Pure. */
+function enrichApiError(err: ApiError, c: ClassifiedError): ApiError {
+  err.code = c.code;
+  if (c.hint) err.hint = c.hint;
+  if (c.docs_url) err.docs_url = c.docs_url;
+  if (c.scope) err.scope = c.scope;
+  if (c.feature) err.feature = c.feature;
+  if (c.upgrade_to) err.upgrade_to = c.upgrade_to;
+  if (c.request_id) err.request_id = c.request_id;
+  return err;
 }
