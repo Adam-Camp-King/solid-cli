@@ -329,49 +329,65 @@ authCommand
           config.userEmail = status.data.user.email;
           config.companyId = status.data.user.company_id;
 
-          console.log(chalk.green(`✔ Authenticated as ${status.data.user.email}`));
+          // Resolve the real company name + role so the arrival screen
+          // shows something better than an email echo. Best-effort: we fall
+          // back to a friendly placeholder if the lookup fails.
+          let resolvedCompanyName = `Solid# workspace`;
+          let resolvedRole: string | undefined;
+          let companiesForPicker: Array<{ id: number; name: string; role: string }> | null = null;
+          try {
+            const companiesResponse = await apiClient.companiesList();
+            companiesForPicker = companiesResponse.data.companies;
+            const active = companiesForPicker?.find((c) => c.id === status.data.user!.company_id);
+            if (active) {
+              resolvedCompanyName = active.name;
+              resolvedRole = active.role;
+            }
+          } catch {
+            // Networkless / permissions — arrival screen still renders.
+          }
+
+          const renderArrival = (name: string, id: number, role?: string) => {
+            console.log(ui.loginSuccessScreen({
+              email: status.data.user!.email,
+              companyName: name,
+              companyId: id,
+              role,
+            }));
+          };
 
           // If --company was passed, the token is already scoped — skip picker
           if (options.company) {
+            renderArrival(resolvedCompanyName, status.data.user.company_id, resolvedRole);
+            return;
+          }
+
+          // Multi-company picker path
+          if (companiesForPicker && companiesForPicker.length > 1) {
+            config.companies = companiesForPicker.map((c) => ({ id: c.id, name: c.name, role: c.role }));
             console.log('');
-            console.log(ui.welcomeBox(status.data.user.email, status.data.user.company_id));
+            console.log(chalk.bold(`  ${companiesForPicker.length} companies available:`));
+            console.log('');
+            const picked = await pickCompany(companiesForPicker, status.data.user.company_id);
+            if (picked && picked !== status.data.user.company_id) {
+              const switchSpinner = ora('Switching...').start();
+              const switchResponse = await apiClient.companySwitch(picked);
+              config.accessToken = switchResponse.data.access_token;
+              config.refreshToken = switchResponse.data.refresh_token;
+              config.companyId = switchResponse.data.company.id;
+              config.tokenExpiresAt = new Date(Date.now() + switchResponse.data.expires_in * 1000);
+              switchSpinner.succeed(chalk.green(`Switched to ${switchResponse.data.company.name}`));
+              resolvedCompanyName = switchResponse.data.company.name;
+              resolvedRole = companiesForPicker.find((c) => c.id === picked)?.role || resolvedRole;
+            }
+            renderArrival(resolvedCompanyName, config.companyId!, resolvedRole);
+            console.log(chalk.dim('  Switch later: solid switch'));
+            console.log(chalk.dim('  Skip picker:  solid auth login --company <id>'));
             console.log('');
             return;
           }
 
-          // Multi-company picker (same as password flow)
-          try {
-            const companiesResponse = await apiClient.companiesList();
-            const { companies } = companiesResponse.data;
-            if (companies.length > 1) {
-              config.companies = companies.map((c: { id: number; name: string; role: string }) => ({
-                id: c.id, name: c.name, role: c.role,
-              }));
-              console.log('');
-              console.log(chalk.bold(`  ${companies.length} companies available:`));
-              console.log('');
-              const picked = await pickCompany(companies, status.data.user.company_id);
-              if (picked && picked !== status.data.user.company_id) {
-                const switchSpinner = ora('Switching...').start();
-                const switchResponse = await apiClient.companySwitch(picked);
-                config.accessToken = switchResponse.data.access_token;
-                config.refreshToken = switchResponse.data.refresh_token;
-                config.companyId = switchResponse.data.company.id;
-                config.tokenExpiresAt = new Date(Date.now() + switchResponse.data.expires_in * 1000);
-                switchSpinner.succeed(chalk.green(`Switched to ${switchResponse.data.company.name}`));
-              }
-              console.log('');
-              console.log(chalk.dim('  Switch later: solid switch'));
-              console.log(chalk.dim('  Skip picker:  solid auth login --company <id>'));
-            } else {
-              console.log('');
-              console.log(ui.welcomeBox(status.data.user.email, config.companyId!));
-            }
-          } catch {
-            console.log('');
-            console.log(ui.welcomeBox(status.data.user.email, status.data.user.company_id));
-          }
-          console.log('');
+          renderArrival(resolvedCompanyName, config.companyId!, resolvedRole);
           return;
         } catch (err) {
           if (spinner) (spinner as ReturnType<typeof ora>).fail(chalk.red('Browser login failed'));

@@ -214,6 +214,55 @@ export function welcomeBox(companyName: string, companyId: number): string {
   return box(content, { title: 'Logged In', padding: 1 });
 }
 
+/**
+ * The "arrival" screen after `solid auth login` completes. Full branded
+ * moment — logo, identity, suggested next commands. This is the product's
+ * first physical artifact the user (or their AI agent) touches.
+ */
+export function loginSuccessScreen(args: {
+  email: string;
+  companyName: string;
+  companyId: number;
+  role?: string;
+}): string {
+  const lines: string[] = [];
+
+  // 1. Big branded logo (silent on dumb terminals, which is correct).
+  lines.push(banner());
+
+  // 2. The confirmation beat.
+  lines.push(`  ${chalk.green('✔')} ${chalk.bold('Signed in as')} ${chalk.hex('#a5b4fc')(args.email)}`);
+  lines.push('');
+
+  // 3. Active workspace card — proper company name, not email.
+  const workspace = [
+    `${chalk.dim('Company'.padEnd(10))} ${chalk.bold.hex('#818cf8')(args.companyName)}`,
+    `${chalk.dim('ID'.padEnd(10))} ${args.companyId}`,
+  ];
+  if (args.role) workspace.push(`${chalk.dim('Role'.padEnd(10))} ${args.role}`);
+  lines.push(box(workspace.join('\n'), { title: 'Active workspace', padding: 1 }));
+  lines.push('');
+
+  // 4. "Try these next" — the first three commands are the highest-signal
+  // ones for a new session (status + revenue + the AI-agent hook).
+  lines.push(`  ${chalk.bold('Try these next')}`);
+  lines.push('');
+  lines.push(commandHelp([
+    { cmd: 'solid status', desc: 'your business, at a glance' },
+    { cmd: 'solid analytics dashboard', desc: 'revenue, traffic, conversions' },
+    { cmd: 'solid context --claude', desc: 'dump context for your AI agent' },
+    { cmd: 'solid --help', desc: 'all commands' },
+  ]));
+  lines.push('');
+
+  // 5. AI-agent nod — the whole point of this CLI.
+  lines.push(`  ${chalk.dim('Your token is cached at ~/.solid/config.json — any AI agent')}`);
+  lines.push(`  ${chalk.dim('running in this shell inherits it. Type')} ${chalk.cyan('claude')} ${chalk.dim('and go.')}`);
+  lines.push('');
+
+  return lines.join('\n');
+}
+
 export function successBox(title: string, lines: string[]): string {
   const content = lines.join('\n');
   return box(content, { title: `${chalk.green('✓')} ${title}`, padding: 1 });
@@ -301,6 +350,7 @@ export const ui = {
   isCI,
   supportsUnicode,
   welcomeBox,
+  loginSuccessScreen,
   successBox,
   errorBox,
   infoBox,
