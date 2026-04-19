@@ -248,9 +248,9 @@ export function loginSuccessScreen(args: {
   lines.push(`  ${chalk.bold('Try these next')}`);
   lines.push('');
   lines.push(commandHelp([
+    { cmd: 'solid ai', desc: 'launch Claude / Cursor with this company loaded' },
+    { cmd: 'solid switch', desc: 'change to a different company (picker)' },
     { cmd: 'solid status', desc: 'your business, at a glance' },
-    { cmd: 'solid analytics dashboard', desc: 'revenue, traffic, conversions' },
-    { cmd: 'solid context --claude', desc: 'dump context for your AI agent' },
     { cmd: 'solid --help', desc: 'all commands' },
   ]));
   lines.push('');
