@@ -480,29 +480,28 @@ program.on('command:*', (operands: string[]) => {
   process.exit(1);
 });
 
-// First-run welcome + identity capture (monetization layer 1).
-// Never blocks CI / non-TTY / SOLID_SKIP_WELCOME=1. Never throws. Fire-and-forget network.
-// Awaited so the prompt renders before the command output begins, then we parse.
+// First-run — silent identity + install ping. No prompt, no banner, no pitch.
+// Matches gh/vercel/stripe behavior: the tool just works. Email is captured
+// later at value-exchange moments (demo/feedback/auth), not as a greeting.
+// Fire-and-forget network; never blocks CI / non-TTY / Docker / SOLID_DISABLE_TELEMETRY.
 import { runFirstRunIfNeeded } from './lib/first-run';
 import { emit as emitTelemetry, recordCommand } from './lib/telemetry';
-(async () => {
-  await runFirstRunIfNeeded(process.argv);
-  // Record this invocation for `solid feedback` context + emit funnel event.
-  try {
-    const invocation = process.argv.slice(2).join(' ') || '<bare>';
-    recordCommand(invocation);
-    if (!process.argv[2]) {
-      emitTelemetry('bare_invocation');
-    } else if (['--help', '-h', 'help', '--version', '-v'].includes(process.argv[2])) {
-      emitTelemetry('help_shown', { command: process.argv[2] });
-    } else {
-      emitTelemetry('first_command', { command: process.argv[2] });
-    }
-  } catch {
-    /* noop */
+runFirstRunIfNeeded();
+// Record this invocation for `solid feedback` context + emit funnel event.
+try {
+  const invocation = process.argv.slice(2).join(' ') || '<bare>';
+  recordCommand(invocation);
+  if (!process.argv[2]) {
+    emitTelemetry('bare_invocation');
+  } else if (['--help', '-h', 'help', '--version', '-v'].includes(process.argv[2])) {
+    emitTelemetry('help_shown', { command: process.argv[2] });
+  } else {
+    emitTelemetry('first_command', { command: process.argv[2] });
   }
-  program.parse(process.argv);
-})();
+} catch {
+  /* noop */
+}
+program.parse(process.argv);
 
 // T11.2 — on exit, print a dry-run summary if any mutations were intercepted.
 process.on('beforeExit', () => {
