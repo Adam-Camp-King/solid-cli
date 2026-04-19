@@ -76,10 +76,22 @@ describe('solid install — SessionStart hook', () => {
     expect(saved.attribution).toEqual({ commit: '', pr: '' }); // preserved
     expect(saved.voiceEnabled).toBe(true); // preserved
     expect(saved.hooks.SessionStart).toHaveLength(1);
-    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('solid context --claude --quiet');
+    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('solid context --claude --raw');
   });
 
   it('is idempotent — running twice does not duplicate the hook', () => {
+    stubSettings(JSON.stringify({
+      hooks: {
+        SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw' }] }],
+      },
+    }));
+
+    runInstall(['install']);
+
+    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('migrates a legacy --quiet hook to the new --raw command', () => {
     stubSettings(JSON.stringify({
       hooks: {
         SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --quiet' }] }],
@@ -88,7 +100,10 @@ describe('solid install — SessionStart hook', () => {
 
     runInstall(['install']);
 
-    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+    const saved = JSON.parse(written!);
+    expect(saved.hooks.SessionStart).toHaveLength(1);
+    expect(saved.hooks.SessionStart[0].hooks).toHaveLength(1);
+    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('solid context --claude --raw');
   });
 
   it('preserves other SessionStart hooks when adding ours', () => {
@@ -103,7 +118,7 @@ describe('solid install — SessionStart hook', () => {
     const saved = JSON.parse(written!);
     expect(saved.hooks.SessionStart).toHaveLength(2);
     expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('echo "hello"');
-    expect(saved.hooks.SessionStart[1].hooks[0].command).toBe('solid context --claude --quiet');
+    expect(saved.hooks.SessionStart[1].hooks[0].command).toBe('solid context --claude --raw');
   });
 
   it('--uninstall removes only the Solid hook', () => {
@@ -112,7 +127,7 @@ describe('solid install — SessionStart hook', () => {
       hooks: {
         SessionStart: [
           { hooks: [{ type: 'command', command: 'echo "hello"' }] },
-          { hooks: [{ type: 'command', command: 'solid context --claude --quiet' }] },
+          { hooks: [{ type: 'command', command: 'solid context --claude --raw' }] },
         ],
       },
     }));

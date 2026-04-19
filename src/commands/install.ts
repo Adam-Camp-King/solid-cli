@@ -23,7 +23,7 @@ import { ui } from '../lib/ui';
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 // The command Claude Code runs before every session. `--quiet` keeps the hook
 // silent on success; failures still print so the user sees what's up.
-const HOOK_COMMAND = 'solid context --claude --quiet';
+const HOOK_COMMAND = 'solid context --claude --raw';
 
 type HookEntry = { type: 'command'; command: string };
 type HookGroup = { hooks: HookEntry[] };
@@ -44,37 +44,67 @@ function saveSettings(obj: Record<string, unknown>): void {
   fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(obj, null, 2) + '\n', 'utf-8');
 }
 
-// Idempotent merge: add our hook entry if (and only if) it isn't already there.
+// Older installs wrote a broken command ("--quiet" is not a valid flag on
+// `solid context`). When we see any of these legacy variants, treat them as
+// "ours" so upsert rewrites them to the current HOOK_COMMAND.
+const LEGACY_HOOK_COMMANDS = [
+  'solid context --claude --quiet',
+];
+
+function isSolidHook(command: string): boolean {
+  return command === HOOK_COMMAND || LEGACY_HOOK_COMMANDS.includes(command);
+}
+
+// Idempotent merge: add our hook entry if (and only if) it isn't already
+// there. If a legacy (broken) variant is present, migrate it in place.
 // Returns true when the file was modified.
 function upsertSessionStartHook(settings: Record<string, unknown>): boolean {
   const hooks = (settings.hooks as Record<string, unknown> | undefined) || {};
   const sessionStart = (hooks.SessionStart as HookGroup[] | undefined) || [];
 
-  const alreadyHasOurs = sessionStart.some((group) =>
+  let mutated = false;
+
+  // Migration pass: rewrite any legacy command to the current one.
+  for (const group of sessionStart) {
+    for (const h of group.hooks || []) {
+      if (LEGACY_HOOK_COMMANDS.includes(h.command)) {
+        h.command = HOOK_COMMAND;
+        mutated = true;
+      }
+    }
+  }
+
+  const alreadyHasCurrent = sessionStart.some((group) =>
     (group.hooks || []).some((h) => h.command === HOOK_COMMAND),
   );
-  if (alreadyHasOurs) return false;
+  if (!alreadyHasCurrent) {
+    sessionStart.push({
+      hooks: [{ type: 'command', command: HOOK_COMMAND }],
+    });
+    mutated = true;
+  }
 
-  sessionStart.push({
-    hooks: [{ type: 'command', command: HOOK_COMMAND }],
-  });
   hooks.SessionStart = sessionStart;
   settings.hooks = hooks;
-  return true;
+  return mutated;
 }
 
 function removeSessionStartHook(settings: Record<string, unknown>): boolean {
   const hooks = settings.hooks as Record<string, unknown> | undefined;
   if (!hooks || !Array.isArray(hooks.SessionStart)) return false;
 
-  const before = (hooks.SessionStart as HookGroup[]).length;
-  const filtered = (hooks.SessionStart as HookGroup[])
-    .map((group) => ({ ...group, hooks: (group.hooks || []).filter((h) => h.command !== HOOK_COMMAND) }))
+  // Remove BOTH the current command and any legacy variants so users who
+  // installed an older broken hook get a clean uninstall.
+  const original = hooks.SessionStart as HookGroup[];
+  const filtered = original
+    .map((group) => ({ ...group, hooks: (group.hooks || []).filter((h) => !isSolidHook(h.command)) }))
     .filter((group) => group.hooks.length > 0);
 
-  if (filtered.length === before && filtered.every((g, i) => g.hooks.length === (hooks.SessionStart as HookGroup[])[i].hooks.length)) {
-    return false;
-  }
+  const removedSomething =
+    filtered.length !== original.length ||
+    filtered.some((g, i) => g.hooks.length !== original[i].hooks.length);
+
+  if (!removedSomething) return false;
 
   if (filtered.length === 0) {
     delete hooks.SessionStart;
