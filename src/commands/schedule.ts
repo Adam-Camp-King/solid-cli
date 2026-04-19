@@ -308,3 +308,12 @@ scheduleCommand
       console.error(chalk.red(`  ${handleApiError(error).message}`));
     }
   });
+
+import { appendExamples as __appendExamplesSchedule } from '../lib/command-kit';
+__appendExamplesSchedule(scheduleCommand, [
+  { cmd: 'solid schedule list --today', why: "Today's appointments" },
+  { cmd: 'solid schedule list --from 2026-04-20 --to 2026-04-27', why: 'Date range' },
+  { cmd: 'solid schedule create --customer <id> --at 2026-04-21T14:00', why: 'Book an appointment' },
+  { cmd: 'solid schedule cancel <id>', why: 'Cancel + auto-notify customer' },
+  { cmd: 'solid schedule reschedule <id> --at 2026-04-22T10:00', why: 'Move an existing slot' },
+]);

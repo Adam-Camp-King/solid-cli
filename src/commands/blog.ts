@@ -389,3 +389,12 @@ seoCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __appendExamplesBlog } from '../lib/command-kit';
+__appendExamplesBlog(blogCommand, [
+  { cmd: 'solid blog list --status draft', why: 'Drafts only' },
+  { cmd: 'solid blog create --title "..." --file post.md', why: 'Publish from markdown' },
+  { cmd: 'solid blog update <slug> --status published', why: 'Flip draft → published' },
+  { cmd: 'solid blog get <slug> --json', why: 'Scriptable fetch' },
+  { cmd: 'solid seo audit <slug>', why: 'SEO pass on a post' },
+]);

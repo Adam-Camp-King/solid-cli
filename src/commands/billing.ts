@@ -302,3 +302,12 @@ billingCommand.command('upgrade-trial').description('Convert trial to paid subsc
       spinner.succeed(chalk.green('Trial upgraded'));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __appendExamplesBilling } from '../lib/command-kit';
+__appendExamplesBilling(billingCommand, [
+  { cmd: 'solid billing status', why: 'Tier, next invoice, usage caps' },
+  { cmd: 'solid billing usage --range 30d', why: 'Metered usage (SMS, calls, AI tokens)' },
+  { cmd: 'solid billing invoices', why: 'Past invoices + payment status' },
+  { cmd: 'solid billing checkout-link --amount 199', why: 'One-off invoice → Stripe checkout URL' },
+  { cmd: 'solid billing invoice --customer <id> --amount 500', why: 'Bill a specific customer' },
+]);

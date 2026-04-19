@@ -125,3 +125,11 @@ keysCommand
       console.log(`  ${chalk.cyan(fresh.key)}`);
     } catch (e) { fail(spinner, 'Failed to rotate key', e); }
   });
+
+import { appendExamples as __appendExamplesKeys } from '../lib/command-kit';
+__appendExamplesKeys(keysCommand, [
+  { cmd: 'solid keys list', why: 'All issued API keys' },
+  { cmd: 'solid keys issue --name "prod worker" --scope read:orders', why: 'Issue a scoped key' },
+  { cmd: 'solid keys revoke <id>', why: 'Kill a compromised key' },
+  { cmd: 'solid keys rotate <id>', why: 'Issue replacement; deprecate old' },
+]);

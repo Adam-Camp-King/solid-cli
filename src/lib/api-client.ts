@@ -1093,35 +1093,130 @@ class ApiClient {
 
 export const apiClient = new ApiClient();
 
+// Redact Bearer tokens + common secret-looking strings from any message the
+// CLI might print. Belt-and-suspenders — tokens should never end up in error
+// strings in the first place, but if they do, we don't leak them to logs.
+function redactSecrets(s: string): string {
+  return s
+    .replace(/Bearer\s+[A-Za-z0-9._\-=]{6,}/g, 'Bearer ***')
+    .replace(/(sk_|pk_|rk_|pat_|tok_)[A-Za-z0-9_\-]{6,}/g, '$1***')
+    .replace(/(password|secret|apikey|api_key|token)=([^&\s]+)/gi, '$1=***');
+}
+
+// Flatten a FastAPI 422 detail array into "field: reason; field: reason".
+function flattenValidation(detail: unknown): string {
+  if (!Array.isArray(detail)) return String(detail ?? 'Validation failed');
+  return detail
+    .map((d) => {
+      if (d && typeof d === 'object') {
+        const loc = Array.isArray((d as any).loc)
+          // FastAPI prepends "body" / "query" / "path" — drop it; the user
+          // doesn't care, they just want the field name.
+          ? (d as any).loc.filter((p: unknown) => p !== 'body' && p !== 'query' && p !== 'path').join('.')
+          : '';
+        const msg = (d as any).msg || JSON.stringify(d);
+        return loc ? `${loc}: ${msg}` : msg;
+      }
+      return String(d);
+    })
+    .join('; ');
+}
+
 export function handleApiError(error: unknown): ApiError {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ detail?: unknown; message?: string }>;
-    const raw = axiosError.response?.data?.detail ?? axiosError.response?.data?.message ?? axiosError.message;
-    // FastAPI 422s send `detail` as an array of {loc, msg, type} objects.
-    // Flattening to "loc.path: msg" beats printing "[object Object]".
-    let message: string;
-    if (typeof raw === 'string') {
-      message = raw;
-    } else if (Array.isArray(raw)) {
-      message = raw
-        .map((d) => {
-          if (d && typeof d === 'object') {
-            const loc = Array.isArray((d as any).loc) ? (d as any).loc.join('.') : '';
-            const msg = (d as any).msg || JSON.stringify(d);
-            return loc ? `${loc}: ${msg}` : msg;
-          }
-          return String(d);
-        })
-        .join('; ');
-    } else if (raw && typeof raw === 'object') {
-      message = JSON.stringify(raw);
-    } else {
-      message = axiosError.message || 'Request failed';
-    }
-    return { message, status: axiosError.response?.status || 500 };
+  // Non-axios errors: plain Error or unknown. Return as-is with light redaction.
+  if (!axios.isAxiosError(error)) {
+    const raw = error instanceof Error ? error.message : 'Unknown error';
+    return { message: redactSecrets(raw), status: 500 };
   }
-  return {
-    message: error instanceof Error ? error.message : 'Unknown error',
-    status: 500,
-  };
+
+  const axiosError = error as AxiosError<{ detail?: unknown; message?: string; error?: string }>;
+  const status = axiosError.response?.status ?? 0;
+  const method = (axiosError.config?.method || 'GET').toUpperCase();
+  const url = axiosError.config?.url || '';
+
+  // Extract the server's own message first — most actionable.
+  const d = axiosError.response?.data;
+  const rawDetail = d?.detail ?? d?.message ?? d?.error ?? '';
+  let serverMessage =
+    typeof rawDetail === 'string'
+      ? rawDetail
+      : Array.isArray(rawDetail)
+        ? flattenValidation(rawDetail)
+        : rawDetail && typeof rawDetail === 'object'
+          ? JSON.stringify(rawDetail)
+          : '';
+
+  serverMessage = redactSecrets(serverMessage);
+
+  // Network-layer failures (no response): most common culprit is "offline"
+  // or "wrong SOLID_API_URL". Don't parrot "Network Error" — say what to do.
+  if (!axiosError.response) {
+    const host = (() => { try { return new URL(url, 'http://x').host || 'unknown'; } catch { return 'unknown'; } })();
+    const hint = process.env.SOLID_API_URL
+      ? ` (SOLID_API_URL=${process.env.SOLID_API_URL})`
+      : '';
+    return {
+      message:
+        axiosError.code === 'ECONNABORTED'
+          ? `Request timed out after ${axiosError.config?.timeout ?? 30000}ms. Try --timeout=60, or check: solid health`
+          : `Couldn't reach the Solid# backend${hint}. Check network, or run: solid health`,
+      status: 0,
+    };
+  }
+
+  // Status-code-specific hints. These make the CLI *feel* world-class —
+  // users know what to do next, not just "something broke".
+  let message: string;
+  switch (status) {
+    case 401:
+      message = serverMessage
+        ? `Not authenticated: ${serverMessage}. Run: solid auth login`
+        : `Not authenticated. Run: solid auth login (or set SOLID_TOKEN)`;
+      break;
+    case 403:
+      message = serverMessage
+        ? `Forbidden: ${serverMessage}. Check your tier: solid whoami --features`
+        : `Forbidden. Your subscription tier may not include this. Check: solid whoami --features`;
+      break;
+    case 404:
+      message = serverMessage
+        ? `Not found: ${serverMessage}`
+        : `Not found: ${method} ${url}. Check the ID, or: solid api list`;
+      break;
+    case 409:
+      message = serverMessage
+        ? `Conflict: ${serverMessage}`
+        : `Conflict — this resource already exists or is in an incompatible state`;
+      break;
+    case 422:
+      message = serverMessage
+        ? `Validation failed — ${serverMessage}`
+        : `Validation failed. Run with --help to see required flags`;
+      break;
+    case 429:
+      message = `Rate limited. The CLI retries automatically; if you see this, the retries were exhausted. Slow down or run with --timeout=60`;
+      break;
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      message = serverMessage
+        ? `Solid# backend error (${status}): ${serverMessage}. Try again, or: solid health`
+        : `Solid# backend error (${status}). Try again, or: solid health`;
+      break;
+    default:
+      message = serverMessage || axiosError.message || `Request failed (${status})`;
+      break;
+  }
+
+  // --debug: append the request context so users can reproduce with curl.
+  if (process.env.SOLID_DEBUG === '1' || process.argv.includes('--debug')) {
+    const bodyPreview =
+      axiosError.config?.data
+        ? ` body=${redactSecrets(typeof axiosError.config.data === 'string' ? axiosError.config.data : JSON.stringify(axiosError.config.data)).slice(0, 200)}`
+        : '';
+    message += `\n  [debug] ${method} ${url} → ${status}${bodyPreview}`;
+  }
+
+  return { message, status };
 }

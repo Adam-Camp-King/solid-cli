@@ -201,3 +201,11 @@ formsCommand
       }
     } catch (e) { fail(s, 'Failed', e); }
   });
+
+import { appendExamples as __appendExamplesForms } from '../lib/command-kit';
+__appendExamplesForms(formsCommand, [
+  { cmd: 'solid forms list', why: 'All forms + surveys' },
+  { cmd: 'solid forms create --title "Contact" --prompt "email + message"', why: 'AI-generate a form' },
+  { cmd: 'solid forms export <id> --format csv', why: 'Dump responses to CSV' },
+  { cmd: 'solid forms responses <id> --since 7d', why: 'Recent submissions' },
+]);

@@ -260,3 +260,12 @@ emailsCommand
       s.succeed(chalk.green('Payment link email sent'));
     } catch (e) { fail(s, 'Failed', e); }
   });
+
+import { appendExamples as __appendExamplesEmails } from '../lib/command-kit';
+__appendExamplesEmails(emailsCommand, [
+  { cmd: 'solid emails list', why: 'Your sending addresses + templates' },
+  { cmd: 'solid emails send --to a@b.com --subject Hi --body "text"', why: 'Transactional send' },
+  { cmd: 'solid emails send --to <id> --template welcome', why: 'Send from a saved template' },
+  { cmd: 'solid emails addresses list', why: 'Verified sender addresses' },
+  { cmd: 'solid emails templates list', why: 'Saved templates' },
+]);

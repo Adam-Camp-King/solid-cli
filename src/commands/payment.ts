@@ -448,3 +448,12 @@ paymentCommand
       console.error(handleApiError(error).message);
     }
   });
+
+import { appendExamples as __appendExamplesPayment } from '../lib/command-kit';
+__appendExamplesPayment(paymentCommand, [
+  { cmd: 'solid payment status', why: 'Stripe Connect + processor health' },
+  { cmd: 'solid payment connect', why: 'Link a Stripe account (opens browser)' },
+  { cmd: 'solid payment products list', why: 'Subscribable products' },
+  { cmd: 'solid payment l3 --order <id>', why: 'Level 3 interchange optimization preview' },
+  { cmd: 'solid payment terminal list', why: 'In-person card terminals' },
+]);

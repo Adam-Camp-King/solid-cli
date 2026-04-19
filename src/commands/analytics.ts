@@ -124,3 +124,11 @@ analyticsCommand
       console.error(handleApiError(error).message);
     }
   });
+
+import { appendExamples as __appendExamplesAnalytics } from '../lib/command-kit';
+__appendExamplesAnalytics(analyticsCommand, [
+  { cmd: 'solid analytics dashboard', why: 'Revenue, customers, conversions at a glance' },
+  { cmd: 'solid analytics dashboard --range 30d', why: 'Last 30 days' },
+  { cmd: 'solid analytics mcp-traffic', why: 'Who is crawling your site (AI bots)' },
+  { cmd: 'solid analytics dashboard --json > snap.json', why: 'Scriptable snapshot' },
+]);

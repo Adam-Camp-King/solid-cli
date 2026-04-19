@@ -156,3 +156,11 @@ subscriptionsCommand
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(s, 'Failed', e); }
   });
+
+import { appendExamples as __appendExamplesSubs } from '../lib/command-kit';
+__appendExamplesSubs(subscriptionsCommand, [
+  { cmd: 'solid subs list', why: 'All recurring products YOU sell' },
+  { cmd: 'solid subs create --name Gold --price 29.99 --interval month', why: 'Create a plan' },
+  { cmd: 'solid subs subscribe <customer> <plan-id>', why: 'Enroll a customer' },
+  { cmd: 'solid subs cancel <sub-id> --yes', why: 'Cancel at period end' },
+]);

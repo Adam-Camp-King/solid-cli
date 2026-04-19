@@ -118,3 +118,11 @@ domainsCommand.command('verify <id>').description('Verify DNS for a custom domai
       }
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __appendExamplesDomains } from '../lib/command-kit';
+__appendExamplesDomains(domainsCommand, [
+  { cmd: 'solid domains list', why: 'All attached domains + status' },
+  { cmd: 'solid domains add acme.com', why: 'Attach a custom domain' },
+  { cmd: 'solid domains verify acme.com', why: 'Re-check DNS + re-issue cert' },
+  { cmd: 'solid domains remove acme.com --yes', why: 'Detach' },
+]);

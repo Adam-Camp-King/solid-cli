@@ -386,3 +386,12 @@ siteCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+import { appendExamples as __appendExamplesSite } from '../lib/command-kit';
+__appendExamplesSite(siteCommand, [
+  { cmd: 'solid site list', why: 'All sites (main, subdomains, landing)' },
+  { cmd: 'solid site create --name "ACME Plumbing"', why: 'Provision a new site from defaults' },
+  { cmd: 'solid site info main', why: 'DNS, SSL, custom-domain status' },
+  { cmd: 'solid site templates', why: '52 industry templates' },
+  { cmd: 'solid site regenerate main', why: 'Rebuild after template change' },
+]);

@@ -269,3 +269,11 @@ inventoryCommand
       console.error(chalk.red(`  ${handleApiError(error).message}`));
     }
   });
+
+import { appendExamples as __appendExamplesInventory } from '../lib/command-kit';
+__appendExamplesInventory(inventoryCommand, [
+  { cmd: 'solid inventory list --low-stock', why: 'Items below reorder threshold' },
+  { cmd: 'solid inventory adjust <sku> --delta -5 --reason "sold in person"', why: 'Stock adjustment with audit trail' },
+  { cmd: 'solid inventory reorder <sku> --qty 50', why: 'Trigger a reorder' },
+  { cmd: 'solid inventory movements <sku>', why: 'Full in/out history' },
+]);

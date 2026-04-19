@@ -607,3 +607,13 @@ agentCommand
       spinner.succeed(chalk.green('Profiles synced'));
     } catch (e) { catchError(spinner, 'Failed to sync')(e); }
   });
+
+import { appendExamples as __appendExamplesAgent } from '../lib/command-kit';
+__appendExamplesAgent(agentCommand, [
+  { cmd: 'solid agent dashboard', why: 'All agents + telemetry' },
+  { cmd: 'solid agent soul sarah', why: 'Identity, config, performance' },
+  { cmd: 'solid agent chat sarah "Test question"', why: 'Talk to any agent' },
+  { cmd: 'solid agent mission "Launch Q2 campaign"', why: 'Multi-agent mission via ADA' },
+  { cmd: 'solid agent prompt sarah --edit', why: 'Edit system prompt in $EDITOR' },
+  { cmd: 'solid agent memory sarah --tail', why: 'Live memory stream' },
+]);

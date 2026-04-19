@@ -383,3 +383,28 @@ export async function run<T>(
     process.exit(1);
   }
 }
+
+/**
+ * Standardized help-examples block. Used by every major command so the
+ * "Examples" section is consistently formatted. Pass a list of
+ * {cmd, why} tuples; the cmd column is padded to the longest entry.
+ *
+ * Keep example text short and actionable. The `why` column should answer
+ * "why would I reach for this form?" — not just restate the command.
+ */
+export interface HelpExample {
+  cmd: string;
+  why: string;
+}
+
+export function appendExamples(
+  command: import('commander').Command,
+  examples: HelpExample[],
+  notes?: string,
+): void {
+  const maxCmdLen = Math.max(...examples.map((e) => e.cmd.length));
+  const lines = examples.map((e) => `  $ ${e.cmd.padEnd(maxCmdLen)}  # ${e.why}`);
+  const block = ['', 'Examples:', ...lines];
+  if (notes) block.push('', notes);
+  command.addHelpText('after', block.join('\n'));
+}

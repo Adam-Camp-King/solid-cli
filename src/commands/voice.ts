@@ -472,3 +472,13 @@ voiceCommand
       console.log(chalk.dim(`  ${r.note}`));
     } catch (error) { fail(spinner, 'Failed to load cost summary', error); }
   });
+
+import { appendExamples as __appendExamplesVoice } from '../lib/command-kit';
+__appendExamplesVoice(voiceCommand, [
+  { cmd: 'solid voice calls list --today', why: "Today's call log" },
+  { cmd: 'solid voice calls get <id>', why: 'Transcript + recording link' },
+  { cmd: 'solid voice numbers list', why: 'Owned phone numbers' },
+  { cmd: 'solid voice numbers buy --area-code 512', why: 'Buy a new number' },
+  { cmd: 'solid voice voicemail list --unread', why: 'Unlistened voicemails' },
+  { cmd: 'solid voice personality get', why: 'Industry voice profile' },
+]);

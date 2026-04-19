@@ -435,3 +435,12 @@ storageCommand
       spinner.succeed(chalk.green('Pack activated'));
     } catch (e) { fail(spinner, 'Failed', e); }
   });
+
+import { appendExamples as __appendExamplesStorage } from '../lib/command-kit';
+__appendExamplesStorage(storageCommand, [
+  { cmd: 'solid storage list', why: 'All files + folders' },
+  { cmd: 'solid storage upload ./logo.png --folder brand', why: 'Upload to a folder' },
+  { cmd: 'solid storage download <id> ./out.png', why: 'Download by file ID' },
+  { cmd: 'solid storage folders list', why: 'Folder tree' },
+  { cmd: 'solid storage delete <id> --yes', why: 'Delete a file' },
+]);

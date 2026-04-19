@@ -120,6 +120,7 @@ import { chatWidgetsCommand } from './commands/chat_widgets';
 import { paymentLinksCommand } from './commands/payment_links';
 import { subscriptionsCommand } from './commands/subscriptions';
 import { schemaCommand } from './commands/schema';
+import { doctorCommand } from './commands/doctor';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -145,6 +146,7 @@ program
   .option('--sort-by <field>', 'Sort list output by this field (subcommand must support it)')
   .option('--order <asc|desc>', 'Sort direction — asc (default) or desc')
   .option('--timeout <seconds>', 'Per-request HTTP timeout in seconds (default: 30)')
+  .option('--debug', 'Append request context (method, url, body) to every error. Also: SOLID_DEBUG=1')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
@@ -323,6 +325,7 @@ program.addCommand(reportsCommand);
 program.addCommand(docsCommand);
 program.addCommand(healthCommand);
 program.addCommand(completionCommand);
+program.addCommand(doctorCommand);
 
 // Multi-company
 program.addCommand(companyCommand);

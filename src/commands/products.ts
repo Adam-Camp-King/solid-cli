@@ -196,3 +196,12 @@ productsCommand
       spinner.succeed(chalk.green(`Product ${id} deleted`));
     } catch (e) { fail(spinner, 'Failed to delete product', e); }
   });
+
+import { appendExamples as __appendExamplesProducts } from '../lib/command-kit';
+__appendExamplesProducts(productsCommand, [
+  { cmd: 'solid products list --all --format csv > catalog.csv', why: 'Export full catalog' },
+  { cmd: 'solid products create -t "Widget" -p 19.99 --sku WID-001', why: 'Add a product' },
+  { cmd: 'solid products update <id> -p 24.99', why: 'Price change' },
+  { cmd: 'solid products delete <id> --yes', why: 'Retire (skips confirm)' },
+  { cmd: 'solid products get <id> --json | jq .components', why: 'Inspect bundle parts' },
+]);

@@ -127,3 +127,12 @@ servicesCommand
       spinner.succeed(chalk.green(`Service ${id} deleted`));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
+
+import { appendExamples as __appendExamplesServices } from '../lib/command-kit';
+__appendExamplesServices(servicesCommand, [
+  { cmd: 'solid services list --category plumbing', why: 'Filter your catalog' },
+  { cmd: 'solid services list --all --format csv', why: 'Export every service' },
+  { cmd: 'solid services create -t "Drain cleaning" -p 199 -d 60', why: 'Add a priced, timed service' },
+  { cmd: 'solid services update 42 -p 249', why: 'Change price only' },
+  { cmd: 'solid services delete 42', why: 'Retire a service' },
+]);
