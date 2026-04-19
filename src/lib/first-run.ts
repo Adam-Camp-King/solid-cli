@@ -24,6 +24,8 @@ import { randomUUID } from 'crypto';
 
 import chalk from 'chalk';
 
+import { emit } from './telemetry';
+
 const CONFIG_DIR = path.join(os.homedir(), '.solid');
 const IDENTITY_FILE = path.join(CONFIG_DIR, 'identity.json');
 
@@ -191,6 +193,15 @@ export async function runFirstRunIfNeeded(argv: string[]): Promise<void> {
     writeIdentity(identity);
     // Fire-and-forget network call. Don't await so we don't stall CLI startup.
     void reportIdentity(identity);
+
+    // Emit telemetry events for funnel tracking
+    emit('first_run_welcome_shown');
+    if (identity.email) {
+      emit('first_run_email_captured');
+    } else {
+      emit('first_run_email_skipped');
+    }
+    emit('installed'); // fires once per machine since first-run only runs once
   } catch {
     /* NEVER let first-run break the actual command */
   }

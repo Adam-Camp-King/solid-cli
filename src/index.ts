@@ -68,6 +68,7 @@ import { blogCommand } from './commands/blog';
 import { exploreCommand } from './commands/explore';
 import { designCommand } from './commands/design';
 import { visualCommand } from './commands/visual';
+import { feedbackCommand } from './commands/feedback';
 import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
 import { analyticsCommand } from './commands/analytics';
@@ -311,6 +312,7 @@ program.addCommand(subscriptionsCommand);
 // Design
 program.addCommand(designCommand);
 program.addCommand(visualCommand);
+program.addCommand(feedbackCommand);
 
 // Platform
 program.addCommand(cloneCommand);
@@ -453,8 +455,23 @@ program.addHelpText('after', () => {
 // Never blocks CI / non-TTY / SOLID_SKIP_WELCOME=1. Never throws. Fire-and-forget network.
 // Awaited so the prompt renders before the command output begins, then we parse.
 import { runFirstRunIfNeeded } from './lib/first-run';
+import { emit as emitTelemetry, recordCommand } from './lib/telemetry';
 (async () => {
   await runFirstRunIfNeeded(process.argv);
+  // Record this invocation for `solid feedback` context + emit funnel event.
+  try {
+    const invocation = process.argv.slice(2).join(' ') || '<bare>';
+    recordCommand(invocation);
+    if (!process.argv[2]) {
+      emitTelemetry('bare_invocation');
+    } else if (['--help', '-h', 'help', '--version', '-v'].includes(process.argv[2])) {
+      emitTelemetry('help_shown', { command: process.argv[2] });
+    } else {
+      emitTelemetry('first_command', { command: process.argv[2] });
+    }
+  } catch {
+    /* noop */
+  }
   program.parse(process.argv);
 })();
 
