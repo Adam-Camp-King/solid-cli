@@ -275,6 +275,10 @@ describe('command-kit', () => {
           expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('Refusing to run destructive op'));
         } finally {
           Object.defineProperty(process.stdin, 'isTTY', { value: prev, configurable: true });
+          // Reading process.stdin lazily initializes a TTYWRAP handle that
+          // keeps the Node event loop alive. Unref it so Jest can exit
+          // cleanly — --detectOpenHandles would otherwise flag this.
+          try { process.stdin.unref(); } catch { /* already unref'd */ }
         }
       });
     });
