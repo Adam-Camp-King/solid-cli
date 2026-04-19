@@ -57,8 +57,19 @@ export function getResolvedApiUrl(): string {
   return ENV_API_URL || config.apiUrl;
 }
 
+// How close to expiry (in seconds) we proactively refresh the access token.
+// The refresh token is good for 7 days; the access token for 1 hour. Refreshing
+// slightly before expiry avoids a 401+retry round-trip on every command an AI
+// agent runs in the last minute of a token's life.
+const REFRESH_LEAD_SECONDS = 60;
+
 class ApiClient {
   private client: AxiosInstance;
+
+  // Single-flight refresh: if an AI agent fires N parallel commands after
+  // the token expired, all N interceptors would otherwise race to refresh.
+  // Share one in-flight promise so exactly one /auth/refresh call happens.
+  private refreshInFlight: Promise<boolean> | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -80,7 +91,7 @@ class ApiClient {
      });
 
     // Add auth interceptor + T11.2 dry-run short-circuit
-    this.client.interceptors.request.use((requestConfig) => {
+    this.client.interceptors.request.use(async (requestConfig) => {
       // T11.2 — dry-run: block mutations before they leave the process.
       // The flag is global (set by --dry-run or SOLID_DRY_RUN env var).
       // We signal "intercepted" via a special error shape the response
@@ -95,6 +106,25 @@ class ApiClient {
         (err as any).__solid_dry_run = true;
         (err as any).config = requestConfig;
         throw err;
+      }
+
+      // Proactive refresh — refresh before sending when the cached access
+      // token is within REFRESH_LEAD_SECONDS of expiry. Skipped when using an
+      // override token (--token / env var) or when targeting /auth/login or
+      // /auth/refresh itself (would loop). Best-effort: on failure we fall
+      // through and let the existing 401-retry path surface the error.
+      const isAuthEndpoint =
+        !!requestConfig.url &&
+        (requestConfig.url.includes('/auth/login') || requestConfig.url.includes('/auth/refresh'));
+      const usingCachedSession =
+        !overrideToken && !process.env.SOLID_API_KEY && !process.env.SOLID_TOKEN;
+      if (
+        usingCachedSession &&
+        !isAuthEndpoint &&
+        config.refreshToken &&
+        this.isAccessTokenExpiringSoon()
+      ) {
+        await this.refreshTokenSingleFlight();
       }
 
       // Auth precedence (highest → lowest):
@@ -176,7 +206,7 @@ class ApiClient {
           !originalRequest.url?.includes('/auth/refresh')
         ) {
           originalRequest._retry = true;
-          const refreshed = await this.refreshToken();
+          const refreshed = await this.refreshTokenSingleFlight();
           if (refreshed) {
             return this.client.request(originalRequest);
           }
@@ -186,9 +216,29 @@ class ApiClient {
     );
   }
 
+  // True when the cached access token is missing an expiry (unknown — skip
+  // proactive refresh) or within REFRESH_LEAD_SECONDS of expiring. Exposed
+  // via a method (not an inline expression) so tests can mock `Date.now`.
+  private isAccessTokenExpiringSoon(): boolean {
+    const expiresAt = config.tokenExpiresAt;
+    if (!expiresAt) return false;
+    const msUntilExpiry = expiresAt.getTime() - Date.now();
+    return msUntilExpiry < REFRESH_LEAD_SECONDS * 1000;
+  }
+
+  // Wraps refreshToken() with single-flight semantics: concurrent callers
+  // share one in-flight /auth/refresh call instead of each firing their own.
+  private refreshTokenSingleFlight(): Promise<boolean> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+    this.refreshInFlight = this.refreshToken().finally(() => {
+      this.refreshInFlight = null;
+    });
+    return this.refreshInFlight;
+  }
+
   // Public so `solid auth refresh` can force-rotate on demand.
   async forceRefreshToken(): Promise<boolean> {
-    return this.refreshToken();
+    return this.refreshTokenSingleFlight();
   }
 
   private async refreshToken(): Promise<boolean> {
