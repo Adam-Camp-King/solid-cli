@@ -143,6 +143,7 @@ program
   .option('--format <fmt>', 'Output format for lists: json | csv | tsv (subcommand must support it)')
   .option('--sort-by <field>', 'Sort list output by this field (subcommand must support it)')
   .option('--order <asc|desc>', 'Sort direction — asc (default) or desc')
+  .option('--timeout <seconds>', 'Per-request HTTP timeout in seconds (default: 30)')
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
@@ -174,6 +175,22 @@ if (process.argv.includes('--no-color') || process.env.NO_COLOR) {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const ck = require('./lib/command-kit');
       if (ck && typeof ck.setOutputFile === 'function') ck.setOutputFile(val);
+    }
+  }
+}
+
+// --timeout <seconds> — pre-captured so api-client's interceptor sees it
+// on the first request. Env var SOLID_TIMEOUT_MS is honored directly in
+// the interceptor without needing pre-capture.
+{
+  const i = process.argv.findIndex((a) => a === '--timeout' || a.startsWith('--timeout='));
+  if (i !== -1) {
+    const val = process.argv[i].includes('=') ? process.argv[i].split('=')[1] : process.argv[i + 1];
+    const secs = Number(val);
+    if (Number.isFinite(secs) && secs > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { setOverrideTimeoutMs } = require('./lib/api-client');
+      setOverrideTimeoutMs(secs * 1000);
     }
   }
 }
@@ -432,8 +449,14 @@ program.addHelpText('after', () => {
   return sections.join('\n');
 });
 
-// Parse arguments
-program.parse(process.argv);
+// First-run welcome + identity capture (monetization layer 1).
+// Never blocks CI / non-TTY / SOLID_SKIP_WELCOME=1. Never throws. Fire-and-forget network.
+// Awaited so the prompt renders before the command output begins, then we parse.
+import { runFirstRunIfNeeded } from './lib/first-run';
+(async () => {
+  await runFirstRunIfNeeded(process.argv);
+  program.parse(process.argv);
+})();
 
 // T11.2 — on exit, print a dry-run summary if any mutations were intercepted.
 process.on('beforeExit', () => {
