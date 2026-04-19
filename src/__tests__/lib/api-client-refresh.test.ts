@@ -12,22 +12,34 @@
  * These tests exercise both invariants without real HTTP.
  */
 
-// The config module reads/writes ~/.solid/config.json on import. Stub out
-// the filesystem so tests stay hermetic.
-jest.mock('fs', () => {
-  const actual = jest.requireActual('fs');
+// CRITICAL: Replace the real config module with a fully in-memory stub.
+// The real ConfigManager's setters call save() → fs.writeFileSync(~/.solid/
+// config.json). Earlier versions of this test tried to mock fs instead, but
+// the spread-actual pattern leaked writes to real disk and nuked Adam's
+// login. Mocking the module itself is the only hermetic fix.
+jest.mock('../../lib/config', () => {
+  const state: Record<string, unknown> = {
+    apiUrl: 'https://test-api.solidnumber.com',
+    environment: 'test',
+    accessToken: undefined,
+    refreshToken: undefined,
+    tokenExpiresAt: undefined,
+    userId: undefined,
+    userEmail: undefined,
+    companyId: undefined,
+  };
   return {
-    ...actual,
-    existsSync: jest.fn(() => false),
-    mkdirSync: jest.fn(),
-    writeFileSync: jest.fn(),
-    readFileSync: jest.fn(() => '{}'),
-    chmodSync: jest.fn(),
+    config: new Proxy(state, {
+      get(target, prop: string) {
+        return target[prop];
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }),
   };
 });
-
-// Undo the global setup.ts mock so we get the real config module.
-jest.unmock('../../lib/config');
 
 // axios must be mocked BEFORE api-client is imported, because api-client has
 // a top-level `new ApiClient()` that calls axios.create() at module load.
