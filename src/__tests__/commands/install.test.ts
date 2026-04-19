@@ -1,169 +1,158 @@
 /**
- * `solid install` — SessionStart hook upsert/remove behavior.
+ * `solid install` — SessionStart hook upsert / migrate / remove.
  *
- * The merge must preserve every unrelated key the user already set
- * (attribution, enabledPlugins, voiceEnabled, other SessionStart hooks, etc).
- * We test through mocked fs so there's zero risk of writing to real
- * ~/.claude/settings.json.
- *
- * The fs mock is scoped: only the settings.json path is intercepted. Any
- * other fs read (ui.ts reading package.json at import time, for example)
- * falls through to the real filesystem.
+ * Approach: point the command at a REAL tmp file via SOLID_CLAUDE_SETTINGS_PATH
+ * and assert on its contents. No fs mock, no ordering sensitivity, no leakage
+ * between tests — each test owns its own tmp path. An earlier mock-based
+ * version of these tests flaked intermittently under `npm publish`'s
+ * `prepublishOnly` prepublish hook; this rewrite fixes that for good.
  */
 
-jest.mock('fs', () => {
-  const actualFs = jest.requireActual('fs') as typeof import('fs');
-  return {
-    ...actualFs,
-    existsSync: jest.fn(actualFs.existsSync),
-    readFileSync: jest.fn(actualFs.readFileSync),
-    writeFileSync: jest.fn(),
-    mkdirSync: jest.fn(),
-  };
-});
-
 import * as fs from 'fs';
-import * as installModule from '../../commands/install';
+import * as os from 'os';
+import * as path from 'path';
 
-const mockedFs = fs as jest.Mocked<typeof fs>;
-const actualFs = jest.requireActual('fs') as typeof import('fs');
+import { installCommand } from '../../commands/install';
 
-function stubSettings(json: string): void {
-  mockedFs.readFileSync.mockImplementation(((p: any, opts: any) =>
-    typeof p === 'string' && p.includes('.claude/settings.json')
-      ? json
-      : actualFs.readFileSync(p, opts)) as any);
-}
+const HOOK_CURRENT = 'solid context --claude --raw';
+const HOOK_LEGACY = 'solid context --claude --quiet';
 
-describe('solid install — SessionStart hook', () => {
-  let written: string | null;
+describe('solid install — SessionStart hook (tmp-file backed)', () => {
+  let settingsPath: string;
 
   beforeEach(() => {
-    // Hard reset every test — clear BOTH call history AND implementations
-    // so a stubSettings() call from a prior test can't leak through.
-    // Every test re-establishes existsSync / writeFileSync below and must
-    // call stubSettings() explicitly to control readFileSync.
-    jest.resetAllMocks();
-    written = null;
-    mockedFs.existsSync.mockImplementation(((p: any) =>
-      typeof p === 'string' && p.includes('.claude/settings.json')
-        ? true
-        : actualFs.existsSync(p)) as any);
-    mockedFs.writeFileSync.mockImplementation(((_p: any, contents: any) => {
-      written = typeof contents === 'string' ? contents : contents.toString();
-    }) as any);
-    // Default readFileSync: pass through to real fs. Any test that needs to
-    // control settings.json contents calls stubSettings() before runInstall.
-    mockedFs.readFileSync.mockImplementation(actualFs.readFileSync as any);
+    // Fresh tmp file per test — no reset ceremony, no cross-test leakage.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'solid-install-test-'));
+    settingsPath = path.join(dir, 'settings.json');
+    process.env.SOLID_CLAUDE_SETTINGS_PATH = settingsPath;
   });
 
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => {
+    // Best-effort cleanup. If it fails, the OS will clean /tmp eventually.
+    try {
+      const dir = path.dirname(settingsPath);
+      if (fs.existsSync(settingsPath)) fs.unlinkSync(settingsPath);
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    } catch { /* ignore */ }
+    delete process.env.SOLID_CLAUDE_SETTINGS_PATH;
+  });
 
-  function runInstall(argv: string[]): { exitCode: number | null } {
+  function writeSettings(obj: unknown): void {
+    fs.writeFileSync(settingsPath, typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2));
+  }
+
+  function readSettings(): any {
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+  }
+
+  function run(argv: string[]): { exitCode: number | null } {
     let exitCode: number | null = null;
     const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       exitCode = code ?? 0;
       throw new Error(`process.exit(${code})`);
     }) as never);
     try {
-      installModule.installCommand.parse(['node', 'solid', ...argv], { from: 'user' });
-    } catch {
-      // process.exit throws; swallow and rely on exitCode
-    }
+      installCommand.parse(['node', 'solid', ...argv], { from: 'user' });
+    } catch { /* process.exit throws; swallow */ }
     exitSpy.mockRestore();
     return { exitCode };
   }
 
   it('adds the Solid hook when settings.json has no hooks block', () => {
-    stubSettings(JSON.stringify({ attribution: { commit: '', pr: '' }, voiceEnabled: true }));
+    writeSettings({ attribution: { commit: '', pr: '' }, voiceEnabled: true });
 
-    runInstall(['install']);
+    run(['install']);
 
-    expect(mockedFs.writeFileSync).toHaveBeenCalled();
-    const saved = JSON.parse(written!);
-    expect(saved.attribution).toEqual({ commit: '', pr: '' }); // preserved
-    expect(saved.voiceEnabled).toBe(true); // preserved
+    const saved = readSettings();
+    expect(saved.attribution).toEqual({ commit: '', pr: '' });
+    expect(saved.voiceEnabled).toBe(true);
     expect(saved.hooks.SessionStart).toHaveLength(1);
-    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('solid context --claude --raw');
+    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe(HOOK_CURRENT);
   });
 
   it('is idempotent — running twice does not duplicate the hook', () => {
-    stubSettings(JSON.stringify({
-      hooks: {
-        SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw' }] }],
-      },
-    }));
+    writeSettings({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: HOOK_CURRENT }] }] },
+    });
 
-    runInstall(['install']);
+    run(['install']);
 
-    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+    // File contents unchanged — still exactly one Solid hook entry.
+    const saved = readSettings();
+    expect(saved.hooks.SessionStart).toHaveLength(1);
+    expect(saved.hooks.SessionStart[0].hooks).toHaveLength(1);
   });
 
   it('migrates a legacy --quiet hook to the new --raw command', () => {
-    stubSettings(JSON.stringify({
-      hooks: {
-        SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --quiet' }] }],
-      },
-    }));
+    writeSettings({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: HOOK_LEGACY }] }] },
+    });
 
-    runInstall(['install']);
+    run(['install']);
 
-    const saved = JSON.parse(written!);
+    const saved = readSettings();
     expect(saved.hooks.SessionStart).toHaveLength(1);
-    expect(saved.hooks.SessionStart[0].hooks).toHaveLength(1);
-    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('solid context --claude --raw');
+    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe(HOOK_CURRENT);
   });
 
   it('preserves other SessionStart hooks when adding ours', () => {
-    stubSettings(JSON.stringify({
-      hooks: {
-        SessionStart: [{ hooks: [{ type: 'command', command: 'echo "hello"' }] }],
-      },
-    }));
+    writeSettings({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo "hello"' }] }] },
+    });
 
-    runInstall(['install']);
+    run(['install']);
 
-    const saved = JSON.parse(written!);
+    const saved = readSettings();
     expect(saved.hooks.SessionStart).toHaveLength(2);
     expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('echo "hello"');
-    expect(saved.hooks.SessionStart[1].hooks[0].command).toBe('solid context --claude --raw');
+    expect(saved.hooks.SessionStart[1].hooks[0].command).toBe(HOOK_CURRENT);
   });
 
   it('--uninstall removes only the Solid hook', () => {
-    stubSettings(JSON.stringify({
+    writeSettings({
       voiceEnabled: true,
       hooks: {
         SessionStart: [
           { hooks: [{ type: 'command', command: 'echo "hello"' }] },
-          { hooks: [{ type: 'command', command: 'solid context --claude --raw' }] },
+          { hooks: [{ type: 'command', command: HOOK_CURRENT }] },
         ],
       },
-    }));
+    });
 
-    runInstall(['install', '--uninstall']);
+    run(['install', '--uninstall']);
 
-    const saved = JSON.parse(written!);
+    const saved = readSettings();
     expect(saved.voiceEnabled).toBe(true);
     expect(saved.hooks.SessionStart).toHaveLength(1);
     expect(saved.hooks.SessionStart[0].hooks[0].command).toBe('echo "hello"');
   });
 
   it('--uninstall with no Solid hook is a clean no-op', () => {
-    stubSettings(JSON.stringify({ voiceEnabled: true }));
-    runInstall(['install', '--uninstall']);
-    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+    const original = { voiceEnabled: true };
+    writeSettings(original);
+
+    run(['install', '--uninstall']);
+
+    // File unchanged.
+    expect(readSettings()).toEqual(original);
   });
 
   it('--preview never writes, even when changes are pending', () => {
-    stubSettings(JSON.stringify({ voiceEnabled: true }));
-    runInstall(['install', '--preview']);
-    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+    const original = { voiceEnabled: true };
+    writeSettings(original);
+
+    run(['install', '--preview']);
+
+    expect(readSettings()).toEqual(original);
   });
 
   it('corrupt settings.json exits non-zero instead of clobbering', () => {
-    stubSettings('{ not valid json');
-    const { exitCode } = runInstall(['install']);
+    writeSettings('{ not valid json');
+
+    const { exitCode } = run(['install']);
+
     expect(exitCode).toBe(1);
-    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+    // Original corrupt content is untouched.
+    expect(fs.readFileSync(settingsPath, 'utf-8')).toBe('{ not valid json');
   });
 });

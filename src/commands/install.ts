@@ -20,7 +20,13 @@ import * as path from 'path';
 
 import { ui } from '../lib/ui';
 
-const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+// Resolves the Claude Code settings.json path. Honors
+// SOLID_CLAUDE_SETTINGS_PATH so tests can point us at a tmp file — makes
+// install tests hermetic without fragile fs module mocks.
+function claudeSettingsPath(): string {
+  return process.env.SOLID_CLAUDE_SETTINGS_PATH
+    || path.join(os.homedir(), '.claude', 'settings.json');
+}
 // The command Claude Code runs before every session. `--quiet` keeps the hook
 // silent on success; failures still print so the user sees what's up.
 const HOOK_COMMAND = 'solid context --claude --raw';
@@ -29,9 +35,9 @@ type HookEntry = { type: 'command'; command: string };
 type HookGroup = { hooks: HookEntry[] };
 
 function loadSettings(): Record<string, unknown> {
-  if (!fs.existsSync(CLAUDE_SETTINGS_PATH)) return {};
+  if (!fs.existsSync(claudeSettingsPath())) return {};
   try {
-    return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf-8'));
+    return JSON.parse(fs.readFileSync(claudeSettingsPath(), 'utf-8'));
   } catch (err) {
     // Corrupt JSON — refuse to clobber. User has to fix it first.
     throw new Error(`~/.claude/settings.json is not valid JSON (${(err as Error).message}). Fix the file and re-run.`);
@@ -39,9 +45,9 @@ function loadSettings(): Record<string, unknown> {
 }
 
 function saveSettings(obj: Record<string, unknown>): void {
-  const dir = path.dirname(CLAUDE_SETTINGS_PATH);
+  const dir = path.dirname(claudeSettingsPath());
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(obj, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(claudeSettingsPath(), JSON.stringify(obj, null, 2) + '\n', 'utf-8');
 }
 
 // Older installs wrote a broken command ("--quiet" is not a valid flag on
