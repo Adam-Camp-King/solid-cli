@@ -73,6 +73,7 @@ import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
 import { aiCommand } from './commands/ai';
 import { installCommand } from './commands/install';
+import { PERSONA_ORDER, PERSONA_TITLES, personaFor, type Persona } from './lib/persona-groups';
 import { analyticsCommand } from './commands/analytics';
 import { seoCommand } from './commands/seo';
 import { insightsCommand } from './commands/insights';
@@ -152,6 +153,79 @@ program
   .configureHelp({
     sortSubcommands: false,
     sortOptions: false,
+    // Custom command list: group by persona (common / customer / developer
+    // / agency) instead of rendering 91 verbs as a flat alphabetical wall.
+    // Every command is still shown — the backend is the authority on what
+    // a given token can actually run. This is pure UX organization.
+    formatHelp: (cmd, helper) => {
+      const termWidth = helper.padWidth(cmd, helper);
+      const itemIndentWidth = 2;
+      const itemSeparatorWidth = 2;
+
+      // Re-use commander's own helpers for usage/description/options so
+      // we don't drift from its look when they upgrade the package.
+      const usage = helper.commandUsage(cmd);
+      const description = helper.commandDescription(cmd);
+
+      let output: string[] = [`Usage: ${usage}`];
+      if (description) output.push('', description);
+
+      const argumentList = helper
+        .visibleArguments(cmd)
+        .map((argument) => {
+          const term = helper.argumentTerm(argument);
+          const desc = helper.argumentDescription(argument);
+          return formatItem(term, desc, termWidth, helper);
+        });
+      if (argumentList.length) output.push('', 'Arguments:', ...argumentList);
+
+      const optionList = helper
+        .visibleOptions(cmd)
+        .map((option) => {
+          const term = helper.optionTerm(option);
+          const desc = helper.optionDescription(option);
+          return formatItem(term, desc, termWidth, helper);
+        });
+      if (optionList.length) output.push('', 'Options:', ...optionList);
+
+      // --- Grouped command listing -----------------------------------
+      const commands = helper.visibleCommands(cmd);
+      if (commands.length) {
+        const groups: Record<Persona, typeof commands> = {
+          common: [],
+          customer: [],
+          developer: [],
+          agency: [],
+        };
+        for (const sub of commands) {
+          groups[personaFor(sub.name())].push(sub);
+        }
+
+        output.push('', 'Commands:');
+        for (const persona of PERSONA_ORDER) {
+          const list = groups[persona];
+          if (!list.length) continue;
+          output.push(`  ── ${PERSONA_TITLES[persona]} ───────────────────────────────────`);
+          for (const sub of list) {
+            const term = helper.subcommandTerm(sub);
+            const desc = helper.subcommandDescription(sub);
+            output.push(formatItem(term, desc, termWidth, helper));
+          }
+          output.push('');
+        }
+      }
+
+      return output.join('\n');
+
+      function formatItem(term: string, description: string, padWidth: number, h: typeof helper): string {
+        const indent = ' '.repeat(itemIndentWidth);
+        if (description) {
+          const fullText = `${term.padEnd(padWidth + itemSeparatorWidth)}${description}`;
+          return indent + h.wrap(fullText, h.helpWidth ?? 80, padWidth + itemSeparatorWidth + itemIndentWidth);
+        }
+        return indent + term;
+      }
+    },
   });
 
 // Honor --no-color / NO_COLOR by disabling chalk globally BEFORE any

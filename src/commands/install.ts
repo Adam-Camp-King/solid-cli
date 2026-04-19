@@ -138,7 +138,13 @@ export const installCommand = new Command('install')
         return;
       }
 
+      // Every terminal-facing outcome below gets the branded banner so
+      // install feels like a first-class "welcome" moment — same tier as
+      // the login arrival screen, not a plain box.
+      const brand = ui.banner();
+
       if (!changed) {
+        console.log(brand);
         if (options.uninstall) {
           console.log(ui.infoBox('Nothing to do', [
             `${chalk.dim('No Solid hook found in')} ~/.claude/settings.json`,
@@ -147,7 +153,7 @@ export const installCommand = new Command('install')
           console.log(ui.successBox('Already installed', [
             `${chalk.dim('Solid hook is already in')} ~/.claude/settings.json`,
             '',
-            `${chalk.dim('Verify with:')} ${chalk.cyan('solid install --dry-run')}`,
+            `${chalk.dim('Verify with:')} ${chalk.cyan('solid install --preview')}`,
           ]));
         }
         return;
@@ -156,6 +162,7 @@ export const installCommand = new Command('install')
       saveSettings(settings);
 
       if (options.uninstall) {
+        console.log(brand);
         console.log(ui.successBox('Uninstalled', [
           `${chalk.dim('Removed Solid SessionStart hook from')} ~/.claude/settings.json`,
           `${chalk.dim('Claude Code will no longer auto-refresh .claude/CLAUDE.md.')}`,
@@ -163,6 +170,7 @@ export const installCommand = new Command('install')
         return;
       }
 
+      console.log(brand);
       console.log(ui.successBox('Installed', [
         `${chalk.bold('Wired Claude Code to auto-load Solid context.')}`,
         '',
