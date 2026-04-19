@@ -32,7 +32,7 @@ interface ProbeResult {
   detail?: string;
 }
 
-interface Probe {
+export interface Probe {
   name: string;
   path: string;
   params?: Record<string, unknown>;
@@ -72,7 +72,8 @@ const EXTENDED_BATTERY: Probe[] = [
   { name: 'subscriptions', path: '/api/v1/subscriptions', params: { limit: 1 }, tolerate403: true, tolerate404: true },
 ];
 
-async function runProbe(probe: Probe): Promise<ProbeResult> {
+// Exported so tests can exercise the probe logic without touching commander.
+export async function runProbe(probe: Probe): Promise<ProbeResult> {
   const t0 = Date.now();
   try {
     const res = await apiClient.get(probe.path, probe.params ? { params: probe.params } : undefined);
