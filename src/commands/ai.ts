@@ -88,6 +88,7 @@ export const aiCommand = new Command('ai')
   .option('--no-context', 'Skip the context refresh — just launch the AI')
   .option('--company <id>', 'Use a specific company for this session (overrides cached)')
   .option('--mode <mode>', 'Cap the AI to a role: customer | developer | agency | full (default: full)')
+  .option('--sandbox', 'Safe-preview mode: every mutation is intercepted (dry-run). The AI sees what would happen without making changes.')
   .action(async (options) => {
     // 1. Auth guard
     if (!config.isLoggedIn()) {
@@ -140,6 +141,18 @@ export const aiCommand = new Command('ai')
     process.env.SOLID_AGENT_MODE = mode;
     if (config.userEmail) process.env.SOLID_HUMAN_INITIATOR = config.userEmail;
 
+    // Sandbox mode: flip the existing CLI-wide dry-run switch. Every
+    // mutation the AI attempts gets intercepted at the api-client layer
+    // and returned as a synthetic success — no real writes, no real
+    // charges, no real deletes. The AI's reasoning still works because
+    // it sees a "would have worked" response shape. Human re-runs without
+    // --sandbox to actually apply. This is the "world class" safety net
+    // promised in the Five Builds — #2 sandbox.
+    if (options.sandbox) {
+      process.env.SOLID_DRY_RUN = '1';
+      process.env.SOLID_AGENT_SANDBOX = '1';
+    }
+
     // 6. Arrival: one clean line so the user (and any AI tail-ing) knows
     // exactly what's happening before the terminal hands off.
     const tool = kind === 'claude' ? 'Claude Code' : kind === 'cursor' ? 'Cursor' : 'Codex';
@@ -147,6 +160,9 @@ export const aiCommand = new Command('ai')
     console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);
     if (mode !== 'full') {
       console.log(`  ${chalk.dim('Mode:')} ${chalk.yellow(modeDescriptor(mode))}`);
+    }
+    if (options.sandbox) {
+      console.log(`  ${chalk.dim('Sandbox:')} ${chalk.hex('#fbbf24')('ON — every mutation intercepted (dry-run). No real writes.')}`);
     }
     console.log('');
 
