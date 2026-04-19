@@ -14,7 +14,7 @@ export const supportCommand = new Command('support')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = supportCommand.command('list').description('List support tickets');
+  const listCmd = supportCommand.command('list').alias('ls').description('List support tickets');
   withListFlags(listCmd, '20');
   listCmd.option('--status <status>', 'Filter: open, closed, pending');
   listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {

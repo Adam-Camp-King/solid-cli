@@ -24,7 +24,7 @@ export const siteCommand = new Command('site')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = siteCommand.command('list').description('List all sites for your company');
+  const listCmd = siteCommand.command('list').alias('ls').description('List all sites for your company');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) {

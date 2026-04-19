@@ -174,7 +174,7 @@ storageCommand
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = storageCommand.command('list').description('List documents');
+  const listCmd = storageCommand.command('list').alias('ls').description('List documents');
   withListFlags(listCmd, '100');
   listCmd.option('--folder <id>', 'Filter by folder ID');
   listCmd.action(async (opts: { folder?: string } & import('../lib/command-kit').ListFlags) => {
@@ -292,7 +292,7 @@ storageCommand
 const foldersCmd = new Command('folders').description('Folder hierarchy');
 
 foldersCmd
-  .command('list')
+  .command('list').alias('ls')
   .description('List folders')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {

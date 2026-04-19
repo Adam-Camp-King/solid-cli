@@ -24,7 +24,7 @@ export const landingCommand = new Command('landing')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = landingCommand.command('list').description('List landing pages');
+  const listCmd = landingCommand.command('list').alias('ls').description('List landing pages');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     const { runListCommand } = await import('../lib/command-kit');

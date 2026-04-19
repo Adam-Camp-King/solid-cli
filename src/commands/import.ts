@@ -562,3 +562,16 @@ export const importCommand = new Command('import')
     console.log(chalk.dim(`  solid open ${slug}      Edit in web builder`));
     console.log(chalk.dim(`  solid push             Push to production`));
   });
+
+importCommand.addHelpText('after', `
+Examples:
+  $ solid import                                   # Interactive (pick source)
+  $ solid import --source squarespace --url https://example.com
+  $ solid import --source wordpress --file ./export.xml
+  $ solid import --source csv ./leads.csv --as contacts
+
+For domain-specific bulk imports, prefer:
+  solid crm contacts import ./leads.csv
+  solid orders import ./sales.csv
+  solid kb add --file ./docs.md
+`);

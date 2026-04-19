@@ -67,7 +67,7 @@ export const reportsCommand = new Command('reports')
   .description('Business reports & analytics');
 
 reportsCommand
-  .command('list')
+  .command('list').alias('ls')
   .description('List available report types')
   .option('--json', 'Output as JSON')
   .action(async (options) => {

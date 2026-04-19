@@ -180,7 +180,7 @@ const emailCmd = inboxCommand
   .description('Email management');
 
 emailCmd
-  .command('list')
+  .command('list').alias('ls')
   .description('List emails')
   .option('--direction <dir>', 'Filter: inbound or outbound')
   .option('--limit <n>', 'Number of emails', '20')

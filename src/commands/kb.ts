@@ -17,7 +17,7 @@ export const kbCommand = new Command('kb')
 
 // List KB entries
 kbCommand
-  .command('list')
+  .command('list').alias('ls')
   .description('List knowledge base entries')
   .option('-q, --query <query>', 'Search query', '*')
   .option('-l, --limit <limit>', 'Page size', '20')
@@ -204,3 +204,17 @@ kbCommand
       process.exit(1);
     }
   });
+
+kbCommand.addHelpText('after', `
+Examples:
+  $ solid kb list                                  # Paginated
+  $ solid kb list --all --format csv > kb.csv      # Export everything
+  $ solid kb search "refund policy"                # Semantic search
+  $ solid kb add --title "Hours" --content "Mon-Fri 9-5"
+  $ solid kb add --file ./docs/pricing.md          # Ingest a markdown file
+  $ solid kb delete <id>
+
+Embeddings are generated server-side on write. Deleting removes the entry
+and its embedding. Drift from CompanyKB is expected — use \`solid context\`
+to fuse SKB + KB for AI consumers.
+`);

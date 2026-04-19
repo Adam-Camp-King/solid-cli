@@ -23,7 +23,7 @@ export const chainsCommand = new Command('chains')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = chainsCommand.command('list').description('List chains');
+  const listCmd = chainsCommand.command('list').alias('ls').description('List chains');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     const { runListCommand } = await import('../lib/command-kit');

@@ -41,7 +41,7 @@ export const insightsCommand = new Command('insights')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = insightsCommand.command('list').description('List pending conversation insights');
+  const listCmd = insightsCommand.command('list').alias('ls').description('List pending conversation insights');
   withListFlags(listCmd);
   listCmd.action(async (options: import('../lib/command-kit').ListFlags) => {
     const { runListCommand } = await import('../lib/command-kit');

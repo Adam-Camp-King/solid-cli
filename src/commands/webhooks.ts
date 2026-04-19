@@ -14,7 +14,7 @@ export const webhooksCommand = new Command('webhooks')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = webhooksCommand.command('list').description('List configured webhooks');
+  const listCmd = webhooksCommand.command('list').alias('ls').description('List configured webhooks');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
@@ -185,3 +185,16 @@ webhooksCommand.command('events').description('List all available webhook event 
     console.log(chalk.dim('  Simulate: solid webhooks simulate <event>'));
     console.log('');
   });
+
+webhooksCommand.addHelpText('after', `
+Examples:
+  $ solid webhooks list                            # All configured webhooks
+  $ solid webhooks create --url https://me.ngrok.app/hook --event order.created
+  $ solid webhooks listen                          # Local tunnel: stream events to your laptop
+  $ solid webhooks test <id>                        # Fire a sample payload
+  $ solid webhooks simulate order.created          # Offline event preview (no network)
+  $ solid webhooks delete <id>
+
+\`listen\` uses an authenticated tunnel keyed to your company_id. Events are
+scoped to your tenant only.
+`);

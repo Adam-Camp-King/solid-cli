@@ -24,7 +24,7 @@ export const paymentLinksCommand = new Command('payment-links')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = paymentLinksCommand.command('list').description('List payment links');
+  const listCmd = paymentLinksCommand.command('list').alias('ls').description('List payment links');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();

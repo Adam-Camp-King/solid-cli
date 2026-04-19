@@ -11,7 +11,7 @@ export const notificationsCommand = new Command('notifications')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = notificationsCommand.command('list').description('List recent notifications');
+  const listCmd = notificationsCommand.command('list').alias('ls').description('List recent notifications');
   withListFlags(listCmd, '20');
   listCmd.option('--unread', 'Only unread');
   listCmd.action(async (opts: { unread?: boolean } & import('../lib/command-kit').ListFlags) => {

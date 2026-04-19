@@ -39,7 +39,7 @@ export const draftsCommand = new Command('drafts')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = draftsCommand.command('list').description('List pages with a pending draft awaiting publish');
+  const listCmd = draftsCommand.command('list').alias('ls').description('List pages with a pending draft awaiting publish');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();

@@ -24,7 +24,7 @@ export const dropletCommand = new Command('droplet')
 // List all managed droplets — full scripting contract
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = dropletCommand.command('list').description('List all managed customer droplets');
+  const listCmd = dropletCommand.command('list').alias('ls').description('List all managed customer droplets');
   withListFlags(listCmd);
   listCmd.option('--status <status>', 'Filter by status (active, inactive, maintenance)');
   listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {

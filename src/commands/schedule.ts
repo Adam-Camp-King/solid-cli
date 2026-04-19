@@ -17,7 +17,7 @@ export const scheduleCommand = new Command('schedule')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = scheduleCommand.command('list').description('List appointments');
+  const listCmd = scheduleCommand.command('list').alias('ls').description('List appointments');
   withListFlags(listCmd, '20');
   listCmd.option('--date <date>', 'Filter by date (YYYY-MM-DD)');
   listCmd.option('--status <status>', 'Filter by status (confirmed, pending, cancelled)');

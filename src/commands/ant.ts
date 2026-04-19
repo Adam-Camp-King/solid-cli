@@ -136,8 +136,7 @@ antCommand
 
 // List imports
 antCommand
-  .command('list')
-  .alias('ls')
+  .command('list').alias('ls')
   .description('List imports')
   .option('-s, --status <status>', 'Filter by status (pending, completed, rolled_back)')
   .option('-l, --limit <number>', 'Number of results', '20')

@@ -16,7 +16,7 @@ export const servicesCommand = new Command('services')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = servicesCommand.command('list').description('List your services');
+  const listCmd = servicesCommand.command('list').alias('ls').description('List your services');
   withListFlags(listCmd);
   listCmd.option('--category <category>', 'Filter by category');
   listCmd.action(async (opts: { category?: string } & import('../lib/command-kit').ListFlags) => {

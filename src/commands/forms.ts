@@ -24,7 +24,7 @@ export const formsCommand = new Command('forms')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = formsCommand.command('list').description('List forms/surveys');
+  const listCmd = formsCommand.command('list').alias('ls').description('List forms/surveys');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     const { runListCommand } = await import('../lib/command-kit');

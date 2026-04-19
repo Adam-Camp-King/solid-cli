@@ -25,7 +25,7 @@ export const inventoryCommand = new Command('inventory')
 // List inventory items — full scripting contract
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = inventoryCommand.command('list').description('List inventory items');
+  const listCmd = inventoryCommand.command('list').alias('ls').description('List inventory items');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     const { runListCommand } = await import('../lib/command-kit');

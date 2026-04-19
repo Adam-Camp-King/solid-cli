@@ -42,7 +42,7 @@ export const inboundCommand = new Command('inbound')
 // ── list ─────────────────────────────────────────────────────────────
 
 inboundCommand
-  .command('list')
+  .command('list').alias('ls')
   .description('List configured inbound webhook endpoints for this company')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {

@@ -80,12 +80,34 @@ const DEFAULT_ORDER_HEADER_MAP: Record<string, string> = {
 };
 
 // Core import — file path in, structured result out. No console side-effects
-// beyond per-row logging the watcher wants. Returns the full summary.
+// beyond per-row progress callbacks. Returns the full summary.
+//
+// Flags worth knowing about:
+//   - `concurrency`: how many POSTs can be in flight at once (default 5).
+//     Keeps small enough to respect backend rate limits but parallel enough
+//     that 1000-row imports don't take 30+ minutes.
+//   - `from`: 1-indexed data row to start from (row 1 is the header, row 2
+//     is the first data record). Lets you resume a failed import.
+//   - `stopOnError`: bail on the first failed row. Default is to continue.
 export async function importOrdersFromCSV(
   absPath: string,
-  opts: { map?: string; dryRun?: boolean; stopOnError?: boolean; onProgress?: (row: number, total: number) => void } = {},
+  opts: {
+    map?: string;
+    dryRun?: boolean;
+    stopOnError?: boolean;
+    concurrency?: number;
+    from?: number;
+    onProgress?: (row: number, total: number) => void;
+  } = {},
 ): Promise<OrderImportResult> {
   const fs = await import('fs');
+  const stat = fs.statSync(absPath);
+  // Memory guardrail: warn (stderr) on files >50 MB so caller knows we're
+  // loading it fully. Streaming parse would need a proper state machine —
+  // not worth the dependency until someone actually hits this.
+  if (stat.size > 50 * 1024 * 1024) {
+    console.error(chalk.yellow(`  ⚠ CSV is ${Math.round(stat.size / 1024 / 1024)} MB. Loading fully into memory.`));
+  }
   const raw = fs.readFileSync(absPath, 'utf-8');
   const rows = parseCSV(raw);
   if (rows.length < 2) throw new Error('CSV needs a header row + at least one data row.');
@@ -101,12 +123,16 @@ export async function importOrdersFromCSV(
   const headerField = header.map((h) => overrides[h.toLowerCase()] ?? DEFAULT_ORDER_HEADER_MAP[h.toLowerCase()] ?? null);
 
   const total = rows.length - 1;
+  const fromRow = Math.max(1, opts.from ?? 1); // 1-indexed over data rows
+  const concurrency = Math.max(1, opts.concurrency ?? 5);
   let created = 0, failed = 0, skipped = 0;
   const results: OrderImportRow[] = [];
+  let aborted = false;
 
-  for (let i = 1; i < rows.length; i++) {
-    if (opts.onProgress) opts.onProgress(i, total);
-
+  // Build the pending work — one unit per data row to import.
+  type Task = { row: number; body: Record<string, unknown> | null; skipReason?: string };
+  const tasks: Task[] = [];
+  for (let i = fromRow; i < rows.length; i++) {
     const body: Record<string, unknown> = {};
     for (let c = 0; c < header.length; c++) {
       const target = headerField[c];
@@ -117,26 +143,48 @@ export async function importOrdersFromCSV(
       else body[target] = val;
     }
     if (!body.customer_email && !body.customer_name) {
-      skipped++;
-      results.push({ row: i + 1, status: 'skipped', error: 'no customer identifier' });
-      continue;
-    }
-    if (opts.dryRun) {
-      results.push({ row: i + 1, status: 'dry-run' });
-      continue;
-    }
-    try {
-      const res = await apiClient.post('/api/v1/orders/', body);
-      const d = res.data as Record<string, unknown>;
-      created++;
-      results.push({ row: i + 1, status: 'created', id: Number(d.id) });
-    } catch (e) {
-      failed++;
-      const msg = handleApiError(e).message;
-      results.push({ row: i + 1, status: 'failed', error: msg });
-      if (opts.stopOnError) break;
+      tasks.push({ row: i + 1, body: null, skipReason: 'no customer identifier' });
+    } else {
+      tasks.push({ row: i + 1, body });
     }
   }
+
+  // Dispatch with a simple async pool. Ordered results via row index.
+  let cursor = 0;
+  async function worker() {
+    while (!aborted) {
+      const idx = cursor++;
+      if (idx >= tasks.length) return;
+      const t = tasks[idx];
+      if (opts.onProgress) opts.onProgress(idx + 1, tasks.length);
+
+      if (t.body === null) {
+        skipped++;
+        results.push({ row: t.row, status: 'skipped', error: t.skipReason });
+        continue;
+      }
+      if (opts.dryRun) {
+        results.push({ row: t.row, status: 'dry-run' });
+        continue;
+      }
+      try {
+        const res = await apiClient.post('/api/v1/orders/', t.body);
+        const d = res.data as Record<string, unknown>;
+        created++;
+        results.push({ row: t.row, status: 'created', id: Number(d.id) });
+      } catch (e) {
+        failed++;
+        const msg = handleApiError(e).message;
+        results.push({ row: t.row, status: 'failed', error: msg });
+        if (opts.stopOnError) aborted = true;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  // Ensure output is in original row order (workers race)
+  results.sort((a, b) => a.row - b.row);
 
   return { total, created, failed, skipped, dry_run: Boolean(opts.dryRun), results };
 }
@@ -147,8 +195,10 @@ ordersCommand
   .option('--map <pairs>', 'Header→field overrides, e.g. "Customer=customer_email,Qty=quantity"')
   .option('--preview', 'Parse + preview without creating anything (alias for --dry-run)')
   .option('--stop-on-error', 'Abort on the first failed row (default: continue)')
+  .option('--concurrency <n>', 'Parallel POSTs in flight at once (default: 5)', '5')
+  .option('--from <row>', 'Resume at this 1-indexed data row (row 1 = first after header)')
   .option('--json', 'Per-row result JSON plus summary')
-  .action(async (file: string, opts: { map?: string; preview?: boolean; stopOnError?: boolean; json?: boolean }) => {
+  .action(async (file: string, opts: { map?: string; preview?: boolean; stopOnError?: boolean; concurrency: string; from?: string; json?: boolean }) => {
     requireAuth();
     const fs = await import('fs');
     const path = await import('path');
@@ -168,6 +218,8 @@ ordersCommand
         map: opts.map,
         dryRun: isPreview,
         stopOnError: opts.stopOnError,
+        concurrency: Math.max(1, parseInt(opts.concurrency, 10)),
+        from: opts.from ? parseInt(opts.from, 10) : undefined,
         onProgress: (i, total) => { spinner.text = `Importing ${total} orders... (${i}/${total})`; },
       });
     } catch (e) {
@@ -225,6 +277,11 @@ ordersCommand
     console.error(chalk.dim('  Press Ctrl+C to stop.'));
     console.error('');
 
+    // Track size + mtime across scans so we only process files whose bytes
+    // stopped changing for one interval — prevents grabbing a half-written
+    // CSV that another process is still streaming into.
+    const pending = new Map<string, { size: number; mtime: number }>();
+
     const scan = async () => {
       const entries = fs.readdirSync(abs);
       for (const name of entries) {
@@ -233,6 +290,16 @@ ordersCommand
         if (seen.has(full)) continue;
         const stat = fs.statSync(full);
         if (!stat.isFile()) continue;
+
+        // Stability gate: require two consecutive scans with the same size
+        // and mtime before treating the file as done-being-written.
+        const prev = pending.get(full);
+        const sig = { size: stat.size, mtime: stat.mtimeMs };
+        if (!prev || prev.size !== sig.size || prev.mtime !== sig.mtime) {
+          pending.set(full, sig);
+          continue;
+        }
+        pending.delete(full);
         seen.add(full);
 
         const ts = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
@@ -261,7 +328,7 @@ ordersCommand
 // List orders — full scripting contract (withListFlags + runListCommand)
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = ordersCommand.command('list').description('List orders');
+  const listCmd = ordersCommand.command('list').alias('ls').description('List orders');
   withListFlags(listCmd, '100');
   listCmd.option('--status <status>', 'Filter by status');
   listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {
@@ -429,3 +496,19 @@ ordersCommand
       spinner.succeed(chalk.green(`Sale recorded: order ${o.order_id || o.id}`));
     } catch (e) { fail(spinner, 'Failed to record sale', e); }
   });
+
+ordersCommand.addHelpText('after', `
+Examples:
+  $ solid orders list                              # First page
+  $ solid orders list --all --json                 # All orders, one JSON array
+  $ solid orders list --status paid --limit 50     # Filter + paginate
+  $ solid orders get 1234                          # Detail view
+  $ solid orders import ./sales.csv --preview      # Dry-run a bulk CSV import
+  $ solid orders import ./sales.csv --concurrency 5
+  $ solid orders import ./sales.csv --from 200     # Resume after row 200
+  $ solid orders watch ./inbox/                    # Auto-import files dropped in a folder
+
+CSV columns (flexible; map with --map=src:dest): customer_email, amount,
+status, external_id. Unknown columns are forwarded as metadata. Empty files
+and malformed rows are reported, not retried silently.
+`);

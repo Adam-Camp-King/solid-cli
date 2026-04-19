@@ -180,7 +180,7 @@ demoCommand
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = demoCommand.command('list').description('List all companies (find your demos)');
+  const listCmd = demoCommand.command('list').alias('ls').description('List all companies (find your demos)');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     if (!config.isLoggedIn()) {

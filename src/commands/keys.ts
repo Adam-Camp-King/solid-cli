@@ -30,7 +30,7 @@ export const keysCommand = new Command('keys')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = keysCommand.command('list').description('List API keys for the current company');
+  const listCmd = keysCommand.command('list').alias('ls').description('List API keys for the current company');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();

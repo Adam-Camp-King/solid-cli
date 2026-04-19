@@ -3,8 +3,21 @@
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 import { config } from './config';
 import { isDryRun, makeDryRunResult } from './dry-run';
+import { checkSkewFromHeaders } from './version-skew';
+
+// Resolve our package version once. Used for the X-Solid-CLI-Version header
+// on every outbound request so the backend can log/compare CLI clients.
+let CLI_VERSION = '0.0.0';
+try {
+  const pkgPath = path.join(__dirname, '..', '..', 'package.json');
+  CLI_VERSION = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || '0.0.0';
+} catch {
+  // leave as 0.0.0 — version-skew is best-effort, never fatal
+}
 
 interface ApiResponse<T = unknown> {
   data: T;
@@ -31,17 +44,40 @@ export function hasOverrideToken(): boolean {
   return overrideToken !== null;
 }
 
+// Global timeout override (ms). Set by `--timeout <seconds>` or
+// SOLID_TIMEOUT_MS. Applied per-request by the interceptor so existing
+// AxiosInstance timeout stays at the default.
+let overrideTimeoutMs: number | null = null;
+export function setOverrideTimeoutMs(ms: number | null): void { overrideTimeoutMs = ms; }
+
+// Global API URL override (for sandbox/local testing without touching
+// ~/.solid/config.json). Set via SOLID_API_URL env var at boot.
+const ENV_API_URL = process.env.SOLID_API_URL || null;
+export function getResolvedApiUrl(): string {
+  return ENV_API_URL || config.apiUrl;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
-      baseURL: config.apiUrl,
+      baseURL: ENV_API_URL || config.apiUrl,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
+
+    // Apply per-request timeout override (from --timeout flag or
+     // SOLID_TIMEOUT_MS env) before anything else. Leaves the default
+     // 30 s in place when no override is set.
+     this.client.interceptors.request.use((requestConfig) => {
+       const envTimeout = Number(process.env.SOLID_TIMEOUT_MS);
+       const ms = overrideTimeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : null);
+       if (ms !== null) requestConfig.timeout = ms;
+       return requestConfig;
+     });
 
     // Add auth interceptor + T11.2 dry-run short-circuit
     this.client.interceptors.request.use((requestConfig) => {
@@ -77,13 +113,25 @@ class ApiClient {
       if (companyId) {
         requestConfig.headers['X-Company-ID'] = companyId.toString();
       }
+      // Advertise which CLI version is talking to the backend. The server
+      // may return X-Solid-Min-CLI-Version / X-Solid-Latest-CLI-Version in
+      // response headers to trigger the skew warning.
+      requestConfig.headers['X-Solid-CLI-Version'] = CLI_VERSION;
+      requestConfig.headers['User-Agent'] = `solid-cli/${CLI_VERSION} node/${process.version.slice(1)}`;
       return requestConfig;
     });
 
     // Add response interceptor — retry once on 401 with token refresh,
     // and synthesize a success response for dry-run-intercepted requests.
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // Version-skew: check once per process from response headers.
+        // No-op until the backend opts in by setting these headers.
+        try { checkSkewFromHeaders(CLI_VERSION, response.headers as Record<string, unknown>); } catch {
+          // Skew warnings are best-effort; never break a real response.
+        }
+        return response;
+      },
       async (error: AxiosError & { __solid_dry_run?: true }) => {
         // Dry-run synthetic response — the mutation never left the process.
         if ((error as any).__solid_dry_run) {
@@ -99,7 +147,26 @@ class ApiClient {
             config: cfg,
           } as any;
         }
-        const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean };
+        const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean; _retry429?: number };
+
+        // Retry on 429 (rate limit) with exponential backoff + Retry-After.
+        // Cap at 3 attempts total (2 retries) to avoid runaway loops.
+        if (
+          error.response?.status === 429 &&
+          originalRequest &&
+          (originalRequest._retry429 ?? 0) < 2
+        ) {
+          originalRequest._retry429 = (originalRequest._retry429 ?? 0) + 1;
+          const retryAfter = Number(error.response.headers?.['retry-after']);
+          // Retry-After is either seconds (integer) or an HTTP-date. We only
+          // handle the seconds form — the date form is rare in practice.
+          const headerDelay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : null;
+          // Exponential backoff: 1s, 2s. Capped by header if present.
+          const backoffMs = Math.min(headerDelay ?? Infinity, 1000 * 2 ** (originalRequest._retry429 - 1));
+          await new Promise((r) => setTimeout(r, backoffMs));
+          return this.client.request(originalRequest);
+        }
+
         // Only attempt refresh if: 401, not already retried, not a login/refresh request itself
         if (
           error.response?.status === 401 &&

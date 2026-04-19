@@ -179,7 +179,7 @@ ecommerceCommand.addCommand(cartsCmd);
 const ordersCmd = new Command('orders').description('Storefront orders');
 
 ordersCmd
-  .command('list')
+  .command('list').alias('ls')
   .description('List storefront orders')
   .option('-l, --limit <n>', 'Page size', '50')
   .option('--offset <n>', 'Pagination offset', '0')
@@ -582,7 +582,7 @@ ecommerceCommand.addCommand(shippingCmd);
 const reviewsCmd = new Command('reviews').description('Product reviews');
 
 reviewsCmd
-  .command('list')
+  .command('list').alias('ls')
   .description('List reviews (optionally filtered)')
   .option('--product <id>', 'Filter by product ID')
   .option('--status <status>', 'pending | approved | rejected')
@@ -679,7 +679,7 @@ ecommerceCommand.addCommand(reviewsCmd);
 const abandonedCmd = new Command('abandoned').description('Abandoned carts');
 
 abandonedCmd
-  .command('list')
+  .command('list').alias('ls')
   .description('List abandoned carts')
   .option('-l, --limit <n>', 'Limit', '50')
   .option('--json', 'Output as JSON')

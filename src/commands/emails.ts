@@ -29,7 +29,7 @@ const addrCmd = new Command('addresses').alias('addr').description('Manage compa
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = addrCmd.command('list').description('List company email addresses');
+  const listCmd = addrCmd.command('list').alias('ls').description('List company email addresses');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     const { runListCommand } = await import('../lib/command-kit');

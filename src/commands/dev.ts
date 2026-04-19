@@ -84,7 +84,7 @@ moduleCmd
 // ─── list ────────────────────────────────────────────────────────────
 
 moduleCmd
-  .command('list')
+  .command('list').alias('ls')
   .description('List custom modules for the authenticated company')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {

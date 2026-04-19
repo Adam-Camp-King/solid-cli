@@ -95,7 +95,7 @@ export const agentCommand = new Command('agent')
 // ── list ──────────────────────────────────────────────────────────────
 
 agentCommand
-  .command('list')
+  .command('list').alias('ls')
   .description('List all agents with status')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {

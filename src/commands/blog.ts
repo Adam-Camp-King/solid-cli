@@ -29,7 +29,7 @@ export const blogCommand = new Command('blog')
 // List blog posts — full scripting contract
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = blogCommand.command('list').description('List blog posts');
+  const listCmd = blogCommand.command('list').alias('ls').description('List blog posts');
   withListFlags(listCmd, '20');
   listCmd.option('--status <status>', 'Filter by status (published, draft)');
   listCmd.action(async (opts: { status?: string } & import('../lib/command-kit').ListFlags) => {

@@ -29,7 +29,7 @@ export const usersCommand = new Command('users')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = usersCommand.command('list').description('List users (defaults to all roles)');
+  const listCmd = usersCommand.command('list').alias('ls').description('List users (defaults to all roles)');
   withListFlags(listCmd);
   listCmd.option('--role <role>', 'Filter by role');
   listCmd.action(async (opts: { role?: string } & import('../lib/command-kit').ListFlags) => {

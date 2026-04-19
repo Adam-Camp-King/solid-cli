@@ -27,7 +27,7 @@ export const productsCommand = new Command('products')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = productsCommand.command('list').description('List products');
+  const listCmd = productsCommand.command('list').alias('ls').description('List products');
   withListFlags(listCmd);
   listCmd.option('--type <type>', 'Filter by product_type');
   listCmd.action(async (opts: { type?: string } & import('../lib/command-kit').ListFlags) => {

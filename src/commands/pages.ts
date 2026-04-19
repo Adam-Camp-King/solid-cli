@@ -26,7 +26,7 @@ export const pagesCommand = new Command('pages')
 // List pages — full scripting contract via withListFlags + runListCommand
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = pagesCommand.command('list').description('List CMS pages');
+  const listCmd = pagesCommand.command('list').alias('ls').description('List CMS pages');
   withListFlags(listCmd);
   listCmd.option('--type <type>', 'Filter by page type (website, landing, blog, booking)');
   listCmd.action(async (opts: { type?: string } & import('../lib/command-kit').ListFlags) => {
@@ -463,3 +463,17 @@ pagesCommand
       console.error(chalk.red(`  ${handleApiError(error).message}`));
     }
   });
+
+pagesCommand.addHelpText('after', `
+Examples:
+  $ solid pages list                               # Paginated
+  $ solid pages list --all --json                  # Everything as JSON
+  $ solid pages get home                           # Detail view by slug
+  $ solid pages create --title "About" --slug about
+  $ solid pages publish about                      # Publish a draft
+  $ solid pages unpublish about
+  $ solid pages generate --type website            # AI-generate a full site
+
+Versioning: every publish creates a snapshot. See: solid history pages <slug>
+and solid rollback pages <slug> --version <n>.
+`);

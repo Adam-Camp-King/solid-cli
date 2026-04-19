@@ -20,7 +20,7 @@ export const companyCommand = new Command('company')
 
 // ── List companies ─────────────────────────────────────────────────
 companyCommand
-  .command('list')
+  .command('list').alias('ls')
   .description('List all companies you have access to')
   .option('--json', 'Output as JSON')
   .action(async (options) => {

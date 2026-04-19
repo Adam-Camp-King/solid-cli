@@ -143,8 +143,7 @@ export const apiCommand = new Command('api')
 
 // List all sections
 apiCommand
-  .command('list')
-  .alias('ls')
+  .command('list').alias('ls')
   .description('Browse API endpoint categories')
   .option('--all', 'Show all endpoints expanded')
   .action((options) => {
@@ -272,3 +271,15 @@ apiCommand
       console.error(chalk.red(`  ${apiError.message}`));
     }
   });
+
+apiCommand.addHelpText('after', `
+Examples:
+  $ solid api list                                 # Enumerate endpoints
+  $ solid api docs /api/v1/orders                  # OpenAPI details for one route
+  $ solid api call GET /api/v1/orders              # Raw call (adds auth header)
+  $ solid api call POST /api/v1/kb -d '{"title":"X","content":"Y"}'
+  $ solid api call GET /api/v1/orders?limit=5 --json | jq '.items[].id'
+
+The \`api call\` form is the escape hatch — if a dedicated subcommand doesn't
+exist, hit the endpoint directly. Honors global --token, --timeout, --dry-run.
+`);

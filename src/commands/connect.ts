@@ -570,8 +570,7 @@ connectCommand
 // ── List ──────────────────────────────────────────────────────────────
 
 connectCommand
-  .command('list')
-  .alias('ls')
+  .command('list').alias('ls')
   .description('Show active connections + recent import history')
   .action(async () => {
     requireAuth();

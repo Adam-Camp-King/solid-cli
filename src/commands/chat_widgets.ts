@@ -26,7 +26,7 @@ export const chatWidgetsCommand = new Command('chat-widgets')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = chatWidgetsCommand.command('list').description('List chat widgets');
+  const listCmd = chatWidgetsCommand.command('list').alias('ls').description('List chat widgets');
   withListFlags(listCmd);
   listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
     requireAuth();

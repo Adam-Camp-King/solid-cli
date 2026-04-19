@@ -27,7 +27,7 @@ export const subscriptionsCommand = new Command('subscriptions')
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = subscriptionsCommand.command('list').description('List active subscriptions for a customer (or all)');
+  const listCmd = subscriptionsCommand.command('list').alias('ls').description('List active subscriptions for a customer (or all)');
   withListFlags(listCmd, '50');
   listCmd.option('--customer <id>', 'Filter by customer ID');
   listCmd.option('--status <status>', 'Filter by status (active, cancelled, past_due)');

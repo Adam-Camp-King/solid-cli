@@ -139,19 +139,25 @@ contactsCommand.command('create').description('Create a new contact')
 
 contactsCommand.command('import <file>').description('Import contacts from a CSV (first row is a header)')
   .option('--map <pairs>', 'Header→field overrides, e.g. "Full Name=name,Mobile=phone"')
-  .option('--dry-run', 'Parse + preview without creating anything (server-side --dry-run too)')
+  .option('--preview', 'Parse + preview without creating anything (alias for --dry-run)')
   .option('--stop-on-error', 'Abort on the first failed row (default: continue)')
+  .option('--concurrency <n>', 'Parallel POSTs in flight at once (default: 5)', '5')
+  .option('--from <row>', 'Resume at this 1-indexed data row')
   .option('--json', 'Emit a per-row result JSON instead of summary')
-  .action(async (file: string, opts: { map?: string; dryRun?: boolean; stopOnError?: boolean; json?: boolean }) => {
+  .action(async (file: string, opts: { map?: string; preview?: boolean; stopOnError?: boolean; concurrency: string; from?: string; json?: boolean }) => {
     requireAuth();
     const fs = await import('fs');
     const path = await import('path');
     const abs = path.resolve(file);
     if (!fs.existsSync(abs)) { console.error(chalk.red(`File not found: ${abs}`)); process.exit(2); }
+
+    const stat = fs.statSync(abs);
+    if (stat.size > 50 * 1024 * 1024) {
+      console.error(chalk.yellow(`  ⚠ CSV is ${Math.round(stat.size / 1024 / 1024)} MB. Loading fully into memory.`));
+    }
     const raw = fs.readFileSync(abs, 'utf-8');
 
     // Minimal inline CSV parser — handles quoted fields + escaped quotes.
-    // No new dependency for one small feature.
     function parseCSV(text: string): string[][] {
       const rows: string[][] = [];
       let row: string[] = [];
@@ -174,6 +180,9 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
       if (field !== '' || row.length) { row.push(field); rows.push(row); }
       return rows.filter((r) => r.some((c) => c.trim() !== ''));
     }
+
+    const { isDryRun } = await import('../lib/dry-run');
+    const isPreview = Boolean(opts.preview) || isDryRun();
 
     const rows = parseCSV(raw);
     if (rows.length < 2) { console.error(chalk.red('CSV needs a header row + at least one data row.')); process.exit(2); }
@@ -199,13 +208,17 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
     }
     const headerField = header.map((h) => overrides[h.toLowerCase()] ?? DEFAULT_MAP[h.toLowerCase()] ?? null);
 
+    const fromRow = Math.max(1, opts.from ? parseInt(opts.from, 10) : 1);
+    const concurrency = Math.max(1, parseInt(opts.concurrency, 10));
     const total = rows.length - 1;
     let created = 0, failed = 0, skipped = 0;
     const results: Array<{ row: number; status: 'created' | 'failed' | 'skipped' | 'dry-run'; id?: number; error?: string }> = [];
+    let aborted = false;
 
-    const spinner = ora({ text: `Importing ${total} contacts...`, stream: process.stderr }).start();
-
-    for (let i = 1; i < rows.length; i++) {
+    // Build the task list so workers can pull from a shared cursor.
+    type Task = { row: number; body: Rec | null; skipReason?: string };
+    const tasks: Task[] = [];
+    for (let i = fromRow; i < rows.length; i++) {
       const body: Rec = {};
       for (let c = 0; c < header.length; c++) {
         const target = headerField[c];
@@ -221,38 +234,58 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
         }
       }
       if (!body.first_name && !body.last_name && !body.email && !body.phone) {
-        skipped++;
-        results.push({ row: i + 1, status: 'skipped', error: 'no mappable fields' });
-        continue;
-      }
-      if (opts.dryRun) {
-        results.push({ row: i + 1, status: 'dry-run' });
-        continue;
-      }
-      try {
-        const res = await apiClient.post('/api/v1/crm/contacts', body);
-        const c = res.data as Rec;
-        created++;
-        results.push({ row: i + 1, status: 'created', id: Number(c.id) });
-        spinner.text = `Importing ${total} contacts... (${created + failed + skipped}/${total})`;
-      } catch (e) {
-        failed++;
-        const msg = handleApiError(e).message;
-        results.push({ row: i + 1, status: 'failed', error: msg });
-        if (opts.stopOnError) {
-          spinner.fail(chalk.red(`Aborted on row ${i + 1}: ${msg}`));
-          if (isJsonOutput(opts)) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
-          process.exit(1);
-        }
+        tasks.push({ row: i + 1, body: null, skipReason: 'no mappable fields' });
+      } else {
+        tasks.push({ row: i + 1, body });
       }
     }
 
-    if (opts.dryRun) spinner.succeed(chalk.yellow(`[dry-run] would import ${total - skipped} contacts (${skipped} skipped)`));
+    const spinner = ora({ text: `Importing ${tasks.length} contacts...`, stream: process.stderr }).start();
+
+    let cursor = 0;
+    async function worker() {
+      while (!aborted) {
+        const idx = cursor++;
+        if (idx >= tasks.length) return;
+        const t = tasks[idx];
+        spinner.text = `Importing ${tasks.length} contacts... (${idx + 1}/${tasks.length})`;
+
+        if (t.body === null) {
+          skipped++;
+          results.push({ row: t.row, status: 'skipped', error: t.skipReason });
+          continue;
+        }
+        if (isPreview) {
+          results.push({ row: t.row, status: 'dry-run' });
+          continue;
+        }
+        try {
+          const res = await apiClient.post('/api/v1/crm/contacts', t.body);
+          const c = res.data as Rec;
+          created++;
+          results.push({ row: t.row, status: 'created', id: Number(c.id) });
+        } catch (e) {
+          failed++;
+          const msg = handleApiError(e).message;
+          results.push({ row: t.row, status: 'failed', error: msg });
+          if (opts.stopOnError) {
+            aborted = true;
+            spinner.fail(chalk.red(`Aborted on row ${t.row}: ${msg}`));
+            if (isJsonOutput(opts)) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
+            process.exit(1);
+          }
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    results.sort((a, b) => a.row - b.row);
+
+    if (isPreview) spinner.succeed(chalk.yellow(`[dry-run] would import ${total - skipped} contacts (${skipped} skipped)`));
     else if (failed === 0) spinner.succeed(chalk.green(`Imported ${created} contacts (${skipped} skipped)`));
     else spinner.warn(chalk.yellow(`Imported ${created} / ${total}  (failed: ${failed}, skipped: ${skipped})`));
 
     if (isJsonOutput(opts)) {
-      console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!opts.dryRun }, results }, null, 2));
+      console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!isPreview }, results }, null, 2));
       return;
     }
     if (failed > 0) {
@@ -615,3 +648,16 @@ crmCommand.command('dashboard').description('CRM summary — contacts, deals, re
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed to load dashboard')); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
   });
+
+crmCommand.addHelpText('after', `
+Examples:
+  $ solid crm contacts list                        # Paginated list
+  $ solid crm contacts list --all --format csv     # All rows as CSV (pipe to file)
+  $ solid crm contacts import ./leads.csv --preview
+  $ solid crm deals list --stage qualified
+  $ solid crm tasks list --due today
+  $ solid crm dashboard                            # Pipeline + deal velocity + task load
+
+Every list supports --all (fetch every page), --format json|csv|tsv,
+--sort-by <field>, --order asc|desc, and --output <file>.
+`);

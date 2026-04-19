@@ -576,7 +576,7 @@ function formatTokenTTL(): string | null {
   return `expires in ${mins}m`;
 }
 
-async function runAuthStatus(options: { json?: boolean } = {}): Promise<void> {
+async function runAuthStatus(options: { json?: boolean; features?: boolean } = {}): Promise<void> {
   // Detect --json from any of: local option, root --json, SOLID_JSON env.
   // Detect --output from the root-level global. The prior impl only read
   // options.json and ignored the root + env + output flags — that silently
@@ -611,6 +611,24 @@ async function runAuthStatus(options: { json?: boolean } = {}): Promise<void> {
         }
       } catch {
         payload.authenticated = config.userEmail || config.companyId ? 'offline' : false;
+      }
+    }
+
+    // --features: include the tier's feature allowlist so agents can
+    // check access before running a gated command. Skipped on offline
+    // or unauthenticated sessions.
+    if (options.features && config.companyId && payload.authenticated === true) {
+      try {
+        const fr = await apiClient.get<{ enabled_features: string[]; tier?: string; features_count?: number }>(
+          `/api/v1/companies/${config.companyId}/features`,
+        );
+        payload.features = {
+          tier: fr.data.tier,
+          count: fr.data.features_count,
+          enabled: fr.data.enabled_features,
+        };
+      } catch (err) {
+        payload.features = { error: (err as Error).message };
       }
     }
     const serialized = JSON.stringify(payload, null, 2);
@@ -672,14 +690,20 @@ authCommand
   .command('status')
   .description('Check authentication status')
   .option('--json', 'JSON output')
-  .action(runAuthStatus);
+  .option('--features', 'Include the tier feature allowlist (implies --json)')
+  .action((opts: { json?: boolean; features?: boolean }) =>
+    runAuthStatus({ json: opts.json || opts.features, features: opts.features }),
+  );
 
 // Top-level alias: `solid whoami` → `solid auth status`.
 // Exported so the entrypoint can register it on the root program.
 export const whoamiCommand = new Command('whoami')
   .description('Show who you are logged in as (alias for `solid auth status`)')
   .option('--json', 'JSON output')
-  .action(runAuthStatus);
+  .option('--features', 'Include the tier feature allowlist (implies --json)')
+  .action((opts: { json?: boolean; features?: boolean }) =>
+    runAuthStatus({ json: opts.json || opts.features, features: opts.features }),
+  );
 
 // Token management (API keys for CI/CD, LLM agents, scripts)
 const tokenCommand = authCommand
@@ -731,7 +755,7 @@ tokenCommand
   });
 
 tokenCommand
-  .command('list')
+  .command('list').alias('ls')
   .description('List API keys')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
@@ -851,3 +875,17 @@ authCommand
       }
     }
   });
+
+authCommand.addHelpText('after', `
+Examples:
+  $ solid auth login                       # Browser-based login (preferred)
+  $ solid auth login --token sk_...        # Login with an existing token
+  $ solid whoami                           # Who am I / which company am I in?
+  $ solid whoami --features                # Dump the feature allowlist for this tier
+  $ solid auth config --show                # Print the on-disk config path + token status
+  $ solid auth refresh                      # Rotate the token if near expiry
+  $ solid auth logout --all-devices        # Revoke tokens everywhere
+
+Tip: --token applies per-invocation (never persisted). Use it in CI instead
+of baking a token into ~/.solid/config.
+`);
