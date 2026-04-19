@@ -55,6 +55,26 @@ describe('handleApiError — status-specific hints', () => {
     expect(r.message).toMatch(/whoami --features/);
   });
 
+  it('403 with FEATURE_GATED → structured "tier limit, not a bug" message', () => {
+    // The backend feature-gate middleware emits { code, feature, upgrade_to }
+    // on 403. AI agents parse this to distinguish a tier limit from a bug.
+    const r = handleApiError(mockAxiosError({
+      status: 403,
+      data: {
+        detail: "Feature 'vibe-coding' is not available on your current plan.",
+        code: 'FEATURE_GATED',
+        feature: 'vibe-coding',
+        upgrade_to: 'professional',
+      },
+    }));
+    expect(r.status).toBe(403);
+    expect(r.message).toMatch(/Tier limit/);
+    expect(r.message).toMatch(/vibe-coding/);
+    expect(r.message).toMatch(/professional tier/);
+    expect(r.message).toMatch(/not a bug/);
+    expect(r.message).toMatch(/solid upgrade/);
+  });
+
   it('404 → surfaces method+url', () => {
     const r = handleApiError(mockAxiosError({ status: 404, method: 'POST', url: '/api/v1/orders/999', data: {} }));
     expect(r.message).toMatch(/POST \/api\/v1\/orders\/999/);

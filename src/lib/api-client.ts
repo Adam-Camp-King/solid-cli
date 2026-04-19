@@ -1179,7 +1179,17 @@ export function handleApiError(error: unknown): ApiError {
     return { message: redactSecrets(raw), status: 500 };
   }
 
-  const axiosError = error as AxiosError<{ detail?: unknown; message?: string; error?: string }>;
+  const axiosError = error as AxiosError<{
+    detail?: unknown;
+    message?: string;
+    error?: string;
+    // Backend feature-gate middleware adds these on 403s.
+    // AI agents (Claude, Cursor) rely on them to distinguish a tier limit
+    // from an actual bug — without this, they'll file a "403 Forbidden" issue.
+    code?: string;
+    feature?: string;
+    upgrade_to?: string;
+  }>;
   const status = axiosError.response?.status ?? 0;
   const method = (axiosError.config?.method || 'GET').toUpperCase();
   const url = axiosError.config?.url || '';
@@ -1224,9 +1234,20 @@ export function handleApiError(error: unknown): ApiError {
         : `Not authenticated. Run: solid auth login (or set SOLID_TOKEN)`;
       break;
     case 403:
-      message = serverMessage
-        ? `Forbidden: ${serverMessage}. Check your tier: solid whoami --features`
-        : `Forbidden. Your subscription tier may not include this. Check: solid whoami --features`;
+      // When the backend signals a tier-gate explicitly, emit a structured
+      // message so AI agents (Claude/Cursor) recognize it as an upgrade path,
+      // not an application bug worth filing.
+      if (d?.code === 'FEATURE_GATED' && d?.feature) {
+        const required = d.upgrade_to ? ` (requires ${d.upgrade_to} tier)` : '';
+        message =
+          `Tier limit: the ${d.feature} feature${required} is not on your current plan. ` +
+          `This is a subscription limit, not a bug. ` +
+          `Run: solid whoami --features  ·  Upgrade: solid upgrade`;
+      } else {
+        message = serverMessage
+          ? `Forbidden: ${serverMessage}. Check your tier: solid whoami --features`
+          : `Forbidden. Your subscription tier may not include this. Check: solid whoami --features`;
+      }
       break;
     case 404:
       message = serverMessage
