@@ -67,9 +67,9 @@ const EXTENDED_BATTERY: Probe[] = [
   { name: 'blog',          path: '/api/v1/cms/blog/posts', params: { limit: 1 }, tolerate403: true },
   { name: 'products',      path: '/api/v1/products', params: { limit: 1 }, tolerate403: true },
   { name: 'mcp traffic',   path: '/api/v1/analytics/mcp/traffic', tolerate403: true },
-  { name: 'domains (sub)', path: '/api/v1/domains/subdomain', tolerate403: true },
+  { name: 'domains (sub)', path: '/api/v1/domains/subdomain', tolerate403: true, tolerate404: true },
   { name: 'payment links', path: '/api/v1/payment-links/', params: { limit: 1 }, tolerate403: true },
-  { name: 'subscriptions', path: '/api/v1/subscriptions', params: { limit: 1 }, tolerate403: true },
+  { name: 'subscriptions', path: '/api/v1/subscriptions', params: { limit: 1 }, tolerate403: true, tolerate404: true },
 ];
 
 async function runProbe(probe: Probe): Promise<ProbeResult> {
@@ -175,7 +175,7 @@ export const doctorCommand = new Command('doctor')
             ok: failed === 0,
             passed: results.filter((r) => r.ok).length,
             failed,
-            skipped: results.filter((r) => r.detail === 'tier-skipped').length,
+            skipped: results.filter((r) => r.detail === 'tier-skipped' || r.detail === 'tenant-skipped').length,
             total_ms: results.reduce((a, r) => a + r.ms, 0),
             results,
           },
