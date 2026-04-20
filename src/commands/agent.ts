@@ -695,6 +695,281 @@ agentCommand
   });
 
 
+// ────────────────────────────────────────────────────────────────────
+// Adapter kernel — install, grant, invoke, uninstall third-party agents
+// (Sprint T5 Phase 2). The verbs below speak to /api/v1/agent-install/*.
+// ────────────────────────────────────────────────────────────────────
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+function parseManifest(opts: { manifest?: string; url?: string; endpoint?: string; scope?: string[] }): Record<string, unknown> {
+  // --manifest path wins — file contents become the manifest.
+  if (opts.manifest) {
+    const p = path.resolve(opts.manifest);
+    if (!fs.existsSync(p)) {
+      console.error(chalk.red(`Manifest file not found: ${opts.manifest}`));
+      process.exit(1);
+    }
+    const raw = fs.readFileSync(p, 'utf8');
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      console.error(chalk.red(`Manifest is not valid JSON: ${(e as Error).message}`));
+      process.exit(1);
+    }
+  }
+  const m: Record<string, unknown> = {};
+  if (opts.url) m.url = opts.url;
+  if (opts.endpoint) m.endpoint = opts.endpoint;
+  if (opts.scope && opts.scope.length) m.declared_scopes = opts.scope;
+  return m;
+}
+
+agentCommand
+  .command('adapters')
+  .description('List registered adapter kinds (mcp, http, ...)')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    requireLogin();
+    const spinner = ora('Loading adapter catalog...').start();
+    try {
+      const r = await apiClient.get<{ adapters: { kind: string; description: string }[] }>(
+        '/api/v1/agent-install/adapters',
+      );
+      spinner.stop();
+      if (isJsonOutput(opts)) {
+        console.log(JSON.stringify(r.data, null, 2));
+        return;
+      }
+      console.log('');
+      for (const a of r.data.adapters) {
+        console.log(`  ${chalk.bold(a.kind)}  ${chalk.dim(a.description)}`);
+      }
+      console.log('');
+    } catch (e) { catchError(spinner, 'Failed to load adapters')(e); }
+  });
+
+agentCommand
+  .command('install')
+  .description('Install a third-party agent via an adapter (mcp, http, ...)')
+  .requiredOption('--adapter <kind>', 'Adapter kind (e.g. mcp, http)')
+  .requiredOption('--display-name <name>', 'Human-friendly name to show in `agent installed`')
+  .option('--url <url>', 'Shortcut for MCP: manifest.url')
+  .option('--endpoint <url>', 'Shortcut for HTTP: manifest.endpoint')
+  .option('--scope <scope...>', 'Shortcut for HTTP: manifest.declared_scopes (repeatable)')
+  .option('--manifest <path>', 'Path to a JSON file — overrides --url/--endpoint shortcuts')
+  .option('--publisher <name>', 'Optional publisher label')
+  .option('--version <v>', 'Optional version string')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireLogin();
+    const manifest = parseManifest(opts);
+    const body = {
+      adapter_kind: opts.adapter,
+      display_name: opts.displayName,
+      manifest,
+      publisher: opts.publisher,
+      version: opts.version,
+    };
+    const spinner = ora(`Installing ${opts.displayName} (${opts.adapter})...`).start();
+    try {
+      const r = await apiClient.post<Record<string, unknown>>('/api/v1/agent-install', body);
+      spinner.succeed(chalk.green(`Installed: ${r.data.external_id}`));
+      if (isJsonOutput(opts)) {
+        console.log(JSON.stringify(r.data, null, 2));
+        return;
+      }
+      console.log(chalk.dim(`  Adapter: ${r.data.adapter_kind}`));
+      console.log(chalk.dim(`  Next:    solid agent grant ${r.data.external_id} --scope kb:read`));
+    } catch (e) { catchError(spinner, 'Install failed')(e); }
+  });
+
+agentCommand
+  .command('installed')
+  .description('List third-party agents installed on this company')
+  .option('--all', 'Include uninstalled agents')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { all?: boolean; json?: boolean }) => {
+    requireLogin();
+    const spinner = ora('Loading installed agents...').start();
+    try {
+      const qs = opts.all ? '?include_uninstalled=true' : '';
+      const r = await apiClient.get<Record<string, unknown>[]>(`/api/v1/agent-install${qs}`);
+      spinner.stop();
+      if (isJsonOutput(opts)) {
+        console.log(JSON.stringify(r.data, null, 2));
+        return;
+      }
+      if (!r.data.length) {
+        console.log(chalk.dim('  No third-party agents installed. Run `solid agent install` to add one.'));
+        return;
+      }
+      console.log('');
+      for (const a of r.data) {
+        const status = a.status === 'active' ? chalk.green(a.status as string) : chalk.dim(a.status as string);
+        console.log(`  ${chalk.bold(a.display_name)}  ${chalk.dim(`[${a.adapter_kind}]`)}  ${status}`);
+        console.log(chalk.dim(`    ${a.external_id}   installed ${a.installed_at}`));
+      }
+      console.log('');
+    } catch (e) { catchError(spinner, 'Failed to list')(e); }
+  });
+
+agentCommand
+  .command('grant <id>')
+  .description('Grant scopes to an installed agent')
+  .requiredOption('--scope <scope...>', 'Scope(s) to grant, e.g. --scope kb:read --scope voice:outbound')
+  .option('--reason <text>', 'Optional audit note')
+  .action(async (id: string, opts: { scope: string[]; reason?: string }) => {
+    requireLogin();
+    const spinner = ora(`Granting scopes to ${id}...`).start();
+    try {
+      const r = await apiClient.post<{ scopes: string[] }>(
+        `/api/v1/agent-install/${id}/grants`,
+        { scopes: opts.scope, reason: opts.reason },
+      );
+      spinner.succeed(chalk.green(`Scopes granted: ${r.data.scopes.join(', ')}`));
+    } catch (e) { catchError(spinner, 'Grant failed')(e); }
+  });
+
+agentCommand
+  .command('revoke <id>')
+  .description('Revoke scopes from an installed agent')
+  .option('--scope <scope...>', 'Specific scope(s) to revoke')
+  .option('--all', 'Revoke every active scope')
+  .option('--reason <text>', 'Optional audit note')
+  .action(async (id: string, opts: { scope?: string[]; all?: boolean; reason?: string }) => {
+    requireLogin();
+    if (!opts.all && (!opts.scope || opts.scope.length === 0)) {
+      console.error(chalk.red('Specify --scope <s> or --all'));
+      process.exit(1);
+    }
+    const spinner = ora(`Revoking scopes from ${id}...`).start();
+    try {
+      const r = await apiClient.delete<{ scopes: string[] }>(
+        `/api/v1/agent-install/${id}/grants`,
+        { params: { all: opts.all, scopes: opts.scope, reason: opts.reason } as Record<string, unknown> },
+      );
+      spinner.succeed(chalk.green(
+        opts.all ? 'All scopes revoked' : `Remaining scopes: ${(r.data.scopes || []).join(', ') || '(none)'}`,
+      ));
+    } catch (e) { catchError(spinner, 'Revoke failed')(e); }
+  });
+
+agentCommand
+  .command('grants <id>')
+  .description('Show the active scopes granted to an installed agent')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, opts: { json?: boolean }) => {
+    requireLogin();
+    const spinner = ora(`Loading grants for ${id}...`).start();
+    try {
+      const r = await apiClient.get<{ scopes: string[]; granted_at: string | null }>(
+        `/api/v1/agent-install/${id}/grants`,
+      );
+      spinner.stop();
+      if (isJsonOutput(opts)) {
+        console.log(JSON.stringify(r.data, null, 2));
+        return;
+      }
+      if (!r.data.scopes.length) {
+        console.log(chalk.dim('  No active scopes. Grant with `solid agent grant <id> --scope ...`.'));
+        return;
+      }
+      console.log('');
+      for (const s of r.data.scopes) console.log(`  ${chalk.bold(s)}`);
+      if (r.data.granted_at) console.log(chalk.dim(`  granted ${r.data.granted_at}`));
+      console.log('');
+    } catch (e) { catchError(spinner, 'Failed to load grants')(e); }
+  });
+
+agentCommand
+  .command('capabilities <id>')
+  .description('Show what an installed agent says it can do')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, opts: { json?: boolean }) => {
+    requireLogin();
+    const spinner = ora(`Loading capabilities for ${id}...`).start();
+    try {
+      const r = await apiClient.get<{ capabilities: { name: string; description: string; required_scopes: string[] }[] }>(
+        `/api/v1/agent-install/${id}/capabilities`,
+      );
+      spinner.stop();
+      if (isJsonOutput(opts)) {
+        console.log(JSON.stringify(r.data, null, 2));
+        return;
+      }
+      if (!r.data.capabilities.length) {
+        console.log(chalk.dim('  Agent declared no capabilities.'));
+        return;
+      }
+      console.log('');
+      for (const c of r.data.capabilities) {
+        const scopes = c.required_scopes.length ? chalk.dim(`  (needs ${c.required_scopes.join(', ')})`) : '';
+        console.log(`  ${chalk.bold(c.name)}  ${chalk.dim(c.description)}${scopes}`);
+      }
+      console.log('');
+    } catch (e) { catchError(spinner, 'Failed to load capabilities')(e); }
+  });
+
+agentCommand
+  .command('call <id> <message>')
+  .description('Invoke an installed agent with a message, print its reply')
+  .option('--data <json>', 'Optional JSON payload merged into message.data')
+  .option('--json', 'Output the full response envelope as JSON')
+  .action(async (id: string, message: string, opts: { data?: string; json?: boolean }) => {
+    requireLogin();
+    let data: Record<string, unknown> = {};
+    if (opts.data) {
+      try { data = JSON.parse(opts.data); }
+      catch (e) {
+        console.error(chalk.red(`--data is not valid JSON: ${(e as Error).message}`));
+        process.exit(1);
+      }
+    }
+    const spinner = ora(`Calling ${id}...`).start();
+    try {
+      const r = await apiClient.post<{ text: string; error: string | null; elapsed_s: number | null }>(
+        `/api/v1/agent-install/${id}/invoke`,
+        { text: message, data },
+      );
+      spinner.stop();
+      if (isJsonOutput(opts)) {
+        console.log(JSON.stringify(r.data, null, 2));
+        return;
+      }
+      if (r.data.error) {
+        console.error(chalk.red(`Agent error: ${r.data.error}`));
+        process.exit(1);
+      }
+      console.log('');
+      console.log(r.data.text || chalk.dim('(empty reply)'));
+      if (r.data.elapsed_s !== null && r.data.elapsed_s !== undefined) {
+        console.log(chalk.dim(`\n  ${r.data.elapsed_s.toFixed(2)}s`));
+      }
+    } catch (e) { catchError(spinner, 'Call failed')(e); }
+  });
+
+agentCommand
+  .command('uninstall <id>')
+  .description('Uninstall a third-party agent (revokes grants, preserves audit trail)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (id: string, opts: { yes?: boolean }) => {
+    requireLogin();
+    const { confirm } = await import('../lib/command-kit');
+    const ok = await confirm(
+      `Uninstall agent ${id}? Grants will be revoked. This cannot be undone.`,
+      { autoConfirm: Boolean(opts.yes) },
+    );
+    if (!ok) { console.error(chalk.dim('  Cancelled.')); process.exit(1); }
+    const spinner = ora(`Uninstalling ${id}...`).start();
+    try {
+      await apiClient.delete(`/api/v1/agent-install/${id}`);
+      spinner.succeed(chalk.green(`Uninstalled ${id}`));
+    } catch (e) { catchError(spinner, 'Uninstall failed')(e); }
+  });
+
+
 import { appendExamples as __appendExamplesAgent } from '../lib/command-kit';
 __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent dashboard', why: 'All agents + telemetry' },
@@ -703,4 +978,7 @@ __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent mission "Launch Q2 campaign"', why: 'Multi-agent mission via ADA' },
   { cmd: 'solid agent prompt sarah --edit', why: 'Edit system prompt in $EDITOR' },
   { cmd: 'solid agent memory sarah --tail', why: 'Live memory stream' },
+  { cmd: 'solid agent install --adapter mcp --url https://ex.com/mcp --display-name Acme', why: 'Install a third-party MCP agent' },
+  { cmd: 'solid agent grant <id> --scope kb:read', why: 'Grant scopes after install' },
+  { cmd: 'solid agent call <id> "summarize pricing"', why: 'Invoke an installed agent' },
 ]);
