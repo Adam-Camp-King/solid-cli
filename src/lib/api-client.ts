@@ -885,7 +885,10 @@ class ApiClient {
     }>;
     total: number;
   }>> {
-    const response = await this.client.get('/api/v1/cli/agents');
+    // Trailing slash required — without it FastAPI returns 307 redirect
+    // and axios/follow-redirects strips the Authorization header, causing
+    // spurious 401s under SOLID_API_KEY auth. Verified 2026-04-19.
+    const response = await this.client.get('/api/v1/cli/agents/');
     return { data: response.data, status: response.status, success: true };
   }
 

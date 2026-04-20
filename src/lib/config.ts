@@ -166,13 +166,24 @@ class ConfigManager {
   }
 
   isLoggedIn(): boolean {
-    // Check if we have a token (access or refresh)
-    // Don't reject on expiry — the API client's interceptor will auto-refresh
+    // BUG-6 fix (role drift): any of FIVE auth sources counts as
+    // "logged in" — not just the cached JWT. Prior impl only saw the
+    // JWT, so `SOLID_API_KEY=sk_... solid agent list` was refused with
+    // "Not logged in" even though the backend would have happily
+    // accepted the key. Makes the CLI consistent with what the api
+    // interceptor actually sends (src/lib/api-client.ts:141).
+    //
+    // Precedence matches the request interceptor:
+    //   1. --token flag (per-invocation)
+    //   2. SOLID_API_KEY env (CI / AI agent)
+    //   3. SOLID_TOKEN env (legacy)
+    //   4. cached access_token (solid auth login)
+    //   5. cached refresh_token (auto-refresh flow)
+    if (process.env.SOLID_API_KEY) return true;
+    if (process.env.SOLID_TOKEN) return true;
     const token = this.accessToken;
     const refresh = this.refreshToken;
-
     if (!token && !refresh) return false;
-
     return true;
   }
 
