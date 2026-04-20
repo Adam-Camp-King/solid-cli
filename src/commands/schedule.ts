@@ -316,4 +316,142 @@ __appendExamplesSchedule(scheduleCommand, [
   { cmd: 'solid schedule create --customer <id> --at 2026-04-21T14:00', why: 'Book an appointment' },
   { cmd: 'solid schedule cancel <id>', why: 'Cancel + auto-notify customer' },
   { cmd: 'solid schedule reschedule <id> --at 2026-04-22T10:00', why: 'Move an existing slot' },
+  { cmd: 'solid schedule action "email top-50 about drain special" --at 2026-04-22T09:00', why: 'Agent plans a future action' },
+  { cmd: 'solid schedule due', why: 'List actions ready to fire now' },
+  { cmd: 'solid schedule fire <ext_id> --result \'{"sent":50}\'', why: 'Agent reports outcome' },
 ]);
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Agent schedule — `solid schedule action` and friends.
+// Separate from appointment scheduling above. Talks to /api/v1/agent-schedule.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _printActionRow(a: any): void {
+  const when = a.run_at || '';
+  console.log(`  ${chalk.cyan(a.external_id.slice(0, 8))}  ${chalk.dim(when.slice(0, 19))}  [${a.status}]`);
+  console.log(`    ${a.description}`);
+}
+
+scheduleCommand
+  .command('action <description>')
+  .description('Queue a future action for the agent to pick up at run_at')
+  .requiredOption('--at <iso8601>', 'When to fire (ISO 8601 with TZ, e.g. 2026-04-22T09:00:00Z)')
+  .option('--payload <json>', 'Structured payload the agent needs when firing')
+  .option('--json', 'JSON output')
+  .action(async (description: string, opts) => {
+    requireAuth();
+    const spinner = ora('Scheduling...').start();
+    try {
+      let payload: unknown = undefined;
+      if (opts.payload) {
+        try { payload = JSON.parse(opts.payload); }
+        catch { payload = { raw: opts.payload }; }
+      }
+      const res = await apiClient.post<any>('/api/v1/agent-schedule', {
+        description,
+        run_at: opts.at,
+        payload,
+      });
+      spinner.stop();
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const a = res.data.action;
+      console.log(chalk.green('  ✓ scheduled'));
+      console.log(chalk.dim('  external_id:'), a.external_id);
+      console.log(chalk.dim('  run_at:    '), a.run_at);
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to schedule'));
+      console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
+    }
+  });
+
+scheduleCommand
+  .command('due')
+  .description('List scheduled actions whose run_at has arrived (ready to fire)')
+  .option('--limit <n>', 'Max to return', '50')
+  .option('--json', 'JSON output')
+  .action(async (opts) => {
+    requireAuth();
+    try {
+      const res = await apiClient.get<any>(`/api/v1/agent-schedule/due?limit=${opts.limit}`);
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const actions = res.data.actions || [];
+      if (!actions.length) {
+        console.log(chalk.dim('  (nothing due)'));
+        return;
+      }
+      console.log(chalk.bold(`  ${actions.length} action(s) ready to fire`));
+      console.log('');
+      actions.forEach(_printActionRow);
+    } catch (error) {
+      console.error(chalk.red(handleApiError(error).message));
+      process.exit(1);
+    }
+  });
+
+scheduleCommand
+  .command('fire <external_id>')
+  .description('Mark a scheduled action as fired (with optional result or error)')
+  .option('--result <json>', 'Structured result the agent produced')
+  .option('--error <message>', 'Mark as failed with this error message')
+  .option('--json', 'JSON output')
+  .action(async (externalId: string, opts) => {
+    requireAuth();
+    try {
+      const body: Record<string, unknown> = {};
+      if (opts.result) {
+        try { body.result = JSON.parse(opts.result); }
+        catch { body.result = { raw: opts.result }; }
+      }
+      if (opts.error) body.error = opts.error;
+      const res = await apiClient.post<any>(
+        `/api/v1/agent-schedule/${encodeURIComponent(externalId)}/fire`,
+        body,
+      );
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      console.log(chalk.green(`  ✓ ${res.data.status}`));
+    } catch (error) {
+      console.error(chalk.red(handleApiError(error).message));
+      process.exit(1);
+    }
+  });
+
+scheduleCommand
+  .command('cancel-action <external_id>')
+  .description('Cancel a queued scheduled action before it fires')
+  .action(async (externalId: string) => {
+    requireAuth();
+    try {
+      const res = await apiClient.post<any>(
+        `/api/v1/agent-schedule/${encodeURIComponent(externalId)}/cancel`,
+        {},
+      );
+      console.log(chalk.yellow(`  cancelled: ${res.data.external_id}`));
+    } catch (error) {
+      console.error(chalk.red(handleApiError(error).message));
+      process.exit(1);
+    }
+  });
+
+scheduleCommand
+  .command('actions')
+  .description('List scheduled actions (all statuses)')
+  .option('--status <s>', 'scheduled | fired | cancelled | failed | all', 'all')
+  .option('--limit <n>', 'Max to return', '50')
+  .option('--json', 'JSON output')
+  .action(async (opts) => {
+    requireAuth();
+    try {
+      const params = new URLSearchParams({ status: opts.status, limit: opts.limit });
+      const res = await apiClient.get<any>(`/api/v1/agent-schedule?${params.toString()}`);
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const actions = res.data.actions || [];
+      console.log(chalk.bold(`  ${actions.length} action(s) (${res.data.status_filter})`));
+      console.log('');
+      actions.forEach(_printActionRow);
+    } catch (error) {
+      console.error(chalk.red(handleApiError(error).message));
+      process.exit(1);
+    }
+  });

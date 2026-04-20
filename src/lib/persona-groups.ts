@@ -38,6 +38,7 @@ export const COMMAND_PERSONAS: Record<string, Persona> = {
   ai: 'common',
   install: 'common',
   'ask-owner': 'common',  // Typed escalation — available to every agent session
+  signal: 'common',       // Event stream — every agent needs to sense state changes
   context: 'common',
   docs: 'common',
   open: 'common',
