@@ -200,8 +200,122 @@ export const doctorCommand = new Command('doctor')
     process.exit(failed === 0 ? 0 : 1);
   });
 
+// ---------------------------------------------------------------------------
+// solid doctor scopes — Sprint 1 T1.6 scope/feature drift diagnostic.
+// Surfaces when the active API key is missing scopes the tenant's enabled
+// features should have granted (e.g. tenant enabled `agents: yes` AFTER
+// the key was issued → `solid agent list` 403s until the key rotates).
+// Pure diagnostic logic lives in src/lib/scope-diagnostic.ts.
+// ---------------------------------------------------------------------------
+import { diagnoseScopeGap } from '../lib/scope-diagnostic';
+
+doctorCommand
+  .command('scopes')
+  .description("Check whether the API key's scopes match the tenant's feature flags")
+  .option('--json', 'Emit JSON result')
+  .action(async (opts: { json?: boolean }) => {
+    if (!config.isLoggedIn()) {
+      const payload = {
+        ok: false,
+        error: { code: 'AUTH_REQUIRED', message: 'Not authenticated. Run: solid auth login' },
+      };
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+      } else {
+        console.error(chalk.red(payload.error.message));
+      }
+      process.exit(2);
+    }
+
+    // Fetch the two inputs: key scopes + tenant feature flags.
+    // We read whatever the backend exposes; if the shapes move, the
+    // pure diagnostic still works — it just reports NO_FEATURES.
+    let currentScopes: string[] = [];
+    let featureSettings: Record<string, unknown> | null = null;
+
+    try {
+      const keys = await apiClient.get<{
+        items?: Array<{ scopes?: string[] }>;
+        api_keys?: Array<{ scopes?: string[] }>;
+      }>('/api/v1/cli/api-keys');
+      // T1.4 normalizes list envelopes to `.items`, but keep the
+      // legacy fallback so this works against older backends too.
+      const list =
+        keys.data.items ??
+        keys.data.api_keys ??
+        [];
+      // Union of scopes across ACTIVE keys for this company — the
+      // diagnostic is about "is any key under-privileged" not "is
+      // key X under-privileged". Take the union so adding a new key
+      // with broader scope clears the warning.
+      const all = new Set<string>();
+      for (const k of list) {
+        for (const s of k.scopes ?? []) all.add(s);
+      }
+      currentScopes = [...all];
+    } catch (err) {
+      // Silent — the diagnostic reports on what it CAN see.
+      currentScopes = [];
+    }
+
+    try {
+      const ctx = await apiClient.get<{
+        tier_capabilities?: Record<string, unknown>;
+        feature_settings?: Record<string, unknown>;
+        capabilities?: Record<string, unknown>;
+      }>('/api/v1/cli/context', { params: { section: 'capabilities' } });
+      featureSettings =
+        ctx.data.tier_capabilities ??
+        ctx.data.feature_settings ??
+        ctx.data.capabilities ??
+        null;
+    } catch (err) {
+      featureSettings = null;
+    }
+
+    const finding = diagnoseScopeGap(currentScopes, featureSettings);
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(
+        JSON.stringify(
+          {
+            ok: finding.severity === 'ok',
+            finding,
+            current_scopes: currentScopes.sort(),
+          },
+          null,
+          2,
+        ) + '\n',
+      );
+      process.exit(finding.severity === 'fail' ? 1 : 0);
+    }
+
+    console.log('');
+    const dot =
+      finding.severity === 'ok' ? chalk.green('●') :
+      finding.severity === 'warn' ? chalk.yellow('●') :
+      chalk.red('●');
+    const label =
+      finding.severity === 'ok' ? chalk.green('PASS') :
+      finding.severity === 'warn' ? chalk.yellow('WARN') :
+      chalk.red('FAIL');
+    console.log(`  ${dot} ${label}  ${finding.message}`);
+    if (finding.missing_scopes.length > 0) {
+      console.log(chalk.dim('   missing:'));
+      for (const s of finding.missing_scopes) {
+        console.log(chalk.red(`     - ${s}`));
+      }
+    }
+    if (finding.hint) {
+      console.log(chalk.dim('   hint: ') + finding.hint);
+    }
+    console.log('');
+    process.exit(finding.severity === 'fail' ? 1 : 0);
+  });
+
 appendExamples(doctorCommand, [
   { cmd: 'solid doctor',             why: 'Core battery — 10 probes, ~1-2s' },
   { cmd: 'solid doctor --endpoints', why: 'Full battery — includes tier-gated endpoints' },
   { cmd: 'solid doctor --json',      why: 'Machine-readable (CI pipelines)' },
+  { cmd: 'solid doctor scopes',      why: 'Check if API key scopes match tenant features (T1.6)' },
 ]);
