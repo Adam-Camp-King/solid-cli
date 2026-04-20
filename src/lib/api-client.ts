@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from './config';
 import { deriveExistenceGet, isDryRun, makeDryRunResult } from './dry-run';
+import { applyListEnvelope } from './list-envelope';
 import { checkSkewFromHeaders } from './version-skew';
 
 // Resolve our package version once. Used for the X-Solid-CLI-Version header
@@ -209,6 +210,15 @@ class ApiClient {
         // No-op until the backend opts in by setting these headers.
         try { checkSkewFromHeaders(CLI_VERSION, response.headers as Record<string, unknown>); } catch {
           // Skew warnings are best-effort; never break a real response.
+        }
+        // T1.4 — list-envelope normalization. Aliases `.items` + `.total`
+        // onto any response body that's shaped like a list (pages,
+        // results, leads, logs, api_keys, ...). Non-destructive: original
+        // keys stay. Opt out via SOLID_LEGACY_LIST_SHAPES=1.
+        try {
+          applyListEnvelope(response.data);
+        } catch {
+          // normalization is additive and best-effort; never break a response.
         }
         return response;
       },
