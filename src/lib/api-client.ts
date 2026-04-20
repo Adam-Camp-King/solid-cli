@@ -1279,13 +1279,22 @@ export function handleApiError(error: unknown): ApiError {
     const hint = process.env.SOLID_API_URL
       ? ` (SOLID_API_URL=${process.env.SOLID_API_URL})`
       : '';
-    return {
+    const baseErr: ApiError = {
       message:
         axiosError.code === 'ECONNABORTED'
           ? `Request timed out after ${axiosError.config?.timeout ?? 30000}ms. Try --timeout=60, or check: solid health`
           : `Couldn't reach the Solid# backend${hint}. Check network, or run: solid health`,
       status: 0,
     };
+    // T1.1 BUG-4 fix: classify network errors too so the JSON envelope
+    // emits code=NETWORK_ERROR / TIMEOUT instead of falling through to
+    // the SERVER_ERROR default. Without this, agents can't distinguish
+    // "backend is down" from "backend returned 500".
+    const classified = classifyError({
+      status: 0,
+      networkErrorCode: axiosError.code,
+    });
+    return enrichApiError(baseErr, classified);
   }
 
   // Status-code-specific hints. These make the CLI *feel* world-class —

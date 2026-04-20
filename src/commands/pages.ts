@@ -302,8 +302,11 @@ pagesCommand
       }
     } catch (error) {
       spinner.fail(chalk.red('Failed to update page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      // BUG-2 fix: emit T1.1 structured envelope (stdout, JSON) when
+      // --json + SOLID_JSON_V2=1; prose to stderr otherwise. Previous
+      // impl only printed prose — agents reading stdout saw nothing.
+      const { emitErrorAndExit } = await import('../lib/command-kit');
+      emitErrorAndExit(error);
     }
   });
 

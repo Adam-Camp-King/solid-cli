@@ -259,15 +259,43 @@ doctorCommand
     }
 
     try {
+      // BUG-5 fix: TWO response shapes exist for /api/v1/cli/context:
+      //
+      //   full:    { capabilities: { tier, feature_settings: {...}, ... }, ... }
+      //   section: { section: "capabilities", data: { tier, feature_settings: {...}, ... }, generated_at }
+      //
+      // We pass ?section=capabilities so the server returns the smaller
+      // envelope, which places feature_settings at `data.data.feature_settings`
+      // from our axios perspective (response.data → "section wrapper",
+      // response.data.data → "capabilities payload"). We check every
+      // plausible nesting so either shape works.
+      // Verified against prod live 2026-04-20.
       const ctx = await apiClient.get<{
+        // section-wrapped shape
+        section?: string;
+        data?: {
+          tier?: string;
+          feature_settings?: Record<string, unknown>;
+          [k: string]: unknown;
+        };
+        // full-context shape
+        capabilities?: {
+          tier?: string;
+          feature_settings?: Record<string, unknown>;
+          [k: string]: unknown;
+        };
+        // legacy fallbacks
         tier_capabilities?: Record<string, unknown>;
         feature_settings?: Record<string, unknown>;
-        capabilities?: Record<string, unknown>;
       }>('/api/v1/cli/context', { params: { section: 'capabilities' } });
       featureSettings =
-        ctx.data.tier_capabilities ??
+        // section-wrapped: ctx.data.data.feature_settings (axios .data = response body; body.data = section payload)
+        (ctx.data.data?.feature_settings as Record<string, unknown> | undefined) ??
+        // full-context: ctx.data.capabilities.feature_settings
+        (ctx.data.capabilities?.feature_settings as Record<string, unknown> | undefined) ??
+        // legacy: top-level feature_settings
         ctx.data.feature_settings ??
-        ctx.data.capabilities ??
+        ctx.data.tier_capabilities ??
         null;
     } catch (err) {
       featureSettings = null;

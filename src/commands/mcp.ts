@@ -51,7 +51,7 @@ mcpCommand
   .option('--company <id>', 'Pin the MCP server to a specific company_id')
   .option('--package <name>', `MCP npm package to invoke (default: ${DEFAULT_MCP_PACKAGE})`)
   .option('--uninstall', 'Remove the Solid# entry from the client config')
-  .option('--dry-run', "Print what would be written without touching disk")
+  .option('--preview', "Print what would be written without touching disk")
   .option('--json', 'Emit the resulting config as JSON on stdout')
   .action(async (client: string, opts: Record<string, unknown>) => {
     if (!isSupportedClient(client)) {
@@ -93,11 +93,17 @@ mcpCommand
 
     const serialized = serializeConfig(nextConfig);
 
-    if (opts.dryRun) {
+    // BUG-1 fix: `--dry-run` at program level is a global (src/index.ts:142)
+    // that commander consumes before the subcommand action sees it. We use
+    // `--preview` here and ALSO honor the global isDryRun() so both paths
+    // short-circuit before any fs.writeFileSync. Writing a real JWT to disk
+    // from a command that claimed --dry-run was a real safety failure.
+    const { isDryRun } = await import('../lib/dry-run');
+    if (opts.preview || isDryRun()) {
       if (isJsonOutput(opts)) {
         process.stdout.write(serialized);
       } else {
-        console.log(chalk.yellow('[dry-run] would write to:'), configPath);
+        console.log(chalk.yellow('[preview] would write to:'), configPath);
         console.log(serialized);
       }
       return;
@@ -238,6 +244,7 @@ import { appendExamples as __ae_mcp } from '../lib/command-kit';
 __ae_mcp(mcpCommand, [
   { cmd: 'solid mcp install claude',            why: 'Wire Solid# into Claude Desktop' },
   { cmd: 'solid mcp install cursor --company 61', why: 'Install pinned to a specific company' },
+  { cmd: 'solid mcp install claude --preview',  why: 'Show what WOULD be written — no disk write' },
   { cmd: 'solid mcp tools --json',              why: 'Machine-readable tool manifest' },
   { cmd: 'solid mcp serve',                      why: 'Launch the stdio server directly' },
 ]);

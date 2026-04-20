@@ -150,7 +150,17 @@ export async function runListCommand(
 ): Promise<void> {
   const asJson = (await import('./json-output')).isJsonOutput(opts) || Boolean(getOutputFile());
 
-  await run<{ items: Array<Record<string, unknown>>; count: number }>(
+  // BUG-3 fix: emit {items, total, has_more} to match the T1.4 envelope
+  // contract. Prior impl returned {items, count} which shadowed the
+  // axios-level normalization — agents saw .count, not .total.
+  // `count` is preserved as an alias so existing CLI tooling doesn't
+  // break; sunset in v2.0 alongside SOLID_LEGACY_LIST_SHAPES.
+  await run<{
+    items: Array<Record<string, unknown>>;
+    total: number;
+    count: number;
+    has_more: boolean;
+  }>(
     async () => {
       const items = opts.all
         ? await fetchAllPages(spec.fetch, spec.extract, { limit: 100 })
@@ -159,7 +169,13 @@ export async function runListCommand(
       // and the pretty renderer all see the same ordering. Prior impl only
       // sorted inside `render`, which --json skipped.
       applyListSort(items);
-      return { items, count: items.length };
+      const limit = parseInt(opts.limit, 10);
+      return {
+        items,
+        total: items.length,
+        count: items.length,
+        has_more: !opts.all && Number.isFinite(limit) && items.length >= limit,
+      };
     },
     {
       spinner: asJson || opts.quiet ? null : (spec.spinnerText || 'Loading...'),
@@ -377,34 +393,64 @@ export async function run<T>(
   } catch (error) {
     const errorText = options.errorText || 'Failed';
     if (spinner) spinner.fail(chalk.red(errorText));
-    const apiError = handleApiError(error);
-
-    // Sprint 1 T1.1 — under --json AND SOLID_JSON_V2=1, emit a structured
-    // envelope to stdout so agents can branch on error.code. Humans (or
-    // legacy scripts) continue to see the prose box on stderr.
-    const { isJsonOutput } = require('./json-output');
-    const { jsonErrorEnvelopeEnabled, toErrorEnvelope } = require('./error-codes');
-    if (isJsonOutput() && jsonErrorEnvelopeEnabled()) {
-      const envelope = toErrorEnvelope(
-        {
-          code: apiError.code || 'SERVER_ERROR',
-          hint: apiError.hint,
-          docs_url: apiError.docs_url,
-          scope: apiError.scope,
-          feature: apiError.feature,
-          upgrade_to: apiError.upgrade_to,
-          request_id: apiError.request_id,
-        },
-        apiError.status,
-        apiError.message,
-      );
-      process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
-    } else {
-      console.error(chalk.red(`  ${apiError.message}`));
-    }
-    // eslint-disable-next-line no-process-exit
-    process.exit(1);
+    emitErrorAndExit(error);
   }
+}
+
+/**
+ * T1.1 envelope emitter — callable from ANY command path, not just
+ * run()'s catch. Use this when your command handles errors directly
+ * (not via run()) but still wants the T1.1 JSON envelope contract.
+ *
+ *   solid-cli/src/commands/pages.ts, /kb.ts, /brand.ts, etc. — anywhere
+ *   you currently do `try { ... } catch(err) { console.error(err.message);
+ *   process.exit(1); }` — replace the catch body with
+ *   `emitErrorAndExit(err)` to pick up the same stdout/stderr routing
+ *   and exit code as run() uses.
+ *
+ * Under `--json + SOLID_JSON_V2=1`: JSON envelope to stdout.
+ * Otherwise:                        red prose to stderr (legacy behavior).
+ * Always exits with code 1.
+ *
+ * BUG-2 fix: without this, the envelope only fired for commands using
+ * run(). Agents saw stderr prose from anything built before run() was
+ * the pattern (e.g. pages update, push, health). Now they can adopt
+ * piecemeal without a full refactor.
+ */
+export function emitErrorAndExit(error: unknown): never {
+  const apiError = handleApiError(error);
+
+  // Sprint 1 T1.1 — under --json AND SOLID_JSON_V2=1, emit a structured
+  // envelope to stdout so agents can branch on error.code. Humans (or
+  // legacy scripts) continue to see the prose box on stderr.
+  // Use require() here (not import) to keep this callable from commands
+  // that run() synchronously without an await/import chain.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { isJsonOutput } = require('./json-output');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { jsonErrorEnvelopeEnabled, toErrorEnvelope } = require('./error-codes');
+  if (isJsonOutput() && jsonErrorEnvelopeEnabled()) {
+    const envelope = toErrorEnvelope(
+      {
+        code: apiError.code || 'SERVER_ERROR',
+        hint: apiError.hint,
+        docs_url: apiError.docs_url,
+        scope: apiError.scope,
+        feature: apiError.feature,
+        upgrade_to: apiError.upgrade_to,
+        request_id: apiError.request_id,
+      },
+      apiError.status,
+      apiError.message,
+    );
+    process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
+  } else {
+    console.error(chalk.red(`  ${apiError.message}`));
+  }
+  // eslint-disable-next-line no-process-exit
+  process.exit(1);
+  // Unreachable; declared `never` return.
+  throw new Error('unreachable');
 }
 
 /**
