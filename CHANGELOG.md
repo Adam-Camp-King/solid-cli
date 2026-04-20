@@ -2,6 +2,72 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.10.0] — 2026-04-19
+
+Sprint 1 — CLI v2 Agent-Ready. Six agent-quality-of-life upgrades ship
+in this release, all behind opt-in env flags so existing callers are
+unaffected until v2.0 flips defaults.
+
+### Added
+- **Structured JSON errors (T1.1)** — Enable with `SOLID_JSON_V2=1`.
+  Under `--json + V2`, errors emit `{error:{code,status,message,scope?,
+  feature?,upgrade_to?,hint?,request_id?}}` to stdout instead of prose
+  to stderr. Closed `ErrorCode` vocabulary (12 codes): AUTH_REQUIRED,
+  FORBIDDEN, FEATURE_GATED, SCOPE_MISSING, NOT_FOUND, VALIDATION_FAILED,
+  CONFLICT, RATE_LIMITED, SERVER_ERROR, NETWORK_ERROR, TIMEOUT,
+  DRY_RUN_BLOCKED. Honors backend-supplied envelope shapes.
+- **Dry-run existence verification (T1.2)** — Mutations with `--dry-run`
+  now GET the resource URL first. If it 404s, the CLI surfaces
+  NOT_FOUND instead of synthetic success. Closes the `solid pages
+  update 99999 --dry-run` false-success lie. Skips for POST/collection
+  and action endpoints where existence can't be probed.
+- **`solid schema verbs` (T1.3)** — Full CLI verb manifest for agent
+  discovery. Walks the Commander tree, emits `{verb, path, description,
+  options, args, subcommands, is_leaf}` per node. `--json` for machine
+  consumption; `--include-hidden` surfaces normally-hidden verbs.
+- **Unified list envelopes (T1.4)** — Every list response now carries
+  `.items` + `.total / .page / .has_more` regardless of whether the
+  backend returned `pages`, `results`, `leads`, `logs`, `api_keys`, etc.
+  Original keys preserved — no breakage. Opt out with
+  `SOLID_LEGACY_LIST_SHAPES=1` (removes in next minor).
+- **`solid mcp install|serve|tools` (T1.5)** — Install Solid# into
+  Claude Desktop / Cursor / Windsurf with one command; spawn the MCP
+  server; list tools from the backend manifest. Auto-detects per-OS
+  config paths, non-destructive merge preserves other MCP servers.
+- **`solid doctor scopes` (T1.6)** — Catches the silent-failure case
+  where a tenant enables a feature after an API key was issued and the
+  key lacks the implied scopes. Reports missing scopes + one-line
+  rotation hint. Uses the same feature→scope map as the backend
+  (services/scope_expansion.py).
+
+### Changed
+- `ApiError` now carries optional `code / hint / docs_url / scope /
+  feature / upgrade_to / request_id`. Legacy string `message` still
+  printed unchanged for humans.
+- Request interceptor issues a verify GET before short-circuiting
+  resource-targeted PATCH/PUT/DELETE under `--dry-run`.
+- Response interceptor non-destructively aliases list arrays to
+  `.items` — consumers that used to branch on `d.pages || d.items ||
+  d.results` can simplify to `d.items`.
+
+### Internal
+- `CLI_VERSION` now exported from `src/lib/api-client.ts` so other
+  modules don't re-read `package.json`.
+- New pure libraries: `error-codes`, `verb-manifest`, `list-envelope`,
+  `mcp-client-config`, `scope-diagnostic`, `program-registry`. Each
+  ships with a dedicated unit-test suite.
+- Full suite grew from **486 → 642 tests** (+156 new Sprint 1 cases).
+  TypeScript + build clean.
+
+### Rollout (T1.7 two-step)
+- `1.10.0`: every new behavior is opt-in via env var. Old `--json`
+  callers see exactly what they see today.
+- `2.0.0` (after soak, TBD): `SOLID_JSON_V2` defaults to on.
+  `SOLID_LEGACY_LIST_SHAPES=1` preserves old envelope keys for one
+  more minor before final removal.
+
+---
+
 ## [1.7.3] — 2026-04-15
 
 ### Added
