@@ -19,7 +19,11 @@ export const kbCommand = new Command('kb')
 kbCommand
   .command('list').alias('ls')
   .description('List knowledge base entries')
-  .option('-q, --query <query>', 'Search query', '*')
+  // No default — empty string means "no title filter" so `solid kb list`
+  // returns every company KB entry, matching what `solid context --claude`
+  // sees. Previous default of '*' passed through to a literal
+  // title ILIKE '%*%' filter on the backend and matched nothing.
+  .option('-q, --query <query>', 'Search query (title contains)', '')
   .option('-l, --limit <limit>', 'Page size', '20')
   .option('--offset <n>', 'Pagination offset', '0')
   .option('--all', 'Auto-paginate every page')

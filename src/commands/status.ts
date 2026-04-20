@@ -82,7 +82,10 @@ export const statusCommand = new Command('status')
       console.log(ui.bannerSmall());
       console.log(ui.successBox(company.name, [
         `${chalk.dim('ID:')}     ${company.id}`,
-        `${chalk.dim('Tier:')}   ${chalk.hex('#818cf8')(company.tier || 'starter')}`,
+        // Prefer effective_tier (derived from feature_settings — reflects
+        // what the company actually has access to right now). Falls back
+        // to subscription tier column, then 'starter'.
+        `${chalk.dim('Tier:')}   ${chalk.hex('#818cf8')(company.effective_tier || company.tier || 'starter')}`,
         `${chalk.dim('Industry:')} ${company.industry || 'not set'}`,
       ]));
 
