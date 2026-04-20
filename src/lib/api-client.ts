@@ -6,12 +6,14 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from './config';
-import { isDryRun, makeDryRunResult } from './dry-run';
+import { deriveExistenceGet, isDryRun, makeDryRunResult } from './dry-run';
 import { checkSkewFromHeaders } from './version-skew';
 
 // Resolve our package version once. Used for the X-Solid-CLI-Version header
 // on every outbound request so the backend can log/compare CLI clients.
-let CLI_VERSION = '0.0.0';
+// Exported so other modules (schema verbs manifest, etc.) don't re-read
+// package.json or duplicate the fallback.
+export let CLI_VERSION = '0.0.0';
 try {
   const pkgPath = path.join(__dirname, '..', '..', 'package.json');
   CLI_VERSION = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || '0.0.0';
@@ -105,7 +107,28 @@ class ApiClient {
       // error-interceptor converts into a success result. No network I/O.
       const method = (requestConfig.method || 'get').toLowerCase();
       const isMutation = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
-      if (isMutation && isDryRun()) {
+      if (isMutation && isDryRun() && !(requestConfig as any).__solid_dry_run_verify) {
+        // T1.2 — Existence verification before short-circuit. Mutations
+        // targeted at a specific resource URL (PATCH/PUT/DELETE /foo/:id)
+        // do a GET first; if the server says 404, we surface NOT_FOUND
+        // instead of lying with synthetic success. Non-verifiable shapes
+        // (POST to a collection, /publish actions, etc.) skip ahead.
+        const verifyUrl = deriveExistenceGet(requestConfig.method, requestConfig.url);
+        if (verifyUrl) {
+          // Tag the GET config so the error interceptor can tell a verify
+          // failure apart from a user-level GET failure — and so we don't
+          // recursively re-verify (dry-run skip check above).
+          await this.client.get(verifyUrl, {
+            params: undefined,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            headers: { 'X-Solid-Dry-Run-Verify': '1' } as any,
+            // Cast so the transient flag isn't part of the public Axios
+            // config type.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...(({ __solid_dry_run_verify: true } as any) as object),
+          });
+          // 200 on verify → existence confirmed; proceed to short-circuit.
+        }
         // Tag the config so the error interceptor can recognize it.
         (requestConfig as any).__solid_dry_run = true;
         // Throwing from a request interceptor cancels the request.

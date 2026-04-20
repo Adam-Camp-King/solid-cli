@@ -116,3 +116,101 @@ export function dryRunSummary(): string {
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + '…' : s;
 }
+
+// ===========================================================================
+// T1.2 — Dry-run existence verification
+// ===========================================================================
+//
+// The T11.2 dry-run interceptor short-circuits mutations and synthesizes
+// success. That lied when the resource didn't exist: `solid pages update
+// 99999 --dry-run` would report synthetic success for an ID that 404s.
+//
+// Closing that lie: before short-circuiting, issue a GET against the
+// resource's existence URL. If it 404s, surface NOT_FOUND. If 200, proceed
+// with the synthetic success. Routes that are not resource-targeted
+// (collection POSTs, action endpoints) skip verification entirely and
+// retain the previous behavior.
+//
+// Pure — no HTTP here, just URL derivation. Actual GET is done in
+// api-client.ts's request interceptor.
+
+/** Methods whose dry-run is verifiable via a GET on the same URL. */
+const EXISTENCE_VERIFIABLE_METHODS: ReadonlySet<string> = new Set([
+  'PATCH',
+  'PUT',
+  'DELETE',
+]);
+
+/** Last-segment tokens that indicate an ACTION endpoint, not a resource.
+ * These tail the URL but aren't IDs, e.g. /api/v1/cms/pages/42/publish.
+ * A GET on such a URL would 404 or 405 — not a useful existence check. */
+const ACTION_SUFFIXES: ReadonlySet<string> = new Set([
+  'publish',
+  'unpublish',
+  'preview',
+  'discard',
+  'approve',
+  'reject',
+  'cancel',
+  'retry',
+  'send',
+  'rotate',
+  'revoke',
+  'restore',
+  'enable',
+  'disable',
+  'lock',
+  'unlock',
+  'verify',
+  'deploy',
+  'run',
+  'execute',
+  'test',
+  'sync',
+]);
+
+/**
+ * Derive the GET URL to verify existence before a dry-run mutation.
+ * Returns null when the mutation is not existence-verifiable:
+ *   - Non-mutating method (GET/HEAD/OPTIONS)
+ *   - POST (creating; nothing to verify)
+ *   - Collection URL (no trailing ID segment)
+ *   - Action endpoint (trailing /publish, /send, etc.)
+ *
+ * Pure function — no I/O. Unit-tested directly.
+ */
+export function deriveExistenceGet(
+  method: string | undefined,
+  url: string | undefined,
+): string | null {
+  if (!method || !url) return null;
+  if (!EXISTENCE_VERIFIABLE_METHODS.has(method.toUpperCase())) return null;
+
+  // Separate path from query string — preserve query on the derived GET.
+  const qIdx = url.indexOf('?');
+  const pathOnly = qIdx >= 0 ? url.slice(0, qIdx) : url;
+  const query = qIdx >= 0 ? url.slice(qIdx) : '';
+
+  const segments = pathOnly.split('/').filter(Boolean);
+  if (segments.length < 2) return null; // too shallow to have an ID
+
+  const last = segments[segments.length - 1];
+
+  // Last segment must LOOK like an ID (numeric, uuid, slug, etc.).
+  // Empty, pure-alpha collection names, or pure-action suffixes are rejected.
+  if (!/^[A-Za-z0-9_\-.:@]+$/.test(last)) return null;
+
+  // Action endpoints don't have a GET shape at the same URL.
+  if (ACTION_SUFFIXES.has(last.toLowerCase())) return null;
+
+  // All-alpha AND short AND not a recognizable ID-ish value → likely a
+  // collection endpoint (e.g. /api/v1/leads). Require at least one digit,
+  // or a length > 24 (uuid-ish), or a dot/dash/underscore (slug-ish).
+  const looksLikeId =
+    /\d/.test(last) ||
+    last.length > 24 ||
+    /[-_.:]/.test(last);
+  if (!looksLikeId) return null;
+
+  return pathOnly + query;
+}

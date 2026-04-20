@@ -618,6 +618,13 @@ try {
 } catch {
   /* noop */
 }
+
+// T1.3 — publish the root program to the registry so any command (today
+// `solid schema verbs`, tomorrow `solid doctor`) can introspect the full
+// verb tree without creating an import cycle.
+import { setProgram as __setProgramForRegistry } from './lib/program-registry';
+__setProgramForRegistry(program);
+
 program.parse(process.argv);
 
 // T11.2 — on exit, print a dry-run summary if any mutations were intercepted.

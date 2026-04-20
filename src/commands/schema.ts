@@ -18,6 +18,9 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isJsonOutput } from '../lib/json-output';
+import { getProgram } from '../lib/program-registry';
+import { buildVerbManifest } from '../lib/verb-manifest';
+import { CLI_VERSION } from '../lib/api-client';
 
 type BlockDef = {
   type: string;
@@ -144,8 +147,67 @@ schemaCommand
     console.log('');
   });
 
+// ---------------------------------------------------------------------------
+// solid schema verbs — (Sprint 1 T1.3) enumerate the full CLI verb tree so
+// agents can discover every command without scraping --help. Builds a
+// manifest by walking the Commander tree stored in program-registry.
+// ---------------------------------------------------------------------------
+schemaCommand
+  .command('verbs')
+  .description('Emit the full verb manifest (every command + options + args)')
+  .option('--json', 'Output as JSON (default shape for agents)')
+  .option('--include-hidden', 'Include commands hidden from --help')
+  .action((opts) => {
+    const program = getProgram();
+    if (!program) {
+      const err = {
+        error: {
+          code: 'SERVER_ERROR',
+          status: 500,
+          message:
+            'program-registry not initialized — this is a CLI bug. ' +
+            'Open an issue: https://github.com/Adam-Camp-King/solid-cli/issues',
+        },
+      };
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify(err, null, 2) + '\n');
+      } else {
+        console.error(chalk.red(err.error.message));
+      }
+      process.exit(1);
+    }
+
+    const manifest = buildVerbManifest(program, CLI_VERSION, {
+      prefix: 'solid',
+      skipRoot: true,
+      includeHidden: Boolean(opts.includeHidden),
+    });
+
+    // Under --json or SOLID_JSON, emit the full wire shape to stdout.
+    // Otherwise print a short human summary to make the command self-
+    // describing when invoked without --json.
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify(manifest, null, 2) + '\n');
+      return;
+    }
+    console.log('');
+    console.log(chalk.bold(`Solid# CLI verbs — ${manifest.count} total`));
+    console.log(chalk.dim(`  v${manifest.cli_version}  ·  schema v${manifest.version}`));
+    console.log('');
+    for (const v of manifest.verbs) {
+      const indent = '  '.repeat(v.depth + 1);
+      const leaf = v.is_leaf ? '' : chalk.dim(`  (${v.subcommands.length} subcommand${v.subcommands.length === 1 ? '' : 's'})`);
+      console.log(`${indent}${chalk.cyan(v.verb)}${leaf}`);
+      if (v.description) console.log(chalk.dim(`${indent}  ${v.description}`));
+    }
+    console.log('');
+    console.log(chalk.dim('  Run with --json for the full machine-readable manifest.'));
+    console.log('');
+  });
+
 import { appendExamples as __ae_schema } from '../lib/command-kit';
 __ae_schema(schemaCommand, [
   { cmd: 'solid schema pages',             why: 'Page block schema — feed this to AI coding agents' },
   { cmd: 'solid schema pages --format yaml', why: 'YAML instead of JSON' },
+  { cmd: 'solid schema verbs --json',      why: 'Full CLI verb manifest for agent discovery' },
 ]);
