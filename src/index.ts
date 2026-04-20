@@ -123,6 +123,7 @@ import { chatWidgetsCommand } from './commands/chat_widgets';
 import { paymentLinksCommand } from './commands/payment_links';
 import { subscriptionsCommand } from './commands/subscriptions';
 import { schemaCommand } from './commands/schema';
+import { mcpCommand } from './commands/mcp';
 import { doctorCommand } from './commands/doctor';
 import { ui } from './lib/ui';
 
@@ -376,6 +377,7 @@ program.addCommand(pagesCommand);
 program.addCommand(siteCommand);
 program.addCommand(servicesCommand);
 program.addCommand(schemaCommand);
+program.addCommand(mcpCommand);
 
 // CRM
 program.addCommand(crmCommand);
