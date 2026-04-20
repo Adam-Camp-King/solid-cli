@@ -73,6 +73,7 @@ import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
 import { aiCommand } from './commands/ai';
 import { installCommand } from './commands/install';
+import { askOwnerCommand } from './commands/ask_owner';
 import { PERSONA_ORDER, PERSONA_TITLES, personaFor, type Persona } from './lib/persona-groups';
 import { analyticsCommand } from './commands/analytics';
 import { seoCommand } from './commands/seo';
@@ -455,6 +456,7 @@ program.addCommand(exploreCommand);
 program.addCommand(contextCommand);
 program.addCommand(aiCommand);
 program.addCommand(installCommand);
+program.addCommand(askOwnerCommand);
 program.addCommand(llmsCommand);
 
 // Analytics & Insights

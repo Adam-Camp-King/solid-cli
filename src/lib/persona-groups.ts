@@ -37,6 +37,7 @@ export const COMMAND_PERSONAS: Record<string, Persona> = {
   status: 'common',
   ai: 'common',
   install: 'common',
+  'ask-owner': 'common',  // Typed escalation — available to every agent session
   context: 'common',
   docs: 'common',
   open: 'common',
