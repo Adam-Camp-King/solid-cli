@@ -264,6 +264,76 @@ nestCommand
   });
 
 nestCommand
+  .command('outcomes')
+  .description('Which of my Nest drops converted — the feedback loop')
+  .option('--campaign <id>', 'filter to one campaign')
+  .option('--since <iso>', 'ISO datetime cutoff (e.g. 2026-04-01)')
+  .option('--limit <n>', 'max rows', '50')
+  .option('--json', 'machine-readable output')
+  .action(async (flags: { campaign?: string; since?: string; limit?: string; json?: boolean }) => {
+    requireAuth();
+    const spinner = flags.json ? null : ora('Querying outcomes…').start();
+    try {
+      const qs = new URLSearchParams();
+      if (flags.campaign) qs.set('campaign_id', flags.campaign);
+      if (flags.since) qs.set('since', flags.since);
+      qs.set('limit', flags.limit ?? '50');
+      const res = await apiClient.get(`/api/v1/cli/ant/outcomes?${qs.toString()}`);
+      const data = res.data as Record<string, any>;
+
+      if (flags.json) {
+        console.log(JSON.stringify(data));
+        return;
+      }
+
+      const outcomes = (data.outcomes ?? []) as Record<string, any>[];
+      const byCampaign = (data.by_campaign ?? []) as Record<string, any>[];
+
+      if (spinner) spinner.succeed(`${outcomes.length} drops, ${byCampaign.length} campaigns`);
+
+      if (outcomes.length === 0) {
+        console.log(chalk.dim('  No tracked drops yet. `solid nest <...> --campaign <id> --live` to start measuring.'));
+        return;
+      }
+
+      if (byCampaign.length > 0) {
+        console.log('');
+        console.log(ui.header('By campaign'));
+        const campHeaders = ['Campaign', 'Drops', 'Views'];
+        const campRows = byCampaign
+          .slice()
+          .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
+          .map((b) => [
+            String(b.campaign_id ?? '(untagged)'),
+            String(b.drops ?? 0),
+            String(b.views ?? 0),
+          ]);
+        console.log(ui.table(campHeaders, campRows));
+      }
+
+      console.log('');
+      console.log(ui.header('Drops (ranked by views)'));
+      const dropHeaders = ['ID', 'Type', 'Campaign', 'Goal', 'Views', 'URL'];
+      const dropRows = outcomes
+        .slice()
+        .sort((a, b) => (b.page_views ?? 0) - (a.page_views ?? 0))
+        .map((o) => [
+          String(o.import_id ?? '').substring(0, 14),
+          String(o.page_type ?? '—'),
+          String(o.campaign_id ?? '—'),
+          String(o.conversion_goal ?? '—'),
+          String(o.page_views ?? 0),
+          String(o.page_url ?? '—'),
+        ]);
+      console.log(ui.table(dropHeaders, dropRows));
+    } catch (error) {
+      if (spinner) spinner.fail(chalk.red('Failed to query outcomes'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+    }
+  });
+
+nestCommand
   .command('from-url <url>')
   .description('Nest from a URL (explicit; equivalent to `solid nest <url>`)')
   .option('--type <type>')
