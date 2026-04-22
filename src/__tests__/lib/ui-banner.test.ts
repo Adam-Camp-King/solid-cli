@@ -24,13 +24,28 @@ function withEnv<T>(env: Record<string, string | undefined>, fn: () => T): T {
 }
 
 function withStdout<T>(opts: { tty?: boolean; columns?: number }, fn: () => T): T {
-  const origTty = (process.stdout as any).isTTY;
-  const origCols = (process.stdout as any).columns;
-  (process.stdout as any).isTTY = opts.tty ?? true;
-  (process.stdout as any).columns = opts.columns ?? 120;
-  try { return fn(); } finally {
-    (process.stdout as any).isTTY = origTty;
-    (process.stdout as any).columns = origCols;
+  // process.stdout.isTTY is a read-only getter in newer Node — use
+  // Object.defineProperty so we can shim it for the duration of the test,
+  // then restore the original descriptor exactly as it was.
+  const origTtyDesc = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+  const origColsDesc = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+  Object.defineProperty(process.stdout, 'isTTY', {
+    value: opts.tty ?? true,
+    configurable: true,
+    writable: true,
+  });
+  Object.defineProperty(process.stdout, 'columns', {
+    value: opts.columns ?? 120,
+    configurable: true,
+    writable: true,
+  });
+  try {
+    return fn();
+  } finally {
+    if (origTtyDesc) Object.defineProperty(process.stdout, 'isTTY', origTtyDesc);
+    else delete (process.stdout as any).isTTY;
+    if (origColsDesc) Object.defineProperty(process.stdout, 'columns', origColsDesc);
+    else delete (process.stdout as any).columns;
   }
 }
 
