@@ -6,84 +6,162 @@ import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
 
 export const domainsCommand = new Command('domains')
-  .description('Custom domain management — list, add, verify, attach tenant subdomains')
+  .description('Per-site domain management — list, add, verify, set canonical')
   .addHelpText('after', `
 Examples:
-  $ solid domains list
-  $ solid domains add my-client.com
-  $ solid domains verify my-client.com
-  $ solid domains remove my-client.com --yes
+  $ solid domains list                            # every site + every address
+  $ solid domains add acme.com                    # attach to primary site
+  $ solid domains add shop.acme.com --site shop   # attach to specific site
+  $ solid domains verify <id>                     # re-check DNS (canonical
+                                                  # flips to this domain
+                                                  # automatically when verified)
+  $ solid domains set-canonical <site> <address>  # force canonical override
+  $ solid domains remove <id> --yes
 
-On-demand TLS is issued automatically by Caddy after verification.
-See: Owners-Manual/09-Core-Innovations/CUSTOM-DOMAINS-ON-DEMAND-TLS.md`)
+Canonical: exactly one address per site is the URL customers see. Non-
+canonical addresses 301-redirect to canonical. The solidnumber.com
+subdomain ALWAYS stays active as a failover — never deleted.
+
+See: Owners-Manual/29-Provisioning/SITE-AND-DOMAIN-ARCHITECTURE.md`)
   .action(async () => { domainsCommand.outputHelp(); });
 
-domainsCommand.command('list').alias('ls').description('List configured domains')
+domainsCommand.command('list').alias('ls').description('List every site + every address (canonical first)')
   .option('--json', 'JSON output')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
-    const spinner = ora('Loading domains...').start();
+    const spinner = ora('Loading sites and addresses...').start();
     try {
-      // Get subdomain + custom domains
-      const [subRes, customRes] = await Promise.all([
-        apiClient.get('/api/v1/domains/subdomain').catch(() => ({ data: {} })),
-        apiClient.get('/api/v1/domains/custom').catch(() => ({ data: [] })),
-      ]);
+      // /api/sites already returns enriched canonical_url + addresses[] per
+      // site (backend P A1). One call, everything on screen.
+      const res = await apiClient.get('/api/v1/sites');
       spinner.stop();
 
+      const body = res.data as Record<string, any>;
+      const sites: any[] = body.sites || [];
+
       if (isJsonOutput(options)) {
-        console.log(JSON.stringify({ subdomain: subRes.data, custom: customRes.data }, null, 2));
+        console.log(JSON.stringify({ sites }, null, 2));
         return;
       }
 
-      const sub = subRes.data as Record<string, any>;
-      const customs = (customRes.data as Record<string, any>).domains || customRes.data || [];
-
       console.log('');
-      console.log(ui.header('Domains'));
+      console.log(ui.header('Your sites and domains'));
 
-      // Subdomain
-      if (sub.subdomain) {
-        console.log(`  ${chalk.bold(`${sub.subdomain}.solidnumber.com`)} ${chalk.green('● active')} ${chalk.hex('#818cf8')('[subdomain]')}`);
+      if (sites.length === 0) {
+        console.log(chalk.dim('  No sites provisioned yet.'));
+        console.log('');
+        return;
       }
 
-      // Custom domains
-      if (customs.length > 0) {
-        for (const d of customs) {
-          const verified = d.verified ? chalk.green('● verified') : chalk.yellow('○ pending');
-          console.log(`  ${chalk.bold(d.domain)} ${verified}`);
+      for (const site of sites) {
+        const liveBadge = site.is_live ? chalk.green('● LIVE') : chalk.dim('○ draft');
+        console.log('');
+        console.log(`  ${chalk.bold(site.name)} ${liveBadge} ${chalk.hex('#818cf8')(`[${site.site_type}]`)}`);
+
+        // Canonical first
+        if (site.canonical_host) {
+          console.log(`    ${chalk.green('★')} ${chalk.bold(site.canonical_host)} ${chalk.dim('(canonical)')}`);
+        } else {
+          console.log(`    ${chalk.dim('no canonical — site has no addresses yet')}`);
+        }
+
+        // Alternates
+        const alts = (site.addresses || []).filter((a: any) => !a.is_canonical && a.is_active);
+        for (const addr of alts) {
+          const status = addr.is_verified
+            ? chalk.green('● verified')
+            : chalk.yellow('○ pending');
+          const kindLabel = addr.kind === 'solidnumber_subdomain'
+            ? chalk.dim('[solidnumber fallback]')
+            : addr.kind === 'custom_subdomain'
+              ? chalk.dim('[custom subdomain]')
+              : chalk.dim('[custom domain]');
+          console.log(`    ${chalk.dim('└')} ${addr.value} ${status} ${kindLabel}`);
         }
       }
-
-      if (!sub.subdomain && customs.length === 0) {
-        console.log(chalk.dim('  No domains configured. Use `solid domains add <domain>` to connect one.'));
-      }
+      console.log('');
+      console.log(chalk.dim('  ★ = canonical. Non-canonical addresses 301-redirect to canonical.'));
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
 
-domainsCommand.command('add <domain>').description('Add a custom domain')
-  .action(async (domain) => {
+domainsCommand.command('add <domain>').description('Attach a custom domain to a site (defaults to primary)')
+  .option('--site <slug>', 'Site slug to attach domain to (defaults to primary)')
+  .option('--type <type>', 'Domain type: website, landing, survey', 'website')
+  .action(async (domain, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
-    const spinner = ora(`Adding ${domain}...`).start();
+    const spinner = ora(`Resolving target site...`).start();
     try {
-      const res = await apiClient.post('/api/v1/domains/custom', { domain });
+      // Resolve site_id from --site slug (or leave undefined → backend defaults to primary)
+      let siteId: number | undefined;
+      if (options.site) {
+        const siteRes = await apiClient.get(`/api/v1/sites/by-slug/${encodeURIComponent(options.site)}`);
+        siteId = (siteRes.data as any)?.site?.id;
+        if (!siteId) {
+          spinner.fail(chalk.red(`Site "${options.site}" not found`));
+          process.exit(1);
+        }
+      }
+      spinner.text = `Attaching ${domain}...`;
+      const res = await apiClient.post('/api/v1/domains/custom', {
+        domain,
+        type: options.type || 'website',
+        ...(siteId ? { site_id: siteId } : {}),
+      });
       spinner.stop();
       const d = res.data as Record<string, any>;
       console.log('');
-      console.log(ui.successBox('Domain Added', [
+      console.log(ui.successBox('Domain Attached', [
         `${chalk.dim('Domain:')} ${domain}`,
+        `${chalk.dim('Site:')}   ${options.site || 'primary (default)'}`,
         '',
-        chalk.dim('Add this CNAME record to your DNS:'),
+        chalk.dim('Add this CNAME record at your DNS provider:'),
         `  ${chalk.bold('Type:')}   CNAME`,
         `  ${chalk.bold('Name:')}   ${domain}`,
-        `  ${chalk.bold('Target:')} ${d.cname_target || d.dns_target || 'cname.solidnumber.com'}`,
+        `  ${chalk.bold('Target:')} ${d.dns_target || d.cname_target || 'proxy.solidnumber.com'}`,
         '',
-        chalk.dim('Then verify: solid domains verify ' + domain),
+        chalk.dim('Then verify: solid domains verify ' + (d.id || '<id>')),
+        chalk.dim('Canonical flips to this domain automatically on verify.'),
       ]));
       console.log('');
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+  });
+
+domainsCommand.command('set-canonical <site> <address>')
+  .description('Force canonical to a specific address (e.g. solid domains set-canonical angl-llc-main angl.net)')
+  .action(async (siteSlug, address) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const ora = (await import('ora')).default;
+    const spinner = ora(`Looking up site ${siteSlug}...`).start();
+    try {
+      const siteRes = await apiClient.get(`/api/v1/sites/by-slug/${encodeURIComponent(siteSlug)}`);
+      const site = (siteRes.data as any)?.site;
+      if (!site) {
+        spinner.fail(chalk.red(`Site "${siteSlug}" not found`));
+        process.exit(1);
+      }
+      const match = (site.addresses || []).find(
+        (a: any) => a.value === address || a.url === address,
+      );
+      if (!match) {
+        spinner.fail(chalk.red(`Address "${address}" not found on site ${siteSlug}`));
+        console.log(chalk.dim('Available addresses:'));
+        for (const a of site.addresses || []) {
+          console.log(`  ${chalk.bold(a.value)} ${chalk.dim(`[${a.kind}]`)}`);
+        }
+        process.exit(1);
+      }
+      spinner.text = `Setting canonical to ${address}...`;
+      // set_canonical endpoint: POST /api/v1/sites/{id}/canonical
+      // (small new route — keep the logic on backend so we don't duplicate
+      // validation here)
+      await apiClient.post(`/api/v1/sites/${site.id}/canonical`, {
+        table: match.table,
+        row_id: match.row_id,
+      });
+      spinner.succeed(chalk.green(`Canonical for ${siteSlug} is now ${address}`));
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
   });
 
