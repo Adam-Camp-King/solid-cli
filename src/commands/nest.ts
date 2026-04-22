@@ -334,6 +334,51 @@ nestCommand
   });
 
 nestCommand
+  .command('promote <import_id>')
+  .description('Move a sandbox Nest drop onto a real site (still a draft — publish separately)')
+  .option('--site <id>', 'destination Site id (numeric). Omit to use company default.')
+  .option('--subdomain <sub>', 'subdomain hint (e.g. "promo"). Stored as intent; no DNS auto-creation.')
+  .option('--custom-domain <domain>', 'custom domain (e.g. anglebuild.com)')
+  .option('--json', 'machine-readable output')
+  .action(async (importId: string, flags: { site?: string; subdomain?: string; customDomain?: string; json?: boolean }) => {
+    requireAuth();
+    const spinner = flags.json ? null : ora(`Promoting ${importId}…`).start();
+    try {
+      const destination: Record<string, unknown> = {};
+      if (flags.site && /^\d+$/.test(flags.site)) destination.site_id = Number(flags.site);
+      if (flags.subdomain?.trim()) destination.subdomain = flags.subdomain.trim();
+      if (flags.customDomain?.trim()) destination.custom_domain = flags.customDomain.trim();
+
+      const res = await apiClient.post(`/api/v1/cli/ant/imports/${importId}/promote`, { destination });
+      const data = res.data as Record<string, any>;
+
+      if (flags.json) {
+        console.log(JSON.stringify(data));
+        return;
+      }
+
+      if (spinner) spinner.succeed(chalk.green('Promoted'));
+      console.log('');
+      console.log(ui.label('Import', importId));
+      console.log(ui.label('Page', String(data.page_id ?? '—')));
+      console.log(ui.label('URL', String(data.page_url ?? '—')));
+      console.log(ui.label('Site', String(data.site_id ?? '—')));
+      if (data.custom_domain) console.log(ui.label('Custom domain', String(data.custom_domain)));
+      console.log(ui.label('Mode', String(data.mode ?? '—')));
+      console.log('');
+      console.log(chalk.dim("  It's a draft on your site. Publish when ready."));
+    } catch (error) {
+      if (spinner) spinner.fail(chalk.red('Promote failed'));
+      const apiError = handleApiError(error);
+      if (flags.json) {
+        console.log(JSON.stringify({ error: apiError.message }));
+      } else {
+        console.error(chalk.red(`  ${apiError.message}`));
+      }
+    }
+  });
+
+nestCommand
   .command('from-url <url>')
   .description('Nest from a URL (explicit; equivalent to `solid nest <url>`)')
   .option('--type <type>')
