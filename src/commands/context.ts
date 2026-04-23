@@ -179,10 +179,10 @@ function printClaudeNextSteps(markdownPath: string, jsonPath: string, markdownBy
     `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude')}`,
     `${chalk.dim('Watch mode:')} ${chalk.cyan('solid context --claude --watch')}`,
     '',
-    `${chalk.dim('Tip:')} try ${chalk.cyan('--ladder')} for a Dewey-classified context library`,
-    `${chalk.dim('     (~8KB spine + one file per KB shelf, under the 40KB perf warning)')}`,
+    `${chalk.dim('This is the legacy monolithic mode (--full).')}`,
+    `${chalk.dim('Drop the --full flag for the slim Dewey-classified library.')}`,
   ];
-  console.log(ui.successBox('AI Context Ready', lines));
+  console.log(ui.successBox('AI Context Ready (full/legacy mode)', lines));
   console.log('');
 }
 
@@ -198,7 +198,8 @@ function printLadderNextSteps(r: LadderWriteResult, jsonPath: string, jsonBytes:
     `${chalk.dim('Shelves load on demand when Claude runs')} ${chalk.cyan('cat .claude/library/<NNN>-<slug>.md')}${chalk.dim('.')}`,
     `${chalk.dim('Full volumes live in the DB:')} ${chalk.cyan('solid kb get <id>')}`,
     '',
-    `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude --ladder')}`,
+    `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude')}`,
+    `${chalk.dim('Legacy single-file mode:')} ${chalk.cyan('solid context --claude --full')}`,
   ];
   console.log(ui.successBox('AI Context Library Ready (DDC mode)', lines));
   console.log('');
@@ -279,8 +280,9 @@ function renderTools(m: ToolManifestResponse): void {
 export const contextCommand = new Command('context')
   .description('One-shot AI context dump (company state, locks, drafts, tools) — T11 agency mode')
   .option('--save', 'Save to ./SOLID-CONTEXT.md')
-  .option('--claude', 'Save BOTH .claude/CLAUDE.md + .claude/solid-context.json')
-  .option('--ladder', 'With --claude, emit a Dewey-classified library: slim spine + .claude/library/<NNN>-<slug>.md shelves')
+  .option('--claude', 'Save a Dewey-classified library: slim .claude/CLAUDE.md spine + .claude/library/<NNN>-<slug>.md shelves Claude loads on demand')
+  .option('--ladder', '(Deprecated alias for --claude ladder mode; retained for compatibility)')
+  .option('--full', 'With --claude, emit the legacy monolithic CLAUDE.md (every KB entry inline — can exceed 40KB and trigger Claude Code size warnings)')
   .option('--cursor', 'Save to ./.cursorrules')
   .option('--codex', 'Save to ./AGENTS.md (the emerging cross-agent standard: Codex / Claude / Cursor / Gemini)')
   .option('--json', 'Output JSON to stdout')
@@ -384,7 +386,13 @@ export const contextCommand = new Command('context')
     let jsonPath: string | null = null;
     let outputMode: 'claude' | 'cursor' | 'codex' | 'file' | 'stdout' = 'stdout';
 
-    if (options.claude && options.ladder) {
+    // Ladder mode is now the default for --claude. Legacy --full opts
+    // back into the monolithic CLAUDE.md (which can exceed 40KB and
+    // trigger the Claude Code "large file will impact performance"
+    // warning). --ladder is retained as an alias for backward compat
+    // with existing tooling / muscle memory.
+    const useLadder = options.claude && !options.full;
+    if (useLadder) {
       // Ladder mode: slim spine + one file per DDC shelf. The `doc`
       // (legacy monolith markdown) is ignored — we fetch the spine +
       // shelves fresh from the two new endpoints.
@@ -404,6 +412,9 @@ export const contextCommand = new Command('context')
         process.exit(1);
       }
     } else if (options.claude) {
+      // --claude --full: legacy monolithic mode. Single .claude/CLAUDE.md
+      // with every KB entry inlined. Warn if it crosses the 40KB
+      // Claude Code threshold so the user knows what they opted into.
       outputMode = 'claude';
       const claudeDir = path.resolve('.claude');
       if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
@@ -411,6 +422,12 @@ export const contextCommand = new Command('context')
       jsonPath = path.join(claudeDir, 'solid-context.json');
       fs.writeFileSync(markdownPath, doc);
       if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+      const bytes = Buffer.byteLength(doc, 'utf-8');
+      if (bytes > 40_000) {
+        console.log('');
+        console.log(chalk.yellow(`  ⚠ --full wrote ${Math.round(bytes / 1024)}KB — Claude Code warns above 40KB.`));
+        console.log(chalk.dim(`     Drop the flag (or use ${chalk.cyan('solid context --claude')}) for the slim ladder library.`));
+      }
     } else if (options.cursor) {
       outputMode = 'cursor';
       markdownPath = path.resolve('.cursorrules');
