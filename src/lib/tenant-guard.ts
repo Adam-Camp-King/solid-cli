@@ -42,13 +42,27 @@ export type GuardResult =
  * Code session across every project, so tenant data leaking there would
  * contaminate every unrelated workflow on the machine.
  */
-function isProtectedRoot(baseDir: string): boolean {
+export function isProtectedRoot(baseDir: string): boolean {
   const resolved = path.resolve(baseDir);
   const home = path.resolve(os.homedir());
   if (resolved === home) return true;
   const claudeUnderHome = path.join(home, '.claude');
   if (resolved === claudeUnderHome) return true;
   return false;
+}
+
+/**
+ * Home-dir-only refusal (for commands like `solid pull` that CREATE the
+ * manifest and therefore can't require one yet). Prints a friendly error
+ * and exits 1 if `baseDir` resolves to $HOME or $HOME/.claude/. Otherwise
+ * returns silently.
+ */
+export function refuseProtectedRoot(baseDir: string): void {
+  if (!isProtectedRoot(baseDir)) return;
+  console.error(chalk.red('Refusing to write tenant data to your home directory.'));
+  console.error(chalk.dim(`  ${path.resolve(baseDir)} is global (loaded by every Claude Code session).`));
+  console.error(chalk.dim('  `cd` into a dedicated tenant project directory and try again.'));
+  process.exit(1);
 }
 
 /**

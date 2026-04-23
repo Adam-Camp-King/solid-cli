@@ -20,17 +20,7 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-
-interface PullManifest {
-  company_id: number;
-  company_name: string;
-  pulled_at: string;
-  api_url: string;
-  pages: Record<string, { id: number; slug: string; updated_at: string }>;
-  kb: Record<string, { id: number; title: string }>;
-  services: Record<string, { id: number; slug: string }>;
-  products: Record<string, { id: number; name: string }>;
-}
+import { refuseProtectedRoot, PullManifest } from '../lib/tenant-guard';
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -67,6 +57,13 @@ export const pullCommand = new Command('pull')
     }
 
     const baseDir = path.resolve(options.dir);
+
+    // Home-dir refusal. `pull` creates the manifest so it can't require
+    // one yet, but it must not scaffold a tenant project into $HOME —
+    // doing so would contaminate the global Claude Code context.
+    // See Owners-Manual/03-AI-Systems/CLAUDE-CONTEXT-CANONICAL-TRUTH.md § 100.2.
+    refuseProtectedRoot(baseDir);
+
     const cacheDir = path.join(baseDir, '.solid', 'cache');
 
     // ── Offline mode: restore from cache ─────────────────────────────

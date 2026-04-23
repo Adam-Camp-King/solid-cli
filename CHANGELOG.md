@@ -2,6 +2,36 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.16.1] — 2026-04-23
+
+Gap-closure patch following the 1.16.0 tenant-guard ship. Tightens the
+same invariant in the one write-path command that was missed.
+
+### Added
+
+- **`refuseProtectedRoot(baseDir)`** in `lib/tenant-guard.ts` — home-dir-
+  only refusal helper for commands that CREATE the manifest and therefore
+  can't call `requireTenantManifest` yet. Exits 1 if `baseDir` resolves
+  to `$HOME` or `$HOME/.claude/`. Shares `isProtectedRoot` with the full
+  guard so there's one source of truth.
+- **`isProtectedRoot`** now exported (was previously private).
+
+### Changed
+
+- **`solid pull`** now calls `refuseProtectedRoot(baseDir)` before writing.
+  Prevents scaffolding a tenant project (pages/, kb/, .solid/manifest.json)
+  into the home directory, closing the symmetric gap to 1.16.0's `context`
+  and `push` coverage.
+- **`pull.ts`** now imports `PullManifest` from `lib/tenant-guard.ts`
+  instead of keeping its own inline duplicate. `push.ts` + `pull.ts` +
+  `context.ts` all share one canonical type.
+
+### Tests
+
+- 4 new cases in `__tests__/lib/tenant-guard.test.ts` covering
+  `refuseProtectedRoot` and `isProtectedRoot`.
+- Suite: 709 / 709 passing.
+
 ## [1.16.0] — 2026-04-23
 
 Tenant context boundary guard. Closes a multi-tenant hygiene bug where

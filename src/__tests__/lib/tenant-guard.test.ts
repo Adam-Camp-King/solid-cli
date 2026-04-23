@@ -8,7 +8,13 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { checkTenantManifest, requireTenantManifest, PullManifest } from '../../lib/tenant-guard';
+import {
+  checkTenantManifest,
+  requireTenantManifest,
+  refuseProtectedRoot,
+  isProtectedRoot,
+  PullManifest,
+} from '../../lib/tenant-guard';
 
 function makeTmpdir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'solid-guard-test-'));
@@ -128,5 +134,47 @@ describe('requireTenantManifest (CLI wrapper)', () => {
     expect(m.company_id).toBe(42);
     expect(m.company_name).toBe('Match Co');
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('refuseProtectedRoot (pull.ts helper)', () => {
+  let exitSpy: jest.SpyInstance;
+  let errSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`__process_exit__:${code}`);
+    }) as never);
+    errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    exitSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it('exits 1 when baseDir is $HOME', () => {
+    expect(() => refuseProtectedRoot(os.homedir())).toThrow('__process_exit__:1');
+    const errors = errSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toMatch(/Refusing to write tenant data to your home directory/i);
+  });
+
+  it('exits 1 when baseDir is $HOME/.claude', () => {
+    expect(() => refuseProtectedRoot(path.join(os.homedir(), '.claude'))).toThrow('__process_exit__:1');
+  });
+
+  it('is a no-op on an ordinary tmpdir', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'refuse-test-'));
+    try {
+      refuseProtectedRoot(tmp);
+      expect(exitSpy).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('isProtectedRoot predicate matches the refusal rule', () => {
+    expect(isProtectedRoot(os.homedir())).toBe(true);
+    expect(isProtectedRoot(path.join(os.homedir(), '.claude'))).toBe(true);
+    expect(isProtectedRoot('/tmp')).toBe(false);
   });
 });
