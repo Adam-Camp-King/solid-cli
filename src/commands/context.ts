@@ -89,6 +89,42 @@ interface ToolManifestResponse {
   scopes_in_use: string[];
 }
 
+// ── Ladder mode (SPRINT-CONTEXT-LIBRARY-DDC) ─────────────────────────
+// `--claude --ladder` emits a slim spine + one file per non-empty DDC
+// shelf under `.claude/library/`, instead of a 70KB monolith. The
+// backend does the classification + rendering; the CLI is just an I/O
+// layer here.
+
+interface SpineResponse {
+  content: string;
+  bytes: number;
+  schema: string;
+  format: string;
+  generated_at: string;
+}
+
+interface ShelvesResponse {
+  shelves: Record<string, string>;  // {ddc: markdown}
+  count: number;
+  entry_total: number;
+  schema: string;
+  generated_at: string;
+}
+
+async function fetchSpine(): Promise<SpineResponse> {
+  const res = await apiClient.get<SpineResponse>('/api/v1/cli/context/spine');
+  return res.data;
+}
+
+async function fetchShelves(): Promise<ShelvesResponse> {
+  const res = await apiClient.get<ShelvesResponse>('/api/v1/cli/context/shelves');
+  return res.data;
+}
+
+// Pure helpers live in lib/context-ladder so they're testable without
+// pulling in ora/chalk (ESM-only). See SPRINT-CONTEXT-LIBRARY-DDC.
+import { writeLadder, LadderWriteResult } from '../lib/context-ladder';
+
 async function fetchContext(format: 'markdown' | 'json', minimal: boolean, section?: ContextSection): Promise<string | ContextResponse | SectionResponse> {
   const params: Record<string, string> = { format, minimal: String(minimal) };
   if (section) params.section = section;
@@ -142,8 +178,29 @@ function printClaudeNextSteps(markdownPath: string, jsonPath: string, markdownBy
     `${chalk.dim('For programmatic access:')} ${chalk.cyan('cat .claude/solid-context.json')}`,
     `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude')}`,
     `${chalk.dim('Watch mode:')} ${chalk.cyan('solid context --claude --watch')}`,
+    '',
+    `${chalk.dim('Tip:')} try ${chalk.cyan('--ladder')} for a Dewey-classified context library`,
+    `${chalk.dim('     (~8KB spine + one file per KB shelf, under the 40KB perf warning)')}`,
   ];
   console.log(ui.successBox('AI Context Ready', lines));
+  console.log('');
+}
+
+function printLadderNextSteps(r: LadderWriteResult, jsonPath: string, jsonBytes: number): void {
+  console.log('');
+  const spineWarn = r.spineBytes > 8_000 ? chalk.yellow(` ⚠ over 8KB cap`) : chalk.green(' ✓');
+  const lines: string[] = [
+    `${chalk.dim('Spine:')}    ${r.spinePath} (${formatBytes(r.spineBytes)})${spineWarn}`,
+    `${chalk.dim('Shelves:')}  ${r.libraryDir}/ — ${r.shelfCount} file${r.shelfCount === 1 ? '' : 's'} (${formatBytes(r.shelfBytes)} total)`,
+    `${chalk.dim('JSON:')}     ${jsonPath} (${formatBytes(jsonBytes)})`,
+    '',
+    `${chalk.dim('Claude Code auto-reads .claude/CLAUDE.md (the spine).')}`,
+    `${chalk.dim('Shelves load on demand when Claude runs')} ${chalk.cyan('cat .claude/library/<NNN>-<slug>.md')}${chalk.dim('.')}`,
+    `${chalk.dim('Full volumes live in the DB:')} ${chalk.cyan('solid kb get <id>')}`,
+    '',
+    `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude --ladder')}`,
+  ];
+  console.log(ui.successBox('AI Context Library Ready (DDC mode)', lines));
   console.log('');
 }
 
@@ -223,6 +280,7 @@ export const contextCommand = new Command('context')
   .description('One-shot AI context dump (company state, locks, drafts, tools) — T11 agency mode')
   .option('--save', 'Save to ./SOLID-CONTEXT.md')
   .option('--claude', 'Save BOTH .claude/CLAUDE.md + .claude/solid-context.json')
+  .option('--ladder', 'With --claude, emit a Dewey-classified library: slim spine + .claude/library/<NNN>-<slug>.md shelves')
   .option('--cursor', 'Save to ./.cursorrules')
   .option('--codex', 'Save to ./AGENTS.md (the emerging cross-agent standard: Codex / Claude / Cursor / Gemini)')
   .option('--json', 'Output JSON to stdout')
@@ -326,7 +384,26 @@ export const contextCommand = new Command('context')
     let jsonPath: string | null = null;
     let outputMode: 'claude' | 'cursor' | 'codex' | 'file' | 'stdout' = 'stdout';
 
-    if (options.claude) {
+    if (options.claude && options.ladder) {
+      // Ladder mode: slim spine + one file per DDC shelf. The `doc`
+      // (legacy monolith markdown) is ignored — we fetch the spine +
+      // shelves fresh from the two new endpoints.
+      outputMode = 'claude';
+      try {
+        const [spineRes, shelvesRes] = await Promise.all([fetchSpine(), fetchShelves()]);
+        const writeRes = writeLadder(spineRes.content, shelvesRes.shelves, process.cwd());
+        jsonPath = path.join(writeRes.libraryDir, '..', 'solid-context.json');
+        if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+        spinner?.succeed(chalk.green('AI context library ready'));
+        printLadderNextSteps(writeRes, jsonPath, jsonDoc ? Buffer.byteLength(jsonDoc, 'utf-8') : 0);
+        // Skip the remaining output-mode branches — ladder mode prints its own summary
+        return;
+      } catch (error) {
+        spinner?.fail(chalk.red('Failed to build DDC library'));
+        console.error(chalk.red(handleApiError(error).message));
+        process.exit(1);
+      }
+    } else if (options.claude) {
       outputMode = 'claude';
       const claudeDir = path.resolve('.claude');
       if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
@@ -403,8 +480,8 @@ export const contextCommand = new Command('context')
 
 import { appendExamples as __ae_context } from '../lib/command-kit';
 __ae_context(contextCommand, [
-  { cmd: 'solid context --claude',   why: 'Dump full company context into Claude (the killer workflow)' },
-  { cmd: 'solid context --cursor',   why: 'Dump into Cursor' },
-  { cmd: 'solid context --json',     why: 'Raw payload for any AI client' },
-  { cmd: 'solid context --lite',     why: 'Trim to core entities (faster, cheaper tokens)' },
+  { cmd: 'solid context --claude',           why: 'Dump full company context into Claude (the killer workflow)' },
+  { cmd: 'solid context --claude --ladder',  why: 'Dewey-classified context library (≤8KB spine + on-demand shelves)' },
+  { cmd: 'solid context --cursor',           why: 'Dump into Cursor' },
+  { cmd: 'solid context --json',             why: 'Raw payload for any AI client' },
 ]);
