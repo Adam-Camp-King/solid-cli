@@ -19,17 +19,7 @@ import * as readline from 'readline';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-
-interface PullManifest {
-  company_id: number;
-  company_name: string;
-  pulled_at: string;
-  api_url: string;
-  pages: Record<string, { id: number; slug: string; updated_at: string }>;
-  kb: Record<string, { id: number; title: string }>;
-  services: Record<string, { id: number; slug: string }>;
-  products: Record<string, { id: number; name: string }>;
-}
+import { requireTenantManifest, PullManifest } from '../lib/tenant-guard';
 
 interface ChangeSet {
   pages: { file: string; action: 'create' | 'update'; data: Record<string, unknown> }[];
@@ -210,22 +200,11 @@ export const pushCommand = new Command('push')
 
     const baseDir = path.resolve(options.dir);
 
-    // ── Load manifest ─────────────────────────────────────────────────
+    // ── Tenant boundary guard ──────────────────────────────────────────
+    // Shared with `solid context --claude` and `solid pull`. See
+    // Owners-Manual/03-AI-Systems/CLAUDE-CONTEXT-CANONICAL-TRUTH.md.
     const manifestPath = path.join(baseDir, '.solid', 'manifest.json');
-    if (!fs.existsSync(manifestPath)) {
-      console.error(chalk.red('No .solid/manifest.json found.'));
-      console.error(chalk.dim('Run `solid pull` first to download your project files.'));
-      process.exit(1);
-    }
-
-    const manifest: PullManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-
-    // Verify company match
-    if (manifest.company_id !== companyId) {
-      console.error(chalk.red(`This project belongs to company ${manifest.company_id} (${manifest.company_name}).`));
-      console.error(chalk.red(`You are logged in as company ${companyId}.`));
-      process.exit(1);
-    }
+    const manifest: PullManifest = requireTenantManifest(baseDir, companyId);
 
     // ── Detect changes ────────────────────────────────────────────────
     const scanSpinner = ora('Scanning for changes...').start();

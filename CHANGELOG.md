@@ -2,6 +2,54 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.16.0] — 2026-04-23
+
+Tenant context boundary guard. Closes a multi-tenant hygiene bug where
+`solid context --claude` would write tenant-scoped data to any directory
+the user happened to be in, including the platform monorepo and
+`$HOME/.claude/` (which is loaded by every Claude Code session on the
+machine).
+
+### Added
+
+- **`lib/tenant-guard.ts`** — new shared guard module exporting
+  `requireTenantManifest(baseDir, companyId)` and the pure testable variant
+  `checkTenantManifest(...)`. Enforces three rules:
+  1. `$HOME` and `$HOME/.claude/` are never writeable (hard refusal, even
+     if a manifest somehow existed there).
+  2. `<cwd>/.solid/manifest.json` must exist.
+  3. `manifest.company_id` must equal the active session's `company_id`.
+- **`PullManifest` interface** — exported from `lib/tenant-guard.ts` as the
+  canonical type. `push.ts` now imports it from there instead of keeping
+  its own copy.
+- Tests: `__tests__/lib/tenant-guard.test.ts`, `__tests__/commands/context.test.ts`.
+
+### Changed
+
+- **`solid context --claude / --cursor / --codex / --save / --watch`** now
+  calls `requireTenantManifest` before writing. Unbound directories exit 1
+  with a friendly error instead of silently contaminating the filesystem.
+  Read-only paths (`--summary`, `--tools-only`, `--section`, `--json` to
+  stdout) are unchanged and remain usable in any directory.
+- **`solid push`** refactored to use the shared guard (previously had an
+  inline duplicate check). Behavior equivalent; the extraction is proven
+  by reuse.
+
+### Docs
+
+- New canonical-truth doc:
+  `Owners-Manual/03-AI-Systems/CLAUDE-CONTEXT-CANONICAL-TRUTH.md`
+  consolidating the previously-dispersed Claude context architecture
+  (three roles of CLAUDE.md, four flows-down channels, write model,
+  refresh model, multi-tenant invariants).
+- Platform `CLAUDE.md` now references the canonical-truth doc as Rule 4b.
+
+### Fixed
+
+- `solid context --claude` no longer writes into `$HOME`, the platform
+  monorepo, or any directory whose bound `company_id` differs from the
+  active session.
+
 ## [1.10.0] — 2026-04-19
 
 Sprint 1 — CLI v2 Agent-Ready. Six agent-quality-of-life upgrades ship

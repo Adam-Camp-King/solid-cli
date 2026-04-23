@@ -30,6 +30,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
+import { requireTenantManifest } from '../lib/tenant-guard';
 
 type ContextSection = 'company' | 'content' | 'operations' | 'capabilities' | 'history' | 'tooling';
 
@@ -357,6 +358,17 @@ export const contextCommand = new Command('context')
 
     // ── Full context paths ────────────────────────────────────────
     const isSaving = Boolean(options.save || options.claude || options.cursor || options.codex || options.watch);
+
+    // Tenant boundary guard. Writing tenant-scoped files (.claude/, .cursorrules,
+    // AGENTS.md, SOLID-CONTEXT.md) into a directory not bound to the active
+    // tenant violates the multi-tenant invariants documented in
+    // Owners-Manual/03-AI-Systems/CLAUDE-CONTEXT-CANONICAL-TRUTH.md.
+    // Read-only paths above (--summary, --tools-only, --section, --json to
+    // stdout) are exempt; only writes are guarded.
+    if (isSaving) {
+      requireTenantManifest(process.cwd(), config.companyId as number);
+    }
+
     const spinner = isSaving ? ora('Building AI context package...').start() : null;
 
     let doc: string;
