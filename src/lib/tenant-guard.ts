@@ -26,8 +26,21 @@ export interface PullManifest {
   products: Record<string, { id: number; name: string }>;
 }
 
+/**
+ * Why a directory is refused as a tenant-write target.
+ *
+ * - `home`           — $HOME itself. ~/.claude/ is loaded by every
+ *                      Claude Code session across every project.
+ * - `home_claude`    — $HOME/.claude/. Same reason, one level deeper.
+ * - `platform_repo`  — anywhere under the Solid# platform monorepo
+ *                      (detected by walking up for docker-compose.base.yml).
+ *                      Role-1 territory; tenant files here contaminate
+ *                      every platform-team Claude Code session.
+ */
+export type ProtectedRootReason = 'home' | 'home_claude' | 'platform_repo';
+
 export type GuardFailure =
-  | { kind: 'home_dir'; resolved: string }
+  | { kind: 'protected_root'; reason: ProtectedRootReason; resolved: string; platformRoot?: string }
   | { kind: 'missing'; manifestPath: string }
   | { kind: 'mismatch'; manifestCompanyId: number; manifestCompanyName: string; activeCompanyId: number };
 
@@ -36,33 +49,95 @@ export type GuardResult =
   | { ok: false; failure: GuardFailure };
 
 /**
- * Hard-coded refusal set: directories that must NEVER receive tenant
- * writes even if a manifest somehow ended up there. The user's home is
- * the critical one — `~/.claude/CLAUDE.md` is loaded into every Claude
- * Code session across every project, so tenant data leaking there would
- * contaminate every unrelated workflow on the machine.
+ * Walk up from ``baseDir`` looking for the platform-monorepo marker file
+ * (``docker-compose.base.yml``). Returns the absolute root path if found,
+ * else null. Matches the discovery logic in
+ * ``solid-backend/scripts/drift_scan/__main__.py::_default_repo_root``
+ * so the guard and the drift scanner agree on which tree counts as the
+ * platform monorepo.
  */
-export function isProtectedRoot(baseDir: string): boolean {
+function findPlatformMonorepoRoot(baseDir: string): string | null {
+  let dir = path.resolve(baseDir);
+  while (true) {
+    if (fs.existsSync(path.join(dir, 'docker-compose.base.yml'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Returns the reason ``baseDir`` is forbidden as a tenant-write target,
+ * or null if it's fine. Use ``isProtectedRoot`` for a bool convenience.
+ */
+export function protectedRootReason(
+  baseDir: string,
+): { reason: ProtectedRootReason; resolved: string; platformRoot?: string } | null {
   const resolved = path.resolve(baseDir);
   const home = path.resolve(os.homedir());
-  if (resolved === home) return true;
-  const claudeUnderHome = path.join(home, '.claude');
-  if (resolved === claudeUnderHome) return true;
-  return false;
+  if (resolved === home) return { reason: 'home', resolved };
+  if (resolved === path.join(home, '.claude')) return { reason: 'home_claude', resolved };
+
+  const platformRoot = findPlatformMonorepoRoot(resolved);
+  if (platformRoot !== null) {
+    // Refuse the monorepo root AND every subdirectory (incl. submodule
+    // trees like solid-backend/, solid-cli/). Running a tenant-write
+    // inside any of them is the § 700.1 pattern.
+    return { reason: 'platform_repo', resolved, platformRoot };
+  }
+  return null;
+}
+
+/**
+ * Hard-coded refusal set: directories that must NEVER receive tenant
+ * writes even if a manifest somehow ended up there. Three locations:
+ *
+ *   1. $HOME — ``~/.claude/CLAUDE.md`` is loaded into every Claude Code
+ *      session across every project, so tenant data leaking there would
+ *      contaminate every unrelated workflow on the machine.
+ *   2. $HOME/.claude — same reason, one level deeper.
+ *   3. The Solid# platform monorepo (and any submodule/subdir of it) —
+ *      Role-1 territory. A ``.claude/CLAUDE.md`` here contaminates
+ *      every platform-team session. This is what happened in the
+ *      2026-04-23 audit (§ 700.1).
+ *
+ * Hardened 2026-04-24 after the ANGL drift incident: before this, only
+ * (1) and (2) were protected; tenant writes inside /Desktop/Solid/ were
+ * only blocked by the "no manifest here" branch, which fails open if
+ * anyone places a manifest file in the platform repo.
+ */
+export function isProtectedRoot(baseDir: string): boolean {
+  return protectedRootReason(baseDir) !== null;
 }
 
 /**
  * Home-dir-only refusal (for commands like `solid pull` that CREATE the
  * manifest and therefore can't require one yet). Prints a friendly error
- * and exits 1 if `baseDir` resolves to $HOME or $HOME/.claude/. Otherwise
+ * and exits 1 if `baseDir` resolves to any protected root. Otherwise
  * returns silently.
  */
 export function refuseProtectedRoot(baseDir: string): void {
-  if (!isProtectedRoot(baseDir)) return;
-  console.error(chalk.red('Refusing to write tenant data to your home directory.'));
-  console.error(chalk.dim(`  ${path.resolve(baseDir)} is global (loaded by every Claude Code session).`));
-  console.error(chalk.dim('  `cd` into a dedicated tenant project directory and try again.'));
+  const refusal = protectedRootReason(baseDir);
+  if (!refusal) return;
+  printProtectedRootError(refusal);
   process.exit(1);
+}
+
+function printProtectedRootError(
+  refusal: { reason: ProtectedRootReason; resolved: string; platformRoot?: string },
+): void {
+  if (refusal.reason === 'platform_repo') {
+    console.error(chalk.red('Refusing to write tenant data inside the Solid# platform monorepo.'));
+    console.error(chalk.dim(`  ${refusal.resolved} is under ${refusal.platformRoot ?? 'the platform monorepo'} (Role-1 territory).`));
+    console.error(chalk.dim('  Tenant files here contaminate every platform-team Claude Code session.'));
+    console.error(chalk.dim('  `cd` into a dedicated tenant project directory (outside the monorepo) and try again.'));
+  } else {
+    console.error(chalk.red('Refusing to write tenant data to your home directory.'));
+    console.error(chalk.dim(`  ${refusal.resolved} is global (loaded by every Claude Code session).`));
+    console.error(chalk.dim('  `cd` into a dedicated tenant project directory and try again.'));
+  }
 }
 
 /**
@@ -71,8 +146,9 @@ export function refuseProtectedRoot(baseDir: string): void {
  * handles the user-facing error output + exit.
  */
 export function checkTenantManifest(baseDir: string, companyId: number): GuardResult {
-  if (isProtectedRoot(baseDir)) {
-    return { ok: false, failure: { kind: 'home_dir', resolved: path.resolve(baseDir) } };
+  const refusal = protectedRootReason(baseDir);
+  if (refusal) {
+    return { ok: false, failure: { kind: 'protected_root', ...refusal } };
   }
   const manifestPath = path.join(baseDir, '.solid', 'manifest.json');
   if (!fs.existsSync(manifestPath)) {
@@ -102,10 +178,8 @@ export function requireTenantManifest(baseDir: string, companyId: number): PullM
   const result = checkTenantManifest(baseDir, companyId);
   if (result.ok) return result.manifest;
 
-  if (result.failure.kind === 'home_dir') {
-    console.error(chalk.red('Refusing to write tenant data to your home directory.'));
-    console.error(chalk.dim(`  ${result.failure.resolved} is global (loaded by every Claude Code session).`));
-    console.error(chalk.dim('  `cd` into a tenant project directory and try again.'));
+  if (result.failure.kind === 'protected_root') {
+    printProtectedRootError(result.failure);
   } else if (result.failure.kind === 'missing') {
     console.error(chalk.red('Not a Solid# tenant working directory.'));
     console.error(chalk.dim(`  No .solid/manifest.json in ${baseDir}`));

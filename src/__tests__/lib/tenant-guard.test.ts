@@ -70,19 +70,52 @@ describe('checkTenantManifest', () => {
     }
   });
 
-  it('refuses $HOME even if a manifest exists there (home_dir rule)', () => {
+  it('refuses $HOME even if a manifest exists there (home reason)', () => {
     const r = checkTenantManifest(os.homedir(), 42);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.failure.kind).toBe('home_dir');
+    if (!r.ok && r.failure.kind === 'protected_root') {
+      expect(r.failure.reason).toBe('home');
+    } else {
+      throw new Error(`expected protected_root/home, got ${JSON.stringify(r)}`);
+    }
   });
 
-  it('refuses $HOME/.claude even if a manifest exists there (home_dir rule)', () => {
+  it('refuses $HOME/.claude even if a manifest exists there (home_claude reason)', () => {
     const r = checkTenantManifest(path.join(os.homedir(), '.claude'), 42);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.failure.kind).toBe('home_dir');
+    if (!r.ok && r.failure.kind === 'protected_root') {
+      expect(r.failure.reason).toBe('home_claude');
+    } else {
+      throw new Error(`expected protected_root/home_claude, got ${JSON.stringify(r)}`);
+    }
   });
 
-  it('does NOT treat /tmp as a protected root (only $HOME itself is protected)', () => {
+  it('refuses the platform monorepo root AND its subdirectories (platform_repo reason)', () => {
+    // Simulate the marker file so the walk-up detects a platform monorepo.
+    fs.writeFileSync(path.join(baseDir, 'docker-compose.base.yml'), '# marker');
+    const inner = path.join(baseDir, 'solid-cli');
+    fs.mkdirSync(inner);
+
+    const rRoot = checkTenantManifest(baseDir, 42);
+    expect(rRoot.ok).toBe(false);
+    if (!rRoot.ok && rRoot.failure.kind === 'protected_root') {
+      expect(rRoot.failure.reason).toBe('platform_repo');
+      expect(rRoot.failure.platformRoot).toBe(path.resolve(baseDir));
+    } else {
+      throw new Error(`expected protected_root/platform_repo at root, got ${JSON.stringify(rRoot)}`);
+    }
+
+    const rInner = checkTenantManifest(inner, 42);
+    expect(rInner.ok).toBe(false);
+    if (!rInner.ok && rInner.failure.kind === 'protected_root') {
+      expect(rInner.failure.reason).toBe('platform_repo');
+    } else {
+      throw new Error(`expected protected_root/platform_repo in subdir, got ${JSON.stringify(rInner)}`);
+    }
+  });
+
+  it('does NOT treat an ordinary tmpdir as a protected root', () => {
+    // No docker-compose.base.yml anywhere above — fall through to `missing`.
     const r = checkTenantManifest(baseDir, 42);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.failure.kind).toBe('missing');
@@ -128,6 +161,14 @@ describe('requireTenantManifest (CLI wrapper)', () => {
     expect(errors).toMatch(/Refusing to write tenant data to your home directory/i);
   });
 
+  it('exits 1 with a platform-repo refusal when baseDir walks up to docker-compose.base.yml', () => {
+    fs.writeFileSync(path.join(baseDir, 'docker-compose.base.yml'), '# marker');
+    expect(() => requireTenantManifest(baseDir, 42)).toThrow('__process_exit__:1');
+    const errors = errSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toMatch(/platform monorepo/i);
+    expect(errors).toMatch(/Role-1 territory/i);
+  });
+
   it('returns the parsed manifest when company_id matches', () => {
     writeManifest(baseDir, { company_id: 42, company_name: 'Match Co' });
     const m = requireTenantManifest(baseDir, 42);
@@ -162,7 +203,19 @@ describe('refuseProtectedRoot (pull.ts helper)', () => {
     expect(() => refuseProtectedRoot(path.join(os.homedir(), '.claude'))).toThrow('__process_exit__:1');
   });
 
-  it('is a no-op on an ordinary tmpdir', () => {
+  it('exits 1 when baseDir walks up to docker-compose.base.yml (platform_repo)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'refuse-repo-'));
+    try {
+      fs.writeFileSync(path.join(tmp, 'docker-compose.base.yml'), '# marker');
+      expect(() => refuseProtectedRoot(tmp)).toThrow('__process_exit__:1');
+      const errors = errSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(errors).toMatch(/platform monorepo/i);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('is a no-op on an ordinary tmpdir (no marker, not $HOME)', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'refuse-test-'));
     try {
       refuseProtectedRoot(tmp);
@@ -175,6 +228,13 @@ describe('refuseProtectedRoot (pull.ts helper)', () => {
   it('isProtectedRoot predicate matches the refusal rule', () => {
     expect(isProtectedRoot(os.homedir())).toBe(true);
     expect(isProtectedRoot(path.join(os.homedir(), '.claude'))).toBe(true);
-    expect(isProtectedRoot('/tmp')).toBe(false);
+    // A tmpdir with no marker walks up to /var/folders → /var → / — none
+    // contain docker-compose.base.yml, so the predicate returns false.
+    const clean = fs.mkdtempSync(path.join(os.tmpdir(), 'predicate-clean-'));
+    try {
+      expect(isProtectedRoot(clean)).toBe(false);
+    } finally {
+      fs.rmSync(clean, { recursive: true, force: true });
+    }
   });
 });
