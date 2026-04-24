@@ -362,8 +362,21 @@ doctorCommand
         get tokenExpiresAt() { return config.tokenExpiresAt; },
       },
       async (p: string) => {
-        const res = await apiClient.get(p, { validateStatus: () => true });
-        return { status: res.status };
+        // The project's apiClient.get() throws on 4xx/5xx. For the doctor
+        // env backend check we just want the status code — any HTTP
+        // response means the server is reachable. Unwrap from the axios
+        // error when the status is present; only re-throw true network
+        // failures so checkBackend can distinguish "slow/bad server"
+        // from "DNS/TLS/network problem".
+        try {
+          const res = await apiClient.get(p);
+          return { status: res.status };
+        } catch (err) {
+          const status = (err as { status?: number; response?: { status?: number } } | null)?.status
+            ?? (err as { response?: { status?: number } } | null)?.response?.status;
+          if (typeof status === 'number') return { status };
+          throw err;
+        }
       },
     );
     const report = await runDoctorEnv(deps);
