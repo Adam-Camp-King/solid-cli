@@ -128,6 +128,7 @@ import { subscriptionsCommand } from './commands/subscriptions';
 import { schemaCommand } from './commands/schema';
 import { mcpCommand } from './commands/mcp';
 import { doctorCommand } from './commands/doctor';
+import { graphCommand } from './commands/graph';
 import { ui } from './lib/ui';
 
 // Check for updates (non-blocking, runs in background)
@@ -447,6 +448,7 @@ program.addCommand(docsCommand);
 program.addCommand(healthCommand);
 program.addCommand(completionCommand);
 program.addCommand(doctorCommand);
+program.addCommand(graphCommand);
 
 // Multi-company
 program.addCommand(companyCommand);
