@@ -24,6 +24,8 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import { apiClient, handleApiError } from '../lib/api-client';
 import { config } from '../lib/config';
@@ -39,13 +41,66 @@ import {
   nodesOfType,
   resolveIri,
   subgraph,
+  validate,
 } from '../lib/graph-walker';
 
-async function fetchJsonLd(): Promise<JsonLdDocument> {
+async function fetchJsonLdRemote(): Promise<JsonLdDocument> {
   const res = await apiClient.get<JsonLdDocument>('/api/v1/cli/context', {
     params: { format: 'jsonld' },
   });
   return res.data;
+}
+
+/**
+ * Default offline path: ``.claude/solid-context.jsonld`` relative to
+ * CWD. ``solid context --claude`` writes this file alongside the
+ * existing flat ``solid-context.json``; once present, ``solid graph``
+ * can walk without hitting the network.
+ */
+function localJsonLdPath(): string {
+  return path.resolve(process.cwd(), '.claude', 'solid-context.jsonld');
+}
+
+function readJsonLdLocalOrNull(): JsonLdDocument | null {
+  const p = localJsonLdPath();
+  if (!fs.existsSync(p)) return null;
+  try {
+    const raw = fs.readFileSync(p, 'utf-8');
+    const doc = JSON.parse(raw);
+    if (doc && typeof doc === 'object' && '@context' in doc) {
+      return doc as JsonLdDocument;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the document according to the --offline / --remote policy:
+ *
+ *   --offline → read the local .jsonld file; fail if missing.
+ *   --remote  → always hit the API; ignore any local file.
+ *   default   → prefer local if it exists AND the session isn't
+ *               authenticated (common case for a bound tenant dir
+ *               using env-var auth or a stale login). Otherwise go
+ *               remote so we don't serve stale data to an active op.
+ */
+async function loadDocument(opts: { offline?: boolean; remote?: boolean }): Promise<JsonLdDocument> {
+  if (opts.remote) {
+    return fetchJsonLdRemote();
+  }
+  const local = readJsonLdLocalOrNull();
+  if (opts.offline) {
+    if (!local) {
+      throw new Error(
+        `No local JSON-LD at ${localJsonLdPath()}. Run \`solid context --claude\` in a tenant dir first, or drop --offline.`,
+      );
+    }
+    return local;
+  }
+  if (local && !config.isLoggedIn()) return local;
+  return fetchJsonLdRemote();
 }
 
 function typeSummary(doc: JsonLdDocument): Record<string, number> {
@@ -133,19 +188,25 @@ export const graphCommand = new Command('graph')
   .option('--type <t>', 'List every node of this @type (e.g. "Service", "solid:Agent"). Mutually exclusive with IRI.')
   .option('--list-types', 'Print every @type value present in the graph.')
   .option('--json', 'Emit the subgraph (or root doc, if no IRI) as JSON-LD on stdout.')
-  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean }) => {
-    if (!config.isLoggedIn()) {
+  .option('--offline', 'Force reading from local .claude/solid-context.jsonld — no API call. Fail if the file is absent.')
+  .option('--remote', 'Force a network fetch — ignore any local .claude/solid-context.jsonld.')
+  .option('--validate', 'Check that every edge target resolves in @graph and required per-type fields are present. Exit 1 on errors.')
+  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean }) => {
+    // --offline doesn't require auth; --remote does; the default prefers
+    // local-if-logged-out, remote-if-logged-in.
+    if (!opts.offline && !readJsonLdLocalOrNull() && !config.isLoggedIn()) {
       if (isJsonOutput(opts)) {
         process.stdout.write(JSON.stringify({ ok: false, error: 'not_authenticated' }, null, 2) + '\n');
       } else {
-        console.error(chalk.red('Not authenticated. Run: solid auth login'));
+        console.error(chalk.red('Not authenticated and no local .claude/solid-context.jsonld found.'));
+        console.error(chalk.dim('  Run `solid auth login` and retry, or cd into a tenant dir with a fresh context.'));
       }
       process.exit(1);
     }
 
     let doc: JsonLdDocument;
     try {
-      doc = await fetchJsonLd();
+      doc = await loadDocument(opts);
     } catch (err) {
       const e = handleApiError(err);
       if (isJsonOutput(opts)) {
@@ -154,6 +215,34 @@ export const graphCommand = new Command('graph')
         console.error(chalk.red(`Failed to fetch JSON-LD context: ${e.message}`));
       }
       process.exit(1);
+    }
+
+    // --validate -----------------------------------------------------------
+    if (opts.validate) {
+      const report = validate(doc);
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+        process.exit(report.ok ? 0 : 1);
+      }
+      console.log('');
+      console.log(chalk.bold(`Graph validation`));
+      console.log(chalk.dim(`  Root: ${doc['@id']}`));
+      console.log(chalk.dim(`  Nodes: ${report.nodeCount}   Edges traversed: ${report.edgeCount}`));
+      console.log(chalk.dim(`  Issues: ${report.issues.length}`));
+      console.log('');
+      for (const issue of report.issues) {
+        const marker = issue.severity === 'error' ? chalk.red('✗') : chalk.yellow('⚠');
+        console.log(`  ${marker} [${issue.code}] ${chalk.dim(issue.nodeId)}`);
+        console.log(`      ${issue.message}`);
+      }
+      console.log('');
+      if (report.ok) {
+        console.log(chalk.green('  ✓ graph is well-formed — every edge resolves, every required field present'));
+      } else {
+        console.log(chalk.red(`  ✗ ${report.issues.filter((i) => i.severity === 'error').length} error(s) — fix required`));
+      }
+      console.log('');
+      process.exit(report.ok ? 0 : 1);
     }
 
     // --list-types ---------------------------------------------------------
@@ -242,4 +331,5 @@ appendExamples(graphCommand, [
   { cmd: 'solid graph kb/42',              why: 'Node kb/42 + its direct neighbours (1 hop)' },
   { cmd: 'solid graph kb/42 --hops 2',     why: 'kb/42 neighbourhood, 2 hops out' },
   { cmd: 'solid graph kb/42 --out --json', why: 'Directed subgraph as machine-readable JSON-LD' },
+  { cmd: 'solid graph --offline',          why: 'Walk .claude/solid-context.jsonld — no network, no auth' },
 ]);

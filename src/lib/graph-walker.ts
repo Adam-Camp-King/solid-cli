@@ -247,3 +247,162 @@ export function subgraph(doc: JsonLdDocument, ids: Set<string>): JsonLdDocument 
     graph,
   };
 }
+
+// -- Validation -----------------------------------------------------------
+
+export type ValidationSeverity = 'error' | 'warn';
+
+export interface ValidationIssue {
+  severity: ValidationSeverity;
+  code: string;
+  nodeId: string;
+  message: string;
+}
+
+export interface ValidationReport {
+  ok: boolean;
+  issues: ValidationIssue[];
+  nodeCount: number;
+  edgeCount: number;
+}
+
+/**
+ * Per-type required-field registry. Matched against the @type array
+ * using the same suffix rules as ``nodesOfType``. Each required field
+ * is either a predicate that must be present and non-empty, or an
+ * edge that must resolve inside @graph.
+ *
+ * Missing required fields are ERROR by default; edge targets that
+ * exist but don't resolve in-document are ERROR. Structural issues
+ * (like a duplicate @id) are ERROR too.
+ *
+ * The registry is permissive: unknown types don't produce issues.
+ * New types are validated the moment they're added to this map.
+ */
+const REQUIRED_FIELDS: Array<{ matchType: string; fields: string[] }> = [
+  { matchType: 'Organization',         fields: ['name'] },
+  { matchType: 'solid:Company',        fields: ['name', 'identifier'] },
+  { matchType: 'Service',              fields: ['name', 'provider'] },
+  { matchType: 'Product',              fields: ['name', 'provider'] },
+  { matchType: 'solid:KnowledgeBaseEntry', fields: ['name', 'company'] },
+  { matchType: 'solid:Agent',          fields: ['name'] },
+  { matchType: 'solid:WebsitePage',    fields: ['name', 'company'] },
+  { matchType: 'solid:Site',           fields: ['name', 'company'] },
+  { matchType: 'solid:AgentChain',     fields: ['name', 'company'] },
+  { matchType: 'solid:InboundWebhook', fields: ['solid:eventKey', 'company'] },
+  { matchType: 'solid:CustomDomain',   fields: ['name', 'company'] },
+  { matchType: 'solid:Tier',           fields: ['name'] },
+  { matchType: 'solid:Industry',       fields: ['name'] },
+];
+
+function nodeTypeMatches(node: JsonLdNode, target: string): boolean {
+  const t = node['@type'];
+  if (!t) return false;
+  const arr = Array.isArray(t) ? t : [t];
+  const needle = target.toLowerCase();
+  return arr.some((ty) => {
+    const s = String(ty).toLowerCase();
+    return s === needle || s.endsWith(':' + needle) || s.endsWith('/' + needle);
+  });
+}
+
+function hasNonEmptyField(node: JsonLdNode, field: string): boolean {
+  const v = node[field];
+  if (v === undefined || v === null || v === '') return false;
+  if (Array.isArray(v) && v.length === 0) return false;
+  if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return false;
+  return true;
+}
+
+export function validate(doc: JsonLdDocument): ValidationReport {
+  const issues: ValidationIssue[] = [];
+  const graph = doc.graph ?? [];
+  const ids = new Set<string>();
+  let edgeCount = 0;
+
+  // Pass 1: duplicate @id detection + build the id set.
+  for (const node of graph) {
+    const id = node['@id'];
+    if (!id) {
+      issues.push({
+        severity: 'error',
+        code: 'missing_id',
+        nodeId: '(unnamed)',
+        message: `node lacks @id — graph cannot reference it`,
+      });
+      continue;
+    }
+    if (ids.has(id)) {
+      issues.push({
+        severity: 'error',
+        code: 'duplicate_id',
+        nodeId: id,
+        message: `@id appears more than once in @graph`,
+      });
+    }
+    ids.add(id);
+  }
+
+  // Pass 2: per-node edge + required-field checks.
+  for (const node of graph) {
+    const id = node['@id'];
+    if (!id) continue;
+
+    // Required fields per type.
+    for (const rule of REQUIRED_FIELDS) {
+      if (!nodeTypeMatches(node, rule.matchType)) continue;
+      for (const field of rule.fields) {
+        if (!hasNonEmptyField(node, field)) {
+          issues.push({
+            severity: 'error',
+            code: 'missing_required',
+            nodeId: id,
+            message: `@type ${rule.matchType} requires field "${field}" — missing or empty`,
+          });
+        }
+      }
+    }
+
+    // Edge targets — any string value resolving to an IRI-shaped id
+    // should exist in @graph. This is the same edge-discovery logic
+    // the walker uses; dangling edges = bad graph.
+    for (const [key, value] of Object.entries(node)) {
+      if (key.startsWith('@')) continue;
+      const targets: string[] = [];
+      if (typeof value === 'string' && /^https?:\/\//.test(value)) {
+        targets.push(value);
+      } else if (Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item === 'string' && /^https?:\/\//.test(item)) targets.push(item);
+        }
+      } else if (value && typeof value === 'object' && '@id' in (value as object)) {
+        const inner = (value as { '@id'?: unknown })['@id'];
+        if (typeof inner === 'string' && /^https?:\/\//.test(inner)) targets.push(inner);
+      }
+
+      for (const target of targets) {
+        edgeCount++;
+        // External IRIs (outside solidnumber.com) aren't expected to
+        // resolve inside @graph — e.g. schema:image might point at a
+        // CDN URL. We only enforce resolution for solidnumber.com IDs.
+        if (!target.startsWith('https://solidnumber.com')) continue;
+        if (target === id) continue;  // self-ref is benign
+        if (!ids.has(target)) {
+          issues.push({
+            severity: 'error',
+            code: 'dangling_edge',
+            nodeId: id,
+            message: `"${key}" → ${target} — target not in @graph`,
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    ok: issues.filter((i) => i.severity === 'error').length === 0,
+    issues,
+    nodeCount: graph.length,
+    edgeCount,
+  };
+}

@@ -13,6 +13,7 @@ import {
   nodesOfType,
   resolveIri,
   subgraph,
+  validate,
   type JsonLdDocument,
 } from '../../lib/graph-walker';
 
@@ -38,6 +39,7 @@ const DOC: JsonLdDocument = {
       '@id': `${SOLID}/co/61`,
       '@type': ['schema:Organization', 'solid:Company'],
       name: 'ANGL LLC',
+      identifier: 61,
       withinTier: `${SOLID}/vocab/tier/builder`,
       inIndustry: `${SOLID}/vocab/industry/construction`,
     },
@@ -219,6 +221,86 @@ describe('resolveIri', () => {
 
   test('recognises cross-tenant "co/<id>/..." short form', () => {
     expect(resolveIri('co/99/kb/1', DOC_ROOT)).toBe(`${SOLID}/co/99/kb/1`);
+  });
+});
+
+// -- validate --------------------------------------------------------------
+
+describe('validate', () => {
+  test('clean graph passes with 0 issues', () => {
+    const report = validate(DOC);
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+    expect(report.nodeCount).toBe(DOC.graph!.length);
+  });
+
+  test('detects duplicate @id', () => {
+    const dupe = structuredClone(DOC);
+    dupe.graph!.push({ '@id': `${SOLID}/co/61`, '@type': 'schema:Organization', name: 'Dup' });
+    const report = validate(dupe);
+    expect(report.ok).toBe(false);
+    expect(report.issues.some((i) => i.code === 'duplicate_id')).toBe(true);
+  });
+
+  test('detects dangling edge to a solidnumber.com IRI not in @graph', () => {
+    const doc: JsonLdDocument = {
+      graph: [
+        {
+          '@id': `${SOLID}/co/61/service/3`,
+          '@type': 'schema:Service',
+          name: 'S',
+          provider: `${SOLID}/co/61`, // target absent — dangling
+        },
+      ],
+    };
+    const report = validate(doc);
+    expect(report.ok).toBe(false);
+    const dangling = report.issues.filter((i) => i.code === 'dangling_edge');
+    expect(dangling).toHaveLength(1);
+    expect(dangling[0].nodeId).toBe(`${SOLID}/co/61/service/3`);
+  });
+
+  test('does NOT flag external IRIs (non-solidnumber.com) as dangling', () => {
+    const doc: JsonLdDocument = {
+      graph: [
+        {
+          '@id': `${SOLID}/co/61/page/1`,
+          '@type': ['schema:WebPage', 'solid:WebsitePage'],
+          name: 'Home',
+          company: `${SOLID}/co/61`,
+          image: 'https://cdn.example.com/hero.png',
+        },
+        { '@id': `${SOLID}/co/61`, '@type': ['schema:Organization', 'solid:Company'], name: 'X', identifier: 61 },
+      ],
+    };
+    const report = validate(doc);
+    // image points at an external URL — that's fine.
+    expect(report.issues.filter((i) => i.code === 'dangling_edge')).toEqual([]);
+  });
+
+  test('detects missing required fields per @type', () => {
+    const doc: JsonLdDocument = {
+      graph: [
+        // Organization missing `name`
+        { '@id': `${SOLID}/co/61`, '@type': ['schema:Organization', 'solid:Company'], identifier: 61 },
+        // Service missing `provider`
+        { '@id': `${SOLID}/co/61/service/3`, '@type': 'schema:Service', name: 'S' },
+      ],
+    };
+    const report = validate(doc);
+    expect(report.ok).toBe(false);
+    const missing = report.issues.filter((i) => i.code === 'missing_required');
+    expect(missing.map((m) => `${m.nodeId} :: ${m.message}`).join(' | ')).toMatch(/Organization requires field "name"/);
+    expect(missing.map((m) => m.message).some((m) => m.includes('Service') && m.includes('provider'))).toBe(true);
+  });
+
+  test('counts edges traversed', () => {
+    const report = validate(DOC);
+    // Company → Tier + Industry = 2 edges from company
+    // Service, Product, Page, KB each point at Company = 4 edges
+    // KB → Shelf-400 = 1 edge
+    // Total ≥ 7.
+    expect(report.edgeCount).toBeGreaterThanOrEqual(7);
   });
 });
 

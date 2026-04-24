@@ -112,6 +112,28 @@ interface ShelvesResponse {
   generated_at: string;
 }
 
+/**
+ * Fetches the JSON-LD envelope. Returns null when the backend is older
+ * than Phase A (2026-04-24) and silently served markdown back — we can
+ * tell because the response lacks ``@context``. In that case the CLI
+ * proceeds without writing .jsonld so callers keep working against
+ * pre-Phase-A backends without error.
+ */
+async function fetchJsonLdOrNull(): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await apiClient.get<Record<string, unknown>>(
+      '/api/v1/cli/context',
+      { params: { format: 'jsonld' } },
+    );
+    if (res.data && typeof res.data === 'object' && '@context' in res.data) {
+      return res.data;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchSpine(): Promise<SpineResponse> {
   const res = await apiClient.get<SpineResponse>('/api/v1/cli/context/spine');
   return res.data;
@@ -373,6 +395,7 @@ export const contextCommand = new Command('context')
 
     let doc: string;
     let jsonDoc: string | null = null;
+    let jsonLdDoc: string | null = null;
     try {
       if (isJsonOutput(options)) {
         const data = await fetchContext('json', !!options.minimal);
@@ -380,10 +403,17 @@ export const contextCommand = new Command('context')
       } else {
         const md = await fetchContext('markdown', !!options.minimal);
         doc = md as string;
-        // --claude also writes JSON alongside; fetch it now
+        // --claude also writes JSON and JSON-LD alongside. Fetch both
+        // in parallel so session-start hooks don't pay two round-trips.
+        // The JSON-LD fetch tolerates a pre-Phase-A backend (returns
+        // null if the response lacks @context).
         if (options.claude) {
-          const data = await fetchContext('json', !!options.minimal);
-          jsonDoc = JSON.stringify(data, null, 2);
+          const [flat, ld] = await Promise.all([
+            fetchContext('json', !!options.minimal),
+            fetchJsonLdOrNull(),
+          ]);
+          jsonDoc = JSON.stringify(flat, null, 2);
+          if (ld) jsonLdDoc = JSON.stringify(ld, null, 2);
         }
       }
     } catch (error) {
@@ -414,6 +444,12 @@ export const contextCommand = new Command('context')
         const writeRes = writeLadder(spineRes.content, shelvesRes.shelves, process.cwd());
         jsonPath = path.join(writeRes.libraryDir, '..', 'solid-context.json');
         if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+        if (jsonLdDoc) {
+          fs.writeFileSync(
+            path.join(writeRes.libraryDir, '..', 'solid-context.jsonld'),
+            jsonLdDoc,
+          );
+        }
         spinner?.succeed(chalk.green('AI context library ready'));
         printLadderNextSteps(writeRes, jsonPath, jsonDoc ? Buffer.byteLength(jsonDoc, 'utf-8') : 0);
         // Skip the remaining output-mode branches — ladder mode prints its own summary
@@ -434,6 +470,9 @@ export const contextCommand = new Command('context')
       jsonPath = path.join(claudeDir, 'solid-context.json');
       fs.writeFileSync(markdownPath, doc);
       if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+      if (jsonLdDoc) {
+        fs.writeFileSync(path.join(claudeDir, 'solid-context.jsonld'), jsonLdDoc);
+      }
       const bytes = Buffer.byteLength(doc, 'utf-8');
       if (bytes > 40_000) {
         console.log('');
