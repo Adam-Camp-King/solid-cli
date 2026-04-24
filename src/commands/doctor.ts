@@ -341,9 +341,77 @@ doctorCommand
     process.exit(finding.severity === 'fail' ? 1 : 0);
   });
 
+// ---------------------------------------------------------------------------
+// solid doctor env — local environment diagnostic (§ 650.5 automation).
+// "Is my context hook installed, is my JWT fresh, is my manifest bound, when
+// did I last refresh, is the backend reachable?" — all in one command.
+// Gap 8 from CLAUDE-CONTEXT-CANONICAL-TRUTH § 650.
+// ---------------------------------------------------------------------------
+import { runDoctorEnv, defaultDoctorEnvDeps, type CheckStatus } from '../lib/doctor-env';
+
+doctorCommand
+  .command('env')
+  .description('Diagnose the local tenant environment (hook / manifest / token / freshness / backend)')
+  .option('--json', 'Emit JSON result')
+  .action(async (opts: { json?: boolean }) => {
+    const deps = defaultDoctorEnvDeps(
+      {
+        isLoggedIn: () => config.isLoggedIn(),
+        get companyId() { return config.companyId; },
+        get accessToken() { return config.accessToken; },
+        get tokenExpiresAt() { return config.tokenExpiresAt; },
+      },
+      async (p: string) => {
+        const res = await apiClient.get(p, { validateStatus: () => true });
+        return { status: res.status };
+      },
+    );
+    const report = await runDoctorEnv(deps);
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      process.exit(report.ok ? 0 : 1);
+    }
+
+    const statusColor: Record<CheckStatus, (s: string) => string> = {
+      pass: (s) => chalk.green(s),
+      warn: (s) => chalk.yellow(s),
+      fail: (s) => chalk.red(s),
+      skip: (s) => chalk.dim(s),
+    };
+    const statusDot: Record<CheckStatus, string> = {
+      pass: chalk.green('●'),
+      warn: chalk.yellow('●'),
+      fail: chalk.red('●'),
+      skip: chalk.dim('○'),
+    };
+
+    const maxLabel = Math.max(...report.results.map((r) => r.label.length));
+    console.log('');
+    console.log(chalk.bold('  Solid# CLI Doctor — environment'));
+    console.log(chalk.dim('  ' + '─'.repeat(maxLabel + 40)));
+    for (const r of report.results) {
+      const label = r.label.padEnd(maxLabel);
+      const status = statusColor[r.status](r.status.toUpperCase().padEnd(4));
+      console.log(`  ${statusDot[r.status]} ${status}  ${label}  ${chalk.dim(r.detail)}`);
+      if (r.hint) console.log(chalk.dim(`       hint: ${r.hint}`));
+    }
+    console.log('');
+    const { pass, warn, fail, skip } = report.summary;
+    const line = [
+      fail === 0 ? chalk.green(`  ✓ ${pass} passed`) : chalk.red(`  ✗ ${fail} failed`),
+      warn > 0 ? chalk.yellow(`${warn} warning${warn === 1 ? '' : 's'}`) : '',
+      skip > 0 ? chalk.dim(`${skip} skipped`) : '',
+    ].filter(Boolean).join('  ');
+    console.log(line);
+    console.log('');
+    process.exit(report.ok ? 0 : 1);
+  });
+
 appendExamples(doctorCommand, [
   { cmd: 'solid doctor',             why: 'Core battery — 10 probes, ~1-2s' },
   { cmd: 'solid doctor --endpoints', why: 'Full battery — includes tier-gated endpoints' },
   { cmd: 'solid doctor --json',      why: 'Machine-readable (CI pipelines)' },
   { cmd: 'solid doctor scopes',      why: 'Check if API key scopes match tenant features (T1.6)' },
+  { cmd: 'solid doctor env',         why: 'Local env diagnostic — hook/manifest/token/freshness/backend (§ 650.5)' },
 ]);
