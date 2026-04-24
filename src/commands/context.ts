@@ -209,21 +209,41 @@ function printClaudeNextSteps(markdownPath: string, jsonPath: string, markdownBy
   console.log('');
 }
 
-function printLadderNextSteps(r: LadderWriteResult, jsonPath: string, jsonBytes: number): void {
+function printLadderNextSteps(
+  r: LadderWriteResult,
+  jsonPath: string,
+  jsonBytes: number,
+  jsonLdPath: string | null,
+  jsonLdBytes: number,
+): void {
   console.log('');
   const spineWarn = r.spineBytes > 8_000 ? chalk.yellow(` ⚠ over 8KB cap`) : chalk.green(' ✓');
   const lines: string[] = [
     `${chalk.dim('Spine:')}    ${r.spinePath} (${formatBytes(r.spineBytes)})${spineWarn}`,
     `${chalk.dim('Shelves:')}  ${r.libraryDir}/ — ${r.shelfCount} file${r.shelfCount === 1 ? '' : 's'} (${formatBytes(r.shelfBytes)} total)`,
     `${chalk.dim('JSON:')}     ${jsonPath} (${formatBytes(jsonBytes)})`,
+  ];
+  if (jsonLdPath) {
+    lines.push(
+      `${chalk.dim('JSON-LD:')}  ${jsonLdPath} (${formatBytes(jsonLdBytes)}) ${chalk.dim('— typed graph for `solid graph --offline`')}`,
+    );
+  }
+  lines.push(
     '',
     `${chalk.dim('Claude Code auto-reads .claude/CLAUDE.md (the spine).')}`,
     `${chalk.dim('Shelves load on demand when Claude runs')} ${chalk.cyan('cat .claude/library/<NNN>-<slug>.md')}${chalk.dim('.')}`,
     `${chalk.dim('Full volumes live in the DB:')} ${chalk.cyan('solid kb get <id>')}`,
+  );
+  if (jsonLdPath) {
+    lines.push(
+      `${chalk.dim('Walk the graph (offline):')} ${chalk.cyan('solid graph --offline')}`,
+    );
+  }
+  lines.push(
     '',
     `${chalk.dim('Refresh:')} ${chalk.cyan('solid context --claude')}`,
     `${chalk.dim('Legacy single-file mode:')} ${chalk.cyan('solid context --claude --full')}`,
-  ];
+  );
   console.log(ui.successBox('AI Context Library Ready (DDC mode)', lines));
   console.log('');
 }
@@ -444,14 +464,21 @@ export const contextCommand = new Command('context')
         const writeRes = writeLadder(spineRes.content, shelvesRes.shelves, process.cwd());
         jsonPath = path.join(writeRes.libraryDir, '..', 'solid-context.json');
         if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+        let jsonLdPath: string | null = null;
+        let jsonLdBytes = 0;
         if (jsonLdDoc) {
-          fs.writeFileSync(
-            path.join(writeRes.libraryDir, '..', 'solid-context.jsonld'),
-            jsonLdDoc,
-          );
+          jsonLdPath = path.join(writeRes.libraryDir, '..', 'solid-context.jsonld');
+          fs.writeFileSync(jsonLdPath, jsonLdDoc);
+          jsonLdBytes = Buffer.byteLength(jsonLdDoc, 'utf-8');
         }
         spinner?.succeed(chalk.green('AI context library ready'));
-        printLadderNextSteps(writeRes, jsonPath, jsonDoc ? Buffer.byteLength(jsonDoc, 'utf-8') : 0);
+        printLadderNextSteps(
+          writeRes,
+          jsonPath,
+          jsonDoc ? Buffer.byteLength(jsonDoc, 'utf-8') : 0,
+          jsonLdPath,
+          jsonLdBytes,
+        );
         // Skip the remaining output-mode branches — ladder mode prints its own summary
         return;
       } catch (error) {
