@@ -27,6 +27,7 @@ See: Owners-Manual/29-Provisioning/SITE-AND-DOMAIN-ARCHITECTURE.md`)
 
 domainsCommand.command('list').alias('ls').description('List every site + every address (canonical first)')
   .option('--json', 'JSON output')
+  .option('--show-fallback', 'Always show the {slug}.solidnumber.com fallback (overrides per-site config.show_vanilla_address)')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
@@ -66,8 +67,22 @@ domainsCommand.command('list').alias('ls').description('List every site + every 
           console.log(`    ${chalk.dim('no canonical — site has no addresses yet')}`);
         }
 
-        // Alternates
-        const alts = (site.addresses || []).filter((a: any) => !a.is_canonical && a.is_active);
+        // Alternates — apply the same vanilla visibility rule the
+        // Settings UI uses (SPRINT-DNS-UNIFICATION). When the canonical
+        // is a verified custom domain, hide the solidnumber.com fallback
+        // unless --show-fallback is passed OR the site has flipped
+        // `Site.config.show_vanilla_address=true`.
+        const allAlts = (site.addresses || []).filter((a: any) => !a.is_canonical && a.is_active);
+        const hasCustomCanonical =
+          site.addresses?.some((a: any) =>
+            (a.kind === 'custom_domain' || a.kind === 'custom_subdomain') && a.is_canonical && a.is_verified,
+          );
+        const showFallback = options.showFallback === true || site.config?.show_vanilla_address === true;
+        const alts = hasCustomCanonical && !showFallback
+          ? allAlts.filter((a: any) => a.kind !== 'solidnumber_subdomain')
+          : allAlts;
+        const hiddenFallbacks = allAlts.length - alts.length;
+
         for (const addr of alts) {
           const status = addr.is_verified
             ? chalk.green('● verified')
@@ -78,6 +93,9 @@ domainsCommand.command('list').alias('ls').description('List every site + every 
               ? chalk.dim('[custom subdomain]')
               : chalk.dim('[custom domain]');
           console.log(`    ${chalk.dim('└')} ${addr.value} ${status} ${kindLabel}`);
+        }
+        if (hiddenFallbacks > 0) {
+          console.log(chalk.dim(`    └ ${hiddenFallbacks} solidnumber.com fallback${hiddenFallbacks === 1 ? '' : 's'} hidden — use --show-fallback to display`));
         }
       }
       console.log('');

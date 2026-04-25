@@ -233,11 +233,20 @@ brandCommand
     const ora = (await import('ora')).default;
     const updates: string[] = [];
 
-    // Handle domain
+    // Handle domain — POST /api/v1/domains/custom is the single canonical
+    // endpoint for attaching a custom domain. Goes through
+    // services/site_address_service.py → custom_domains row with site_id
+    // wired to the company's primary site. Settings UI, CLI, and the
+    // setup wizard all converge on this endpoint. The legacy
+    // /api/v1/domains/add (which wrote to subdomain_mappings) was
+    // deleted in SPRINT-DNS-UNIFICATION (2026-04-25).
     if (options.domain) {
       const spinner = ora(`Configuring domain: ${options.domain}...`).start();
       try {
-        await apiClient.post('/api/v1/domains/add', { domain: options.domain });
+        await apiClient.post('/api/v1/domains/custom', {
+          domain: options.domain,
+          type: 'website',
+        });
         spinner.succeed(chalk.green(`Domain: ${options.domain}`));
         updates.push('domain');
       } catch (error) {
