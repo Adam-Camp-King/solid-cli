@@ -54,7 +54,7 @@ notificationsCommand.command('read-all').description('Mark all as read')
     try {
       await apiClient.post('/api/v1/notifications/read-all');
       spinner.succeed(chalk.green('All notifications marked as read'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __ae_notif } from '../lib/command-kit';

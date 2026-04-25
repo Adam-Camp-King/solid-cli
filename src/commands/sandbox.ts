@@ -368,6 +368,7 @@ sandboxCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to fork'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -402,6 +403,7 @@ sandboxCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to create preview'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -430,6 +432,7 @@ sandboxCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to promote'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -453,6 +456,7 @@ sandboxCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 

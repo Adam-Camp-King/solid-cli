@@ -55,7 +55,7 @@ export const auditCommand = new Command('audit')
         console.log('');
         console.log(chalk.dim(`  ${events.length} event(s) shown.`));
         console.log('');
-      } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+      } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
       return;
     }
 
@@ -82,7 +82,7 @@ export const auditCommand = new Command('audit')
         }
       }
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // ── Subcommands for the rest of the security/audit surface ─────────
@@ -108,7 +108,7 @@ auditCommand.command('export').description('Export audit logs (CSV)')
         spinner.stop();
         process.stdout.write(body);
       }
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 auditCommand.command('suspicious <userId>').description('Suspicious activity for a user')
@@ -122,7 +122,7 @@ auditCommand.command('suspicious <userId>').description('Suspicious activity for
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Suspicious activity'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 auditCommand.command('compliance-report').description('Compliance summary report')
@@ -134,7 +134,7 @@ auditCommand.command('compliance-report').description('Compliance summary report
       const res = await apiClient.get('/api/v1/security/compliance/report');
       spinner.succeed(chalk.green('Compliance'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 auditCommand.command('gdpr-export').description('Trigger GDPR data export for a user')
@@ -147,7 +147,7 @@ auditCommand.command('gdpr-export').description('Trigger GDPR data export for a 
       const res = await apiClient.post('/api/v1/security/gdpr/export', { user_id: parseInt(options.user, 10) });
       spinner.succeed(chalk.green('GDPR export started'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 auditCommand.command('gdpr-delete').description('Trigger GDPR data deletion (right to be forgotten)')
@@ -159,7 +159,7 @@ auditCommand.command('gdpr-delete').description('Trigger GDPR data deletion (rig
     try {
       await apiClient.post('/api/v1/security/gdpr/delete', { user_id: parseInt(options.user, 10) });
       spinner.succeed(chalk.green('GDPR deletion initiated'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 auditCommand.command('gdpr-consent <userId>').description('Get a user\'s GDPR consent record')
@@ -171,7 +171,7 @@ auditCommand.command('gdpr-consent <userId>').description('Get a user\'s GDPR co
       const res = await apiClient.get(`/api/v1/security/gdpr/consent/${userId}`);
       spinner.succeed(chalk.green('Consent'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 auditCommand.command('gdpr-consent-set').description('Record a GDPR consent decision')
@@ -189,7 +189,7 @@ auditCommand.command('gdpr-consent-set').description('Record a GDPR consent deci
         granted: options.granted === 'true',
       });
       spinner.succeed(chalk.green('Consent recorded'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __ae_audit } from '../lib/command-kit';

@@ -67,6 +67,7 @@ seoCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to start SEO audit'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -183,6 +184,7 @@ seoCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to run SEO audit'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -226,6 +228,7 @@ seoCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load rankings'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -268,6 +271,7 @@ seoCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load citations'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -309,6 +313,7 @@ seoCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load SEO gaps'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 

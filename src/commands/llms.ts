@@ -89,6 +89,7 @@ llmsCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to fetch llms.txt'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -192,6 +193,7 @@ llmsCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to check discoverability'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 

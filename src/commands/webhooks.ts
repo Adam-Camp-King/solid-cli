@@ -61,7 +61,7 @@ webhooksCommand.command('create <url>').description('Create a webhook')
       console.log('');
       console.log(ui.successBox('Webhook Created', [`${chalk.dim('URL:')}    ${url}`, `${chalk.dim('ID:')}     ${d.id || 'n/a'}`, `${chalk.dim('Secret:')} ${d.secret || 'check dashboard'}`]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 webhooksCommand.command('delete <id>').description('Delete a webhook')
@@ -72,7 +72,7 @@ webhooksCommand.command('delete <id>').description('Delete a webhook')
     try {
       await apiClient.delete(`/api/v1/developer/webhooks/${id}`);
       spinner.succeed(chalk.green(`Webhook ${id} deleted`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 webhooksCommand.command('simulate <event>').description('Send a test event to a webhook')
@@ -122,7 +122,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
       } catch (e) {
         listSpinner.fail(chalk.red('Failed to list webhooks'));
         console.error(handleApiError(e).message);
-        return;
+        process.exit(1);
       }
     }
 
@@ -158,6 +158,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
     } catch (e) {
       spinner.fail(chalk.red(`Failed to send ${event}`));
       console.error(chalk.red(`  ${handleApiError(e).message}`));
+      process.exit(1);
     }
   });
 

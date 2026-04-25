@@ -151,6 +151,7 @@ async function pullModuleToDisk(folderName: string, outDir: string): Promise<voi
   } catch (error) {
     spinner.fail(chalk.red(`Pull failed`));
     console.error(chalk.red(`  ${handleApiError(error).message}`));
+    process.exit(1);
   }
 }
 

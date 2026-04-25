@@ -104,6 +104,7 @@ paymentCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load payment status'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -177,6 +178,7 @@ l3Command
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -222,6 +224,7 @@ l3Command
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -289,6 +292,7 @@ paymentCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -330,6 +334,7 @@ paymentCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -379,6 +384,7 @@ paymentCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -406,6 +412,7 @@ paymentCommand
     } catch (error) {
       spinner.fail(chalk.red(`Failed to connect ${processor}`));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -446,6 +453,7 @@ paymentCommand
     } catch (error) {
       spinner.fail(chalk.red('Payment failed'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 

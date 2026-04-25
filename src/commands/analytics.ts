@@ -83,6 +83,7 @@ analyticsCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load analytics'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -122,6 +123,7 @@ analyticsCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load MCP traffic'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 

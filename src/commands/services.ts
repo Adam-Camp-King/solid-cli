@@ -84,7 +84,7 @@ servicesCommand
       console.log(`  ID: ${d.id || d.service?.id || 'created'}`);
       console.log(`  Title: ${options.title}`);
       if (options.price) console.log(`  Price: $${options.price}`);
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // Update service
@@ -112,7 +112,7 @@ servicesCommand
     try {
       await apiClient.put(`/api/v1/services/catalog/${id}`, body);
       spinner.succeed(chalk.green(`Service ${id} updated`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // Delete service
@@ -125,7 +125,7 @@ servicesCommand
     try {
       await apiClient.delete(`/api/v1/services/catalog/${id}`);
       spinner.succeed(chalk.green(`Service ${id} deleted`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __appendExamplesServices } from '../lib/command-kit';

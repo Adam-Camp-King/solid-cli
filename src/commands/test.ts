@@ -86,6 +86,7 @@ export const testCommand = new Command('test')
       } catch (error) {
         spinner.fail(chalk.red('Failed to load results'));
         console.error(chalk.red(`  ${handleApiError(error).message}`));
+        process.exit(1);
       }
       return;
     }
@@ -141,6 +142,9 @@ export const testCommand = new Command('test')
             failed++;
           }
         } catch (error) {
+          // Don't exit on individual test failure — count and keep
+          // going, then exit non-zero at the end of the loop based on
+          // failed > 0. The aggregate summary is the contract.
           spinner.fail(chalk.red(`${label} — ERROR`));
           console.error(`    ${chalk.red(handleApiError(error).message)}`);
           failed++;

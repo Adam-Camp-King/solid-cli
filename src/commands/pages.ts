@@ -402,6 +402,7 @@ pagesCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to look up page'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -422,6 +423,7 @@ pagesCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to create coming-soon page'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -443,6 +445,7 @@ pagesCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to regenerate'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -464,6 +467,7 @@ pagesCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to generate website'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 

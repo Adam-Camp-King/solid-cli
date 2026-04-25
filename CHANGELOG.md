@@ -2,6 +2,39 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.19.2] — 2026-04-24
+
+**Correctness patch.** Closes Phase 0.4 of the AI Stack Sovereignty
+sprint — the silent-failure bug that broke the scripting contract.
+
+### Fixed
+
+- **109 silent-failure sites across 26 command files** — every catch
+  block whose only error handling was `console.error(handleApiError(e).message)`
+  (no `process.exit(1)`) now exits non-zero. Pipelines that depended
+  on the documented `solid <verb> && next-step` contract no longer
+  paper over backend failures.
+  Files touched: `accounting`, `analytics`, `audit`, `billing`, `crm`,
+  `dashboard`, `demo`, `dev`, `domains`, `export`, `inventory`,
+  `llms`, `logs`, `notifications`, `pages`, `payment`, `sandbox`,
+  `schedule`, `seo`, `services`, `status`, `storage`, `support`,
+  `test`, `webhooks`, plus a JSDoc comment fix in `command-kit.ts`.
+- **Cleanup-before-exit preserved** in three catch blocks where
+  follow-up code matters — `demo.ts` (state restoration after a
+  failed company switch), `demo.ts` delete (helpful CLI hint about
+  demo-company-only deletion), `test.ts` (loop continues counting
+  failures and exits at end based on aggregate, not on first failure).
+- **Redundant `return` after `process.exit`** removed in `webhooks.ts`
+  (exit is `never`-typed; return is unreachable).
+
+### Verification
+
+- `npm test`: 763/763 green.
+- `npm audit --omit=dev`: 0 vulns (carried from v1.19.1).
+- `tsc --noEmit`: clean.
+- Audit script (verifies no exit-before-cleanup-code patterns left):
+  pass.
+
 ## [1.19.1] — 2026-04-24
 
 **Security patch.** Closes the production CVEs that shipped in v1.19.0.

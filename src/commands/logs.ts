@@ -99,6 +99,7 @@ export const logsCommand = new Command('logs')
       } catch (error) {
         spinner.fail(chalk.red('Failed to load errors'));
         console.error(chalk.red(`  ${handleApiError(error).message}`));
+        process.exit(1);
       }
       return;
     }
@@ -163,6 +164,7 @@ export const logsCommand = new Command('logs')
       } catch (error) {
         if (spinner) spinner.fail(chalk.red('Failed to load logs'));
         console.error(chalk.red(`  ${handleApiError(error).message}`));
+        process.exit(1);
       }
     }
 

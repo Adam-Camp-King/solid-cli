@@ -70,7 +70,7 @@ export const exportCommand = new Command('export')
         `${chalk.dim('Files:')}    ${fileCount}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Export failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Export failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __ae_export } from '../lib/command-kit';

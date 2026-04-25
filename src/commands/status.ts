@@ -52,6 +52,7 @@ export const statusCommand = new Command('status')
       } catch (error) {
         spinner.fail(chalk.red('Failed'));
         console.error(handleApiError(error).message);
+        process.exit(1);
       }
       return;
     }

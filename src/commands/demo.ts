@@ -176,11 +176,12 @@ demoCommand
       } catch {
         /* noop */
       }
-      // Restore original company
+      // Restore original company before exiting so state isn't left wrong.
       if (originalCompanyId) {
         await apiClient.companySwitch(originalCompanyId).catch(() => {});
         config.companyId = originalCompanyId;
       }
+      process.exit(1);
     }
   });
 
@@ -229,6 +230,7 @@ demoCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to convert'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 
@@ -291,6 +293,7 @@ demoCommand
       spinner.fail(chalk.red('Failed to delete'));
       console.error(handleApiError(error).message);
       console.log(chalk.dim('  Note: Only demo/test companies can be deleted via CLI.'));
+      process.exit(1);
     }
   });
 

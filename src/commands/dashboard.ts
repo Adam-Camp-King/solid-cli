@@ -130,6 +130,7 @@ export const dashboardCommand = new Command('dashboard')
     } catch (error) {
       spinner.fail(chalk.red('Failed to load dashboard'));
       console.error(handleApiError(error).message);
+      process.exit(1);
     }
   });
 

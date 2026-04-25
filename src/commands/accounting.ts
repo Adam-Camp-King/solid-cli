@@ -26,7 +26,7 @@ accountingCommand.command('sync').description('Trigger a full accounting sync')
       console.log('');
       console.log(ui.successBox('Sync Started', [`${chalk.dim('Status:')}  ${d.status || 'running'}`, `${chalk.dim('Sync ID:')} ${d.sync_id || d.id || 'n/a'}`]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 accountingCommand.command('status').description('Check sync status')
@@ -47,7 +47,7 @@ accountingCommand.command('status').description('Check sync status')
       if (d.last_sync) console.log(ui.label('Last Sync', d.last_sync));
       if (d.records_synced !== undefined) console.log(ui.label('Records', String(d.records_synced)));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 accountingCommand.command('history').description('View sync history')
@@ -67,7 +67,7 @@ accountingCommand.command('history').description('View sync history')
       if (entries.length === 0) { console.log(chalk.dim('  No sync history yet.')); }
       else { for (const e of entries) { const s = e.status === 'success' ? chalk.green('✓') : chalk.red('✗'); console.log(`  ${s} ${e.created_at || e.date} — ${e.records || 0} records`); } }
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __ae_accounting } from '../lib/command-kit';

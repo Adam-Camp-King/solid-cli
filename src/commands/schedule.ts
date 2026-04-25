@@ -78,6 +78,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load appointment'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -111,6 +112,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to create appointment'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -141,6 +143,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to update appointment'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -164,6 +167,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to hold slot'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -193,6 +197,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to book'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -214,6 +219,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to reschedule'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -235,6 +241,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to cancel appointment'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -270,6 +277,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to load calendar'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -306,6 +314,7 @@ scheduleCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to check availability'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 

@@ -7,6 +7,7 @@
  *   3. try / await apiClient.*
  *   4. if (options.json) console.log(JSON.stringify(...))
  *   5. catch { spinner.fail; console.error(handleApiError(e).message) }
+ *      6. process.exit(1)
  *
  * `run()` collapses that into one call so every migrated command handles
  * auth, JSON output, spinner lifecycle, and error reporting the same way.

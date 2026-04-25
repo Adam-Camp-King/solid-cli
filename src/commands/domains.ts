@@ -83,7 +83,7 @@ domainsCommand.command('list').alias('ls').description('List every site + every 
       console.log('');
       console.log(chalk.dim('  ★ = canonical. Non-canonical addresses 301-redirect to canonical.'));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 domainsCommand.command('add <domain>').description('Attach a custom domain to a site (defaults to primary)')
@@ -126,7 +126,7 @@ domainsCommand.command('add <domain>').description('Attach a custom domain to a 
         chalk.dim('Canonical flips to this domain automatically on verify.'),
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 domainsCommand.command('set-canonical <site> <address>')
@@ -162,7 +162,7 @@ domainsCommand.command('set-canonical <site> <address>')
         row_id: match.row_id,
       });
       spinner.succeed(chalk.green(`Canonical for ${siteSlug} is now ${address}`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 domainsCommand.command('remove <id>').description('Remove a custom domain by ID')
@@ -175,7 +175,7 @@ domainsCommand.command('remove <id>').description('Remove a custom domain by ID'
     try {
       await apiClient.delete(`/api/v1/domains/custom/${domainId}`);
       spinner.succeed(chalk.green(`Domain #${domainId} removed`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 domainsCommand.command('verify <id>').description('Verify DNS for a custom domain')
@@ -194,7 +194,7 @@ domainsCommand.command('verify <id>').description('Verify DNS for a custom domai
       } else {
         console.log(chalk.yellow(`  ○ DNS not yet propagated. Check your CNAME record.`));
       }
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __appendExamplesDomains } from '../lib/command-kit';

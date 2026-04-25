@@ -67,7 +67,7 @@ supportCommand.command('get <id>').description('View ticket details')
       if (t.priority) console.log(ui.label('Priority', t.priority));
       if (t.description || t.body) { console.log(''); console.log(`  ${t.description || t.body}`); }
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __ae_support } from '../lib/command-kit';

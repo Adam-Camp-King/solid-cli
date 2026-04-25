@@ -165,6 +165,7 @@ storageCommand
       } catch (e) {
         failed++;
         console.error(chalk.red(`  ${path.relative(abs, f) || path.basename(f)}: ${handleApiError(e).message}`));
+        process.exit(1);
       }
     }
     if (failed === 0) spinner.succeed(chalk.green(`Uploaded ${uploaded} file(s)`));

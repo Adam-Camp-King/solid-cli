@@ -27,7 +27,7 @@ billingCommand.command('status').description('Current subscription and usage')
       if (d.current_period_end) console.log(ui.label('Renews', d.current_period_end));
       if (d.amount) console.log(ui.label('Amount', chalk.green(`$${d.amount}/mo`)));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('usage').description('Current period usage (tokens, storage, API calls)')
@@ -49,7 +49,7 @@ billingCommand.command('usage').description('Current period usage (tokens, stora
       if (d.storage_mb !== undefined) console.log(ui.label('Storage', `${d.storage_mb} MB`));
       if (d.voice_minutes !== undefined) console.log(ui.label('Voice Min', String(d.voice_minutes)));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('invoices').description('List invoices')
@@ -68,7 +68,7 @@ billingCommand.command('invoices').description('List invoices')
       if (invoices.length === 0) { console.log(chalk.dim('  No invoices yet.')); }
       else { for (const inv of invoices) { const status = inv.status === 'paid' ? chalk.green('paid') : chalk.yellow(inv.status); console.log(`  ${inv.date || inv.created_at}  $${inv.amount || inv.total}  ${status}`); } }
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // Generate checkout link for a client company
@@ -93,7 +93,7 @@ billingCommand.command('checkout-link <companyId>')
       console.log('');
       console.log(chalk.dim('  Send this link to your client. When they pay, their account activates automatically.'));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // Create and send an invoice
@@ -138,7 +138,7 @@ billingCommand.command('invoice <companyIdOrEmail>')
       console.log(`  ${chalk.bold('Pay URL:')} ${chalk.cyan(d.hosted_url)}`);
       if (d.pdf_url) console.log(`  ${chalk.bold('PDF:')}     ${d.pdf_url}`);
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to send invoice')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed to send invoice')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // Download an invoice PDF
@@ -157,7 +157,7 @@ billingCommand.command('invoice-pdf <invoiceId>')
       const filename = options.out || `invoice-${invoiceId}.pdf`;
       fs.writeFileSync(filename, Buffer.from(res.data as ArrayBuffer));
       spinner.succeed(chalk.green(`Saved: ${filename}`));
-    } catch (e) { spinner.fail(chalk.red('Failed to download invoice PDF')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed to download invoice PDF')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // ── Payment methods ──────────────────────────────────────────────────
@@ -180,7 +180,7 @@ billingCommand.command('methods').description('List saved payment methods')
         console.log(`  ${chalk.bold(m.id)}  ${m.brand || m.type || '—'} •••• ${m.last4 || '????'}  ${chalk.dim(`${m.exp_month}/${m.exp_year}`)}${def}`);
         if (m.nickname) console.log(chalk.dim(`      ${m.nickname}`));
       }
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('method-add').description('Attach a new payment method from a Stripe token')
@@ -192,7 +192,7 @@ billingCommand.command('method-add').description('Attach a new payment method fr
     try {
       const res = await apiClient.post('/api/v1/billing/payment-method/add', { payment_method_token: options.token });
       spinner.succeed(chalk.green(`Payment method attached: ${(res.data as Record<string, any>).id}`));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('method-default <id>').description('Set a payment method as default')
@@ -203,7 +203,7 @@ billingCommand.command('method-default <id>').description('Set a payment method 
     try {
       await apiClient.patch(`/api/v1/billing/payment-method/${id}/set-default`);
       spinner.succeed(chalk.green('Default set'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('method-nickname <id>').description('Rename a payment method')
@@ -215,7 +215,7 @@ billingCommand.command('method-nickname <id>').description('Rename a payment met
     try {
       await apiClient.patch(`/api/v1/billing/payment-method/${id}/nickname`, { nickname: options.nickname });
       spinner.succeed(chalk.green('Nickname updated'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('method-remove <id>').description('Remove a payment method')
@@ -226,7 +226,7 @@ billingCommand.command('method-remove <id>').description('Remove a payment metho
     try {
       await apiClient.delete(`/api/v1/billing/payment-method/${id}`);
       spinner.succeed(chalk.green('Removed'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 // ── Charges, statement, subscription detail ──────────────────────────
@@ -248,7 +248,7 @@ billingCommand.command('charges').description('List charges')
       for (const c of items as Record<string, any>[]) {
         console.log(`  ${chalk.bold(c.id)}  $${c.amount || (c.amount_cents / 100).toFixed(2)}  ${chalk.dim(c.status || '')}  ${chalk.dim(c.created_at?.split('T')[0] || '')}`);
       }
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('statement').description('Current billing statement')
@@ -262,7 +262,7 @@ billingCommand.command('statement').description('Current billing statement')
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Current statement'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('subscription <customerId>').description('Subscription details for a customer')
@@ -276,7 +276,7 @@ billingCommand.command('subscription <customerId>').description('Subscription de
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Subscription'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('trial').description('Trial status')
@@ -288,7 +288,7 @@ billingCommand.command('trial').description('Trial status')
       const res = await apiClient.get('/api/v1/billing/trial-status');
       spinner.succeed(chalk.green('Trial'));
       console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 billingCommand.command('upgrade-trial').description('Convert trial to paid subscription')
@@ -300,7 +300,7 @@ billingCommand.command('upgrade-trial').description('Convert trial to paid subsc
     try {
       await apiClient.post('/api/v1/billing/upgrade-trial', { plan_slug: options.plan });
       spinner.succeed(chalk.green('Trial upgraded'));
-    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); }
+    } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
 import { appendExamples as __appendExamplesBilling } from '../lib/command-kit';

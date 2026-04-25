@@ -83,6 +83,7 @@ inventoryCommand
     } catch (error) {
       spinner.fail(chalk.red(`Failed to load item ${sku}`));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -114,6 +115,7 @@ inventoryCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to create item'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -142,6 +144,7 @@ inventoryCommand
     } catch (error) {
       spinner.fail(chalk.red(`Failed to update item ${sku}`));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -168,6 +171,7 @@ inventoryCommand
     } catch (error) {
       spinner.fail(chalk.red(`Failed to adjust stock for ${sku}`));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
@@ -267,6 +271,7 @@ inventoryCommand
     } catch (error) {
       spinner.fail(chalk.red('Failed to import CSV'));
       console.error(chalk.red(`  ${handleApiError(error).message}`));
+      process.exit(1);
     }
   });
 
