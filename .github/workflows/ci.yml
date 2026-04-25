@@ -67,8 +67,18 @@ jobs:
 
       - name: Verify no secrets in code
         run: |
-          # Check for hardcoded tokens, keys, passwords
-          if grep -rn "sk_live_\|sk_test_\|npm_[A-Za-z0-9]\{20,\}\|password.*=.*['\"]" src/ --include="*.ts" | grep -v "test" | grep -v "__tests__" | grep -v "\.example"; then
+          # Check for hardcoded tokens, keys, passwords. Excludes:
+          #   - test files (mock fixtures)
+          #   - redaction regexes (lines containing `.replace(` — those
+          #     define patterns that REMOVE secrets from error strings,
+          #     not secrets themselves)
+          #   - pragma allowlist (`// pragma: allowlist secret`)
+          if grep -rn "sk_live_\|sk_test_\|npm_[A-Za-z0-9]\{20,\}\|password.*=.*['\"]" src/ --include="*.ts" \
+             | grep -v "test" \
+             | grep -v "__tests__" \
+             | grep -v "\.example" \
+             | grep -v "\.replace(" \
+             | grep -v "pragma: allowlist secret"; then
             echo "FAIL: Possible hardcoded secrets found"
             exit 1
           fi
