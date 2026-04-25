@@ -2,6 +2,50 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.19.3] — 2026-04-24
+
+**Hygiene batch.** Closes Phases 0.5, 0.7, 0.8, and 0.12 of the AI Stack
+Sovereignty sprint — four small but load-bearing gaps that an AI
+agent calling the CLI from a script would have hit silently.
+
+### Added
+
+- **`solid kb search <query>`** (Phase 0.5) — first-class subcommand
+  for the company-scoped full-text + semantic KB search. Was reachable
+  before only via `solid kb list -q`, which is a different code path
+  (title `ILIKE` filter, not the embedding-aware `/api/v1/kb/search`).
+  Supports `--limit`, `--offset`, and `--json`. Exits non-zero on
+  failure.
+- **Recursive unknown-command handler** (Phase 0.7) — `solid kb xyzzy`
+  and every other typo at any subcommand level now exits 1 with a
+  Levenshtein-suggested correction. Previously, only top-level typos
+  exited 1; any subcommand typo silently exited 0, which broke
+  pipelines that rely on exit codes to detect mistakes.
+
+### Changed
+
+- **`__solid_dry_run` config flags now have a typed home** (Phase 0.12) —
+  introduced `ExtendedAxiosRequestConfig`, `ExtendedAxiosError`, and
+  `ExtendedRequestConfig` interfaces in `lib/api-client.ts`. Removed
+  the 7 `as any` casts that were threading these flags through axios's
+  typed config. The flags' lifecycle is now self-documenting in the
+  type system instead of a parade of escape hatches.
+
+### Removed
+
+- **Source maps no longer ship to npm** (Phase 0.8) — added `*.js.map`
+  and `*.d.ts.map` to `.npmignore`. They exposed original source paths
+  to anyone who unpacked the tarball and added ~200 KB of dead weight
+  to every install. Stack traces in production CLI usage are
+  unaffected (they reference compiled paths).
+
+### Verification
+
+- `npm test`: 763/763 green.
+- `tsc --noEmit`: clean.
+- Tarball size shrinks; install size for 1M+ AI-agent installs drops
+  proportionally.
+
 ## [1.19.2] — 2026-04-24
 
 **Correctness patch.** Closes Phase 0.4 of the AI Stack Sovereignty

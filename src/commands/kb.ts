@@ -209,6 +209,57 @@ kbCommand
     }
   });
 
+// ── search ──────────────────────────────────────────────────────────
+kbCommand
+  .command('search <query>')
+  .description('Search the company knowledge base (full-text + semantic)')
+  .option('-l, --limit <n>', 'Max results to return', '20')
+  .option('-o, --offset <n>', 'Pagination offset', '0')
+  .action(async (query: string, opts: { limit?: string; offset?: string }) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+
+    const { isJsonOutput } = await import('../lib/json-output');
+    const limit = Math.max(1, Math.min(100, parseInt(opts.limit ?? '20', 10) || 20));
+    const offset = Math.max(0, parseInt(opts.offset ?? '0', 10) || 0);
+    const isJson = isJsonOutput({});
+
+    const spinner = isJson ? null : ora({ text: 'Searching KB...', stream: process.stderr }).start();
+
+    try {
+      const { data } = await apiClient.kbSearch(query, limit, offset);
+      const results = (data.results || []) as Array<Record<string, unknown>>;
+
+      if (isJson) {
+        process.stdout.write(JSON.stringify({ query, total: data.total, results }, null, 2) + '\n');
+        return;
+      }
+
+      spinner?.succeed(chalk.green(`Found ${data.total} match${data.total === 1 ? '' : 'es'}`));
+      if (results.length === 0) {
+        console.log(chalk.dim('  No matches.'));
+        return;
+      }
+      for (const r of results.slice(0, limit)) {
+        const id = r.id ?? '?';
+        const title = (r.title as string) ?? '(untitled)';
+        const category = (r.category as string) ?? '';
+        const excerpt = ((r.excerpt as string) || (r.content as string) || '').toString().slice(0, 200);
+        console.log('');
+        console.log(chalk.cyan(`  #${id}  `) + chalk.bold(title) + (category ? chalk.dim(`  [${category}]`) : ''));
+        if (excerpt) console.log(chalk.dim(`    ${excerpt}${excerpt.length >= 200 ? '…' : ''}`));
+      }
+      console.log('');
+    } catch (error) {
+      spinner?.fail(chalk.red('Search failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
 kbCommand.addHelpText('after', `
 Examples:
   $ solid kb list                                  # Paginated

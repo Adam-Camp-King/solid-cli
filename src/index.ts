@@ -583,29 +583,47 @@ program.addHelpText('after', () => {
 
 // ── Unknown command handler: "did you mean ...?" ───────────────────
 // Fires when the user types a command that commander doesn't recognize.
-// Suggests the nearest known top-level command, exits 1.
+// Suggests the nearest known command at THAT level (top-level or
+// subcommand), exits 1. Without this, commander silently exits 0 on
+// unknown subcommands like `solid kb xyzzy` — which breaks pipelines
+// that rely on exit codes to detect typos. (Phase 0.7 of
+// SPRINT-JSONLD-GRAPH-MOAT.md / I-8 every-advertised-command-exists.)
 import { suggest } from './lib/suggest';
-program.on('command:*', (operands: string[]) => {
-  const unknown = operands[0];
-  const available = program.commands.map((c) => c.name()).filter((n) => n !== '*');
-  const suggestions = suggest(unknown, available);
 
-  const line = (s: string) => process.stderr.write(s + '\n');
-  line('');
-  line(`  ${chalk.red('✗')} Unknown command: ${chalk.bold(unknown)}`);
-  line('');
-  if (suggestions.length === 1) {
-    line(`  ${chalk.dim('Did you mean')} ${chalk.cyan('solid ' + suggestions[0])}${chalk.dim('?')}`);
-  } else if (suggestions.length > 1) {
-    line(`  ${chalk.dim('Did you mean one of these?')}`);
-    for (const s of suggestions) line(`    ${chalk.cyan('solid ' + s)}`);
-  } else {
-    line(`  ${chalk.dim('Run')} ${chalk.cyan('solid --help')} ${chalk.dim('to see all commands.')}`);
+function attachUnknownCommandHandler(cmd: Command, displayPath: string): void {
+  cmd.on('command:*', (operands: string[]) => {
+    const unknown = operands[0];
+    const available = cmd.commands.map((c) => c.name()).filter((n) => n !== '*');
+    const suggestions = suggest(unknown, available);
+    const fullCmd = `${displayPath} ${unknown}`.trim();
+
+    const line = (s: string) => process.stderr.write(s + '\n');
+    line('');
+    line(`  ${chalk.red('✗')} Unknown command: ${chalk.bold(fullCmd)}`);
+    line('');
+    if (suggestions.length === 1) {
+      line(`  ${chalk.dim('Did you mean')} ${chalk.cyan(`${displayPath} ${suggestions[0]}`)}${chalk.dim('?')}`);
+    } else if (suggestions.length > 1) {
+      line(`  ${chalk.dim('Did you mean one of these?')}`);
+      for (const s of suggestions) line(`    ${chalk.cyan(`${displayPath} ${s}`)}`);
+    } else {
+      line(`  ${chalk.dim('Run')} ${chalk.cyan(`${displayPath} --help`)} ${chalk.dim('to see all subcommands.')}`);
+    }
+    line('');
+    try { emitTelemetry('unknown_command', { command: fullCmd, extra: { suggestions } }); } catch { /* noop */ }
+    process.exit(1);
+  });
+
+  // Recursively wire the same behaviour into every subcommand that has
+  // its own subcommands. `solid kb xyzzy`, `solid agent foo bar`, etc.
+  for (const sub of cmd.commands) {
+    if (sub.commands.length > 0) {
+      attachUnknownCommandHandler(sub, `${displayPath} ${sub.name()}`.trim());
+    }
   }
-  line('');
-  try { emitTelemetry('unknown_command', { command: unknown, extra: { suggestions } }); } catch { /* noop */ }
-  process.exit(1);
-});
+}
+
+attachUnknownCommandHandler(program, 'solid');
 
 // First-run — silent identity + install ping. No prompt, no banner, no pitch.
 // Matches gh/vercel/stripe behavior: the tool just works. Email is captured

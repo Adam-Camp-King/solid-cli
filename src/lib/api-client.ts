@@ -2,7 +2,34 @@
  * API Client for Solid# Backend
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+
+/**
+ * Centralised type for Axios request configs that carry our internal
+ * `__solid_dry_run` / `__solid_dry_run_verify` flags. Closes Phase 0.12
+ * — was 12 `as any` casts threading these flags through axios's typed
+ * config; now they're a single declaration consumers can extend.
+ *
+ * Both flags are stripped before any network I/O — they exist purely
+ * to communicate intent between the request interceptor (where we
+ * decide to short-circuit) and the response interceptor (where we
+ * convert the synthetic error into a user-visible dry-run summary).
+ */
+export interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
+  __solid_dry_run?: true;
+  __solid_dry_run_verify?: true;
+}
+
+export interface ExtendedAxiosError extends AxiosError {
+  __solid_dry_run?: true;
+}
+
+/** Adds the dry-run flags to a plain AxiosRequestConfig (used by callers
+ *  who build a config and pass it to client.get/post/etc.). */
+export interface ExtendedRequestConfig extends AxiosRequestConfig {
+  __solid_dry_run?: true;
+  __solid_dry_run_verify?: true;
+}
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from './config';
@@ -108,7 +135,8 @@ class ApiClient {
       // error-interceptor converts into a success result. No network I/O.
       const method = (requestConfig.method || 'get').toLowerCase();
       const isMutation = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
-      if (isMutation && isDryRun() && !(requestConfig as any).__solid_dry_run_verify) {
+      const extConfig = requestConfig as ExtendedAxiosRequestConfig;
+      if (isMutation && isDryRun() && !extConfig.__solid_dry_run_verify) {
         // T1.2 — Existence verification before short-circuit. Mutations
         // targeted at a specific resource URL (PATCH/PUT/DELETE /foo/:id)
         // do a GET first; if the server says 404, we surface NOT_FOUND
@@ -119,23 +147,20 @@ class ApiClient {
           // Tag the GET config so the error interceptor can tell a verify
           // failure apart from a user-level GET failure — and so we don't
           // recursively re-verify (dry-run skip check above).
-          await this.client.get(verifyUrl, {
+          const verifyCfg: ExtendedRequestConfig = {
             params: undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            headers: { 'X-Solid-Dry-Run-Verify': '1' } as any,
-            // Cast so the transient flag isn't part of the public Axios
-            // config type.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...(({ __solid_dry_run_verify: true } as any) as object),
-          });
+            headers: { 'X-Solid-Dry-Run-Verify': '1' },
+            __solid_dry_run_verify: true,
+          };
+          await this.client.get(verifyUrl, verifyCfg);
           // 200 on verify → existence confirmed; proceed to short-circuit.
         }
         // Tag the config so the error interceptor can recognize it.
-        (requestConfig as any).__solid_dry_run = true;
+        extConfig.__solid_dry_run = true;
         // Throwing from a request interceptor cancels the request.
-        const err = new Error('SOLID_DRY_RUN_INTERCEPT') as AxiosError & { __solid_dry_run?: true };
-        (err as any).__solid_dry_run = true;
-        (err as any).config = requestConfig;
+        const err = new Error('SOLID_DRY_RUN_INTERCEPT') as ExtendedAxiosError;
+        err.__solid_dry_run = true;
+        err.config = requestConfig;
         throw err;
       }
 
@@ -222,10 +247,10 @@ class ApiClient {
         }
         return response;
       },
-      async (error: AxiosError & { __solid_dry_run?: true }) => {
+      async (error: ExtendedAxiosError) => {
         // Dry-run synthetic response — the mutation never left the process.
-        if ((error as any).__solid_dry_run) {
-          const cfg = (error as any).config || {};
+        if (error.__solid_dry_run) {
+          const cfg = (error.config || {}) as ExtendedAxiosRequestConfig;
           const method = (cfg.method || 'POST').toUpperCase();
           const body = cfg.data;
           const parsed = typeof body === 'string' ? (() => { try { return JSON.parse(body); } catch { return body; } })() : body;
@@ -235,7 +260,7 @@ class ApiClient {
             statusText: 'DRY_RUN',
             headers: {},
             config: cfg,
-          } as any;
+          } as unknown as import('axios').AxiosResponse;
         }
         const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean; _retry429?: number };
 
