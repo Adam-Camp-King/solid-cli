@@ -4,6 +4,11 @@ Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
 96 top-level commands, 500+ subcommands, 52 industries, 116 AI agents. One CLI.
 
+**v2.0.0** — agent-ready by default. `--json` output ships structured
+error envelopes; every business entity is a node in a typed JSON-LD
+graph; queries via SPARQL; offline reads + writes with auto-flush on
+reconnect. See [Graph (v2)](#graph-v2--vendor-portable-json-ld).
+
 ```bash
 npx @solidnumber/cli clone plumber
 ```
@@ -112,6 +117,40 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid context --save` | Save to `SOLID-CONTEXT.md` |
 | `solid context --watch` | Auto-refresh when data changes |
 | `solid context --json` | JSON output |
+| `solid context --jsonld` | JSON-LD typed graph (Schema.org + `solid:*` vocab) |
+
+### Graph (v2 — vendor-portable JSON-LD)
+
+Your business is a typed graph. Every entity has a globally-resolvable
+IRI. Walk it, query it, diff it, export it, take it offline.
+
+| Command | Description |
+|---------|-------------|
+| `solid graph` | Top-level summary — types and counts |
+| `solid graph services` | Walk a single node and its 1-hop neighborhood |
+| `solid graph --type Service` | List every node of a given `@type` |
+| `solid graph --validate` | Check edges resolve, required fields present |
+| `solid graph --query <sparql>` | Offline SPARQL BGP — SELECT + WHERE patterns |
+| `solid graph --query <sparql> --server` | Full SPARQL 1.1 via backend (OPTIONAL/FILTER/UNION/property paths) |
+| `solid graph --dump nquads` | Export as N-Quads — pipe to Fuseki, Neptune, GraphDB |
+| `solid graph --dump turtle` | Export as Turtle (requires `--remote`) |
+| `solid graph --diff <baseline.jsonld>` | What changed since X — added/removed/modified nodes + predicates |
+| `--queue` | Offline mode — mutations write to `.solid/queue/*.jsonld` |
+| `solid push --flush` | Replay queued offline mutations |
+
+**Auto-magic:** lose wifi mid-mutation, the CLI auto-queues. Regain
+wifi, the next mutation auto-replays the queue. Zero flags, zero
+ceremony — `[QUEUED — offline]` and `[auto-flush]` lines on stderr
+are your only signal.
+
+**Dereferenceable IRIs** — every `@id` resolves:
+
+```bash
+curl -H 'Accept: application/ld+json' https://solidnumber.com/co/61/service/3
+```
+
+Returns the typed JSON-LD node. Public allowlist applied unless your
+JWT matches the path's company.
 
 ### AI Discovery (llms.txt)
 | Command | Description |
