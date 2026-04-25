@@ -18,10 +18,14 @@ import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequ
 export interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
   __solid_dry_run?: true;
   __solid_dry_run_verify?: true;
+  __solid_offline_queue?: true;
 }
 
 export interface ExtendedAxiosError extends AxiosError {
   __solid_dry_run?: true;
+  __solid_offline_queue?: true;
+  /** Queue file path on the synthetic-success error shape. */
+  __solid_queue_path?: string;
 }
 
 /** Adds the dry-run flags to a plain AxiosRequestConfig (used by callers
@@ -29,11 +33,13 @@ export interface ExtendedAxiosError extends AxiosError {
 export interface ExtendedRequestConfig extends AxiosRequestConfig {
   __solid_dry_run?: true;
   __solid_dry_run_verify?: true;
+  __solid_offline_queue?: true;
 }
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from './config';
 import { deriveExistenceGet, isDryRun, makeDryRunResult } from './dry-run';
+import { enqueue, isQueueMode } from './offline-queue';
 import { applyListEnvelope } from './list-envelope';
 import { checkSkewFromHeaders } from './version-skew';
 
@@ -136,6 +142,24 @@ class ApiClient {
       const method = (requestConfig.method || 'get').toLowerCase();
       const isMutation = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
       const extConfig = requestConfig as ExtendedAxiosRequestConfig;
+
+      // A+.6 — offline queue. Mutations get written to .solid/queue/
+      // instead of dispatched. Read-side calls pass through (the read
+      // path already supports offline via `.claude/solid-context.jsonld`).
+      // Queue mode supersedes dry-run: if both are armed, queue wins
+      // because it preserves state for replay; dry-run is fire-and-forget.
+      if (isMutation && isQueueMode() && !extConfig.__solid_dry_run_verify) {
+        const result = enqueue(method, requestConfig.url || '', requestConfig.data, {
+          cliVersion: CLI_VERSION,
+        });
+        extConfig.__solid_offline_queue = true;
+        const err = new Error('SOLID_OFFLINE_QUEUE_INTERCEPT') as ExtendedAxiosError;
+        err.__solid_offline_queue = true;
+        err.__solid_queue_path = result.path;
+        err.config = requestConfig;
+        throw err;
+      }
+
       if (isMutation && isDryRun() && !extConfig.__solid_dry_run_verify) {
         // T1.2 — Existence verification before short-circuit. Mutations
         // targeted at a specific resource URL (PATCH/PUT/DELETE /foo/:id)
@@ -248,6 +272,26 @@ class ApiClient {
         return response;
       },
       async (error: ExtendedAxiosError) => {
+        // A+.6 — offline queue synthetic response. Mutation was written
+        // to .solid/queue/ instead of dispatched; the caller's success
+        // path runs as if the server accepted it.
+        if (error.__solid_offline_queue) {
+          const cfg = (error.config || {}) as ExtendedAxiosRequestConfig;
+          return {
+            data: {
+              queued: true,
+              queue_path: error.__solid_queue_path,
+              status: 'queued',
+              success: true,
+              id: `queued_${Date.now()}`,
+              message: 'mutation written to offline queue; replay with `solid push --flush`',
+            },
+            status: 202, // Accepted — semantically correct for "queued, will replay"
+            statusText: 'QUEUED',
+            headers: {},
+            config: cfg,
+          } as unknown as import('axios').AxiosResponse;
+        }
         // Dry-run synthetic response — the mutation never left the process.
         if (error.__solid_dry_run) {
           const cfg = (error.config || {}) as ExtendedAxiosRequestConfig;

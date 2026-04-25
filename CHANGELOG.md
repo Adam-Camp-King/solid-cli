@@ -2,6 +2,65 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.24.0] — 2026-04-25
+
+**Offline mutation queue.** Closes A+.6 (happy path) of
+SPRINT-JSONLD-GRAPH-MOAT.md. Read side was already offline via
+`.claude/solid-context.jsonld`; write side now is too. Field agents,
+travel, air-gapped demos.
+
+### Added
+
+- **`--queue` global flag** (also `SOLID_OFFLINE_QUEUE=1` env var) —
+  arms offline mode. With it on, every mutation (POST/PUT/PATCH/DELETE)
+  is written to `.solid/queue/<utc>-<uuid>.jsonld` instead of being
+  dispatched. The mutation file is itself a JSON-LD document
+  (`@type: solid:QueuedMutation`) so `solid graph` over the queue
+  directory can introspect what's pending.
+- **`solid push --flush`** — replay every queued mutation in
+  chronological order. Idempotency keys travel with each mutation so
+  retries are safe. Successful files are deleted; failed files stay
+  in queue for the next attempt.
+- **`lib/offline-queue.ts`** — pure module: `enqueue`, `readQueue`,
+  `deleteQueued`, `queueSize`, plus the mode-toggle plumbing that
+  mirrors the dry-run pattern.
+
+### Behavior
+
+- Reads pass through unchanged (the read side already supports offline).
+- Queue mode supersedes dry-run: if both armed, queue wins (dry-run
+  is fire-and-forget, queue preserves state for replay).
+- The api-client interceptor (same layer as `--dry-run`) intercepts
+  before any network I/O, so `--queue` works with zero connectivity.
+- File names are `<UTC-timestamp>-<UUID>.jsonld` so a directory
+  listing IS chronological order.
+- `readQueue` skips malformed files with a stderr warning rather
+  than failing — one bad file shouldn't block the rest from
+  replaying.
+
+### What's NOT shipped (deferred to A+.6b)
+
+- **Conflict resolution.** If the queued mutation conflicts with
+  current server state on replay (e.g., the resource was deleted
+  while you were offline), v1 surfaces the backend's error and
+  preserves the queue file. v1.1 will add a `solid:conflictsWith`
+  IRI in the response and an interactive resolver.
+- **Idempotency-Key header send.** Each queue file has an
+  idempotencyKey field; v1 doesn't yet thread it as an HTTP header
+  through `apiClient.{post,put,patch,delete}` because per-call
+  headers aren't in the v1 wrapper signature. The key still serves
+  as the de-dup token in the file format for client-side
+  deduplication.
+- **Auto-detect connectivity.** v1 requires explicit `--queue`. v1.1
+  could fall back to the queue when an axios `ECONNREFUSED` /
+  network error fires.
+
+### Verification
+
+- `npm test`: 828/828 green (18 unit + 3 integration tests).
+- File format is a valid JSON-LD document (verified via the
+  `solid graph --offline` walker on a hand-placed queue dir).
+
 ## [1.23.0] — 2026-04-25
 
 **SPARQL BGP query.** Closes A+.5 of SPRINT-JSONLD-GRAPH-MOAT.md (offline

@@ -29,6 +29,12 @@ const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'
 import { activateDryRunIfRequested, dryRunSummary, isDryRun } from './lib/dry-run';
 activateDryRunIfRequested(process.argv);
 
+// A+.6 — activate global --queue (offline mutation queue) for the same
+// reason: the api-client request interceptor must see the flag before
+// the first command runs.
+import { activateQueueModeIfRequested } from './lib/offline-queue';
+activateQueueModeIfRequested(process.argv);
+
 // T11.3 — program-level --json flag that cascades to subcommands which
 // don't explicitly declare their own --json option.
 import { activateProgramJsonIfRequested } from './lib/json-output';
@@ -144,6 +150,7 @@ program
   .description('Solid# CLI — AI Business Infrastructure')
   .version(pkg.version)
   .option('--dry-run', 'Preview every mutation without touching the server (T11). Global. Also: SOLID_DRY_RUN=1')
+  .option('--queue', 'Offline mode: write mutations to .solid/queue/ for later replay (A+.6). Global. Also: SOLID_OFFLINE_QUEUE=1')
   .option('--json', 'Prefer JSON output (if the subcommand supports it). Also: SOLID_JSON=1')
   .option('--token <token>', 'Auth token for this invocation only (never persisted). Overrides env/config.')
   .option('--no-spinner', 'Disable the progress spinner (same as --quiet)')
