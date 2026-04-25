@@ -249,30 +249,39 @@ describe('toErrorEnvelope', () => {
 // jsonErrorEnvelopeEnabled
 // ============================================================================
 
-describe('jsonErrorEnvelopeEnabled', () => {
-  const original = process.env.SOLID_JSON_V2;
+describe('jsonErrorEnvelopeEnabled (v2.0.0 default flipped to ON)', () => {
+  const originalV2 = process.env.SOLID_JSON_V2;
+  const originalLegacy = process.env.SOLID_LEGACY_ERRORS;
 
   beforeEach(() => {
     delete process.env.SOLID_JSON_V2;
+    delete process.env.SOLID_LEGACY_ERRORS;
   });
 
   afterEach(() => {
-    if (original === undefined) delete process.env.SOLID_JSON_V2;
-    else process.env.SOLID_JSON_V2 = original;
+    if (originalV2 === undefined) delete process.env.SOLID_JSON_V2;
+    else process.env.SOLID_JSON_V2 = originalV2;
+    if (originalLegacy === undefined) delete process.env.SOLID_LEGACY_ERRORS;
+    else process.env.SOLID_LEGACY_ERRORS = originalLegacy;
   });
 
-  it('false when env var unset', () => {
-    expect(jsonErrorEnvelopeEnabled()).toBe(false);
-  });
-
-  it.each(['1', 'true', 'TRUE', 'yes', 'On'])('%s → true', (value) => {
-    process.env.SOLID_JSON_V2 = value;
+  it('default ON when no env var set (v2.0.0 behavior)', () => {
     expect(jsonErrorEnvelopeEnabled()).toBe(true);
   });
 
-  it.each(['0', 'false', 'no', 'off', '', 'banana'])('%s → false', (value) => {
-    process.env.SOLID_JSON_V2 = value;
+  it('still ON when SOLID_JSON_V2=1 explicitly set (backward compat)', () => {
+    process.env.SOLID_JSON_V2 = '1';
+    expect(jsonErrorEnvelopeEnabled()).toBe(true);
+  });
+
+  it.each(['1', 'true', 'TRUE', 'yes', 'On'])('SOLID_LEGACY_ERRORS=%s → opt out (false)', (value) => {
+    process.env.SOLID_LEGACY_ERRORS = value;
     expect(jsonErrorEnvelopeEnabled()).toBe(false);
+  });
+
+  it.each(['0', 'false', 'no', 'off', ''])('SOLID_LEGACY_ERRORS=%s → still default (true)', (value) => {
+    process.env.SOLID_LEGACY_ERRORS = value;
+    expect(jsonErrorEnvelopeEnabled()).toBe(true);
   });
 });
 

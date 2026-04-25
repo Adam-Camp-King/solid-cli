@@ -2,6 +2,66 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.0.0] — 2026-04-25
+
+**v2.0.0 — agent-ready by default.** The structured JSON error
+envelopes shipped behind `SOLID_JSON_V2=1` since 1.10.0 are now ON
+by default. Every `--json` invocation gets the structured envelope
+without ceremony. Closes the v2.0.0 default-flip on the SPRINT-CLI-V2-
+AGENT-READY sprint.
+
+### Breaking change
+
+- **Default `--json` shape now ships the structured error envelope.**
+  When a `--json` invocation hits an error, stdout receives:
+
+      {
+        "error": {
+          "code": "NOT_FOUND",
+          "status": 404,
+          "message": "...",
+          "hint": "...",
+          "docs_url": "...",
+          "scope": "...",
+          "feature": "...",
+          "upgrade_to": "...",
+          "request_id": "..."
+        }
+      }
+
+  In 1.x this was opt-in via `SOLID_JSON_V2=1`. AI agents and
+  scripts that wanted the structured shape had to set the env var.
+  In 2.0.0 it's the default — agents work out of the box.
+
+### Backward compatibility
+
+- **Opt-out: `SOLID_LEGACY_ERRORS=1`** restores the 1.x prose-style
+  errors for any script that depends on the old shape.
+- **`SOLID_JSON_V2=1` is still honored** (it just no longer matters,
+  since the default is already on). Scripts that explicitly opt in
+  need no changes.
+- **List envelope normalization** (the `{items, total, page}` shape
+  added in 1.10) is unchanged — already on by default; opt-out via
+  `SOLID_LEGACY_LIST_SHAPES=1` still works.
+
+### Why now
+
+The agent-ready features (T1.1 structured errors, T1.2 dry-run
+validation, T1.3 schema verbs, T1.4 list envelopes, T1.5 MCP serve,
+T1.6 doctor scopes) shipped in 1.10.0 (2026-04-15) but stayed
+gated behind `SOLID_JSON_V2=1`. AI agents that didn't know to set
+the env var got the legacy shape. Flipping to default-on closes the
+"why does the same CLI behave differently for different agents"
+gap and is the single biggest functionality grade unlock — it's
+what makes the agent-ready sprint actually visible.
+
+### Verification
+
+- 835/835 tests green. The legacy-prose path now requires explicit
+  `SOLID_LEGACY_ERRORS=1`; the new default test covers the flipped
+  behavior; backward-compat path with `SOLID_JSON_V2=1` still
+  yields the structured envelope.
+
 ## [1.26.0] — 2026-04-25
 
 **Full SPARQL 1.1 (online).** Closes A+.5b of SPRINT-JSONLD-GRAPH-MOAT.md.

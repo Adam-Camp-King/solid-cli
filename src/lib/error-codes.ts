@@ -253,11 +253,18 @@ export function toErrorEnvelope(
 }
 
 /**
- * True when the caller has opted into structured JSON errors (Sprint 1 T1.7
- * two-step rollout). Default behavior stays legacy-prose until a later minor
- * flips this on unconditionally.
+ * True when the caller wants structured JSON errors. Default flipped
+ * to ON in v2.0.0 (was opt-in via SOLID_JSON_V2 in 1.x). Callers that
+ * still want the legacy prose-style errors can set SOLID_LEGACY_ERRORS=1.
+ *
+ * The old SOLID_JSON_V2 env var is still honored for backward
+ * compatibility with scripts that explicitly opt in — it just no
+ * longer matters because the default is already on.
  */
 export function jsonErrorEnvelopeEnabled(): boolean {
-  const v = process.env.SOLID_JSON_V2;
-  return typeof v === 'string' && /^(1|true|yes|on)$/i.test(v);
+  const legacy = process.env.SOLID_LEGACY_ERRORS;
+  if (typeof legacy === 'string' && /^(1|true|yes|on)$/i.test(legacy)) {
+    return false;
+  }
+  return true;
 }

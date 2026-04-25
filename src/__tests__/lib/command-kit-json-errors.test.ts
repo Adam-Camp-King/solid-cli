@@ -68,8 +68,12 @@ describe('command-kit — JSON error envelope', () => {
     expect(errSpy).toHaveBeenCalled();
   });
 
-  it('prose to stderr when --json is on but SOLID_JSON_V2 is NOT set (legacy)', async () => {
+  it('prose to stderr when --json is on AND SOLID_LEGACY_ERRORS=1 (opt-out)', async () => {
+    // v2.0.0 flipped the default — JSON envelopes are now default-on
+    // when --json is set. SOLID_LEGACY_ERRORS=1 is the opt-out for
+    // scripts that still want the legacy prose-style error output.
     (jsonOutput.isJsonOutput as jest.Mock).mockReturnValue(true);
+    process.env.SOLID_LEGACY_ERRORS = '1';
 
     await expect(
       run(async () => { throw axiosLikeError(404, { detail: 'Not found' }); }, { spinner: null }),
@@ -77,9 +81,11 @@ describe('command-kit — JSON error envelope', () => {
 
     expect(stdoutSpy).not.toHaveBeenCalled();
     expect(errSpy).toHaveBeenCalled();
+
+    delete process.env.SOLID_LEGACY_ERRORS;
   });
 
-  it('JSON envelope to stdout when --json AND SOLID_JSON_V2=1', async () => {
+  it('JSON envelope to stdout when --json (default, no flag needed in v2)', async () => {
     (jsonOutput.isJsonOutput as jest.Mock).mockReturnValue(true);
     process.env.SOLID_JSON_V2 = '1';
 
