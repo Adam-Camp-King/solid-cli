@@ -191,7 +191,8 @@ export const graphCommand = new Command('graph')
   .option('--offline', 'Force reading from local .claude/solid-context.jsonld — no API call. Fail if the file is absent.')
   .option('--remote', 'Force a network fetch — ignore any local .claude/solid-context.jsonld.')
   .option('--validate', 'Check that every edge target resolves in @graph and required per-type fields are present. Exit 1 on errors.')
-  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean }) => {
+  .option('--dump <format>', 'Emit RDF for piping to a graph store. Format: nquads (offline-capable) | turtle (requires --remote)')
+  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string }) => {
     // --offline doesn't require auth; --remote does; the default prefers
     // local-if-logged-out, remote-if-logged-in.
     if (!opts.offline && !readJsonLdLocalOrNull() && !config.isLoggedIn()) {
@@ -215,6 +216,50 @@ export const graphCommand = new Command('graph')
         console.error(chalk.red(`Failed to fetch JSON-LD context: ${e.message}`));
       }
       process.exit(1);
+    }
+
+    // --dump ---------------------------------------------------------------
+    // RDF export for piping to external graph stores. N-Quads runs offline
+    // (jsonld.toRDF natively); Turtle requires the backend so we ask for
+    // it via ?format=turtle. Output goes straight to stdout — no chalk,
+    // no extra newlines beyond what the format requires — so users can
+    // shell-pipe (`solid graph --dump nquads > tenant.nq`).
+    if (opts.dump) {
+      const fmt = opts.dump.toLowerCase();
+      if (fmt !== 'nquads' && fmt !== 'turtle') {
+        console.error(chalk.red(`Unknown --dump format: ${opts.dump}. Use nquads or turtle.`));
+        process.exit(1);
+      }
+      try {
+        if (fmt === 'nquads') {
+          // Offline-capable: convert in-process via jsonld lib.
+          // Lazy-load so users who never use --dump don't pay the
+          // require cost.
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const jsonldLib = require('jsonld');
+          const nquads = await jsonldLib.toRDF(doc, { format: 'application/n-quads' });
+          process.stdout.write(nquads);
+          return;
+        }
+        // turtle — needs the backend serializer
+        if (opts.offline) {
+          console.error(chalk.red('--dump turtle requires the backend (no offline turtle yet).'));
+          console.error(chalk.dim('  Use --dump nquads for offline export, or drop --offline.'));
+          process.exit(1);
+        }
+        // FastAPI returns text/turtle; ask axios for raw text so it
+        // doesn't try to JSON-parse the body.
+        const res = await apiClient.get<string>('/api/v1/cli/context', {
+          params: { format: 'turtle' },
+          responseType: 'text',
+        });
+        process.stdout.write(typeof res.data === 'string' ? res.data : String(res.data));
+        return;
+      } catch (err) {
+        const e = handleApiError(err);
+        console.error(chalk.red(`Dump failed: ${e.message}`));
+        process.exit(1);
+      }
     }
 
     // --validate -----------------------------------------------------------

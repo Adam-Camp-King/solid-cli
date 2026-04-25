@@ -2,6 +2,40 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.21.0] — 2026-04-25
+
+**RDF export.** Closes A+.2 of SPRINT-JSONLD-GRAPH-MOAT.md — the
+tenant graph is now ingestable into any RDF store (Neo4j, Fuseki,
+Blazegraph, GraphDB, Neptune) without going through JSON-LD.
+
+### Added
+
+- **`solid graph --dump nquads`** — converts the loaded JSON-LD context
+  to N-Quads and prints to stdout. Pipe to a file, a graph store
+  ingester, or `rdfox load` / `tdbloader`. Works **offline** (uses
+  the local `.claude/solid-context.jsonld` and the bundled `jsonld`
+  npm lib) so AI agents bound to a tenant dir can dump without
+  network.
+- **`solid graph --dump turtle`** — same idea, Turtle format.
+  Currently requires the backend (it fetches `?format=turtle` from
+  `/api/v1/cli/context`); offline turtle errors with a hint pointing
+  to nquads. Adding offline turtle is a future patch — N-Quads is
+  the canonical lossless format every RDF store accepts, so this
+  doesn't block any real workflow.
+
+### Dependencies
+
+- **Added `jsonld@^9.0.0`** as a runtime dep (~2 MB unpacked). This
+  is the canonical JSON-LD reference implementation; we use its
+  `toRDF()` for offline conversion. `npm audit --omit=dev`: 0 vulns.
+
+### Verification
+
+- `npm test`: 771/771 green (5 new in `graph-dump.test.ts`).
+- `tsc --noEmit`: clean.
+- Round-trip verified: every IRI from a fixture JSON-LD doc survives
+  `--dump nquads` as either subject or object position.
+
 ## [1.20.1] — 2026-04-25
 
 **License reconciliation.** Closes Phase 0.3 of the AI Stack
