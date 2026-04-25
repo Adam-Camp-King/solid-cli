@@ -2,6 +2,40 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.19.4] — 2026-04-24
+
+**Honesty patch.** Closes Phases 0.6 and 0.10 of the AI Stack
+Sovereignty sprint — eliminates the last placeholder assertion in the
+critical-security test file and brings dev dep versions current.
+
+### Fixed
+
+- **`company-isolation.test.ts` no longer contains `expect(true).toBe(true)`**
+  (Phase 0.6) — the placeholder for "company switch requires a new
+  JWT" is replaced with two real source-level contract assertions:
+  one verifying that `commands/switch.ts` writes BOTH new tokens
+  AND `companyId` back to config, and one verifying that the
+  `companySwitch` API method's return type still includes
+  `access_token` and `refresh_token`. A future refactor that breaks
+  the new-JWT contract (e.g., dropping refresh_token, or only
+  changing `X-Company-ID` while keeping the old JWT) will fail this
+  test instead of silently regressing.
+
+### Changed
+
+- **`@types/node` 20.19.33 → 20.19.39, `ts-jest` 29.4.6 → 29.4.9**
+  (Phase 0.10) — within-semver dev dep updates. Major-version
+  bumps for `chalk` / `ora` / `inquirer` / `commander` / `eslint` /
+  `jest` / `typescript` are deferred to a dedicated migration sprint
+  (ESM-only conversions and breaking API changes; not safe in a
+  hygiene patch).
+
+### Verification
+
+- `npm test`: 764/764 green (one new test added in 0.6).
+- `npm audit --omit=dev`: 0 vulns.
+- `tsc --noEmit`: clean.
+
 ## [1.19.3] — 2026-04-24
 
 **Hygiene batch.** Closes Phases 0.5, 0.7, 0.8, and 0.12 of the AI Stack

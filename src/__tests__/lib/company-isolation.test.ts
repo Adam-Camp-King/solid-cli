@@ -17,6 +17,8 @@
  */
 
 import { config } from '../../lib/config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Company Isolation — Security Critical', () => {
 
@@ -96,10 +98,33 @@ describe('Company Isolation — Security Critical', () => {
 
     it('company switch requires a new JWT, not just a header change', () => {
       // companySwitch returns a NEW access_token + refresh_token
-      // The old JWT is replaced entirely
-      // This prevents an attacker from just changing X-Company-ID header
-      // while keeping an old JWT (backend would reject mismatched JWT)
-      expect(true).toBe(true); // Contract documentation
+      // The old JWT is replaced entirely. This prevents an attacker
+      // from just changing X-Company-ID while keeping an old JWT
+      // (backend would reject mismatched JWT). Verified by reading the
+      // switch command source — must write BOTH tokens AND companyId
+      // back to config.
+      const switchSrc = fs.readFileSync(
+        path.join(__dirname, '..', '..', 'commands', 'switch.ts'),
+        'utf-8',
+      );
+      expect(switchSrc).toMatch(/config\.accessToken\s*=\s*switchResponse\.data\.access_token/);
+      expect(switchSrc).toMatch(/config\.refreshToken\s*=\s*switchResponse\.data\.refresh_token/);
+      expect(switchSrc).toMatch(/config\.companyId\s*=\s*switchResponse\.data\.company\.id/);
+    });
+
+    it('companySwitch API method returns both new tokens (type contract)', () => {
+      // Read the api-client.ts source and confirm the return type of
+      // companySwitch still includes access_token + refresh_token.
+      // A future refactor that drops these from the response shape
+      // would silently break the new-JWT contract — this catches it.
+      const apiSrc = fs.readFileSync(
+        path.join(__dirname, '..', '..', 'lib', 'api-client.ts'),
+        'utf-8',
+      );
+      const switchBlock = apiSrc.match(/async companySwitch[\s\S]*?\}\>\>/);
+      expect(switchBlock).not.toBeNull();
+      expect(switchBlock![0]).toContain('access_token: string');
+      expect(switchBlock![0]).toContain('refresh_token: string');
     });
 
     it('no fallback to company_id=1 anywhere', () => {
