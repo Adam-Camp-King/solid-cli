@@ -43,6 +43,7 @@ import {
   subgraph,
   validate,
 } from '../lib/graph-walker';
+import { diff as graphDiff } from '../lib/graph-diff';
 
 async function fetchJsonLdRemote(): Promise<JsonLdDocument> {
   const res = await apiClient.get<JsonLdDocument>('/api/v1/cli/context', {
@@ -192,7 +193,8 @@ export const graphCommand = new Command('graph')
   .option('--remote', 'Force a network fetch — ignore any local .claude/solid-context.jsonld.')
   .option('--validate', 'Check that every edge target resolves in @graph and required per-type fields are present. Exit 1 on errors.')
   .option('--dump <format>', 'Emit RDF for piping to a graph store. Format: nquads (offline-capable) | turtle (requires --remote)')
-  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string }) => {
+  .option('--diff <before>', 'Compare a baseline .jsonld file against the current graph. Reports added/removed/modified nodes. Exit 1 if any change.')
+  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string }) => {
     // --offline doesn't require auth; --remote does; the default prefers
     // local-if-logged-out, remote-if-logged-in.
     if (!opts.offline && !readJsonLdLocalOrNull() && !config.isLoggedIn()) {
@@ -260,6 +262,85 @@ export const graphCommand = new Command('graph')
         console.error(chalk.red(`Dump failed: ${e.message}`));
         process.exit(1);
       }
+    }
+
+    // --diff ---------------------------------------------------------------
+    // Compare a baseline file (the "before") against the loaded
+    // current graph (the "after"). Output a JSON-Patch-style report.
+    // Exit 1 if anything changed so this can gate CI: "fail the build
+    // if the tenant graph diverges from the committed baseline."
+    if (opts.diff) {
+      const beforePath = path.resolve(opts.diff);
+      if (!fs.existsSync(beforePath)) {
+        const msg = `--diff baseline not found: ${beforePath}`;
+        if (isJsonOutput(opts)) {
+          process.stdout.write(JSON.stringify({ ok: false, error: msg }, null, 2) + '\n');
+        } else {
+          console.error(chalk.red(msg));
+        }
+        process.exit(1);
+      }
+      let before: JsonLdDocument;
+      try {
+        before = JSON.parse(fs.readFileSync(beforePath, 'utf-8')) as JsonLdDocument;
+      } catch (err) {
+        const msg = `Failed to parse ${beforePath}: ${(err as Error).message}`;
+        if (isJsonOutput(opts)) {
+          process.stdout.write(JSON.stringify({ ok: false, error: msg }, null, 2) + '\n');
+        } else {
+          console.error(chalk.red(msg));
+        }
+        process.exit(1);
+      }
+
+      const report = graphDiff(before, doc);
+      const hasChanges = report.summary.added + report.summary.removed + report.summary.modified > 0;
+
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+        process.exit(hasChanges ? 1 : 0);
+      }
+
+      console.log('');
+      console.log(chalk.bold('Graph diff'));
+      console.log(chalk.dim(`  Before: ${beforePath}`));
+      console.log(chalk.dim(`  After:  ${doc['@id'] || '(loaded graph)'}`));
+      console.log('');
+      console.log(`  ${chalk.green('+')} ${report.summary.added} added`);
+      console.log(`  ${chalk.red('-')} ${report.summary.removed} removed`);
+      console.log(`  ${chalk.yellow('~')} ${report.summary.modified} modified`);
+      console.log(chalk.dim(`    ${report.summary.unchanged} unchanged`));
+      console.log('');
+
+      for (const node of report.added) {
+        const types = Array.isArray(node['@type']) ? node['@type'].join(', ') : (node['@type'] ?? '');
+        console.log(chalk.green(`  + ${node['@id']}`));
+        if (types) console.log(chalk.dim(`      [${types}]`));
+      }
+      for (const node of report.removed) {
+        const types = Array.isArray(node['@type']) ? node['@type'].join(', ') : (node['@type'] ?? '');
+        console.log(chalk.red(`  - ${node['@id']}`));
+        if (types) console.log(chalk.dim(`      [${types}]`));
+      }
+      for (const change of report.modified) {
+        console.log(chalk.yellow(`  ~ ${change['@id']}`));
+        for (const p of change.predicates) {
+          const sym = p.op === 'add' ? chalk.green('+') : p.op === 'remove' ? chalk.red('-') : chalk.yellow('~');
+          if (p.op === 'add') {
+            console.log(chalk.dim(`      ${sym} ${p.predicate} = ${JSON.stringify(p.after)}`));
+          } else if (p.op === 'remove') {
+            console.log(chalk.dim(`      ${sym} ${p.predicate} (was ${JSON.stringify(p.before)})`));
+          } else {
+            console.log(chalk.dim(`      ${sym} ${p.predicate}: ${JSON.stringify(p.before)} → ${JSON.stringify(p.after)}`));
+          }
+        }
+      }
+      console.log('');
+      if (!hasChanges) {
+        console.log(chalk.green('  ✓ graphs are identical'));
+        console.log('');
+      }
+      process.exit(hasChanges ? 1 : 0);
     }
 
     // --validate -----------------------------------------------------------

@@ -2,6 +2,43 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.22.0] — 2026-04-25
+
+**Graph diff.** Closes A+.4 of SPRINT-JSONLD-GRAPH-MOAT.md — answer
+"what changed in my tenant since X" structurally, not by log-grepping.
+
+### Added
+
+- **`solid graph --diff <baseline>`** — load a baseline `.jsonld` file,
+  compare against the currently loaded graph (offline file or remote
+  fetch), report added / removed / modified nodes with per-predicate
+  operations in JSON-Patch style. Pretty-prints by default; `--json`
+  emits the structured report.
+- **Exit code is the diff signal.** 0 if graphs are identical, 1 if
+  any change. Lets you gate CI on graph stability:
+  `solid graph --diff baseline.jsonld --offline || echo "tenant drifted"`.
+- **`lib/graph-diff.ts`** — pure function `diff(before, after)` so
+  consumers (eventually `solid graph --since 2d`) can reuse the
+  primitive.
+
+### Behavior
+
+- Identity is `@id`. Anonymous nodes (no `@id`) are skipped — diffing
+  them produces phantom add+remove churn that's never useful.
+- `@type` array order is normalized — reordering a node's types is
+  not a modification.
+- Edge changes appear as predicate changes on the source node (every
+  JSON-LD edge is a predicate value), not as separate edge entries.
+- Stable output ordering: nodes sorted by `@id`, predicates sorted
+  alphabetically. Deterministic for snapshots and CI gates.
+
+### Verification
+
+- `npm test`: 785/785 green (11 lib + 3 integration tests).
+- 8 acceptance scenarios from the spec all green: zero-diff,
+  add/remove × node + edge, modify (rename, predicate add, predicate
+  remove), plus tenant-isolation and @type-reorder invariants.
+
 ## [1.21.0] — 2026-04-25
 
 **RDF export.** Closes A+.2 of SPRINT-JSONLD-GRAPH-MOAT.md — the
