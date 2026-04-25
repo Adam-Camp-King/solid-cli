@@ -2,6 +2,57 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.19.1] — 2026-04-24
+
+**Security patch.** Closes the production CVEs that shipped in v1.19.0.
+A third-party audit on 2026-04-24 caught that the published tarball
+contained a vulnerable `axios@1.13.5` (NO_PROXY → SSRF; header
+injection → cloud-metadata exfil) plus a transitively vulnerable
+`handlebars@4.7.8` (critical) and minor regressions in
+`flatted` / `minimatch` / `picomatch`.
+
+### Security
+
+- **`axios` 1.13.5 → 1.15.2** —
+  closes [GHSA-3p68-rc4w-qgx5](https://github.com/advisories/GHSA-3p68-rc4w-qgx5)
+  (NO_PROXY bypass → SSRF) and
+  [GHSA-fvcv-3m26-pcqx](https://github.com/advisories/GHSA-fvcv-3m26-pcqx)
+  (header injection → cloud-metadata exfiltration). `follow-redirects`
+  also bumped to a non-vulnerable version
+  ([GHSA-r4q5-vmmm-2653](https://github.com/advisories/GHSA-r4q5-vmmm-2653) —
+  auth-header leak on cross-domain redirects).
+- **`handlebars` 4.7.8 → 4.7.9** — closes the
+  critical-severity advisory chain (transitive via `ts-jest`; not
+  reachable from runtime, but still patched).
+- **`flatted`, `minimatch`, `picomatch`** bumped to non-vulnerable
+  versions in lockfile.
+
+### Changed
+
+- **`prepublishOnly` adds `npm run audit:prod`** —
+  `npm publish` now refuses if the production dependency tree
+  (`npm audit --omit=dev --audit-level=high`) has any high or critical
+  vulnerabilities. The local publish flow now catches what CI catches.
+  Closes the gap that let v1.16.2 / v1.17.0 / v1.18.0 / v1.19.0 ship
+  through a failing security job.
+- New script `audit:prod` for production-only audit (devDeps excluded
+  from the gate so eslint / typescript / jest churn doesn't block
+  releases that are clean for end users).
+
+### Verification
+
+- `npm audit --omit=dev`: **0 vulnerabilities** in the production tree.
+- `npm test`: 763/763 green.
+- `npm pack --dry-run`: tarball builds cleanly.
+
+### Outstanding (deferred — won't block users)
+
+- 6 high-severity advisories remain in the `@typescript-eslint`
+  devDependency family (require a major version bump from v6/v7 to
+  v8+, which needs a separate PR to verify the eslint config still
+  builds). These are devDeps only — they don't ship in the published
+  tarball, so end users are unaffected.
+
 ## [1.16.1] — 2026-04-23
 
 Gap-closure patch following the 1.16.0 tenant-guard ship. Tightens the
