@@ -312,4 +312,16 @@ writes to stderr so pipelines are unaffected.
 
 ## License
 
-MIT
+[Business Source License 1.1](./LICENSE) (`BUSL-1.1`).
+
+**Plain English:** read the source, run the CLI, build on top of the SDK,
+ship internal tools, run it in production for your own business — all
+permitted. What's not permitted: offering a substantially similar
+command-line interface for managing AI-powered business infrastructure
+as a competing commercial product or service.
+
+On **2030-04-14** (the Change Date), this license converts automatically
+to **Apache 2.0** and all restrictions drop. No "phone home" required.
+
+The full license text and the additional use grant are in [LICENSE](./LICENSE).
+Background on BSL: <https://mariadb.com/bsl11/>.

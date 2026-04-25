@@ -2,6 +2,36 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.20.1] — 2026-04-25
+
+**License reconciliation.** Closes Phase 0.3 of the AI Stack
+Sovereignty sprint — three drifted spellings of the same license,
+one of them ("MIT" in the README footer) actively wrong.
+
+### Fixed
+
+- **`package.json` license: `BSL-1.1` → `BUSL-1.1`** — the SPDX
+  license list standardized "Business Source License 1.1" to
+  identifier `BUSL-1.1` in 2023. The non-standard `BSL-1.1` rendered
+  as "Custom" on npm and broke GitHub's license detection. Now
+  recognized correctly by tooling (npm, FOSSA, Snyk, GitHub).
+- **README footer: `## License\n\nMIT` → BSL-1.1 with plain-English
+  summary.** The footer was outright wrong (claimed MIT) while
+  `package.json` and `LICENSE` both correctly said BSL-1.1. The new
+  section names what's permitted (read source, build on the SDK,
+  run for your own business, ship internal tools), what's not
+  (competing commercial CLI for AI-powered business infrastructure),
+  and the 2030-04-14 conversion to Apache 2.0.
+
+The `LICENSE` file (full BSL-1.1 text + additional use grant) was
+already correct; this patch only fixes the references.
+
+### Verification
+
+- `npm test`: 766/766 green.
+- `npm view @solidnumber/cli@1.20.1 license` will return `BUSL-1.1`
+  after publish.
+
 ## [1.20.0] — 2026-04-25
 
 **CI green patch.** Closes Phase 0.2 of the AI Stack Sovereignty
