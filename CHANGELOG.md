@@ -2,6 +2,32 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.19.5] — 2026-04-24
+
+**Truth-in-advertising patch.** Closes Phase 0.9 of the AI Stack
+Sovereignty sprint — the README banner numbers were stale and
+undercounting the actual CLI surface by ~3×.
+
+### Fixed
+
+- **README banner now matches the program registry.** Was: "86
+  top-level commands, 200+ subcommands". Reality: 96 top-level,
+  595 subcommands. Updated to "96 top-level commands, 500+
+  subcommands".
+
+### Added
+
+- **`marketing-numbers-drift.test.ts`** — runs `dist/index.js schema
+  verbs --json` against the built CLI and asserts the README banner
+  is in sync with the registry. Top-level number must match exactly;
+  subcommand count must be `≤ actual && ≥ floor(actual/100)*100`.
+  Drift now fails CI before publish.
+
+### Verification
+
+- `npm test`: 766/766 green (two new tests).
+- README banner now matches `solid schema verbs --json` output.
+
 ## [1.19.4] — 2026-04-24
 
 **Honesty patch.** Closes Phases 0.6 and 0.10 of the AI Stack
