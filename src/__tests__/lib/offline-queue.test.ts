@@ -16,8 +16,10 @@ import * as os from 'os';
 import * as path from 'path';
 
 import {
+  autoFlushQueue,
   deleteQueued,
   enqueue,
+  isAutoFlushInProgress,
   isQueueMode,
   queueDir,
   queueSize,
@@ -176,5 +178,94 @@ describe('idempotency keys', () => {
     const a = enqueue('POST', '/a', null, { cwd });
     const b = enqueue('POST', '/a', null, { cwd });  // same URL/body, different mutation
     expect(a.mutation.idempotencyKey).not.toBe(b.mutation.idempotencyKey);
+  });
+});
+
+
+describe('autoFlushQueue (A+.6b)', () => {
+  it('drains every queued mutation when dispatcher succeeds', async () => {
+    const cwd = tempCwd();
+    enqueue('POST', '/api/v1/a', { x: 1 }, { cwd });
+    enqueue('PUT', '/api/v1/b/2', { y: 2 }, { cwd });
+    enqueue('DELETE', '/api/v1/c/3', null, { cwd });
+    expect(queueSize(cwd)).toBe(3);
+
+    const calls: Array<{ method: string; url: string }> = [];
+    const dispatch = async (method: string, url: string) => {
+      calls.push({ method, url });
+    };
+
+    const stats = await autoFlushQueue(dispatch, cwd);
+    expect(stats).toEqual({ succeeded: 3, failed: 0, total: 3 });
+    expect(queueSize(cwd)).toBe(0);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('replays in chronological order', async () => {
+    const cwd = tempCwd();
+    enqueue('POST', '/api/v1/first', null, { cwd });
+    await new Promise((r) => setTimeout(r, 5));
+    enqueue('POST', '/api/v1/second', null, { cwd });
+    await new Promise((r) => setTimeout(r, 5));
+    enqueue('POST', '/api/v1/third', null, { cwd });
+
+    const order: string[] = [];
+    await autoFlushQueue(async (_m, url) => { order.push(url); }, cwd);
+    expect(order).toEqual(['/api/v1/first', '/api/v1/second', '/api/v1/third']);
+  });
+
+  it('leaves failed mutations in queue, retries others', async () => {
+    const cwd = tempCwd();
+    enqueue('POST', '/api/v1/ok', null, { cwd });
+    enqueue('POST', '/api/v1/bad', null, { cwd });
+    enqueue('POST', '/api/v1/ok2', null, { cwd });
+
+    const dispatch = async (_m: string, url: string) => {
+      if (url.endsWith('/bad')) throw new Error('simulated 500');
+    };
+    const stats = await autoFlushQueue(dispatch, cwd);
+    expect(stats.succeeded).toBe(2);
+    expect(stats.failed).toBe(1);
+    // Bad one stays in queue
+    expect(queueSize(cwd)).toBe(1);
+  });
+
+  it('returns zero-stats and is a no-op when queue is empty', async () => {
+    const cwd = tempCwd();
+    const stats = await autoFlushQueue(async () => {}, cwd);
+    expect(stats).toEqual({ succeeded: 0, failed: 0, total: 0 });
+  });
+
+  it('isAutoFlushInProgress() reflects in-flight state', async () => {
+    const cwd = tempCwd();
+    enqueue('POST', '/x', null, { cwd });
+    expect(isAutoFlushInProgress()).toBe(false);
+    let observedDuringDispatch = false;
+    await autoFlushQueue(async () => {
+      observedDuringDispatch = isAutoFlushInProgress();
+    }, cwd);
+    expect(observedDuringDispatch).toBe(true);
+    expect(isAutoFlushInProgress()).toBe(false);
+  });
+
+  it('re-entry is suppressed (the recursion guard)', async () => {
+    const cwd = tempCwd();
+    enqueue('POST', '/x', null, { cwd });
+
+    // Simulate the auto-flush guard being held by an outer call.
+    // A second autoFlushQueue invocation while the first is in-flight
+    // must return zero-stats instead of double-dispatching.
+    let outerCalls = 0;
+    const dispatch = async () => {
+      outerCalls++;
+      // Mid-dispatch, ask for another flush. The guard should block it.
+      const innerStats = await autoFlushQueue(async () => {
+        // If reached, the guard failed — assertion below will fire.
+        outerCalls += 100;
+      }, cwd);
+      expect(innerStats).toEqual({ succeeded: 0, failed: 0, total: 0 });
+    };
+    await autoFlushQueue(dispatch, cwd);
+    expect(outerCalls).toBe(1);
   });
 });

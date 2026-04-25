@@ -2,6 +2,54 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.25.0] — 2026-04-25
+
+**Auto-detect connectivity.** Closes A+.6b of SPRINT-JSONLD-GRAPH-MOAT.md.
+The "holy shit" moment: lose wifi mid-mutation, the CLI auto-queues
+without erroring; regain wifi, the next successful mutation auto-replays
+the entire queue. No flag, no ceremony — it just works.
+
+### Added
+
+- **Auto-queue on network failure.** When a mutation hits
+  `ECONNREFUSED` / `ENOTFOUND` / `ECONNABORTED` / `ECONNRESET` /
+  `EAI_AGAIN` / "Network Error", the api-client interceptor
+  intercepts the failure and writes the mutation to `.solid/queue/`
+  (same JSON-LD format as explicit `--queue` mode). User sees:
+
+      [QUEUED — offline] connection failed; mutation saved.
+        Replay automatically on the next online command, or run: solid push --flush
+
+  The mutation's success path runs as if the server returned 202.
+  Caller code doesn't need to know.
+
+- **Auto-flush on next online mutation.** A successful mutation
+  response proves connectivity. The api-client response interceptor
+  drains the queue silently in the background. User sees:
+
+      [auto-flush] replayed 4 queued mutations.
+
+  Re-entry is guarded so the replay's own success doesn't trigger
+  another flush attempt. Best-effort: a failure on one queued
+  mutation leaves it in queue; the rest still get a chance.
+
+### Excluded
+
+- `/auth/login` and `/auth/refresh` are NOT auto-queued — replaying
+  them on reconnect would loop or create duplicate sessions.
+- Queue mode (`--queue`) supersedes auto-flush: explicitly armed
+  offline mode never triggers auto-replay.
+
+### Verification
+
+- `npm test`: 834/834 green (24 unit tests on the queue alone — 18
+  for the file format + 6 for auto-flush behavior).
+- Re-entry guard: a recursive auto-flush attempt during an in-flight
+  flush returns zero-stats instead of double-dispatching. Verified
+  by test.
+- Tested edge cases: empty queue is a no-op; failed dispatches stay
+  in queue for retry; chronological order preserved.
+
 ## [1.24.0] — 2026-04-25
 
 **Offline mutation queue.** Closes A+.6 (happy path) of

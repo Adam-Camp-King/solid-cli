@@ -39,7 +39,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from './config';
 import { deriveExistenceGet, isDryRun, makeDryRunResult } from './dry-run';
-import { enqueue, isQueueMode } from './offline-queue';
+import { autoFlushQueue, enqueue, isAutoFlushInProgress, isQueueMode, queueSize } from './offline-queue';
 import { applyListEnvelope } from './list-envelope';
 import { checkSkewFromHeaders } from './version-skew';
 
@@ -269,6 +269,45 @@ class ApiClient {
         } catch {
           // normalization is additive and best-effort; never break a response.
         }
+
+        // A+.6b — auto-flush. A successful mutation response proves
+        // connectivity. If there are queued mutations from a prior
+        // offline window, drain them silently in the background.
+        // Re-entry guard: each replay also returns a successful
+        // response; isAutoFlushInProgress() short-circuits inner calls.
+        try {
+          const respMethod = (response.config?.method || 'get').toLowerCase();
+          const respIsMutation =
+            respMethod === 'post' || respMethod === 'put' ||
+            respMethod === 'patch' || respMethod === 'delete';
+          if (
+            respIsMutation &&
+            !isAutoFlushInProgress() &&
+            !isQueueMode() &&
+            queueSize() > 0
+          ) {
+            const dispatch = async (method: string, url: string, body: unknown) => {
+              const m = method.toLowerCase();
+              if (m === 'post') await this.client.post(url, body);
+              else if (m === 'put') await this.client.put(url, body);
+              else if (m === 'patch') await this.client.patch(url, body);
+              else if (m === 'delete') await this.client.delete(url);
+              else throw new Error(`unknown queued method: ${method}`);
+            };
+            void autoFlushQueue(dispatch).then((stats) => {
+              if (stats.succeeded > 0) {
+                process.stderr.write(
+                  `\x1b[36m[auto-flush]\x1b[0m replayed ${stats.succeeded} queued mutation${stats.succeeded === 1 ? '' : 's'}` +
+                    (stats.failed > 0 ? `, ${stats.failed} still pending` : '') +
+                    `.\n`,
+                );
+              }
+            }).catch(() => { /* best-effort */ });
+          }
+        } catch {
+          // never break a response over auto-flush plumbing
+        }
+
         return response;
       },
       async (error: ExtendedAxiosError) => {

@@ -225,3 +225,61 @@ export function queueSize(cwd: string = process.cwd()): number {
   if (!fs.existsSync(dir)) return 0;
   return fs.readdirSync(dir).filter((f) => f.endsWith('.jsonld')).length;
 }
+
+
+// ---------------------------------------------------------------------------
+// A+.6b — Auto-flush after a successful mutation.
+//
+// When the CLI proves connectivity (a mutation just succeeded), drain
+// any pending offline queue silently. This is the "holy shit" moment:
+// user lost wifi mid-flight, kept working, regains wifi, the next
+// successful mutation triggers everything they queued to land in
+// chronological order without them lifting a finger.
+//
+// Best-effort: a failure on one queued mutation leaves it in the queue
+// (next attempt picks it up), but every other queued mutation still
+// gets a chance. We use a guard flag so the auto-flush itself doesn't
+// recurse — when each replay fires through the response interceptor,
+// the guard suppresses inner auto-flush attempts.
+// ---------------------------------------------------------------------------
+let _autoFlushInFlight = false;
+
+export function isAutoFlushInProgress(): boolean {
+  return _autoFlushInFlight;
+}
+
+export interface AutoFlushStats {
+  succeeded: number;
+  failed: number;
+  total: number;
+}
+
+/** Replay every queued mutation using the supplied dispatcher.
+ *  The dispatcher is injected so this module stays free of axios. */
+export async function autoFlushQueue(
+  dispatch: (method: string, url: string, body: unknown) => Promise<void>,
+  cwd: string = process.cwd(),
+): Promise<AutoFlushStats> {
+  if (_autoFlushInFlight) return { succeeded: 0, failed: 0, total: 0 };
+  const items = readQueue(cwd);
+  if (items.length === 0) return { succeeded: 0, failed: 0, total: 0 };
+
+  _autoFlushInFlight = true;
+  let succeeded = 0;
+  let failed = 0;
+  try {
+    for (const { path: filepath, mutation } of items) {
+      try {
+        await dispatch(mutation.method, mutation.url, mutation.body);
+        deleteQueued(filepath);
+        succeeded++;
+      } catch {
+        // Leave file in queue for the next attempt.
+        failed++;
+      }
+    }
+  } finally {
+    _autoFlushInFlight = false;
+  }
+  return { succeeded, failed, total: items.length };
+}
