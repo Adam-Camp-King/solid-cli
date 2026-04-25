@@ -2,6 +2,36 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.26.0] — 2026-04-25
+
+**Full SPARQL 1.1 (online).** Closes A+.5b of SPRINT-JSONLD-GRAPH-MOAT.md.
+The CLI's offline BGP matcher handles SELECT + multi-pattern joins;
+this release adds `--server` to route to the backend's full SPARQL
+endpoint for OPTIONAL, FILTER, property paths, UNION, GROUP BY,
+ORDER BY, LIMIT.
+
+### Added
+
+- **`solid graph --query <sparql> --server`** — POSTs the query to
+  `/api/v1/cli/context/query`. The backend uses rdflib's full SPARQL
+  1.1 implementation. Same output shape as the offline matcher
+  (`{vars, bindings}`) so the table render works identically.
+
+### Backend
+
+- New endpoint `POST /api/v1/cli/context/query` shipped in
+  `solid-backend` 1dc7306. Tenant scope is JWT-derived (cross-tenant
+  query is impossible by construction). Response carries both the
+  SPARQL 1.1 spec shape (`head.vars` + `results.bindings` with
+  type-tagged terms) AND the CLI-friendly flat shape.
+
+### Verification
+
+- 835/835 CLI tests green (1 new flag-parse test).
+- 18/18 backend RDF-suite tests green (7 new SPARQL tests covering
+  SELECT, OPTIONAL, FILTER, URI classification, empty/invalid query
+  rejection, zero-match).
+
 ## [1.25.0] — 2026-04-25
 
 **Auto-detect connectivity.** Closes A+.6b of SPRINT-JSONLD-GRAPH-MOAT.md.

@@ -286,6 +286,10 @@ class ApiClient {
             !isQueueMode() &&
             queueSize() > 0
           ) {
+            // Fire-and-forget: don't block the caller's response. The
+            // dispatcher uses the same axios client so each replay
+            // re-enters this interceptor (and is short-circuited by
+            // the in-flight guard).
             const dispatch = async (method: string, url: string, body: unknown) => {
               const m = method.toLowerCase();
               if (m === 'post') await this.client.post(url, body);
@@ -331,6 +335,60 @@ class ApiClient {
             config: cfg,
           } as unknown as import('axios').AxiosResponse;
         }
+
+        // A+.6b — auto-detect connectivity loss. If a mutation hits a
+        // network-layer failure (ECONNREFUSED / ENOTFOUND / ECONNABORTED
+        // / no response), AUTO-ENQUEUE instead of erroring. No flag, no
+        // ceremony — the CLI just keeps working. User sees
+        // `[QUEUED — offline]` and the next online run flushes.
+        const cfgEarly = (error.config || {}) as ExtendedAxiosRequestConfig;
+        const methodEarly = (cfgEarly.method || 'get').toLowerCase();
+        const isMutationEarly =
+          methodEarly === 'post' || methodEarly === 'put' ||
+          methodEarly === 'patch' || methodEarly === 'delete';
+        const isNetworkFailure =
+          !error.response &&
+          (error.code === 'ECONNREFUSED' ||
+            error.code === 'ENOTFOUND' ||
+            error.code === 'ECONNABORTED' ||
+            error.code === 'ECONNRESET' ||
+            error.code === 'EAI_AGAIN' ||
+            error.message === 'Network Error');
+        if (
+          isMutationEarly &&
+          isNetworkFailure &&
+          !cfgEarly.__solid_dry_run_verify &&
+          !cfgEarly.__solid_offline_queue &&
+          // Skip for auth/refresh: queueing those would loop on next flush.
+          !(cfgEarly.url || '').includes('/auth/login') &&
+          !(cfgEarly.url || '').includes('/auth/refresh')
+        ) {
+          const result = enqueue(
+            cfgEarly.method || 'POST',
+            cfgEarly.url || '',
+            cfgEarly.data,
+            { cliVersion: CLI_VERSION },
+          );
+          process.stderr.write(
+            `\x1b[36m[QUEUED — offline]\x1b[0m connection failed; mutation saved.\n` +
+            `  Replay automatically on the next online command, or run: solid push --flush\n`,
+          );
+          return {
+            data: {
+              queued: true,
+              queue_path: result.path,
+              status: 'queued_auto',
+              success: true,
+              id: `queued_auto_${Date.now()}`,
+              message: 'auto-queued on connectivity loss',
+            },
+            status: 202,
+            statusText: 'QUEUED_AUTO',
+            headers: {},
+            config: cfgEarly,
+          } as unknown as import('axios').AxiosResponse;
+        }
+
         // Dry-run synthetic response — the mutation never left the process.
         if (error.__solid_dry_run) {
           const cfg = (error.config || {}) as ExtendedAxiosRequestConfig;

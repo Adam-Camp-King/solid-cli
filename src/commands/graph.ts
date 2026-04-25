@@ -195,8 +195,9 @@ export const graphCommand = new Command('graph')
   .option('--validate', 'Check that every edge target resolves in @graph and required per-type fields are present. Exit 1 on errors.')
   .option('--dump <format>', 'Emit RDF for piping to a graph store. Format: nquads (offline-capable) | turtle (requires --remote)')
   .option('--diff <before>', 'Compare a baseline .jsonld file against the current graph. Reports added/removed/modified nodes. Exit 1 if any change.')
-  .option('--query <sparql>', 'Run a minimal SPARQL BGP query against the graph. Supports SELECT + WHERE with triple patterns. See `solid graph --query "?"` for examples.')
-  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string; query?: string }) => {
+  .option('--query <sparql>', 'Run a SPARQL BGP query against the graph. With --server, hits the backend for full SPARQL 1.1 (OPTIONAL/FILTER/UNION/property-paths). Without --server, runs the offline-capable BGP matcher.')
+  .option('--server', 'When used with --query, route to the backend SPARQL endpoint (full SPARQL 1.1) instead of the offline BGP matcher.')
+  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string; query?: string; server?: boolean }) => {
     // --offline doesn't require auth; --remote does; the default prefers
     // local-if-logged-out, remote-if-logged-in.
     if (!opts.offline && !readJsonLdLocalOrNull() && !config.isLoggedIn()) {
@@ -267,14 +268,27 @@ export const graphCommand = new Command('graph')
     }
 
     // --query --------------------------------------------------------------
-    // Minimal SPARQL BGP query against the loaded graph. Supports
-    // SELECT + WHERE with triple patterns; no OPTIONAL / FILTER /
-    // property paths (use the RDF export + a real SPARQL engine for
-    // those). Output: JSON `{vars, bindings}` under --json, or a
-    // table by default.
+    // SPARQL query against the graph. Two modes:
+    //   - default (offline-capable): minimal BGP matcher in `lib/sparql-bgp.ts`.
+    //     Supports SELECT + WHERE with triple patterns; no OPTIONAL /
+    //     FILTER / property paths.
+    //   - --server: hits POST /api/v1/cli/context/query. Full SPARQL 1.1
+    //     via rdflib. Use for OPTIONAL, FILTER, property paths, UNION,
+    //     GROUP BY, ORDER BY, LIMIT.
     if (opts.query) {
       try {
-        const result = sparqlQuery(opts.query, doc);
+        let result: { vars: string[]; bindings: Record<string, string>[] };
+        if (opts.server) {
+          const res = await apiClient.post<{
+            vars: string[];
+            bindings: Record<string, string>[];
+            head?: { vars: string[] };
+            results?: { bindings: Record<string, Record<string, string>>[] };
+          }>('/api/v1/cli/context/query', { query: opts.query });
+          result = { vars: res.data.vars, bindings: res.data.bindings };
+        } else {
+          result = sparqlQuery(opts.query, doc);
+        }
         if (isJsonOutput(opts)) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');
           process.exit(0);

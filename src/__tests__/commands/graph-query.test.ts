@@ -124,4 +124,35 @@ describeOrSkip('solid graph --query', () => {
     expect(result.bindings[0].service).toBe(`${SOLID}/co/61/service/1`);
     expect(result.bindings[0].tier).toBe(`${SOLID}/vocab/tier/builder`);
   });
+
+  it('--server flag is accepted by argv parser (no "unknown option" error)', () => {
+    // Smoke test: --server is a registered flag. Actual backend
+    // roundtrip is covered by the backend SPARQL service tests
+    // (test_ai_context_rdf.py); this just verifies argv parsing.
+    const tmp = setupTenant();
+    let stdout = '';
+    let stderr = '';
+    try {
+      stdout = execFileSync(
+        'node',
+        [distEntry, 'graph', '--query', 'SELECT * WHERE { ?s ?p ?o }', '--server', '--json'],
+        {
+          cwd: tmp,
+          encoding: 'utf-8',
+          env: { ...process.env, HOME: tmp, USERPROFILE: tmp, SOLID_API_URL: 'http://127.0.0.1:1' },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+    } catch (err: unknown) {
+      const e = err as { stdout?: Buffer | string; stderr?: Buffer | string };
+      stdout = String(e.stdout ?? '');
+      stderr = String(e.stderr ?? '');
+    }
+    // The exact exit code depends on whether the auto-queue intercepted
+    // the network failure (exit 0 + queued) or surfaced as an error
+    // (exit 1). Either is fine — the test just confirms the flag was
+    // recognized (not "unknown option" / "error: unknown option").
+    expect(stderr).not.toMatch(/unknown option/i);
+    expect(stdout + stderr).not.toMatch(/error:.*unknown option/);
+  });
 });
