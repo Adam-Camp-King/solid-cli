@@ -2,6 +2,61 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.23.0] — 2026-04-25
+
+**SPARQL BGP query.** Closes A+.5 of SPRINT-JSONLD-GRAPH-MOAT.md (offline
+half) — answer "show me every Service provided by companies on builder
+tier" as a graph query, not an array join.
+
+### Added
+
+- **`solid graph --query <sparql>`** — minimal SPARQL Basic Graph Pattern
+  engine, runs in-process against the loaded graph. Works offline (the
+  bundled `.claude/solid-context.jsonld`) and remote (auto-fetches via
+  the existing `loadDocument` path). Output: a table by default,
+  `--json` emits the structured `{vars, bindings}` shape (SPARQL 1.1
+  results spec).
+- **`lib/sparql-bgp.ts`** — pure functions:
+  - `parseQuery(text)` → typed AST with PREFIX expansion
+  - `materializeTriples(doc)` → flat (s, p, o) triples
+  - `runQuery(query, doc)` → de-duplicated bindings
+  - `query(text, doc)` → convenience parse-and-run
+
+### Supported
+
+- `SELECT ?var ?var WHERE { ?s ?p ?o . ?s2 ?p2 ?o2 . }`
+- `SELECT *` (binds every variable in WHERE)
+- `PREFIX foo: <http://...>` plus always-on `schema:`, `solid:`, `rdf:`
+- `a` shorthand for `rdf:type`
+- IRI terms, prefixed names, string literals (`"..."`), numeric literals
+- Multi-pattern joins (variable bindings carry forward)
+- List-valued JSON-LD predicates expand to multiple matches
+- Triple terminator `.` properly handled inside `<...>` IRIs and quoted
+  literals
+- Result rows de-duplicated (DISTINCT-by-default for projection)
+
+### Not supported (use the RDF export + a real SPARQL engine)
+
+- `OPTIONAL { ... }`
+- `FILTER (...)`
+- Property paths (`?s schema:knows+ ?o`)
+- `UNION` / `MINUS`
+- `GROUP BY` / `ORDER BY` / `LIMIT` (pipe through `head` / `sort`)
+- Named graphs / `GRAPH ?g { ... }`
+
+For those: `solid graph --dump nquads | apache-jena-fuseki tdbloader2`
+and run full SPARQL there.
+
+### Verification
+
+- `npm test`: 807/807 green (18 unit + 4 integration tests).
+- 10 canned queries from the spec all green: tier holders, services
+  by category, agents handling a category, webhooks firing chains,
+  type counts, services by provider, KB by category, chained joins,
+  predicate-counts, zero-match.
+- Plus join-semantics (var bound twice must agree), DISTINCT
+  projection, list-valued predicates, and parser sanity.
+
 ## [1.22.0] — 2026-04-25
 
 **Graph diff.** Closes A+.4 of SPRINT-JSONLD-GRAPH-MOAT.md — answer

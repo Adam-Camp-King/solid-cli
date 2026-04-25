@@ -44,6 +44,7 @@ import {
   validate,
 } from '../lib/graph-walker';
 import { diff as graphDiff } from '../lib/graph-diff';
+import { query as sparqlQuery } from '../lib/sparql-bgp';
 
 async function fetchJsonLdRemote(): Promise<JsonLdDocument> {
   const res = await apiClient.get<JsonLdDocument>('/api/v1/cli/context', {
@@ -194,7 +195,8 @@ export const graphCommand = new Command('graph')
   .option('--validate', 'Check that every edge target resolves in @graph and required per-type fields are present. Exit 1 on errors.')
   .option('--dump <format>', 'Emit RDF for piping to a graph store. Format: nquads (offline-capable) | turtle (requires --remote)')
   .option('--diff <before>', 'Compare a baseline .jsonld file against the current graph. Reports added/removed/modified nodes. Exit 1 if any change.')
-  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string }) => {
+  .option('--query <sparql>', 'Run a minimal SPARQL BGP query against the graph. Supports SELECT + WHERE with triple patterns. See `solid graph --query "?"` for examples.')
+  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string; query?: string }) => {
     // --offline doesn't require auth; --remote does; the default prefers
     // local-if-logged-out, remote-if-logged-in.
     if (!opts.offline && !readJsonLdLocalOrNull() && !config.isLoggedIn()) {
@@ -260,6 +262,56 @@ export const graphCommand = new Command('graph')
       } catch (err) {
         const e = handleApiError(err);
         console.error(chalk.red(`Dump failed: ${e.message}`));
+        process.exit(1);
+      }
+    }
+
+    // --query --------------------------------------------------------------
+    // Minimal SPARQL BGP query against the loaded graph. Supports
+    // SELECT + WHERE with triple patterns; no OPTIONAL / FILTER /
+    // property paths (use the RDF export + a real SPARQL engine for
+    // those). Output: JSON `{vars, bindings}` under --json, or a
+    // table by default.
+    if (opts.query) {
+      try {
+        const result = sparqlQuery(opts.query, doc);
+        if (isJsonOutput(opts)) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+          process.exit(0);
+        }
+        // Table render — variable names as headers, then one row per binding.
+        if (result.vars.length === 0) {
+          console.log(chalk.dim('  No SELECT variables.'));
+          process.exit(0);
+        }
+        if (result.bindings.length === 0) {
+          console.log(chalk.dim('  No matches.'));
+          process.exit(0);
+        }
+        // Compute column widths for a clean table.
+        const widths: number[] = result.vars.map((v) =>
+          Math.max(v.length, ...result.bindings.map((b) => (b[v] ?? '').length)),
+        );
+        const sep = '  ';
+        const header = result.vars.map((v, i) => chalk.bold(v.padEnd(widths[i]))).join(sep);
+        const rule = result.vars.map((_, i) => '─'.repeat(widths[i])).join(sep);
+        console.log('');
+        console.log(`  ${header}`);
+        console.log(chalk.dim(`  ${rule}`));
+        for (const row of result.bindings) {
+          console.log(`  ${result.vars.map((v, i) => (row[v] ?? '').padEnd(widths[i])).join(sep)}`);
+        }
+        console.log('');
+        console.log(chalk.dim(`  ${result.bindings.length} row${result.bindings.length === 1 ? '' : 's'}`));
+        console.log('');
+        process.exit(0);
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (isJsonOutput(opts)) {
+          process.stdout.write(JSON.stringify({ ok: false, error: msg }, null, 2) + '\n');
+        } else {
+          console.error(chalk.red(`Query error: ${msg}`));
+        }
         process.exit(1);
       }
     }
