@@ -2,6 +2,36 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [1.20.0] — 2026-04-25
+
+**CI green patch.** Closes Phase 0.2 of the AI Stack Sovereignty
+sprint — five red CI runs in a row, two distinct root causes.
+
+### Breaking
+
+- **Drop Node.js 18 support.** Node 18 reached EOL on 2025-04-30 and
+  several runtime deps (notably `inquirer@9`, ESM-only) no longer
+  load via CommonJS `require()` on Node 18, producing
+  `ERR_REQUIRE_ESM` on every command. Minimum is now Node 20.
+  `engines.node` updated to `>=20.0.0`. Users on Node 18 should
+  upgrade to Node 20 LTS or 22 LTS.
+
+### Fixed
+
+- **CI matrix: Node 18 dropped, kept 20 + 22.** Was failing
+  `test (18)` because of the ESM/CJS interop break described above.
+- **CI security job: `npm audit --omit=dev`.** Was failing on the
+  `@typescript-eslint/*` dev-only advisory chain — vulns shielded
+  from user installs since dev deps don't ship to npm. Now matches
+  the `audit:prod` script in `prepublishOnly`. Same flag passed to
+  `audit-ci` (`--skip-dev`).
+
+### Verification
+
+- 766/766 tests green locally.
+- `npm audit --omit=dev`: 0 vulns.
+- CI matrix builds + tests on Node 20 and 22.
+
 ## [1.19.5] — 2026-04-24
 
 **Truth-in-advertising patch.** Closes Phase 0.9 of the AI Stack

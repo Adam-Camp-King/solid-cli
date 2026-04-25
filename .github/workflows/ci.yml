@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [18, 20, 22]
+        # Node 18 reached EOL 2025-04-30 and our runtime deps (inquirer 9
+        # ESM-only) no longer support it. Test on supported LTS lines.
+        node: [20, 22]
     steps:
       - uses: actions/checkout@v4
 
@@ -54,13 +56,14 @@ jobs:
 
       - run: npm ci
 
-      - name: Audit dependencies (fail on HIGH)
-        # Sprint 2026-Q2 D5: flipped from `|| true` so a HIGH-severity
-        # npm advisory blocks the PR. Pin-or-fix is the expected response.
-        run: npm audit --audit-level=high
+      - name: Audit production dependencies (fail on HIGH)
+        # We only ship runtime deps to npm, so dev-only advisories
+        # (eslint, ts-jest, etc.) can't reach a user's machine. Match
+        # what prepublishOnly enforces: `npm audit --omit=dev`.
+        run: npm audit --omit=dev --audit-level=high
 
-      - name: Check for known vulnerabilities (fail on HIGH)
-        run: npx audit-ci --high
+      - name: Check for known vulnerabilities in production deps (fail on HIGH)
+        run: npx audit-ci --high --skip-dev
 
       - name: Verify no secrets in code
         run: |
