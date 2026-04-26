@@ -27,9 +27,13 @@ function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
   console.error(chalk.red(`  ${handleApiError(err).message}`));
 }
 
+// NOTE: previously aliased as `setup`, but `solid setup` is now the local-CLI
+// onboarding wizard (Phase 2 of SPRINT-CLI-ONE-COMMAND-ONBOARDING). The two
+// concepts collided — this one provisions a NEW CLIENT (email/domain/phone/
+// payment/website), the other wires the local CLI install. The local one is
+// hit far more often, so it owns the `setup` verb.
 export const onboardingCommand = new Command('onboarding')
-  .alias('setup')
-  .description('Programmatic client onboarding (email, domain, phone-buy, payment, website)');
+  .description('Programmatic CLIENT onboarding (email, domain, phone-buy, payment, website)');
 
 // ── Status ────────────────────────────────────────────────────────────
 

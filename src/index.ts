@@ -81,6 +81,8 @@ import { paymentCommand } from './commands/payment';
 import { contextCommand } from './commands/context';
 import { aiCommand } from './commands/ai';
 import { installCommand } from './commands/install';
+import { setupCommand } from './commands/setup';
+import { config } from './lib/config';
 import { askOwnerCommand } from './commands/ask_owner';
 import { signalCommand } from './commands/signal';
 import { PERSONA_ORDER, PERSONA_TITLES, personaFor, type Persona } from './lib/persona-groups';
@@ -470,6 +472,7 @@ program.addCommand(exploreCommand);
 program.addCommand(contextCommand);
 program.addCommand(aiCommand);
 program.addCommand(installCommand);
+program.addCommand(setupCommand);
 program.addCommand(askOwnerCommand);
 program.addCommand(signalCommand);
 program.addCommand(llmsCommand);
@@ -672,7 +675,34 @@ process.on('beforeExit', () => {
   }
 });
 
-// Show branded help if no command provided
+// Bare `solid` (no args):
+//   - First run AND TTY → drop into the `solid setup` wizard (Phase 2 of
+//     SPRINT-CLI-ONE-COMMAND-ONBOARDING.md). Same UX as `gh auth login` on
+//     first run. Detected by absence of `~/.solid/config.json` AND no
+//     SOLID_API_KEY env var (CI / scripted callers stay on the help screen).
+//   - Otherwise → branded help (existing behavior).
+//
+// SOLID_SKIP_FIRST_RUN_WIZARD=1 forces the help path even on first run —
+// useful for tests, CI, and users who explicitly don't want the wizard.
 if (!process.argv.slice(2).length) {
-  program.outputHelp();
+  const looksLikeFirstRun =
+    !config.isLoggedIn() &&
+    process.stdin.isTTY &&
+    process.stdout.isTTY &&
+    !process.env.SOLID_API_KEY &&
+    !process.env.SOLID_SKIP_FIRST_RUN_WIZARD &&
+    !process.env.CI;
+
+  if (looksLikeFirstRun) {
+    // Re-invoke ourselves as `solid setup`. Cleaner than calling the action
+    // directly — re-uses the registered command's option parsing, telemetry,
+    // and error handling. Sync exec so the parent doesn't double-print help.
+    const { spawnSync } = require('child_process');
+    spawnSync(process.execPath, [process.argv[1], 'setup'], {
+      stdio: 'inherit',
+      env: { ...process.env, SOLID_SKIP_FIRST_RUN_WIZARD: '1' },
+    });
+  } else {
+    program.outputHelp();
+  }
 }
