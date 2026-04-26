@@ -13,15 +13,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Skip when invoked from inside `npm publish`. We sit in `prepublishOnly`,
-# which `npm publish` runs before its own `npm pack`. Our `npm pack` +
-# `npm install` here would recurse into npm's already-locked process tree
-# (exit 254). CI runs this on every push, so by the time you `npm publish`,
-# the test has already proven the tarball is good.
-if [ "${npm_command:-}" = "publish" ]; then
-  echo "▸ Skipping tarball install smoke (inside \`npm publish\` — CI ran it on push)."
-  exit 0
-fi
+# Note: this script does `npm pack` + `npm install` and so cannot be run
+# inside `npm publish`'s prepublishOnly chain — npm rejects the recursion
+# (exit 254). The fast static check (`npm run verify:deps`) is what runs
+# in prepublishOnly. This script runs in CI and on manual invocation,
+# where it provides the deeper guarantee that the tarball actually
+# installs and boots end-to-end.
 
 # Build first — the tarball ships dist/, not src/.
 echo "▸ Building..."
