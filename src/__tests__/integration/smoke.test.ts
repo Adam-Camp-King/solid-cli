@@ -147,6 +147,9 @@ describe('CLI Smoke Tests', () => {
     ['graph',     ['--query', '--dump', '--diff', '--validate']],
     ['push',      ['--flush']],
     ['render',    ['--png', '--breakpoint', '--install']],
+    ['audit a11y',   ['--threshold', '--json']],
+    ['audit perf',   ['--threshold']],
+    ['audit mobile', ['--threshold']],
   ])('%s --help', (cmd, expectedTokens) => {
     it(`renders without crashing and lists key tokens`, () => {
       const output = run(`${cmd} --help`);

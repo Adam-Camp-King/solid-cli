@@ -2,6 +2,75 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.1.0] — 2026-04-25
+
+**Agents can now see what they ship.** Closes Phase 1 of
+SPRINT-CLI-AGENT-CAN-SHIP — the four highest-leverage visible-gap
+fixes. The agent's read graph + write graph + visual outcome are now
+inspectable from the CLI without reaching for a browser.
+
+### Added
+
+- **`solid render <slug> --png`** — headless screenshot of any page
+  or breakpoint. Returns a path the agent can attach to its reasoning.
+  Supports named breakpoints (`mobile`, `tablet`, `desktop`, `full`),
+  custom `--viewport WxH`, `--full-page`, `--wait <ms>`, multiple
+  breakpoints in one call, `--json` output, `--out <dir>` override.
+- **`solid render --install`** — one-time Chromium download (~150MB)
+  into `~/.solid/chromium/`. Auto-prompted on first `render`/`audit`
+  invocation in interactive contexts; non-interactive contexts (CI,
+  agents) get a clear "run `solid render --install`" hint or
+  auto-install via `SOLID_AUTO_INSTALL=1`.
+- **`solid schema blocks --examples`** — canonical example JSON per
+  block type. Agents copy/paste; no inferring from the source. Uses
+  domain-aware placeholders (headline → marketing copy, image →
+  placehold.co, cta_url → /signup, enums → first sane value). Hand-
+  written examples in the schema win over synthesized ones.
+  `--type <name>` for one block; `--json` for the full
+  `{examples, count}` envelope.
+- **`solid audit a11y|perf|mobile <slug>`** — Lighthouse-driven page
+  quality scoring on top of `solid seo audit`. Supports
+  `--threshold <0..100>` (exit 1 if score below — CI-gateable),
+  `--keep-raw`, `--json`. Mobile is a form-factor toggle (throttled
+  network + viewport). Reuses the same Chromium that powers
+  `solid render`.
+- **`Owners-Manual/45-Developer-CLI/CUSTOM-MODULES.md`** — canonical
+  agent-friendly answer to "what IS a custom module?" File layout,
+  lifecycle, where each piece runs, multi-tenancy guarantee, and a
+  side-by-side comparison with industry templates so agents stop
+  confusing the two.
+
+### Dependencies
+
+- **`puppeteer-core@^24`** — runtime browser automation (~9 MB).
+- **`@puppeteer/browsers@^2`** — programmatic Chromium installer.
+- **`lighthouse@^13`** — quality auditing.
+
+Total install footprint added: ~30 MB. Chromium itself is downloaded
+on first use (~150 MB), not bundled — most CLI users never run
+`render`/`audit` and pay zero browser cost.
+
+`npm audit --omit=dev`: 0 vulnerabilities.
+
+### Sprint context
+
+This is **Phase 1** of SPRINT-CLI-AGENT-CAN-SHIP — the subset
+shippable in ~3 days as one cohesive release. Phase 2 covers the
+heavier items: `solid serve --proxy`, `solid pages diff --visual`,
+`solid pages translate`, `solid pages preview --shareable-url`,
+integration manifests + OAuth-test + typed clients, app templates +
+data model + marketplace publish. Tracked in
+`Owners-Manual/98-Backlog/`.
+
+### Verification
+
+- 921/921 tests green (888 → 921, +33 unit + integration tests).
+- Lighthouse extract logic, browser install resolution, viewport
+  parsing, breakpoint resolution, URL construction, output filename
+  generation, block-example synthesis (placeholders, types, enums,
+  hand-written precedence) all covered.
+- `solid schema blocks --examples --json` smoke-tested in CI.
+
 ## [2.0.1] — 2026-04-25
 
 **A+.7 — top-15 command surface smoke coverage.** Catches the most-

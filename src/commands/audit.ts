@@ -192,6 +192,85 @@ auditCommand.command('gdpr-consent-set').description('Record a GDPR consent deci
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
+// ---------------------------------------------------------------------------
+// A.5 — `solid audit a11y|perf|mobile <slug>`
+//
+// Lighthouse-style page quality scoring. The existing `audit` family
+// is activity-log focused; these are page-quality focused. Same verb
+// (`audit`) because the user-facing word is the same — quality gates
+// are audits too.
+//
+// Each subcommand:
+//   - takes a page slug (e.g. "home", "pricing", "/about")
+//   - hits the same Chromium installer that `solid render` uses
+//   - runs Lighthouse with the relevant category enabled
+//   - prints a 0..100 score, top issues sorted by severity
+//   - exits 1 if score < --threshold (default 80) — CI-gateable
+// ---------------------------------------------------------------------------
+
+import type { LighthouseCategory } from '../lib/lighthouse-runner';
+
+function makeQualityAudit(name: 'a11y' | 'perf' | 'mobile', categoryDescription: string) {
+  return auditCommand
+    .command(`${name} <slug>`)
+    .description(`${categoryDescription} (Lighthouse-driven, A.5)`)
+    .option('--url <baseUrl>', 'Override the base URL. Defaults to https://app.solidnumber.com.')
+    .option('--threshold <score>', 'Exit 1 if score below this 0..100 value', '80')
+    .option('--keep-raw', 'Include the full Lighthouse JSON in --json output (large)')
+    .option('--json', 'Emit JSON for programmatic consumption')
+    .action(async (slug: string, opts: { url?: string; threshold: string; keepRaw?: boolean; json?: boolean }) => {
+      const ora = (await import('ora')).default;
+      const { runLighthouse } = await import('../lib/lighthouse-runner');
+      const { buildRenderUrl } = await import('../lib/render-utils');
+
+      const baseUrl = opts.url || process.env.SOLID_RENDER_BASE || 'https://app.solidnumber.com';
+      const fullUrl = buildRenderUrl(baseUrl, slug);
+      const threshold = Math.max(0, Math.min(100, parseInt(opts.threshold, 10) || 80));
+
+      const spinner = ora({ text: `Auditing ${categoryDescription.toLowerCase()} on ${fullUrl}…`, stream: process.stderr }).start();
+      try {
+        const result = await runLighthouse(fullUrl, name as LighthouseCategory, { keepRaw: Boolean(opts.keepRaw) });
+        spinner.succeed(`${categoryDescription}: ${result.score}/100`);
+
+        if (isJsonOutput(opts)) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+          process.exit(result.score >= threshold ? 0 : 1);
+        }
+
+        // Pretty render — 0..100 score, then top issues
+        console.log('');
+        const scoreColor = result.score >= 90 ? chalk.green : result.score >= 50 ? chalk.yellow : chalk.red;
+        console.log(`  ${scoreColor.bold(`${result.score}/100`)}  ${chalk.dim(`(threshold: ${threshold})`)}`);
+        console.log(chalk.dim(`  ${fullUrl}`));
+        console.log('');
+        const failing = result.issues.filter((i) => i.severity !== 'pass');
+        if (failing.length === 0) {
+          console.log(chalk.green('  ✓ no issues — every audit passed'));
+          console.log('');
+        } else {
+          console.log(chalk.bold(`  ${failing.length} issue${failing.length === 1 ? '' : 's'}:`));
+          for (const issue of failing.slice(0, 10)) {
+            const sev = issue.severity === 'serious' ? chalk.red('●') : issue.severity === 'moderate' ? chalk.yellow('●') : chalk.dim('●');
+            console.log(`    ${sev} ${chalk.bold(issue.title)} ${chalk.dim(`(${issue.rule})`)}`);
+          }
+          if (failing.length > 10) console.log(chalk.dim(`    … and ${failing.length - 10} more (use --json for full list)`));
+          console.log('');
+        }
+        process.exit(result.score >= threshold ? 0 : 1);
+      } catch (err) {
+        spinner.fail(chalk.red(`Audit failed: ${(err as Error).message}`));
+        if (isJsonOutput(opts)) {
+          process.stdout.write(JSON.stringify({ ok: false, error: (err as Error).message }, null, 2) + '\n');
+        }
+        process.exit(1);
+      }
+    });
+}
+
+makeQualityAudit('a11y',   'Accessibility audit');
+makeQualityAudit('perf',   'Performance audit');
+makeQualityAudit('mobile', 'Mobile performance audit');
+
 import { appendExamples as __ae_audit } from '../lib/command-kit';
 __ae_audit(auditCommand, [
   { cmd: 'solid audit export --since 30d',     why: 'Dump activity log (who changed what)' },
@@ -199,4 +278,7 @@ __ae_audit(auditCommand, [
   { cmd: 'solid audit gdpr-export <email>',    why: 'GDPR subject access request' },
   { cmd: 'solid audit gdpr-delete <email> -y', why: 'GDPR right-to-be-forgotten (prompts without -y)' },
   { cmd: 'solid audit gdpr-consent-set <id>',  why: 'Record marketing consent' },
+  { cmd: 'solid audit a11y home --json',       why: 'A.5 — accessibility score for a page' },
+  { cmd: 'solid audit perf home --threshold 90', why: 'A.5 — performance score; exit 1 if <90' },
+  { cmd: 'solid audit mobile home',            why: 'A.5 — mobile performance audit' },
 ]);
