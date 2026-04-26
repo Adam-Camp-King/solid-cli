@@ -35,6 +35,7 @@ import { execSync, spawnSync } from 'child_process';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
+import { getResolvedApiUrl } from '../lib/api-client';
 
 type StepStatus = 'done' | 'skipped' | 'failed' | 'pending';
 
@@ -52,7 +53,10 @@ interface SetupOptions {
   skipRender?: boolean;
   skipFirstAction?: boolean;
   json?: boolean;
+  installToken?: string;
 }
+
+const INSTALL_TOKEN_PREFIX = 'ist_';
 
 const EDITORS: Array<{ binary: string; clientFlag: string; pretty: string }> = [
   { binary: 'claude', clientFlag: 'claude', pretty: 'Claude Code' },
@@ -104,6 +108,89 @@ async function confirm(message: string, defaultYes: boolean, autoYes: boolean): 
 // ─────────────────────────────────────────────────────────────────────────────
 // Steps
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Phase 3 magic-link auth: redeem an `ist_*` install token from the
+ * dashboard for a real CLI access+refresh token, stamp the config,
+ * and skip the browser auth step entirely.
+ *
+ * Returns null if no --install-token was supplied (regular flow).
+ * Returns 'failed' if a token was supplied but the exchange failed —
+ * we DON'T silently fall through to browser auth in that case, because
+ * the user explicitly asked for token-based auth and a fall-through
+ * could mask a real expiry/replay/network problem.
+ */
+async function stepInstallToken(opts: SetupOptions): Promise<StepResult | null> {
+  if (!opts.installToken) return null;
+
+  const token = opts.installToken.trim();
+  if (!token.startsWith(INSTALL_TOKEN_PREFIX)) {
+    return {
+      step: 'install_token',
+      status: 'failed',
+      detail: `--install-token must start with "${INSTALL_TOKEN_PREFIX}" (got "${token.slice(0, 8)}…")`,
+    };
+  }
+
+  const apiUrl = getResolvedApiUrl().replace(/\/+$/, '');
+  const exchangeUrl = `${apiUrl}/api/v1/auth/install-token/exchange`;
+
+  let res: Response;
+  try {
+    res = await fetch(exchangeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, label: 'CLI (install-token)' }),
+    });
+  } catch (e) {
+    return {
+      step: 'install_token',
+      status: 'failed',
+      detail: `network error contacting ${exchangeUrl}: ${(e as Error).message}`,
+    };
+  }
+
+  if (!res.ok) {
+    // 401 = invalid/expired/replayed. 429 = rate-limited. Anything else
+    // is unexpected — surface the body verbatim for debugging.
+    let body = '';
+    try { body = (await res.text()).slice(0, 200); } catch { /* ignore */ }
+    const reason = res.status === 401
+      ? 'token invalid, expired, or already used — generate a fresh one from the dashboard'
+      : `HTTP ${res.status} ${body}`;
+    return { step: 'install_token', status: 'failed', detail: reason };
+  }
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch (e) {
+    return { step: 'install_token', status: 'failed', detail: `bad JSON in exchange response` };
+  }
+
+  if (!data.access_token || !data.refresh_token) {
+    return { step: 'install_token', status: 'failed', detail: 'exchange response missing tokens' };
+  }
+
+  // Stamp the config — same shape `solid auth login` writes.
+  config.accessToken = data.access_token;
+  config.refreshToken = data.refresh_token;
+  if (data.user) {
+    if (data.user.id) config.userId = data.user.id;
+    if (data.user.email) config.userEmail = data.user.email;
+    if (data.user.company_id) config.companyId = data.user.company_id;
+  }
+  if (data.expires_in) {
+    config.tokenExpiresAt = new Date(Date.now() + Number(data.expires_in) * 1000);
+  }
+
+  const company = data.company?.name ? ` for ${data.company.name}` : '';
+  return {
+    step: 'install_token',
+    status: 'done',
+    detail: `authenticated via install token${company}`,
+  };
+}
 
 async function stepAuth(opts: SetupOptions): Promise<StepResult> {
   if (opts.skipAuth) return { step: 'auth', status: 'skipped', detail: '--skip-auth' };
@@ -257,11 +344,30 @@ export const setupCommand = new Command('setup')
   .option('--skip-completion', 'Skip shell tab-completion install')
   .option('--skip-render', 'Skip the optional Chromium download for solid render')
   .option('--skip-first-action', 'Skip the "what would you like to do first?" picker')
+  .option('--install-token <token>', 'Redeem an ist_* install token from /dashboard/install-command instead of opening a browser to log in')
   .option('--json', 'Emit a structured progress envelope to stdout')
   .action(async (options: SetupOptions) => {
     const results: StepResult[] = [];
 
     try {
+      // Phase 3: if an install token was supplied, redeem it FIRST so the
+      // browser-auth step below sees `config.isLoggedIn() === true` and
+      // becomes a no-op. If the exchange fails we record the failure and
+      // bail — don't silently fall through to a browser flow that the
+      // user may not be able to complete (e.g., headless / scripted install).
+      const installTokenResult = await stepInstallToken(options);
+      if (installTokenResult) {
+        results.push(installTokenResult);
+        if (installTokenResult.status === 'failed') {
+          if (isJsonOutput(options)) {
+            process.stdout.write(JSON.stringify({ ok: false, results }, null, 2) + '\n');
+          } else {
+            printHumanSummary(results);
+          }
+          process.exit(1);
+        }
+      }
+
       results.push(await stepAuth(options));
       const mcpResults = await stepEditorsMcp(options);
       results.push(...mcpResults);
