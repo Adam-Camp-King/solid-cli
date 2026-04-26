@@ -39,18 +39,14 @@ jobs:
           fi
           echo "Version consistent: $PKG_VERSION"
 
-      - name: Canary — verify CLI starts
-        run: |
-          node dist/index.js --help > /dev/null
-          node dist/index.js completion > /dev/null
-          echo "Canary passed"
-
       - name: Tarball install smoke
         # Catches the v2.1.0-class regression where a runtime dep is missing
         # from `dependencies` but tests pass against the dev tree because the
         # dep is installed via devDependencies. Packs, installs into a clean
-        # tmpdir, exercises subcommand --help, and statically resolves every
-        # `import('<pkg>')` in the installed dist/.
+        # tmpdir, exercises boot + subcommand --help (audit a11y/perf/mobile,
+        # render, graph, completion), and statically resolves every
+        # `import('<pkg>')` / `require('<pkg>')` in the installed dist/.
+        # Subsumes the old `solid --help` / `solid completion` canary.
         run: npm run test:tarball
 
   security:
