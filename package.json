@@ -35,7 +35,7 @@
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "prepublish:check": "bash scripts/prepublish.sh",
     "test:tarball": "bash scripts/test-tarball.sh",
-    "prepublishOnly": "npm run build && npm test && npm run test:security && npm run audit:prod && npm run test:tarball"
+    "prepublishOnly": "npm run build && npm test && npm run test:security && npm run audit:prod && bash scripts/test-tarball.sh"
   },
   "keywords": [
     "cli",

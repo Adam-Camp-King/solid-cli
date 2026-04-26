@@ -13,6 +13,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Skip when invoked from inside `npm publish`. We sit in `prepublishOnly`,
+# which `npm publish` runs before its own `npm pack`. Our `npm pack` +
+# `npm install` here would recurse into npm's already-locked process tree
+# (exit 254). CI runs this on every push, so by the time you `npm publish`,
+# the test has already proven the tarball is good.
+if [ "${npm_command:-}" = "publish" ]; then
+  echo "▸ Skipping tarball install smoke (inside \`npm publish\` — CI ran it on push)."
+  exit 0
+fi
+
 # Build first — the tarball ships dist/, not src/.
 echo "▸ Building..."
 npm run build --silent

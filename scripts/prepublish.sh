@@ -1,55 +1,38 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Manual pre-publish safety check. Run before `npm publish` if you want
+# a slower, more paranoid gate than CI alone.
+#
+#   prepublishOnly:    build + test + test:security + audit:prod + tarball smoke
+#   this script adds:  clean dist/ before build + `npm pack --dry-run`
+#                      (file-list visibility into what would actually ship)
 set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
 echo "╔═══════════════════════════════════════╗"
 echo "║  Solid# CLI Pre-publish Safety Check  ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
-# 1. Clean build
-echo "▸ Building..."
+# 1. Clean dist/ — guarantee no stale artifacts ride along into the tarball.
+echo "▸ Clean dist/..."
 rm -rf dist/
-npm run build
-echo "  ✓ Build succeeded"
+echo "  ✓ Clean"
 
-# 2. Tests
-echo "▸ Running tests..."
-npm test -- --forceExit --detectOpenHandles 2>&1 | tail -5
-echo "  ✓ Tests passed"
+# 2. Run the full prepublishOnly chain: build + test + test:security
+#    + audit:prod + tarball install smoke + lazy-import scan.
+echo "▸ Running prepublishOnly chain..."
+npm run prepublishOnly
 
-# 3. Version check
-PKG_VERSION=$(node -p "require('./package.json').version")
-BUILT_VERSION=$(node dist/index.js --version 2>/dev/null || echo "UNKNOWN")
-if [ "$PKG_VERSION" != "$BUILT_VERSION" ]; then
-  echo "  ✗ FAIL: package.json ($PKG_VERSION) != built CLI ($BUILT_VERSION)"
-  exit 1
-fi
-echo "  ✓ Version consistent: $PKG_VERSION"
-
-# 4. Canary: pack and install locally
-echo "▸ Canary test..."
-TARBALL=$(npm pack --silent)
-npm install -g "./$TARBALL" --silent 2>/dev/null
-INSTALLED_VERSION=$(solid --version 2>/dev/null || echo "UNKNOWN")
-if [ "$PKG_VERSION" != "$INSTALLED_VERSION" ]; then
-  echo "  ✗ FAIL: installed version ($INSTALLED_VERSION) != package ($PKG_VERSION)"
-  npm uninstall -g @solidnumber/cli --silent 2>/dev/null
-  rm -f "$TARBALL"
-  exit 1
-fi
-
-# Verify core commands don't crash
-solid --help > /dev/null 2>&1 || { echo "  ✗ FAIL: solid --help crashed"; exit 1; }
-solid completion > /dev/null 2>&1 || { echo "  ✗ FAIL: solid completion crashed"; exit 1; }
-
-npm uninstall -g @solidnumber/cli --silent 2>/dev/null
-rm -f "$TARBALL"
-echo "  ✓ Canary passed"
-
-# 5. Dry run
-echo "▸ npm publish --dry-run..."
-npm publish --dry-run --access public 2>&1 | tail -3
-echo "  ✓ Dry run passed"
+# 3. Pack dry-run — show the exact file list that would ship.
+#    Note: `npm publish --dry-run` is unsafe to invoke from here because it
+#    re-triggers `prepublishOnly`, which runs `npm pack` inside the active
+#    publish process (exit 254). `npm pack --dry-run` skips lifecycle
+#    scripts and just prints the file list.
+echo ""
+echo "▸ npm pack --dry-run (file list)..."
+npm pack --dry-run 2>&1 | tail -10
 
 echo ""
 echo "═══════════════════════════════════════"
