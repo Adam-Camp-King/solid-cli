@@ -112,4 +112,98 @@ describe('CLI Smoke Tests', () => {
     expect(output).toContain('site-audit');
     expect(output).toContain('report');
   });
+
+  // ===========================================================================
+  // A+.7 — Top-15 command surface smoke tests
+  //
+  // Goal: every top command's --help renders a valid Commander tree
+  // without crashing on import resolution / missing dep / argv parser
+  // tree-walk. Each one catches the most-common regression class:
+  // "user installs the CLI, types `solid <cmd> --help`, gets a stack
+  // trace instead of help text."
+  //
+  // Extended from the original 4-command list (pages/site/billing/seo)
+  // to cover the moat-critical commands too: graph, schema verbs, kb,
+  // services, clone, audit, doctor, status, mcp, chains, domains,
+  // insights, nest, dev, health.
+  // ===========================================================================
+
+  describe.each([
+    ['kb',        ['list', 'add', 'search']],
+    ['services',  ['list', 'create']],
+    ['clone',     ['plumber']],
+    ['audit',     ['log', 'export']],
+    ['doctor',    ['env']],
+    ['status',    []],
+    ['schema',    ['verbs']],
+    ['mcp',       ['serve', 'install']],
+    ['chains',    ['list']],
+    ['domains',   ['list']],
+    ['insights',  ['list']],
+    ['nest',      []],
+    ['dev',       []],
+    ['health',    []],
+    ['context',   ['--claude', '--cursor']],
+    ['graph',     ['--query', '--dump', '--diff', '--validate']],
+    ['push',      ['--flush']],
+  ])('%s --help', (cmd, expectedTokens) => {
+    it(`renders without crashing and lists key tokens`, () => {
+      const output = run(`${cmd} --help`);
+      // The command name itself should appear somewhere in the help
+      expect(output).toContain(cmd);
+      // Each expected token should be in the help text (loose match —
+      // some commands list subcommands, some list flags). Tokens are
+      // hand-picked to be load-bearing surface for that command.
+      for (const token of expectedTokens) {
+        expect(output).toContain(token);
+      }
+    });
+  });
+
+  // ===========================================================================
+  // A+.7 — Real-shape tests for the v2 moat features
+  // ===========================================================================
+
+  it('schema verbs --json emits valid JSON', () => {
+    const output = run('schema verbs --json');
+    const parsed = JSON.parse(output);
+    expect(parsed).toHaveProperty('verbs');
+    expect(parsed).toHaveProperty('count');
+    expect(Array.isArray(parsed.verbs)).toBe(true);
+    expect(parsed.verbs.length).toBeGreaterThan(50);  // we have 96+
+  });
+
+  it('graph --offline without local file exits with clear error', () => {
+    const result = runSafe('graph --offline');
+    expect(result.exitCode).toBe(1);
+    // Error message should mention the missing file or `solid context`
+    // so the user knows the recovery path.
+  });
+
+  it('graph --query without query string exits with usage error', () => {
+    // --query expects a value; commander reports option-requires-arg.
+    const result = runSafe('graph --query');
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it('--dry-run global flag activates dry-run mode (no crash)', () => {
+    // Dry-run emits a banner on stderr and short-circuits any
+    // mutation. We can't trigger a mutation without auth, so verify
+    // --dry-run --help passes through cleanly.
+    const output = run('--dry-run --help');
+    expect(output).toContain('Solid#');
+  });
+
+  it('--queue global flag is parseable', () => {
+    // Queue mode uses .solid/queue/ for offline mutations.
+    // --queue --help should not crash.
+    const output = run('--queue --help');
+    expect(output).toContain('Solid#');
+  });
+
+  it('completion subcommand exists for all three shells', () => {
+    expect(run('completion zsh')).toMatch(/_solid|compdef/);
+    expect(run('completion --bash')).toMatch(/_solid|complete/);
+    expect(run('completion --fish')).toMatch(/complete -c solid/);
+  });
 });

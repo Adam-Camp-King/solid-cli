@@ -2,6 +2,42 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.0.1] — 2026-04-25
+
+**A+.7 — top-15 command surface smoke coverage.** Catches the most-
+common regression class: "user installs the CLI, types
+`solid <cmd> --help`, gets a stack trace instead of help text."
+
+### Added
+
+- **23 new smoke tests** in `__tests__/integration/smoke.test.ts`,
+  bringing the suite from 12 → 35 tests:
+  - `--help` render checks for kb, services, clone, audit, doctor,
+    status, schema, mcp, chains, domains, insights, nest, dev, health,
+    context, graph, push (each with hand-picked load-bearing tokens)
+  - Real-shape tests: `schema verbs --json` parses + has 50+ verbs;
+    `graph --offline` exits 1 with no local file; `graph --query`
+    without arg is usage error; `--dry-run` + `--queue` global flags
+    are parseable; `completion` works for zsh + bash + fish.
+- 858/858 tests green (was 835).
+
+### Why this matters for the S-grade goal
+
+Top-20 CLIs are top-20 partly because they don't crash on
+first-touch. Every regression class our existing suite caught
+(silent failures, exit codes, secret-scanner false positives,
+package-lock drift) was a per-incident fix. Smoke coverage is the
+preventive layer: every command's help renders without crashing,
+verified on every CI run.
+
+### What's still uncovered
+
+- Mocked-backend E2E tests (assert exit code + stdout shape against
+  recorded backend responses) — still ~3-5 days of work for full
+  top-20 backend coverage.
+- The other ~50 commands without test files (most are low-traffic
+  or already covered by lib-level unit tests).
+
 ## [2.0.0] — 2026-04-25
 
 **v2.0.0 — agent-ready by default.** The structured JSON error
