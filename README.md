@@ -2,7 +2,7 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-96 top-level commands, 500+ subcommands, 52 industries, 116 AI agents. One CLI.
+97 top-level commands, 500+ subcommands, 52 industries, 116 AI agents. One CLI.
 
 **v2.0.0** — agent-ready by default. `--json` output ships structured
 error envelopes; every business entity is a node in a typed JSON-LD

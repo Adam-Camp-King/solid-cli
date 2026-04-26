@@ -146,6 +146,7 @@ describe('CLI Smoke Tests', () => {
     ['context',   ['--claude', '--cursor']],
     ['graph',     ['--query', '--dump', '--diff', '--validate']],
     ['push',      ['--flush']],
+    ['render',    ['--png', '--breakpoint', '--install']],
   ])('%s --help', (cmd, expectedTokens) => {
     it(`renders without crashing and lists key tokens`, () => {
       const output = run(`${cmd} --help`);
@@ -163,6 +164,24 @@ describe('CLI Smoke Tests', () => {
   // ===========================================================================
   // A+.7 — Real-shape tests for the v2 moat features
   // ===========================================================================
+
+  it('schema blocks --examples --json emits valid JSON with example per block type', () => {
+    const output = run('schema blocks --examples --json');
+    const parsed = JSON.parse(output);
+    expect(parsed).toHaveProperty('examples');
+    expect(parsed).toHaveProperty('count');
+    expect(parsed.count).toBeGreaterThan(20);  // we have 28 blocks
+    // Every example must have a `type` field
+    for (const [_blockType, ex] of Object.entries(parsed.examples)) {
+      expect(ex).toHaveProperty('type');
+    }
+  });
+
+  it('schema blocks --type hero --json returns one example', () => {
+    const output = run('schema blocks --type hero --json');
+    const parsed = JSON.parse(output);
+    expect(parsed.type).toBe('hero');
+  });
 
   it('schema verbs --json emits valid JSON', () => {
     const output = run('schema verbs --json');

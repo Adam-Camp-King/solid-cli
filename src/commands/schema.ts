@@ -148,6 +148,67 @@ schemaCommand
   });
 
 // ---------------------------------------------------------------------------
+// solid schema blocks — (A.3 of SPRINT-CLI-AGENT-CAN-SHIP)
+//
+// `schema pages` already lists block types and their props. This new
+// subcommand emits a canonical EXAMPLE per block type. Agents stop
+// guessing block shape from the source; they get a runnable JSON
+// snippet they can paste directly into a layout.
+// ---------------------------------------------------------------------------
+schemaCommand
+  .command('blocks')
+  .description('Emit canonical example JSON per block type — agents copy/paste, no inference (A.3)')
+  .option('--examples', 'Emit examples (default for this subcommand)')
+  .option('--type <name>', 'Show one block type only (e.g., hero)')
+  .option('--json', 'Emit JSON; without --json renders a human-readable list')
+  .action(async (opts) => {
+    const { synthesizeExample, synthesizeAllExamples } = await import('../lib/block-example-synth');
+    const schema = loadSchema();
+
+    if (opts.type) {
+      const target = String(opts.type).toLowerCase();
+      const block = schema.blocks.find(
+        (b) => b.type.toLowerCase() === target || b.aliases?.some((a) => a.toLowerCase() === target),
+      );
+      if (!block) {
+        console.error(chalk.red(`Unknown block type: ${opts.type}`));
+        console.error(chalk.dim('  Run `solid schema blocks` to list all available types.'));
+        process.exit(1);
+      }
+      const ex = synthesizeExample(block);
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify(ex, null, 2) + '\n');
+        return;
+      }
+      console.log('');
+      console.log(chalk.bold.cyan(block.type));
+      console.log(chalk.dim(`  category: ${block.category}`));
+      console.log('');
+      const lines = JSON.stringify(ex, null, 2).split('\n');
+      for (const l of lines) console.log(`  ${l}`);
+      console.log('');
+      return;
+    }
+
+    // All blocks
+    const all = synthesizeAllExamples(schema.blocks);
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify({ examples: all, count: schema.blocks.length }, null, 2) + '\n');
+      return;
+    }
+
+    console.log('');
+    console.log(chalk.bold(`${schema.blocks.length} block types — canonical examples`));
+    console.log('');
+    for (const [type, ex] of Object.entries(all)) {
+      console.log(chalk.bold.cyan(type));
+      const lines = JSON.stringify(ex, null, 2).split('\n');
+      for (const l of lines) console.log(chalk.dim(`  ${l}`));
+      console.log('');
+    }
+  });
+
+// ---------------------------------------------------------------------------
 // solid schema verbs — (Sprint 1 T1.3) enumerate the full CLI verb tree so
 // agents can discover every command without scraping --help. Builds a
 // manifest by walking the Commander tree stored in program-registry.
