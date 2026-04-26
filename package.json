@@ -1,6 +1,6 @@
 {
   "name": "@solidnumber/cli",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "AI business infrastructure from the terminal — CRM, payments, voice AI, 116 agents, 52 industry templates. solid clone plumber → instant business. Also: programmatic TS SDK via @solidnumber/cli/sdk.",
   "main": "dist/index.js",
   "bin": {
@@ -87,12 +87,16 @@
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.0",
     "jsonld": "^9.0.0",
+    "lighthouse": "^13.1.0",
     "ora": "^8.0.0",
     "puppeteer-core": "^24.42.0",
     "update-notifier": "^7.3.1"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "overrides": {
+    "minimatch": "^9.0.7"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",

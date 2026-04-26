@@ -2,6 +2,29 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.1.1] — 2026-04-26
+
+**Critical fix.** v2.1.0 was published without `lighthouse` declared
+as a runtime dependency — `solid audit a11y|perf|mobile <slug>`
+would fail with `Cannot find module 'lighthouse'` for every fresh
+install. Caught by deploy gate; v2.1.1 ships the dep correctly.
+
+### Fixed
+
+- **`lighthouse@^13.1.0` now declared in `dependencies`** of
+  `@solidnumber/cli/package.json` (was only in the parent monorepo's
+  `package.json` due to `npm install` running from the wrong cwd).
+  Fresh installs of v2.1.1 now have lighthouse available; v2.1.0
+  installs need to upgrade.
+
+### Security
+
+- **Added `overrides.minimatch: ^9.0.7`** to force a non-vulnerable
+  `minimatch` in the dep tree. lighthouse → @sentry/node → minimatch
+  pulled in `9.0.3` which has 3 ReDoS advisories
+  (GHSA-3ppc-4f35-3m26, GHSA-7r86-cg39-jmmj, GHSA-23c5-xmqv-rm74).
+  `npm audit --omit=dev`: 0 vulnerabilities.
+
 ## [2.1.0] — 2026-04-25
 
 **Agents can now see what they ship.** Closes Phase 1 of
