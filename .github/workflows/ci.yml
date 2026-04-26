@@ -45,6 +45,14 @@ jobs:
           node dist/index.js completion > /dev/null
           echo "Canary passed"
 
+      - name: Tarball install smoke
+        # Catches the v2.1.0-class regression where a runtime dep is missing
+        # from `dependencies` but tests pass against the dev tree because the
+        # dep is installed via devDependencies. Packs, installs into a clean
+        # tmpdir, exercises subcommand --help, and statically resolves every
+        # `import('<pkg>')` in the installed dist/.
+        run: npm run test:tarball
+
   security:
     runs-on: ubuntu-latest
     steps:
