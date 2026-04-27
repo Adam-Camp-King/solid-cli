@@ -282,6 +282,69 @@ describeOrSkip('solid setup --install-token', () => {
     expect(tokenStep.detail).not.toContain(sentinelToken.slice(0, 8));
   });
 
+  it('env var: SOLID_INSTALL_TOKEN works without --install-token argv flag', async () => {
+    // The recommended path — token in env, not argv. install.sh sets
+    // this; users can `export SOLID_INSTALL_TOKEN=…` directly.
+    const mock = await startMockServer(() => ({
+      status: 200,
+      body: JSON.stringify({
+        access_token: 'env.access.token',
+        refresh_token: 'env.refresh.token',
+        expires_in: 3600,
+        user: { id: 1, email: 'env@example.com', company_id: 11111 },
+      }),
+    }));
+
+    try {
+      const r = await runSetupWithIsolatedConfig(
+        ['--yes', '--skip-mcp', '--skip-completion', '--skip-render', '--skip-first-action', '--json'],
+        {
+          SOLID_API_URL: mock.url,
+          SOLID_INSTALL_TOKEN: 'ist_envtoken_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        },
+      );
+
+      expect(r.code).toBe(0);
+      const exchangeReqs = mock.requests.filter((req) => req.url === '/api/v1/auth/install-token/exchange');
+      expect(exchangeReqs.length).toBe(1);
+      expect(JSON.parse(exchangeReqs[0].body).token).toBe('ist_envtoken_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+      expect(r.configContents.access_token).toBe('env.access.token');
+      // No warning when env var is the source.
+      expect(r.stderr).not.toMatch(/visible in process listings/);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it('argv path: emits stderr warning recommending the env var', async () => {
+    // argv still works (back-compat for install.sh today and any
+    // wild-internet automation), but we warn so the next sweep flips
+    // those callers to env.
+    const mock = await startMockServer(() => ({
+      status: 200,
+      body: JSON.stringify({
+        access_token: 'argv.access.token',
+        refresh_token: 'argv.refresh.token',
+        expires_in: 3600,
+        user: { id: 1, email: 'argv@example.com', company_id: 22222 },
+      }),
+    }));
+
+    try {
+      const r = await runSetupWithIsolatedConfig(
+        ['--install-token', 'ist_argvtoken_yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy', '--yes', '--skip-mcp', '--skip-completion', '--skip-render', '--skip-first-action', '--json'],
+        { SOLID_API_URL: mock.url },
+      );
+
+      expect(r.code).toBe(0);
+      // The whole point — argv path warns about ps -ef visibility.
+      expect(r.stderr).toMatch(/visible in process listings/);
+      expect(r.stderr).toMatch(/SOLID_INSTALL_TOKEN/);
+    } finally {
+      await mock.close();
+    }
+  });
+
   it('bad-prefix: detail uses the anti-leak phrasing "got something else"', async () => {
     // Locks the exact wording. If a maintainer changes the message to
     // include the user-supplied bytes ("got 'sentineltoken...'"), this

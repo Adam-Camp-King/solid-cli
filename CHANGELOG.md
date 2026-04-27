@@ -2,6 +2,67 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.2.2] — 2026-04-27
+
+**Hardening release for the magic-link install path.**
+No public CLI surface change — every command behaves the same — but
+several quiet correctness + security wins for the `--install-token` flow
+shipped in 2.2.0/2.2.1.
+
+### Added
+
+- **`SOLID_INSTALL_TOKEN` env var as the preferred input** for
+  `solid setup`. argv (`--install-token <token>`) still works, but
+  the CLI now warns when used because tokens on argv are visible in
+  process listings (`ps -ef`) for the lifetime of the process.
+  install.sh already sets the env var; users + automation should
+  prefer it directly.
+- **`SOLID_INSTALL_TOKEN_TIMEOUT_MS` env override** for the exchange
+  call. Production stays at 30s; tests can drop to 200ms. Clamped to
+  `[50ms, 120s]` so a misconfigured shell can't disable the safety.
+- **3 regression tests** locking the post-2.2.1 fixes (timeout path,
+  token-byte leak prevention, anti-leak prefix phrasing).
+- **Cross-repo contract test** — fetches the live `install.sh` and
+  asserts (a) it references `SOLID_INSTALL_TOKEN`, (b) it uses the
+  same prefix the CLI validates. Network-gated via
+  `SOLID_RUN_NETWORK_TESTS=1`. Run on a daily cron — when it fails,
+  the cross-repo contract has drifted.
+
+### Changed
+
+- The timeout error message now reflects the actual configured timeout
+  instead of a hardcoded "30s" string.
+
+## [2.2.1] — 2026-04-27
+
+**Quiet fixes on top of 2.2.0 — no public CLI behavior change.**
+Backfilled CHANGELOG entry; the version was published without one.
+
+### Fixed
+
+- **Hash corruption on partial download** — install scripts now use
+  `rm -f` + a `downloaded=false` flag + `[ ! -s "$file" ]` guard so
+  a half-downloaded tarball can't pass verification.
+- **Indefinite hang on unreachable backend** — `solid setup
+  --install-token` now uses `AbortSignal.timeout(30_000)` and
+  discriminates `TimeoutError` / `AbortError` from generic network
+  errors in the failure detail.
+- **User-supplied token bytes leaking into stderr** — bad-prefix
+  validation no longer echoes the supplied value; the message reads
+  `--install-token must start with "ist_" (got something else)`.
+- **Workflow re-run safety** — auto-bump CI uses `git checkout -B` +
+  `--force-with-lease` so a re-run on the same tag doesn't choke on
+  a stale local branch.
+
+### CI
+
+- Added Node 20 + 22 matrix (dropped 18); `npm audit --omit=dev` +
+  `audit-ci`; secret-scan; company-isolation grep;
+  version-consistency check (`pkg.version === solid --version`);
+  tarball install smoke; and a static dep verifier
+  (`scripts/verify-runtime-deps.mjs`) catching the v2.1.0 regression
+  class.
+
 ## [2.2.0] — 2026-04-26
 
 **Phase 3 of `SPRINT-CLI-ONE-COMMAND-ONBOARDING` — magic-link auth.**

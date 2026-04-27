@@ -133,9 +133,26 @@ async function confirm(message: string, defaultYes: boolean, autoYes: boolean): 
  * could mask a real expiry/replay/network problem.
  */
 async function stepInstallToken(opts: SetupOptions): Promise<StepResult | null> {
-  if (!opts.installToken) return null;
+  // Prefer SOLID_INSTALL_TOKEN env var over --install-token argv. argv
+  // is visible in `ps -ef` for the lifetime of the process — on a
+  // multi-user box, anyone can read the token. The env var stays in
+  // the process's own env block. install.sh sets the env var; users
+  // can also `export SOLID_INSTALL_TOKEN=ist_…` before running setup.
+  const envToken = process.env.SOLID_INSTALL_TOKEN;
+  const argvToken = opts.installToken;
 
-  const token = opts.installToken.trim();
+  if (!envToken && !argvToken) return null;
+
+  if (argvToken && !envToken) {
+    // Loud-but-non-fatal warning: argv tokens still work, but the
+    // user (or installer) should switch to the env var.
+    process.stderr.write(
+      '⚠  --install-token on argv is visible in process listings (ps -ef). ' +
+      'Prefer SOLID_INSTALL_TOKEN=ist_… as an env var.\n',
+    );
+  }
+
+  const token = (envToken || argvToken || '').trim();
   if (!token.startsWith(INSTALL_TOKEN_PREFIX)) {
     // Don't echo any bytes of the user-supplied value — even partial
     // characters of a bearer credential leak entropy into stderr/CI
