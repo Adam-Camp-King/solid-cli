@@ -1,0 +1,85 @@
+name: Scoop bucket auto-bump
+
+# Mirrors .github/workflows/homebrew-bump.yml but for Scoop. Fires on
+# any v* tag, computes the npm tarball sha256, opens a PR to
+# Solidnumber/scoop-bucket updating bucket/solid.json.
+#
+# Setup (one-time): create a fine-grained PAT scoped to
+# Solidnumber/scoop-bucket with `contents:write` and
+# `pull-requests:write`, then add it as a repo secret named
+# SCOOP_BUCKET_TOKEN in solid-cli.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  bump-bucket:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout solid-cli (for package.json)
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute npm tarball sha256
+        id: sha
+        run: |
+          # Same retry pattern as the Homebrew bump — npm registry CDN
+          # can lag a few seconds behind the publish.
+          for i in 1 2 3 4 5; do
+            if curl -fsSL "https://registry.npmjs.org/@solidnumber/cli/-/cli-${{ steps.version.outputs.version }}.tgz" -o /tmp/cli.tgz; then
+              break
+            fi
+            echo "tarball not yet on registry CDN, retrying in 10s..."
+            sleep 10
+          done
+          SHA="$(sha256sum /tmp/cli.tgz | awk '{print $1}')"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout scoop-bucket
+        uses: actions/checkout@v4
+        with:
+          repository: Solidnumber/scoop-bucket
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: bucket
+
+      - name: Update bucket/solid.json
+        working-directory: bucket
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha }}"
+          # Use jq to update the deterministic fields. Safer than sed
+          # because JSON quoting is fiddly and we don't want to corrupt
+          # the manifest.
+          jq --arg v "$VERSION" --arg s "$SHA" \
+            '.version = $v
+             | .url = ("https://registry.npmjs.org/@solidnumber/cli/-/cli-" + $v + ".tgz")
+             | .hash = ("sha256:" + $s)' \
+            bucket/solid.json > bucket/solid.json.new
+          mv bucket/solid.json.new bucket/solid.json
+          git diff --stat bucket/solid.json || true
+
+      - name: Open PR
+        working-directory: bucket
+        env:
+          GH_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH="bump-solid-$VERSION"
+          git config user.name  "solid-cli-bot"
+          git config user.email "bot@solidnumber.com"
+          git checkout -b "$BRANCH"
+          git add bucket/solid.json
+          git commit -m "bump solid to $VERSION" || { echo "no changes — already at $VERSION"; exit 0; }
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "bump solid to $VERSION" \
+            --body "Automated bump from solid-cli tag v$VERSION. Tarball sha256 verified against the npm registry. Merge to publish to the Scoop bucket." \
+            --base main \
+            --head "$BRANCH"
