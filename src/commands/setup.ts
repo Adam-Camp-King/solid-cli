@@ -125,28 +125,40 @@ async function stepInstallToken(opts: SetupOptions): Promise<StepResult | null> 
 
   const token = opts.installToken.trim();
   if (!token.startsWith(INSTALL_TOKEN_PREFIX)) {
+    // Don't echo any bytes of the user-supplied value — even partial
+    // characters of a bearer credential leak entropy into stderr/CI
+    // logs. The prefix is a public constant; the rest is secret.
     return {
       step: 'install_token',
       status: 'failed',
-      detail: `--install-token must start with "${INSTALL_TOKEN_PREFIX}" (got "${token.slice(0, 8)}…")`,
+      detail: `--install-token must start with "${INSTALL_TOKEN_PREFIX}" (got something else)`,
     };
   }
 
   const apiUrl = getResolvedApiUrl().replace(/\/+$/, '');
   const exchangeUrl = `${apiUrl}/api/v1/auth/install-token/exchange`;
 
+  // 30-second hard ceiling on the exchange call. A one-paste install
+  // can't afford to hang forever if the backend is unreachable —
+  // users would see no progress and assume their terminal is dead.
+  // AbortSignal.timeout() is Node 18+ / browser standard.
   let res: Response;
   try {
     res = await fetch(exchangeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, label: 'CLI (install-token)' }),
+      signal: AbortSignal.timeout(30_000),
     });
   } catch (e) {
+    const err = e as Error;
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError';
     return {
       step: 'install_token',
       status: 'failed',
-      detail: `network error contacting ${exchangeUrl}: ${(e as Error).message}`,
+      detail: isTimeout
+        ? `timed out after 30s contacting ${exchangeUrl} — backend unreachable or slow`
+        : `network error contacting ${exchangeUrl}: ${err.message}`,
     };
   }
 

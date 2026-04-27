@@ -34,13 +34,24 @@ jobs:
           # Wait briefly for npm registry to surface the new version. The
           # tag is usually pushed AFTER `npm publish` so this is a no-op
           # most of the time, but the registry's CDN can lag a few seconds.
+          rm -f /tmp/cli.tgz  # ensure no stale file from a prior run
+          downloaded=false
           for i in 1 2 3 4 5; do
             if curl -fsSL "https://registry.npmjs.org/@solidnumber/cli/-/cli-${{ steps.version.outputs.version }}.tgz" -o /tmp/cli.tgz; then
+              downloaded=true
               break
             fi
             echo "tarball not yet on registry CDN, retrying in 10s..."
             sleep 10
           done
+          # Critical: a successful exit from the retry loop doesn't mean
+          # success. Verify we actually have a non-empty file before
+          # hashing — otherwise we'd silently bump the formula to a
+          # wrong sha and ship a checksum-mismatch to brew users.
+          if ! $downloaded || [ ! -s /tmp/cli.tgz ]; then
+            echo "✗ tarball download failed after 5 attempts — refusing to compute sha256 of stale/empty file"
+            exit 1
+          fi
           SHA="$(sha256sum /tmp/cli.tgz | awk '{print $1}')"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "sha256: $SHA"
@@ -74,10 +85,14 @@ jobs:
           BRANCH="bump-cli-$VERSION"
           git config user.name  "solid-cli-bot"
           git config user.email "bot@solidnumber.com"
-          git checkout -b "$BRANCH"
+          # Use -B (capital) so a re-run of the workflow on the same tag
+          # resets the branch instead of failing on "branch already exists".
+          # --force-with-lease on the push protects against clobbering
+          # someone else's work on the same branch.
+          git checkout -B "$BRANCH"
           git add Formula/cli.rb
           git commit -m "bump cli to $VERSION" || { echo "no changes — already at $VERSION"; exit 0; }
-          git push origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
           gh pr create \
             --title "bump cli to $VERSION" \
             --body "Automated bump from solid-cli tag v$VERSION. Tarball sha256 verified against the npm registry. Merge to publish to the Homebrew tap." \

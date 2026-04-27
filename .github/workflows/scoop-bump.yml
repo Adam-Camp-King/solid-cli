@@ -32,13 +32,20 @@ jobs:
         run: |
           # Same retry pattern as the Homebrew bump — npm registry CDN
           # can lag a few seconds behind the publish.
+          rm -f /tmp/cli.tgz
+          downloaded=false
           for i in 1 2 3 4 5; do
             if curl -fsSL "https://registry.npmjs.org/@solidnumber/cli/-/cli-${{ steps.version.outputs.version }}.tgz" -o /tmp/cli.tgz; then
+              downloaded=true
               break
             fi
             echo "tarball not yet on registry CDN, retrying in 10s..."
             sleep 10
           done
+          if ! $downloaded || [ ! -s /tmp/cli.tgz ]; then
+            echo "✗ tarball download failed after 5 attempts — refusing to compute sha256 of stale/empty file"
+            exit 1
+          fi
           SHA="$(sha256sum /tmp/cli.tgz | awk '{print $1}')"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
@@ -74,10 +81,12 @@ jobs:
           BRANCH="bump-solid-$VERSION"
           git config user.name  "solid-cli-bot"
           git config user.email "bot@solidnumber.com"
-          git checkout -b "$BRANCH"
+          # Use -B (capital) + --force-with-lease so re-runs of the
+          # workflow on the same tag don't fail on "branch already exists".
+          git checkout -B "$BRANCH"
           git add bucket/solid.json
           git commit -m "bump solid to $VERSION" || { echo "no changes — already at $VERSION"; exit 0; }
-          git push origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
           gh pr create \
             --title "bump solid to $VERSION" \
             --body "Automated bump from solid-cli tag v$VERSION. Tarball sha256 verified against the npm registry. Merge to publish to the Scoop bucket." \
