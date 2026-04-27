@@ -2,6 +2,40 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.2.0] — 2026-04-26
+
+**Phase 3 of `SPRINT-CLI-ONE-COMMAND-ONBOARDING` — magic-link auth.**
+A logged-in dashboard user mints a single-use `ist_*` token at
+`/dashboard/install-command`, embeds it in their install command,
+and the CLI redeems it for real auth in one paste — no browser
+dance, no second login.
+
+### Added
+
+- **`solid setup --install-token <ist_*>`** — redeem an install
+  token from the dashboard for a real CLI session. Single-use,
+  5-minute TTL, scope-bound to the minting user's company. Skips
+  the browser auth step entirely.
+- **install.sh + install.ps1** forward the `SOLID_INSTALL_TOKEN`
+  env var to `solid setup`, enabling one-paste install + auth:
+    ```
+    curl -fsSL https://solidnumber.com/install.sh | SOLID_INSTALL_TOKEN=ist_xxx sh
+    ```
+- **Homebrew tap** at `Solidnumber/homebrew-tap` —
+  `brew install solidnumber/tap/cli` is live.
+- **Scoop bucket** at `Solidnumber/scoop-bucket` —
+  `scoop install solidnumber/solid` is live.
+- Auto-bump CI workflows in `.github/workflows/` open PRs to
+  both registries on every `v*` tag.
+
+### Notes
+
+- Backend ships two new endpoints (`POST /api/v1/auth/install-token`
+  and `/install-token/exchange`). Token exchange is CSRF-exempt
+  because the token IS the auth — replays return 401 + audit event.
+- winget is in the backlog pending a self-contained Windows binary.
+  Tracked at `Owners-Manual/98-Backlog/CLI-WINGET-NATIVE-WINDOWS.md`.
+
 ## [2.1.1] — 2026-04-26
 
 **Critical fix.** v2.1.0 was published without `lighthouse` declared

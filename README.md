@@ -4,10 +4,12 @@ Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
 98 top-level commands, 500+ subcommands, 52 industries, 116 AI agents. One CLI.
 
-**v2.0.0** — agent-ready by default. `--json` output ships structured
-error envelopes; every business entity is a node in a typed JSON-LD
-graph; queries via SPARQL; offline reads + writes with auto-flush on
-reconnect. See [Graph (v2)](#graph-v2--vendor-portable-json-ld).
+**v2.2.0** — magic-link install + Homebrew + Scoop. Logged-in dashboard
+users mint a single-use `ist_*` token, paste one command, CLI is
+authenticated. No browser auth dance. Agent-ready by default — `--json`
+output ships structured error envelopes; every business entity is a
+node in a typed JSON-LD graph; queries via SPARQL; offline reads +
+writes with auto-flush on reconnect. See [Graph (v2)](#graph-v2--vendor-portable-json-ld).
 
 ```bash
 npx @solidnumber/cli clone plumber
@@ -15,8 +17,22 @@ npx @solidnumber/cli clone plumber
 
 ## Install
 
+Pick whichever package manager you already trust:
+
 ```bash
+# macOS / Linux
+brew install solidnumber/tap/cli
+
+# Windows
+scoop bucket add solidnumber https://github.com/Solidnumber/scoop-bucket
+scoop install solidnumber/solid
+
+# any platform with Node 20+
 npm install -g @solidnumber/cli
+
+# one-paste install + magic-link auth (logged-in dashboard users only)
+# get your personal command at https://app.solidnumber.com/dashboard/install-command
+curl -fsSL https://solidnumber.com/install.sh | SOLID_INSTALL_TOKEN=ist_xxx sh
 ```
 
 ## Quick Start
