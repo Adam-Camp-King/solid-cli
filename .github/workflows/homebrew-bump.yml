@@ -1,0 +1,85 @@
+name: Homebrew tap auto-bump
+
+# Fires when a v* tag lands on this repo (which `npm version <bump>` creates
+# automatically and `git push --follow-tags` ships). Reads the new version
+# from package.json, computes the npm tarball sha256, and opens a PR to
+# Solidnumber/homebrew-tap updating Formula/cli.rb.
+#
+# Setup (one-time): create a fine-grained PAT scoped to
+# Solidnumber/homebrew-tap with `contents:write` and `pull-requests:write`,
+# then add it as a repo secret named HOMEBREW_TAP_TOKEN in solid-cli.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  bump-tap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout solid-cli (for package.json)
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag: $VERSION"
+
+      - name: Compute npm tarball sha256
+        id: sha
+        run: |
+          # Wait briefly for npm registry to surface the new version. The
+          # tag is usually pushed AFTER `npm publish` so this is a no-op
+          # most of the time, but the registry's CDN can lag a few seconds.
+          for i in 1 2 3 4 5; do
+            if curl -fsSL "https://registry.npmjs.org/@solidnumber/cli/-/cli-${{ steps.version.outputs.version }}.tgz" -o /tmp/cli.tgz; then
+              break
+            fi
+            echo "tarball not yet on registry CDN, retrying in 10s..."
+            sleep 10
+          done
+          SHA="$(sha256sum /tmp/cli.tgz | awk '{print $1}')"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "sha256: $SHA"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: Solidnumber/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update Formula/cli.rb
+        working-directory: tap
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha }}"
+          # Match the deterministic url + sha256 fields so we don't
+          # accidentally rewrite anything else in the formula.
+          sed -E -i \
+            -e "s|url \"https://registry\\.npmjs\\.org/@solidnumber/cli/-/cli-[^\"]+\\.tgz\"|url \"https://registry.npmjs.org/@solidnumber/cli/-/cli-${VERSION}.tgz\"|" \
+            -e "s|sha256 \"[a-f0-9]{64}\"|sha256 \"${SHA}\"|" \
+            Formula/cli.rb
+          git diff --stat Formula/cli.rb || true
+
+      - name: Open PR
+        working-directory: tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH="bump-cli-$VERSION"
+          git config user.name  "solid-cli-bot"
+          git config user.email "bot@solidnumber.com"
+          git checkout -b "$BRANCH"
+          git add Formula/cli.rb
+          git commit -m "bump cli to $VERSION" || { echo "no changes — already at $VERSION"; exit 0; }
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "bump cli to $VERSION" \
+            --body "Automated bump from solid-cli tag v$VERSION. Tarball sha256 verified against the npm registry. Merge to publish to the Homebrew tap." \
+            --base main \
+            --head "$BRANCH"
