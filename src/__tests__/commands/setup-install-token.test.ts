@@ -223,4 +223,79 @@ describeOrSkip('solid setup --install-token', () => {
     expect(tokenStep.status).toBe('failed');
     expect(tokenStep.detail).toMatch(/network|ECONNREFUSED|fetch failed/i);
   });
+
+  // ───── post-2.2.1 regression locks ─────
+
+  it('timeout: AbortSignal.timeout fires when backend hangs (regression: #4)', async () => {
+    // Mock that NEVER responds — the timeout path is the only way out.
+    // SOLID_INSTALL_TOKEN_TIMEOUT_MS=200 forces a fast trip; production
+    // stays at 30s. If a future refactor drops AbortSignal.timeout, the
+    // test hangs and CI kills the suite — also a regression signal.
+    const hangServer = http.createServer((_req, _res) => {
+      // intentionally never respond
+    });
+    await new Promise<void>((resolve) => hangServer.listen(0, '127.0.0.1', resolve));
+    const addr = hangServer.address();
+    if (!addr || typeof addr === 'string') throw new Error('no address');
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const r = await runSetupWithIsolatedConfig(
+        ['--install-token', 'ist_hangtoken_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '--yes', '--skip-mcp', '--skip-completion', '--skip-render', '--skip-first-action', '--json'],
+        { SOLID_API_URL: url, SOLID_INSTALL_TOKEN_TIMEOUT_MS: '200' },
+      );
+
+      expect(r.code).toBe(1);
+      const env = JSON.parse(r.stdout);
+      const tokenStep = env.results.find((s: any) => s.step === 'install_token');
+      expect(tokenStep.status).toBe('failed');
+      // The detail must clearly indicate timeout, not a generic network error.
+      expect(tokenStep.detail).toMatch(/timed out/i);
+      // No partial success leaked into the config.
+      if (r.configContents) {
+        expect(r.configContents.access_token).toBeUndefined();
+      }
+    } finally {
+      await new Promise<void>((resolve) => hangServer.close(() => resolve()));
+    }
+  }, 15_000);
+
+  it('bad-prefix: error detail does NOT echo the bad-token bytes (regression: #5)', async () => {
+    // The whole point of the prefix check is to fail BEFORE leaking
+    // user-supplied entropy into stderr. If a refactor reverts to
+    // `(got "${token}")`, this test catches it.
+    const sentinelToken = 'sentineltokenZZZZZZZZZZZZZZZZZZZZ';
+    const r = await runSetupWithIsolatedConfig(
+      ['--install-token', sentinelToken, '--yes', '--skip-mcp', '--skip-completion', '--skip-render', '--skip-first-action', '--json'],
+      { SOLID_API_URL: 'http://127.0.0.1:1' },
+    );
+
+    expect(r.code).toBe(1);
+    const env = JSON.parse(r.stdout);
+    const tokenStep = env.results.find((s: any) => s.step === 'install_token');
+    expect(tokenStep.status).toBe('failed');
+    // The full token must NOT appear anywhere — stdout, stderr, or detail.
+    expect(tokenStep.detail).not.toContain(sentinelToken);
+    expect(r.stdout).not.toContain(sentinelToken);
+    expect(r.stderr).not.toContain(sentinelToken);
+    // Even a non-trivial substring of the secret must not leak.
+    expect(tokenStep.detail).not.toContain(sentinelToken.slice(0, 8));
+  });
+
+  it('bad-prefix: detail uses the anti-leak phrasing "got something else"', async () => {
+    // Locks the exact wording. If a maintainer changes the message to
+    // include the user-supplied bytes ("got 'sentineltoken...'"), this
+    // test fires before the leak ships.
+    const r = await runSetupWithIsolatedConfig(
+      ['--install-token', 'wrongprefix_aaaaaaaaaaaaaaaaaaaaaa', '--yes', '--skip-mcp', '--skip-completion', '--skip-render', '--skip-first-action', '--json'],
+      { SOLID_API_URL: 'http://127.0.0.1:1' },
+    );
+
+    expect(r.code).toBe(1);
+    const env = JSON.parse(r.stdout);
+    const tokenStep = env.results.find((s: any) => s.step === 'install_token');
+    expect(tokenStep.status).toBe('failed');
+    expect(tokenStep.detail).toMatch(/got something else/i);
+    expect(tokenStep.detail).toMatch(/ist_/);
+  });
 });

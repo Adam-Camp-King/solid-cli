@@ -58,6 +58,18 @@ interface SetupOptions {
 
 const INSTALL_TOKEN_PREFIX = 'ist_';
 
+// Override for tests only — production stays at 30s. A configurable
+// timeout lets the unit test assert the timeout path without waiting
+// 30 real seconds; clamped to a sane range so a misconfigured shell
+// can't disable the safety entirely.
+function getInstallTokenTimeoutMs(): number {
+  const raw = process.env.SOLID_INSTALL_TOKEN_TIMEOUT_MS;
+  if (!raw) return 30_000;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 50 || n > 120_000) return 30_000;
+  return n;
+}
+
 const EDITORS: Array<{ binary: string; clientFlag: string; pretty: string }> = [
   { binary: 'claude', clientFlag: 'claude', pretty: 'Claude Code' },
   { binary: 'cursor', clientFlag: 'cursor', pretty: 'Cursor' },
@@ -148,7 +160,7 @@ async function stepInstallToken(opts: SetupOptions): Promise<StepResult | null> 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, label: 'CLI (install-token)' }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(getInstallTokenTimeoutMs()),
     });
   } catch (e) {
     const err = e as Error;
@@ -157,7 +169,7 @@ async function stepInstallToken(opts: SetupOptions): Promise<StepResult | null> 
       step: 'install_token',
       status: 'failed',
       detail: isTimeout
-        ? `timed out after 30s contacting ${exchangeUrl} — backend unreachable or slow`
+        ? `timed out after ${Math.round(getInstallTokenTimeoutMs() / 1000)}s contacting ${exchangeUrl} — backend unreachable or slow`
         : `network error contacting ${exchangeUrl}: ${err.message}`,
     };
   }
