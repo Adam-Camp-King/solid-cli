@@ -2,6 +2,31 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.2.3] — 2026-04-27
+
+**Bug fix — `solid completion install` produced an unparseable zsh script.**
+
+### Fixed
+
+- **Apostrophes in command descriptions broke the generated zsh/bash
+  completion script.** The generator escaped `'` with `\'`, which is
+  valid in fish but invalid inside zsh/bash single-quoted strings (where
+  `\` is literal). The `solid ai` description (`...this company's
+  context...`) terminated its string early, surfacing as
+  `parse error near '>'` on every shell start after `solid completion
+  install`. Each shell now uses its own correct quoting:
+  - zsh/bash: `'\''` (close, escaped literal, reopen) — POSIX-portable
+  - fish: `\'` (fish's actual single-quote escape) — unchanged
+
+### Added
+
+- **`completion.test.ts`** — runs `zsh -n` / `bash -n` against the
+  generated scripts to lock the regression. Catches future quoting bugs
+  before they ship.
+
+**Action for existing users:** re-run `solid completion install` (or
+`solid setup`) after upgrading. Reload the shell.
+
 ## [2.2.2] — 2026-04-27
 
 **Hardening release for the magic-link install path.**

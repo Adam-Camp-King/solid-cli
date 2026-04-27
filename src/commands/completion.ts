@@ -22,7 +22,8 @@ function walk(cmd: Command): Node {
   return {
     name: cmd.name(),
     aliases,
-    desc: (cmd.description() || '').replace(/'/g, "\\'").split('\n')[0].slice(0, 80),
+    // Store raw — each shell generator escapes for its own quoting rules.
+    desc: (cmd.description() || '').split('\n')[0].slice(0, 80),
     subs: cmd.commands.map(walk),
   };
 }
@@ -31,10 +32,23 @@ function allNames(n: Node): string[] {
   return [n.name, ...n.aliases];
 }
 
+// zsh/bash single-quoted strings don't interpret backslash, so the only way
+// to embed a literal apostrophe is: close-quote, escaped-literal, reopen.
+// Without this, descriptions like "company's" terminate the string early
+// and the script fails to parse.
+function zshSingleQuote(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}
+
+// fish single quotes interpret \\ and \' as escapes — nothing else.
+function fishSingleQuote(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 function generateZsh(tree: Node): string {
   const tops = tree.subs;
   const commandTuples = tops
-    .flatMap((t) => allNames(t).map((n) => `'${n}:${t.desc}'`))
+    .flatMap((t) => allNames(t).map((n) => `'${n}:${zshSingleQuote(t.desc)}'`))
     .join(' ');
 
   const subCases = tops
@@ -122,14 +136,14 @@ function generateFish(tree: Node): string {
   const lines: string[] = [];
   for (const t of tree.subs) {
     for (const n of allNames(t)) {
-      lines.push(`complete -c solid -n '__fish_use_subcommand' -a '${n}' -d '${t.desc}'`);
+      lines.push(`complete -c solid -n '__fish_use_subcommand' -a '${n}' -d '${fishSingleQuote(t.desc)}'`);
     }
   }
   for (const t of tree.subs) {
     const anyTop = allNames(t).join(' ');
     for (const s of t.subs) {
       for (const sn of allNames(s)) {
-        lines.push(`complete -c solid -n '__fish_seen_subcommand_from ${anyTop}' -a '${sn}' -d '${s.desc}'`);
+        lines.push(`complete -c solid -n '__fish_seen_subcommand_from ${anyTop}' -a '${sn}' -d '${fishSingleQuote(s.desc)}'`);
       }
     }
   }
