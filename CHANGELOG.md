@@ -2,6 +2,41 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.3.0] — 2026-04-29
+
+**New flag: `solid graph --watch-actions` — live tail of tenant graph
+mutations as agents fire.** SSE-driven, tenant-scoped via JWT. Pairs
+with the new backend endpoint `/api/v1/cli/graph/watch-actions`.
+
+### Added
+
+- **`solid graph --watch-actions`** — opens a Server-Sent Events
+  stream and renders each event as a one-line graph diff:
+
+  ```
+  [12:34:56] + Contact #42 (Ada Lovelace)        by Sarah (agent)
+  [12:34:58] ~ Service #3 (Drain cleaning)       price: 99 → 119
+  [12:35:01] + Order #99 (ORD-2026-099)          fired by chain "New lead followup"
+  ```
+
+  Symbols: `+` create (green), `~` update (yellow), `-` delete (red),
+  `⚡` fire (cyan). Press Ctrl+C to stop.
+
+- **`--watch-pattern <p>`** — narrows the subscription. Examples:
+  `order.*`, `contact.*`, `inventory.*`. Default `*` (all events).
+
+- **`graph-watch-render.ts`** — pure renderer (`formatTime`,
+  `payloadLabel`, `payloadId`, `classifyEvent`, `renderWatchEvent`)
+  with 31 unit tests covering happy + edge paths.
+
+### Why
+
+The second holy-shit moment after auto-flush. An agent fires an MCP
+tool; the operator watches the resulting graph diff stream into the
+terminal in real time. Every action is an edge; every response
+updates a known node by IRI. Sprint:
+`Owners-Manual/99-Active-Sprints/SPRINT-JSONLD-GRAPH-MOAT.md` § A+.3b.
+
 ## [2.2.3] — 2026-04-27
 
 **Bug fix — `solid completion install` produced an unparseable zsh script.**
