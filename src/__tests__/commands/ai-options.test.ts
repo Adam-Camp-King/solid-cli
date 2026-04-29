@@ -121,4 +121,37 @@ describe('solid ai — option → env wiring', () => {
     await runAi(['ai', '--as', 'claude', '--mode', 'nonsense']);
     expect(process.env.SOLID_AGENT_MODE).toBe('full');
   });
+
+  it('refreshContext spawns `solid context --claude --if-tenant` (silent skip outside tenant dirs)', async () => {
+    // Regression for the 2.3.1 fix: launching `solid ai` from $HOME used to
+    // print "Refusing to write tenant data to your home directory" via the
+    // child context refresh, then "Context refresh failed — launching anyway."
+    // With --if-tenant the child silently exits 0 and the warning never fires.
+    const { spawnSync } = jest.requireMock('child_process') as { spawnSync: jest.Mock };
+    spawnSync.mockClear();
+    await runAi(['ai', '--as', 'claude']);
+    const contextCalls = spawnSync.mock.calls.filter(
+      (call: unknown[]) => Array.isArray(call[1]) && (call[1] as string[])[0] === 'context',
+    );
+    expect(contextCalls.length).toBeGreaterThan(0);
+    expect(contextCalls[0][1]).toEqual(['context', '--claude', '--if-tenant']);
+  });
+
+  it('refreshContext passes the right flag for --as cursor and --as codex too', async () => {
+    const { spawnSync } = jest.requireMock('child_process') as { spawnSync: jest.Mock };
+
+    spawnSync.mockClear();
+    await runAi(['ai', '--as', 'cursor']);
+    const cursorCall = spawnSync.mock.calls.find(
+      (c: unknown[]) => Array.isArray(c[1]) && (c[1] as string[])[0] === 'context',
+    );
+    expect(cursorCall?.[1]).toEqual(['context', '--cursor', '--if-tenant']);
+
+    spawnSync.mockClear();
+    await runAi(['ai', '--as', 'codex']);
+    const codexCall = spawnSync.mock.calls.find(
+      (c: unknown[]) => Array.isArray(c[1]) && (c[1] as string[])[0] === 'context',
+    );
+    expect(codexCall?.[1]).toEqual(['context', '--codex', '--if-tenant']);
+  });
 });

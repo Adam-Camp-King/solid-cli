@@ -62,9 +62,18 @@ function refreshContext(kind: AiKind): boolean {
   //   claude → .claude/CLAUDE.md + .claude/solid-context.json
   //   cursor → .cursorrules
   //   codex  → AGENTS.md
+  //
+  // --if-tenant turns "no manifest here" / "protected root (home, platform
+  // monorepo)" into a silent exit 0 instead of the loud refusal banner.
+  // That's correct for `solid ai`: when launched from $HOME or anywhere
+  // not bound to a tenant, the right behavior is "launch the AI with
+  // whatever cached files exist", not "print a scary error and then
+  // launch anyway." Mismatched-company manifests still loud-fail because
+  // silent skip there would let stale or wrong-tenant context flow into
+  // the AI session.
   const flag = kind === 'claude' ? '--claude' : kind === 'cursor' ? '--cursor' : '--codex';
   const solidBin = resolveBinary('solid') || 'solid';
-  const result = spawnSync(solidBin, ['context', flag], { stdio: 'inherit' });
+  const result = spawnSync(solidBin, ['context', flag, '--if-tenant'], { stdio: 'inherit' });
   return result.status === 0;
 }
 

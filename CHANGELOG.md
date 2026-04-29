@@ -2,6 +2,35 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.3.2] — 2026-04-29
+
+**`solid ai` no longer prints "Refusing to write tenant data" when
+launched outside a tenant directory.**
+
+### Changed
+
+- `commands/ai.ts::refreshContext` now spawns
+  `solid context <flag> --if-tenant` instead of `solid context <flag>`.
+  When the AI is launched from `$HOME`, the platform monorepo, or any
+  directory without `.solid/manifest.json`, the child context refresh
+  silently exits 0 and the AI launches with whatever cached files
+  exist — instead of printing the loud guard banner followed by
+  "Context refresh failed — launching anyway."
+
+### Why
+
+Same root cause as 2.3.1, second code path. `solid auth login` →
+`solid ai` from `$HOME` hit the protected_root guard via the child
+context refresh and surfaced the wrong-shape error to the user.
+Two regression tests in `__tests__/commands/ai-options.test.ts`
+lock in the spawnSync args for all three AI kinds (claude, cursor,
+codex).
+
+### Migration
+
+None — purely additive. Re-install: `npm i -g @solidnumber/cli` (or
+`npm install -g .` from a local checkout).
+
 ## [2.3.1] — 2026-04-29
 
 **`--if-tenant` flag — fixes "Refusing to write tenant data" banner
