@@ -197,7 +197,9 @@ export const graphCommand = new Command('graph')
   .option('--diff <before>', 'Compare a baseline .jsonld file against the current graph. Reports added/removed/modified nodes. Exit 1 if any change.')
   .option('--query <sparql>', 'Run a SPARQL BGP query against the graph. With --server, hits the backend for full SPARQL 1.1 (OPTIONAL/FILTER/UNION/property-paths). Without --server, runs the offline-capable BGP matcher.')
   .option('--server', 'When used with --query, route to the backend SPARQL endpoint (full SPARQL 1.1) instead of the offline BGP matcher.')
-  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string; query?: string; server?: boolean }) => {
+  .option('--watch-actions', 'A+.3b — live tail of tenant graph mutations as agents fire. Streams via SSE from /api/v1/cli/graph/watch-actions. Press Ctrl+C to stop.')
+  .option('--watch-pattern <p>', 'With --watch-actions, narrow to events matching this pattern (e.g. "order.*", "contact.*"). Default: all events.', '*')
+  .action(async (iri: string | undefined, opts: { hops?: string; out?: boolean; type?: string; listTypes?: boolean; json?: boolean; offline?: boolean; remote?: boolean; validate?: boolean; dump?: string; diff?: string; query?: string; server?: boolean; watchActions?: boolean; watchPattern?: string }) => {
     // --offline doesn't require auth; --remote does; the default prefers
     // local-if-logged-out, remote-if-logged-in.
     if (!opts.offline && !readJsonLdLocalOrNull() && !config.isLoggedIn()) {
@@ -265,6 +267,81 @@ export const graphCommand = new Command('graph')
         console.error(chalk.red(`Dump failed: ${e.message}`));
         process.exit(1);
       }
+    }
+
+    // --watch-actions ------------------------------------------------------
+    // A+.3b — live SSE tail of tenant graph mutations. Opens an HTTP
+    // request with Accept: text/event-stream to the backend SSE
+    // endpoint. Each event becomes a one-line graph-diff render.
+    // Exits cleanly on Ctrl+C; auto-reconnects on transient network
+    // errors are deferred to a follow-up patch (start simple).
+    if (opts.watchActions) {
+      if (!config.isLoggedIn()) {
+        console.error(chalk.red('--watch-actions requires authentication. Run: solid auth login'));
+        process.exit(1);
+      }
+      const { renderWatchEvent } = await import('../lib/graph-watch-render');
+      const url = `${config.apiUrl}/api/v1/cli/graph/watch-actions?pattern=${encodeURIComponent(opts.watchPattern || '*')}`;
+      const useJson = isJsonOutput(opts);
+      if (!useJson) {
+        console.log('');
+        console.log(chalk.bold('Watching tenant graph mutations…') + chalk.dim('  (Ctrl+C to stop)'));
+        console.log(chalk.dim(`  pattern: ${opts.watchPattern || '*'}`));
+        console.log('');
+      }
+      try {
+        // Lazy-import undici/native fetch streaming. Node 20+ has
+        // native fetch with ReadableStream body. SSE = newline-
+        // separated `data: {...}` blocks. Parse incrementally.
+        const headers: Record<string, string> = {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        };
+        const tok = config.accessToken;
+        if (tok) headers['Authorization'] = `Bearer ${tok}`;
+
+        const res = await fetch(url, { headers });
+        if (!res.ok || !res.body) {
+          console.error(chalk.red(`watch-actions stream failed: HTTP ${res.status}`));
+          process.exit(1);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        // SSE frames are separated by blank lines (\n\n).
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf('\n\n')) >= 0) {
+            const frame = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            // Each frame may have multiple lines; only `data:` lines
+            // carry the JSON body. Comments (lines starting with `:`)
+            // are heartbeats — skip silently.
+            const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
+            if (!dataLine) continue;
+            const json = dataLine.slice(5).trim();
+            if (!json) continue;
+            try {
+              const evt = JSON.parse(json) as { type: string; payload?: Record<string, unknown>; ts?: string };
+              if (useJson) {
+                process.stdout.write(JSON.stringify(evt) + '\n');
+              } else {
+                const rendered = renderWatchEvent(evt);
+                console.log(rendered.line);
+              }
+            } catch {
+              // Malformed event — skip rather than crash the stream.
+            }
+          }
+        }
+      } catch (err) {
+        console.error(chalk.red(`watch-actions: ${(err as Error).message}`));
+        process.exit(1);
+      }
+      return;
     }
 
     // --query --------------------------------------------------------------
