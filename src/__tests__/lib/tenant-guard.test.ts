@@ -13,6 +13,7 @@ import {
   requireTenantManifest,
   refuseProtectedRoot,
   isProtectedRoot,
+  tenantManifestForHook,
   PullManifest,
 } from '../../lib/tenant-guard';
 
@@ -236,5 +237,80 @@ describe('refuseProtectedRoot (pull.ts helper)', () => {
     } finally {
       fs.rmSync(clean, { recursive: true, force: true });
     }
+  });
+});
+
+describe('tenantManifestForHook (lenient guard for SessionStart hooks)', () => {
+  // Why this exists, in one line: when Claude Code runs `solid context
+  // --claude --raw --if-tenant` from a SessionStart hook outside a tenant
+  // directory, we want a silent exit 0 — not the loud "Refusing to write
+  // tenant data" banner the hard guard prints. This shape is what makes
+  // the hook safe to install globally.
+  let baseDir: string;
+  let exitSpy: jest.SpyInstance;
+  let errSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    baseDir = makeTmpdir();
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`__process_exit__:${code}`);
+    }) as never);
+    errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    exitSpy.mockRestore();
+    errSpy.mockRestore();
+    fs.rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it('returns null silently when manifest is missing (the common hook-in-arbitrary-cwd case)', () => {
+    const result = tenantManifestForHook(baseDir, 42);
+    expect(result).toBeNull();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null silently when baseDir is $HOME (protected_root/home)', () => {
+    const result = tenantManifestForHook(os.homedir(), 42);
+    expect(result).toBeNull();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null silently when baseDir is $HOME/.claude (protected_root/home_claude)', () => {
+    const result = tenantManifestForHook(path.join(os.homedir(), '.claude'), 42);
+    expect(result).toBeNull();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null silently when baseDir is the platform monorepo (protected_root/platform_repo)', () => {
+    // This is the exact case Adam saw in the screenshot that triggered
+    // this fix: launching `claude` from /Desktop/Solid printed the
+    // "Refusing to write tenant data inside the Solid# platform monorepo"
+    // banner via the SessionStart hook. With --if-tenant we want silence.
+    fs.writeFileSync(path.join(baseDir, 'docker-compose.base.yml'), '# marker');
+    const result = tenantManifestForHook(baseDir, 42);
+    expect(result).toBeNull();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+  });
+
+  it('exits 1 LOUDLY on company-mismatch (silent skip would let stale context leak across tenants)', () => {
+    writeManifest(baseDir, { company_id: 61, company_name: 'ANGL LLC' });
+    expect(() => tenantManifestForHook(baseDir, 42)).toThrow('__process_exit__:1');
+    const errors = errSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toMatch(/company 61/);
+    expect(errors).toMatch(/company 42/);
+    expect(errors).toMatch(/solid switch 61/);
+  });
+
+  it('returns the parsed manifest when company_id matches', () => {
+    writeManifest(baseDir, { company_id: 42, company_name: 'Match Co' });
+    const m = tenantManifestForHook(baseDir, 42);
+    expect(m).not.toBeNull();
+    expect(m!.company_id).toBe(42);
+    expect(m!.company_name).toBe('Match Co');
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });

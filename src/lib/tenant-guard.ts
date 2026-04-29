@@ -193,3 +193,36 @@ export function requireTenantManifest(baseDir: string, companyId: number): PullM
   }
   process.exit(1);
 }
+
+/**
+ * Lenient guard for hook contexts (e.g. `solid context --if-tenant` fired
+ * by Claude Code's SessionStart). Returns the manifest if the directory is
+ * properly bound; returns null when the directory is a protected root
+ * (platform monorepo, $HOME, $HOME/.claude) or simply has no manifest —
+ * both meaning "no tenant write to do here, move on quietly".
+ *
+ * The `mismatch` failure mode is still loud and still exits 1: a manifest
+ * pinning the dir to company A while the user is logged in as company B is
+ * a real misconfiguration and silently skipping would let stale or wrong
+ * context flow into the next Claude session. We want loud here.
+ *
+ * Use this — not `requireTenantManifest` — for any code path that runs
+ * automatically (hooks, cron, post-install scripts) where "I'm not in a
+ * tenant directory" is the expected case, not an error.
+ */
+export function tenantManifestForHook(
+  baseDir: string,
+  companyId: number,
+): PullManifest | null {
+  const result = checkTenantManifest(baseDir, companyId);
+  if (result.ok) return result.manifest;
+  if (result.failure.kind === 'protected_root') return null;
+  if (result.failure.kind === 'missing') return null;
+  // mismatch — fall through to the loud handler in requireTenantManifest
+  // so the message stays in one place.
+  const f = result.failure;
+  console.error(chalk.red(`Directory belongs to company ${f.manifestCompanyId} (${f.manifestCompanyName}).`));
+  console.error(chalk.red(`You are logged in as company ${f.activeCompanyId}.`));
+  console.error(chalk.dim(`  Run \`solid switch ${f.manifestCompanyId}\` to match, or cd elsewhere.`));
+  process.exit(1);
+}

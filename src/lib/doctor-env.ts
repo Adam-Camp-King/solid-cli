@@ -385,7 +385,7 @@ export function defaultDoctorEnvDeps(
     claudeSettingsPath:
       process.env.SOLID_CLAUDE_SETTINGS_PATH ||
       path.join(os.homedir(), '.claude', 'settings.json'),
-    hookCommand: 'solid context --claude --raw',
+    hookCommand: 'solid context --claude --raw --if-tenant',
     config,
     apiGet,
   };

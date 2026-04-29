@@ -39,7 +39,7 @@ function tmpDir(): string {
 function makeDeps(partial: Partial<DoctorEnvDeps> & { cwd: string; home: string }): DoctorEnvDeps {
   return {
     claudeSettingsPath: path.join(partial.home, '.claude', 'settings.json'),
-    hookCommand: 'solid context --claude --raw',
+    hookCommand: 'solid context --claude --raw --if-tenant',
     config: partial.config ?? makeConfig(),
     apiGet: partial.apiGet ?? (async () => ({ status: 200 })),
     freshnessWindowMs: partial.freshnessWindowMs,
@@ -198,13 +198,13 @@ describe('checkHook', () => {
     const home = tmpDir();
     const settings = path.join(home, 'settings.json');
     fs.writeFileSync(settings, JSON.stringify({
-      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw' }] }] },
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw --if-tenant' }] }] },
     }));
     const r = checkHook(makeDeps({ cwd: tmpDir(), home, claudeSettingsPath: settings }));
     expect(r.status).toBe('pass');
   });
 
-  test('legacy solid-context command present → warn', () => {
+  test('legacy --quiet hook command present → warn (drift)', () => {
     const home = tmpDir();
     const settings = path.join(home, 'settings.json');
     fs.writeFileSync(settings, JSON.stringify({
@@ -212,6 +212,19 @@ describe('checkHook', () => {
     }));
     const r = checkHook(makeDeps({ cwd: tmpDir(), home, claudeSettingsPath: settings }));
     expect(r.status).toBe('warn');
+  });
+
+  test('legacy --raw (no --if-tenant) hook command present → warn (drift)', () => {
+    // The 2.2-2.3.0 hook variant. doctor env should recommend re-running
+    // `solid install` to migrate to --raw --if-tenant.
+    const home = tmpDir();
+    const settings = path.join(home, 'settings.json');
+    fs.writeFileSync(settings, JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw' }] }] },
+    }));
+    const r = checkHook(makeDeps({ cwd: tmpDir(), home, claudeSettingsPath: settings }));
+    expect(r.status).toBe('warn');
+    expect(r.hint).toMatch(/solid install/);
   });
 
   test('no solid hook at all → fail', () => {
@@ -306,7 +319,7 @@ describe('runDoctorEnv', () => {
     fs.mkdirSync(path.join(home, '.claude'));
     const settings = path.join(home, '.claude', 'settings.json');
     fs.writeFileSync(settings, JSON.stringify({
-      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw' }] }] },
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'solid context --claude --raw --if-tenant' }] }] },
     }));
     // Drop a fresh CLAUDE.md
     fs.mkdirSync(path.join(cwd, '.claude'));

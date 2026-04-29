@@ -14,8 +14,9 @@ import * as path from 'path';
 
 import { installCommand } from '../../commands/install';
 
-const HOOK_CURRENT = 'solid context --claude --raw';
-const HOOK_LEGACY = 'solid context --claude --quiet';
+const HOOK_CURRENT = 'solid context --claude --raw --if-tenant';
+const HOOK_LEGACY_QUIET = 'solid context --claude --quiet';
+const HOOK_LEGACY_RAW = 'solid context --claude --raw';
 
 describe('solid install — SessionStart hook (tmp-file backed)', () => {
   let settingsPath: string;
@@ -83,9 +84,25 @@ describe('solid install — SessionStart hook (tmp-file backed)', () => {
     expect(saved.hooks.SessionStart[0].hooks).toHaveLength(1);
   });
 
-  it('migrates a legacy --quiet hook to the new --raw command', () => {
+  it('migrates a legacy --quiet hook to the current command', () => {
     writeSettings({
-      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: HOOK_LEGACY }] }] },
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: HOOK_LEGACY_QUIET }] }] },
+    });
+
+    run(['install']);
+
+    const saved = readSettings();
+    expect(saved.hooks.SessionStart).toHaveLength(1);
+    expect(saved.hooks.SessionStart[0].hooks[0].command).toBe(HOOK_CURRENT);
+  });
+
+  it('migrates a legacy --raw hook (the 2.2-2.3.0 noisy variant) to --raw --if-tenant', () => {
+    // The 2.2-2.3.0 hook printed "Refusing to write tenant data inside the
+    // Solid# platform monorepo" every time the user launched Claude Code
+    // outside a tenant directory. 2.3.1 fixes that by adding --if-tenant
+    // (silent no-op outside tenant dirs). This test locks in the migration.
+    writeSettings({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: HOOK_LEGACY_RAW }] }] },
     });
 
     run(['install']);

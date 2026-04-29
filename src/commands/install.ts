@@ -27,9 +27,14 @@ function claudeSettingsPath(): string {
   return process.env.SOLID_CLAUDE_SETTINGS_PATH
     || path.join(os.homedir(), '.claude', 'settings.json');
 }
-// The command Claude Code runs before every session. `--quiet` keeps the hook
-// silent on success; failures still print so the user sees what's up.
-const HOOK_COMMAND = 'solid context --claude --raw';
+// The command Claude Code runs before every session.
+//   --raw       — clean output, no spinner / decoration
+//   --if-tenant — silently exit 0 when the cwd is not a tenant directory
+//                 (no manifest, or a protected root like the platform
+//                 monorepo or $HOME). Without this, every `claude` launched
+//                 outside a tenant repo would print a scary "Refusing to
+//                 write tenant data" banner that's not the user's fault.
+const HOOK_COMMAND = 'solid context --claude --raw --if-tenant';
 
 type HookEntry = { type: 'command'; command: string };
 type HookGroup = { hooks: HookEntry[] };
@@ -50,11 +55,18 @@ function saveSettings(obj: Record<string, unknown>): void {
   fs.writeFileSync(claudeSettingsPath(), JSON.stringify(obj, null, 2) + '\n', 'utf-8');
 }
 
-// Older installs wrote a broken command ("--quiet" is not a valid flag on
-// `solid context`). When we see any of these legacy variants, treat them as
-// "ours" so upsert rewrites them to the current HOOK_COMMAND.
+// Older installs wrote earlier hook commands. When we see any of these legacy
+// variants, treat them as "ours" so upsert rewrites them to the current
+// HOOK_COMMAND on the next `solid install` invocation.
+//
+//   --quiet  (pre-2.2): not a real flag on `solid context`; was always broken.
+//   --raw    (2.2-2.3.0): worked but emitted "Refusing to write tenant data"
+//                          whenever the user launched Claude Code outside a
+//                          tenant directory. Replaced by --raw --if-tenant
+//                          in 2.3.1 which silently no-ops in that case.
 const LEGACY_HOOK_COMMANDS = [
   'solid context --claude --quiet',
+  'solid context --claude --raw',
 ];
 
 function isSolidHook(command: string): boolean {

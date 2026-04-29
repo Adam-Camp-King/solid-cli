@@ -2,6 +2,60 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.3.1] — 2026-04-29
+
+**`--if-tenant` flag — fixes "Refusing to write tenant data" banner
+on every `claude` launch outside a tenant directory.**
+
+### Added
+
+- **`solid context --if-tenant`** — hook-mode flag. Silently exits 0
+  when the cwd is not a tenant directory (no `.solid/manifest.json`)
+  or sits inside a protected root (platform monorepo, `$HOME`,
+  `$HOME/.claude`). Mismatched-company manifests still fail loudly
+  because silent skip there would let stale/wrong context flow into
+  the next session.
+
+- **`tenantManifestForHook(baseDir, companyId)`** in
+  `lib/tenant-guard.ts` — lenient guard for hook contexts. Returns
+  `null` (silent no-op) for `protected_root` + `missing`, exits 1
+  loud for `mismatch`. Six new unit tests lock in the contract.
+
+### Changed
+
+- **SessionStart hook command** registered by `solid install`:
+  `solid context --claude --raw` → `solid context --claude --raw --if-tenant`.
+- `solid install` migrates older hooks (`--quiet` pre-2.2, plain
+  `--raw` from 2.2–2.3.0) to the current command in place.
+- `solid doctor env` recognizes the new command as the pass case;
+  older variants drift to `warn` with `solid install` as the hint.
+
+### Why
+
+The 2.2–2.3.0 SessionStart hook printed `Refusing to write tenant
+data inside the Solid# platform monorepo` (or `…to your home
+directory`) every time a user launched Claude Code outside their
+tenant repo. The tenant-guard was doing exactly its job — but the
+guard's loud banner is for direct invocation (`solid context --claude`),
+not background hooks fired in arbitrary cwds. `--if-tenant` is the
+right shape for the hook: refresh when there's a tenant to refresh,
+silent otherwise.
+
+Real-world trigger: 2026-04-29, Adam launched `claude` from
+`~/Desktop/Solid` (the platform monorepo, Role 1 — never gets
+tenant writes) and saw the refusal banner stuck to the splash
+screen. Confusing UX that would scare any first-time user.
+
+### Migration
+
+Re-run `solid install`. Existing hooks migrate in place. No tenant
+data changes.
+
+**Propagation note (per CLAUDE-CONTEXT-CANONICAL-TRUTH § 650):**
+Live — purely additive at the CLI layer. Old hook still works (just
+noisy in non-tenant cwds); new hook is silent there. Existing
+tenants need no re-seed.
+
 ## [2.3.0] — 2026-04-29
 
 **New flag: `solid graph --watch-actions` — live tail of tenant graph

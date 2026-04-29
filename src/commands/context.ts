@@ -30,7 +30,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
-import { requireTenantManifest } from '../lib/tenant-guard';
+import { requireTenantManifest, tenantManifestForHook } from '../lib/tenant-guard';
 
 type ContextSection = 'company' | 'content' | 'operations' | 'capabilities' | 'history' | 'tooling';
 
@@ -335,6 +335,7 @@ export const contextCommand = new Command('context')
   .option('--summary', 'Lightweight counts (fast)')
   .option('--watch', 'Auto-refresh the output file on change (use with --claude/--cursor/--save)')
   .option('--interval <seconds>', 'Watch interval in seconds (default: 30)', '30')
+  .option('--if-tenant', 'Hook-mode: silently exit 0 when the current directory is not bound to a tenant (no manifest, or a protected root like the platform monorepo or $HOME). Without this flag, those cases are loud errors. Mismatched-company manifests are still loud either way.')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` or export SOLID_API_KEY.'));
@@ -407,8 +408,21 @@ export const contextCommand = new Command('context')
     // Owners-Manual/03-AI-Systems/CLAUDE-CONTEXT-CANONICAL-TRUTH.md.
     // Read-only paths above (--summary, --tools-only, --section, --json to
     // stdout) are exempt; only writes are guarded.
+    //
+    // --if-tenant relaxes the "no manifest" / "protected root" cases into a
+    // silent exit 0. That's the right shape for the SessionStart hook
+    // installed by `solid install`: when the user launches Claude Code
+    // outside a tenant directory there is genuinely nothing to refresh,
+    // and a scary banner would just confuse them. Mismatched-company
+    // manifests stay loud (silent skip there would let stale/wrong context
+    // flow into the next session).
     if (isSaving) {
-      requireTenantManifest(process.cwd(), config.companyId as number);
+      if (options.ifTenant) {
+        const manifest = tenantManifestForHook(process.cwd(), config.companyId as number);
+        if (!manifest) return;
+      } else {
+        requireTenantManifest(process.cwd(), config.companyId as number);
+      }
     }
 
     const spinner = isSaving ? ora('Building AI context package...').start() : null;
