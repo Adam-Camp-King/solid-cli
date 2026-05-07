@@ -39,6 +39,28 @@ activateQueueModeIfRequested(process.argv);
 // don't explicitly declare their own --json option.
 import { activateProgramJsonIfRequested } from './lib/json-output';
 activateProgramJsonIfRequested(process.argv);
+
+// AI-first I/O — soft warn when a non-TTY caller (agent / MCP / CI)
+// is about to operate on the implicit current company without --company.
+// Lazy-loaded after a quick gate to keep --help / --version paths quiet.
+{
+  const verb = process.argv[2];
+  const isDiscovery = !verb || ['--help', '-h', 'help', '--version', '-v'].includes(verb);
+  if (!isDiscovery) {
+    // Defer the import so the warning module's side-effect-free code
+    // doesn't load on `solid --help` / `solid --version` invocations.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { maybeWarnImplicitTenant } = require('./lib/tenant-warn');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { config: __cfg } = require('./lib/config');
+    maybeWarnImplicitTenant({
+      argv: process.argv,
+      env: process.env,
+      hasCurrentCompany: typeof __cfg.companyId === 'number',
+      companyId: typeof __cfg.companyId === 'number' ? __cfg.companyId : null,
+    });
+  }
+}
 import { authCommand, whoamiCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
 import { kbCommand } from './commands/kb';
@@ -393,6 +415,8 @@ program.addCommand(siteCommand);
 program.addCommand(servicesCommand);
 program.addCommand(schemaCommand);
 program.addCommand(mcpCommand);
+import { versionCommand } from './commands/version';
+program.addCommand(versionCommand);
 
 // CRM
 program.addCommand(crmCommand);

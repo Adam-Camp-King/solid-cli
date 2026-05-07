@@ -196,13 +196,14 @@ describe('classifyError — request_id', () => {
 // ============================================================================
 
 describe('toErrorEnvelope', () => {
-  it('wraps minimal classified error in {error: {...}} with message + status', () => {
+  it('wraps minimal classified error in {error: {...}} with message + status + retryable', () => {
     const env = toErrorEnvelope({ code: 'NOT_FOUND' }, 404, 'Not found: /api/v1/leads/99');
     expect(env).toEqual({
       error: {
         code: 'NOT_FOUND',
         status: 404,
         message: 'Not found: /api/v1/leads/99',
+        retryable: false,
       },
     });
   });
@@ -224,6 +225,7 @@ describe('toErrorEnvelope', () => {
         code: 'SCOPE_MISSING',
         status: 403,
         message: 'Missing scope: agents:read',
+        retryable: false,
         scope: 'agents:read',
         hint: 'rotate key',
         docs_url: 'https://solidnumber.com/docs/errors',
@@ -242,6 +244,24 @@ describe('toErrorEnvelope', () => {
     expect('scope' in env.error).toBe(false);
     expect('hint' in env.error).toBe(false);
     expect('feature' in env.error).toBe(false);
+  });
+
+  it('marks transient errors retryable (NETWORK_ERROR, TIMEOUT, RATE_LIMITED, SERVER_ERROR)', () => {
+    expect(toErrorEnvelope({ code: 'NETWORK_ERROR' }, 0, '').error.retryable).toBe(true);
+    expect(toErrorEnvelope({ code: 'TIMEOUT' }, 0, '').error.retryable).toBe(true);
+    expect(toErrorEnvelope({ code: 'RATE_LIMITED' }, 429, '').error.retryable).toBe(true);
+    expect(toErrorEnvelope({ code: 'SERVER_ERROR' }, 500, '').error.retryable).toBe(true);
+  });
+
+  it('marks deterministic errors NOT retryable (auth, scope, validation, conflict, gating)', () => {
+    expect(toErrorEnvelope({ code: 'AUTH_REQUIRED' }, 401, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'FORBIDDEN' }, 403, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'SCOPE_MISSING' }, 403, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'NOT_FOUND' }, 404, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'VALIDATION_FAILED' }, 422, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'CONFLICT' }, 409, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'FEATURE_GATED' }, 402, '').error.retryable).toBe(false);
+    expect(toErrorEnvelope({ code: 'DRY_RUN_BLOCKED' }, 0, '').error.retryable).toBe(false);
   });
 });
 

@@ -224,6 +224,8 @@ export interface ErrorEnvelope {
     code: ErrorCode;
     status: number;
     message: string;
+    /** True when an automated retry could plausibly succeed (network blip, 5xx, rate limit, timeout). */
+    retryable: boolean;
     scope?: string;
     feature?: string;
     upgrade_to?: string;
@@ -231,6 +233,41 @@ export interface ErrorEnvelope {
     docs_url?: string;
     request_id?: string;
   };
+}
+
+/**
+ * Whether an agent should retry on this error class.
+ *
+ * Agents need this signal to write recovery logic without parsing prose:
+ *   - Network blips, 5xx, timeouts, rate limits → retry with backoff.
+ *   - Auth, scope, validation, conflict, feature-gating, dry-run → don't
+ *     retry; surface to the human.
+ *
+ * Pure on the code; no I/O, no env. Unit-tested.
+ */
+export function isRetryable(code: ErrorCode): boolean {
+  switch (code) {
+    case 'NETWORK_ERROR':
+    case 'TIMEOUT':
+    case 'RATE_LIMITED':
+    case 'SERVER_ERROR':
+      return true;
+    case 'AUTH_REQUIRED':
+    case 'FORBIDDEN':
+    case 'FEATURE_GATED':
+    case 'SCOPE_MISSING':
+    case 'NOT_FOUND':
+    case 'VALIDATION_FAILED':
+    case 'CONFLICT':
+    case 'DRY_RUN_BLOCKED':
+      return false;
+    default: {
+      // Exhaustive check — TypeScript flags missing cases.
+      const _exhaustive: never = code;
+      void _exhaustive;
+      return false;
+    }
+  }
 }
 
 export function toErrorEnvelope(
@@ -242,6 +279,7 @@ export function toErrorEnvelope(
     code: classified.code,
     status: Number(status) || 0,
     message,
+    retryable: isRetryable(classified.code),
   };
   if (classified.scope) envelope.scope = classified.scope;
   if (classified.feature) envelope.feature = classified.feature;

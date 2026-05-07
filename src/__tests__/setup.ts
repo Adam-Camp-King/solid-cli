@@ -1,6 +1,15 @@
 /**
  * Global test setup — prevents tests from touching real config, real API, or real companies.
+ *
+ * NOTE: jest runs in a non-TTY environment, which would now trigger the
+ * auto-JSON detection in lib/json-output.ts. We force human-output mode
+ * for all tests by default; individual tests that want JSON should set
+ * `localOptions.json = true` or stub `isJsonOutput` directly. Real users
+ * piping into a script still get auto-JSON because their env doesn't
+ * have SOLID_NO_JSON set.
  */
+process.env.SOLID_NO_JSON = process.env.SOLID_NO_JSON ?? '1';
+
 
 // Mock config — prevents filesystem access to ~/.solid/
 jest.mock('../lib/config', () => ({

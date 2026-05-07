@@ -38,8 +38,11 @@ function readManifest(): VerbManifest {
     env: {
       ...process.env,
       // Belt-and-suspenders: silence first-run wizard, stay non-interactive,
-      // ignore any user config the test machine might have.
+      // ignore any user config the test machine might have, and silence the
+      // implicit-tenant warning (this is a build-time introspection call,
+      // not real tenant work).
       SOLID_SKIP_FIRST_RUN_WIZARD: "1",
+      SOLID_NO_TENANT_WARN: "1",
       NO_COLOR: "1",
       CI: "1",
     },
