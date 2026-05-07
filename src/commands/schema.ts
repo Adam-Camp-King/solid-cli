@@ -74,16 +74,19 @@ function printBlock(block: BlockDef): void {
 export const schemaCommand = new Command('schema').description('CMS / page block schema for AI coding agents');
 
 // Default action — `solid schema` (no subcommand) defaults to dumping the
-// full verb manifest as JSON, since that is the single highest-leverage
-// thing an agent typically wants. Without this default, agents had to
-// guess `solid schema verbs --json` on the first try; now `solid schema
-// --json` works too. Falls back to help text in non-JSON mode so humans
-// still discover the subcommands.
+// full verb manifest as JSON when JSON output is requested, since that
+// is the single highest-leverage thing an agent typically wants.
+// Falls back to help text in non-JSON mode so humans still discover the
+// subcommands.
+//
+// IMPORTANT: this command intentionally does NOT declare its own --json
+// option. Adding one would shadow the identically-named option on
+// `schema verbs` and `schema pages` (commander absorbs duplicates into
+// the parent). The program-level --json + auto-non-TTY detection is
+// enough — isJsonOutput() picks both up.
 schemaCommand
-  .option('--json', 'Emit the full verb manifest as JSON (same as `schema verbs --json`)')
-  .option('--include-hidden', 'Include commands hidden from --help')
-  .action((opts) => {
-    if (isJsonOutput(opts)) {
+  .action(() => {
+    if (isJsonOutput()) {
       const program = getProgram();
       if (!program) {
         process.stdout.write(JSON.stringify({ error: { code: 'SERVER_ERROR', message: 'program-registry not initialized' } }) + '\n');
@@ -92,7 +95,7 @@ schemaCommand
       const manifest = buildVerbManifest(program, CLI_VERSION, {
         prefix: 'solid',
         skipRoot: true,
-        includeHidden: Boolean(opts.includeHidden),
+        includeHidden: false,
       });
       process.stdout.write(JSON.stringify(manifest, null, 2) + '\n');
       return;

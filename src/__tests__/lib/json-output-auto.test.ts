@@ -16,6 +16,7 @@
 const ORIGINAL_TTY = process.stdout.isTTY;
 const ORIGINAL_NO_JSON = process.env.SOLID_NO_JSON;
 const ORIGINAL_JSON = process.env.SOLID_JSON;
+const ORIGINAL_JEST_WORKER = process.env.JEST_WORKER_ID;
 
 function setTTY(value: boolean): void {
   Object.defineProperty(process.stdout, 'isTTY', { value, configurable: true });
@@ -26,12 +27,18 @@ describe('isJsonOutput — auto-detect on non-TTY', () => {
     jest.resetModules();
     delete process.env.SOLID_NO_JSON;
     delete process.env.SOLID_JSON;
+    // The auto-JSON path is short-circuited inside jest workers (intentional —
+    // see lib/json-output.ts) so callers don't get JSON in their unit tests.
+    // To verify the non-TTY auto-detect itself, clear JEST_WORKER_ID for the
+    // duration of these checks.
+    delete process.env.JEST_WORKER_ID;
   });
 
   afterAll(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: ORIGINAL_TTY, configurable: true });
     if (ORIGINAL_NO_JSON !== undefined) process.env.SOLID_NO_JSON = ORIGINAL_NO_JSON;
     if (ORIGINAL_JSON !== undefined) process.env.SOLID_JSON = ORIGINAL_JSON;
+    if (ORIGINAL_JEST_WORKER !== undefined) process.env.JEST_WORKER_ID = ORIGINAL_JEST_WORKER;
   });
 
   it('returns true when stdout is not a TTY (pipe, redirect, agent)', () => {

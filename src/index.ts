@@ -45,7 +45,13 @@ activateProgramJsonIfRequested(process.argv);
 // Lazy-loaded after a quick gate to keep --help / --version paths quiet.
 {
   const verb = process.argv[2];
-  const isDiscovery = !verb || ['--help', '-h', 'help', '--version', '-v'].includes(verb);
+  const DISCOVERY_FLAGS = ['--help', '-h', 'help', '--version', '-v'];
+  // Skip when no command, top-level help/version, OR any --help/-h appears
+  // anywhere in the argv (e.g. `solid schema --help`, `solid pages list -h`).
+  const isDiscovery =
+    !verb ||
+    DISCOVERY_FLAGS.includes(verb) ||
+    process.argv.some((a) => a === '--help' || a === '-h');
   if (!isDiscovery) {
     // Defer the import so the warning module's side-effect-free code
     // doesn't load on `solid --help` / `solid --version` invocations.

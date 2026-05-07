@@ -87,18 +87,29 @@ describeOrSkip('solid graph --diff', () => {
     const { tmp } = setupTenant(doc);
     let exited = 0;
     let stderr = '';
+    let stdout = '';
     try {
       execFileSync(
         'node',
         [distEntry, 'graph', '--diff', '/nonexistent/baseline.jsonld', '--offline'],
-        { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+        {
+          cwd: tmp,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          // Force human-prose mode so "baseline not found" lands on stderr
+          // as a clean string (auto-JSON would route it to stdout as a
+          // {ok:false,error:"…"} envelope, which is also valid behavior).
+          env: { ...process.env, SOLID_NO_JSON: '1' },
+        },
       );
     } catch (err: unknown) {
-      const e = err as { status?: number; stderr?: Buffer | string };
+      const e = err as { status?: number; stderr?: Buffer | string; stdout?: Buffer | string };
       exited = e.status ?? 0;
       stderr = String(e.stderr ?? '');
+      stdout = String(e.stdout ?? '');
     }
     expect(exited).toBe(1);
-    expect(stderr).toMatch(/baseline not found/);
+    // Either prose on stderr OR JSON envelope on stdout — both are correct.
+    expect(`${stderr}\n${stdout}`).toMatch(/baseline not found/);
   });
 });

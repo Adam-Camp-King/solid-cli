@@ -41,12 +41,24 @@ export function isNonTty(): boolean {
 /**
  * True if any signal asks for JSON, including the auto-detect (non-TTY).
  * Pass the local command's options to honor the most specific flag.
+ *
+ * Jest carve-out: `typeof jest !== 'undefined'` only when this code runs
+ * inside a jest worker; child_process.execSync('node dist/...') does NOT
+ * inherit that global, so smoke tests that spawn the CLI and pass --json
+ * still get JSON. The carve-out keeps the 1000+ in-process unit tests in
+ * human-output mode (which is what they were written against) without
+ * needing an env var that would bleed into spawned subprocesses.
  */
 export function isJsonOutput(localOptions?: { json?: boolean } | Record<string, unknown>): boolean {
   if (localOptions && (localOptions as any).json === true) return true;
   if (explicitHumanOptOut(localOptions)) return false;
   if (programJson) return true;
   if (process.env.SOLID_JSON && /^(1|true|yes|on)$/i.test(process.env.SOLID_JSON)) return true;
+  // Jest in-process — preserve the legacy human-mode default. JEST_WORKER_ID
+  // is set on every jest worker but does NOT propagate to subprocesses
+  // spawned via execSync/execFileSync that override env, which is exactly
+  // the boundary we want.
+  if (process.env.JEST_WORKER_ID !== undefined) return false;
   // Auto-detect: agents and scripts pipe; humans use TTYs.
   if (isNonTty()) return true;
   return false;

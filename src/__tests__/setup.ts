@@ -1,14 +1,17 @@
 /**
  * Global test setup — prevents tests from touching real config, real API, or real companies.
  *
- * NOTE: jest runs in a non-TTY environment, which would now trigger the
- * auto-JSON detection in lib/json-output.ts. We force human-output mode
- * for all tests by default; individual tests that want JSON should set
- * `localOptions.json = true` or stub `isJsonOutput` directly. Real users
- * piping into a script still get auto-JSON because their env doesn't
- * have SOLID_NO_JSON set.
+ * Jest detection in lib/json-output.ts (typeof jest !== 'undefined') keeps
+ * in-process tests in human-output mode without setting an env var that
+ * would leak into spawned subprocesses. Smoke tests that exec `node
+ * dist/index.js --json` therefore still get JSON exactly as designed.
+ *
+ * SOLID_NO_TENANT_WARN=1 is fine to leak into subprocesses — it just
+ * silences the implicit-tenant warning that would otherwise show up on
+ * stderr and confuse tests asserting specific error messages (e.g.
+ * graph-diff expecting /baseline not found/).
  */
-process.env.SOLID_NO_JSON = process.env.SOLID_NO_JSON ?? '1';
+process.env.SOLID_NO_TENANT_WARN = process.env.SOLID_NO_TENANT_WARN ?? '1';
 
 
 // Mock config — prevents filesystem access to ~/.solid/
