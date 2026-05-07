@@ -73,6 +73,33 @@ function printBlock(block: BlockDef): void {
 
 export const schemaCommand = new Command('schema').description('CMS / page block schema for AI coding agents');
 
+// Default action — `solid schema` (no subcommand) defaults to dumping the
+// full verb manifest as JSON, since that is the single highest-leverage
+// thing an agent typically wants. Without this default, agents had to
+// guess `solid schema verbs --json` on the first try; now `solid schema
+// --json` works too. Falls back to help text in non-JSON mode so humans
+// still discover the subcommands.
+schemaCommand
+  .option('--json', 'Emit the full verb manifest as JSON (same as `schema verbs --json`)')
+  .option('--include-hidden', 'Include commands hidden from --help')
+  .action((opts) => {
+    if (isJsonOutput(opts)) {
+      const program = getProgram();
+      if (!program) {
+        process.stdout.write(JSON.stringify({ error: { code: 'SERVER_ERROR', message: 'program-registry not initialized' } }) + '\n');
+        process.exit(1);
+      }
+      const manifest = buildVerbManifest(program, CLI_VERSION, {
+        prefix: 'solid',
+        skipRoot: true,
+        includeHidden: Boolean(opts.includeHidden),
+      });
+      process.stdout.write(JSON.stringify(manifest, null, 2) + '\n');
+      return;
+    }
+    schemaCommand.outputHelp();
+  });
+
 schemaCommand
   .command('pages')
   .description('Show the page layout_json block schema (27 block types)')

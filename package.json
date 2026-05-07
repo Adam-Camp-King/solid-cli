@@ -24,6 +24,8 @@
   },
   "scripts": {
     "build": "tsc && node -e \"require('fs').cpSync('src/data','dist/data',{recursive:true})\"",
+    "postbuild": "ts-node scripts/generate-llms.ts",
+    "verify:llms": "ts-node scripts/generate-llms.ts --check",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts",

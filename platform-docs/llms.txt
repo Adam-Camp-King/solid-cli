@@ -125,20 +125,123 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 
 ## CLI — `npm i -g @solidnumber/cli`
 
-- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v1.7.1
-- [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI
-- [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference with 59 command groups
-- 59 command groups, 150+ subcommands. Core workflow: auth → company create → clone → site → pages → pull/push → publish → billing.
-- **Site Management**: `solid site list/create/info/delete/templates/regenerate` — create sites with industry-specific templates (213 industries mapped), regenerate pages with updated design
-- **Page Management**: `solid pages list/create/get/publish/unpublish/delete/generate` — AI page generation from natural language prompts
-- **Template Scaffolding**: `solid clone plumber` — scaffolds complete business: 15-120 KB entries + industry website + default pages + AI personality
-- **Agency Billing**: `solid billing checkout-link <id> --tier starter` (Stripe checkout URL for clients), `solid billing invoice <id> --amount 8900` (send Stripe invoice)
-- **SEO Audit**: `solid seo site-audit` — zero-token site crawl scoring every page for title, meta, H1, readability, structured data, keywords, images, performance. `solid seo report` for results.
-- **AI Agents**: `solid agent dashboard/list/soul/reflect/memory/chat/mission/telemetry` — full agent management including multi-agent missions coordinated by ADA
-- **Natural Language**: `solid vibe "Add a testimonials section to the homepage"` — AI analyzes intent and applies changes
-- **Pull/Push**: `solid pull` downloads pages, KB, settings as local files. Edit in any editor. `solid push` deploys changes.
-- **Multi-Company**: `solid company create/list/switch` — agencies manage unlimited client companies ($495/mo agency tier)
-- **Domain Management**: `solid domains list/add/verify/remove` — custom domain configuration with DNS verification
+<!-- CLI:AUTO:BEGIN -->
+
+- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.3.2
+- [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
+- [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
+- **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
+- 98 top-level command groups, 599 subcommands.
+- Core workflow: `solid auth login` → `solid company create` → `solid clone <industry>` → `solid pull` → edit → `solid push` → `solid pages publish` → `solid billing checkout-link`.
+
+**Top-level commands (no subcommands):**
+
+- `solid ai` — Launch Claude Code / Cursor / Codex with this company's context pre-loaded (stupid easy)
+- `solid clone` — Scaffold a business from an industry template
+- `solid context` — One-shot AI context dump (company state, locks, drafts, tools) — T11 agency mode
+- `solid dashboard` — Agency dashboard — all companies at a glance
+- `solid deploy` — Create preview deployments with shareable URLs for client approval
+- `solid diff` — Show differences between local files and production
+- `solid docs` — Pull developer documentation into your project
+- `solid explore` — Platform Intelligence — ask anything about Solid#
+- `solid export` — Export all company data (backup, GDPR)
+- `solid feedback` — Send a message directly to the founder — response within 5 minutes
+- `solid graph` — Navigate the tenant JSON-LD context graph — counts, types, and N-hop neighbourhoods around any entity
+- `solid health` — Health check commands
+- `solid history` — View version history for pages and KB entries
+- `solid import` — Convert HTML/JSX into Solid# CMS page blocks
+- `solid init` — Scaffold a LOCAL app template (boilerplate files only — does NOT create a company; use `solid company create` or `solid demo create` for that)
+- `solid install` — One-time setup: wire Claude Code to auto-refresh Solid context at every session start
+- `solid logs` — View real-time agent activity logs
+- `solid migrate` — Migrate pages, KB, and settings from one company to another
+- `solid open` — Open pages, sites, or dashboard in the web builder
+- `solid proposal` — Generate a branded PDF pitch deck for a prospect (agency sales tool)
+- `solid publish` — Promote pending CMS page drafts to live (T12)
+- `solid pull` — Download your business data as local files
+- `solid push` — Push local file changes to your Solid# business
+- `solid render` — Screenshot any page (A.1 — visible-gap close for AI agents)
+- `solid rollback` — Rollback a page or KB entry to a previous version
+- `solid serve` — Start a local preview server for your pulled site
+- `solid setup` — One-command onboarding: auth + editor MCP + Claude hook + completion + first action
+- `solid status` — Show your business status and setup overview
+- `solid switch` — Switch active company
+- `solid test` — Test agent responses with assertions
+- `solid visual` — Open the Visual Canvas (Figma/Stitch-style page designer) in the browser
+- `solid watch` — Watch local files and auto-push changes to production
+- `solid whoami` — Show who you are logged in as (alias for `solid auth status`)
+
+**Command groups (alphabetical):**
+
+- **accounting** (3 subcommands) — Accounting sync — QuickBooks, Xero: `history, status, sync`
+- **agent** (25 subcommands) — Manage and interact with AI agents: `activity, adapters, call, capabilities, chat, clone, clones, dashboard, grant, grants, install, installed, list, memory, mission, profile, prompt, reflect, revoke, settings, soul, sync, telemetry, tools, uninstall`
+- **analytics** (2 subcommands) — Business analytics and insights: `dashboard, mcp-traffic`
+- **ant** (7 subcommands) — Ant Farm — code import system: `analyze, execute, get, import, import-url, list, rollback`
+- **api** (3 subcommands) — API explorer — browse and test Solid# API endpoints: `call, docs, list`
+- **ask-owner** (1 subcommands) — Typed escalation — agent asks, owner answers, agent resumes: `check`
+- **audit** (10 subcommands) — Activity log — who changed what, when: `a11y, compliance-report, export, gdpr-consent, gdpr-consent-set, gdpr-delete, gdpr-export, mobile, perf, suspicious`
+- **auth** (6 subcommands) — Authentication management: `config, login, logout, refresh, status, token`
+- **billing** (16 subcommands) — Subscription, usage, and invoices: `charges, checkout-link, invoice, invoice-pdf, invoices, method-add, method-default, method-nickname, method-remove, methods, statement, status, subscription, trial, upgrade-trial, usage`
+- **blog** (6 subcommands) — Blog posts & local SEO: `create, delete, get, list, seo, update`
+- **brand** (6 subcommands) — Brand Engine — brand identity management: `audit, create, export, get, set, update`
+- **chains** (17 subcommands) — Agent chains — multi-step AI workflows (build, execute, approve): `activate, approve, archive, cancel, create, delete, execute, execution, executions, from-template, get, list, pause, pending-approvals, template, templates, update`
+- **chat-widgets** (6 subcommands) — Chat widgets for external sites (CRUD + embed code): `create, delete, embed, get, list, update`
+- **company** (11 subcommands) — Manage companies (agencies & multi-company developers): `create, create-for-client, current, info, invite, list, lock, lock-status, members, request-unlock, unlock`
+- **completion** (2 subcommands) — Generate or install shell completion (reflects the live command tree): `install, uninstall`
+- **connect** (11 subcommands) — Import external data into your Solid# business: `csv, docs, figma, github, history, list, notion, sheets, slack, status, wordpress`
+- **crm** (4 subcommands) — CRM — contacts, deals, tasks, and pipeline: `contacts, dashboard, deals, tasks`
+- **demo** (4 subcommands) — Create live demo companies for prospects — AI answers the phone: `convert, create, delete, list`
+- **design** (4 subcommands) — Design with Stitch AI — generate UI from text prompts: `generate, import, pull, status`
+- **dev** (1 subcommands) — Custom module development — scaffold, push, deploy code that runs in Solid# scoped to your company: `module`
+- **doctor** (2 subcommands) — Smoke-test the backend against the authenticated company (safe, read-only): `env, scopes`
+- **domains** (5 subcommands) — Per-site domain management — list, add, verify, set canonical: `add, list, remove, set-canonical, verify`
+- **drafts** (3 subcommands) — Pending CMS page drafts — list, preview, discard (pair with `solid publish`): `discard, list, preview`
+- **droplet** (10 subcommands) — Manage customer droplets (Type 2: Managed Instance): `backup, deploy, destroy, exec, list, logs, provision, rollback, ssh, status`
+- **ecommerce** (5 subcommands) — Storefront flow — carts, orders, shipping, reviews, abandoned carts: `abandoned, cart, orders, reviews, shipping`
+- **emails** (6 subcommands) — Email — addresses, templates, send transactional messages: `addresses, send, send-invoice, send-payment-link, template-vars, templates`
+- **flow** (11 subcommands) — Commerce flows — payment flows and subscriptions: `activate, agents, archive, clone, create, get, list, metrics, pause, test, update`
+- **forms** (11 subcommands) — Forms & surveys — CRUD, AI generate, export CSV/Excel/PDF: `analyze, create, delete, embed, export, followup, generate, get, list, optimize, update`
+- **inbound** (9 subcommands) — Inbound webhooks — receive events from Zapier/Stripe/external systems and fire chains: `create, delete, event, events, get, list, replay, rotate, update`
+- **inbox** (4 subcommands) — Unified inbox — messages, email, and campaigns: `campaigns, email, send, stats`
+- **insights** (4 subcommands) — AI-generated conversation insights: `approve, list, reject, stats`
+- **integrations** (10 subcommands) — Integration management: `catalog, create, deploy, disable, health, list, logs, rollback, test, validate`
+- **inventory** (8 subcommands) — Inventory & stock management: `adjust, archive, create, get, import, list, unarchive, update`
+- **kb** (5 subcommands) — Knowledge base management: `add, delete, list, search, update`
+- **keys** (4 subcommands) — Issue and manage scoped API keys (agencies use this for client access): `create, list, revoke, rotate`
+- **landing** (9 subcommands) — Landing pages — CRUD, templates, publish, analytics: `analytics, create, delete, get, list, publish, template-categories, templates, update`
+- **leads** (19 subcommands) — Lead pipeline, scoring, prospecting, forms, and analytics: `activities, activity, analytics, attribution, budget, connections, enrich-status, forms, performance, pipeline, plan-subscribe, preferences, preferences-set, prospect, recent, score, score-update, stats, submissions`
+- **llms** (2 subcommands) — AI discovery — manage your llms.txt for AI shopping agents: `check, preview`
+- **marketplace** (10 subcommands) — Cross-company marketplace — publish products + services: `disable, enable, products, publish-all, publish-product, publish-service, services, status, unpublish-product, unpublish-service`
+- **mcp** (3 subcommands) — Install / run the Solid# MCP server for Claude Desktop, Cursor, or Windsurf: `install, serve, tools`
+- **nest** (5 subcommands) — Nest — drop anything, we make it real. (paste/url/file → live page): `from-file, from-url, list, outcomes, promote`
+- **notifications** (2 subcommands) — View and manage notifications: `list, read-all`
+- **onboarding** (12 subcommands) — Programmatic CLIENT onboarding (email, domain, phone-buy, payment, website): `complete, discover, email, health, help-request, payment, phone, provision, session, set-business, status, website`
+- **orders** (11 subcommands) — Order lifecycle (list, create, confirm, fulfill, cancel, refund, import, watch): `allocate, cancel, confirm, create, fulfill, get, import, list, quick-sale, refund, watch`
+- **pages** (12 subcommands) — Website page management: `coming-soon, create, delete, generate, get, list, publish, regenerate, site-generate, slug, unpublish, update`
+- **payment** (7 subcommands) — Payment processing & Level 3 interchange optimization: `analytics, connect, l3, mcc, products, status, terminal`
+- **payment-links** (6 subcommands) — Pay-by-link — create, text-to-pay, mark paid: `create, delete, get, list, mark-paid, text2pay`
+- **products** (8 subcommands) — Product catalog (CRUD, pricing, components): `catalog, components, create, delete, get, list, pricing, update`
+- **reports** (5 subcommands) — Business reports & analytics: `export, list, revenue, run, top-products`
+- **sandbox** (9 subcommands) — Isolated sandbox for safe site editing: `create, diff, exit, fork, preview, promote, push, reset, status`
+- **schedule** (15 subcommands) — Appointment scheduling & calendar: `action, actions, book, calendar, cancel, cancel-action, create, due, fire, get, hold, list, reschedule, slots, update`
+- **schema** (3 subcommands) — CMS / page block schema for AI coding agents: `blocks, pages, verbs`
+- **seo** (6 subcommands) — SEO — site audit, local SEO, rankings, citations: `audit, citations, gaps, rank, report, site-audit`
+- **services** (4 subcommands) — Service catalog management: `create, delete, list, update`
+- **signal** (3 subcommands) — Agent-facing event stream — sense what happened on this company: `tail, topics, watch`
+- **site** (9 subcommands) — Website management: `create, delete, guardrails, info, list, regenerate, reset-guardrails, set-guardrails, templates`
+- **storage** (16 subcommands) — File storage — upload, download, organize folders, asset packs: `archive, breakdown, config, delete, download, folders, get, list, pack-activate, packs, restore, search, sources, star, upload, usage`
+- **subscriptions** (7 subcommands) — Recurring subscription products you sell to YOUR customers: `cancel, downgrade, get, health, list, reactivate, upgrade`
+- **support** (2 subcommands) — Customer support tickets: `get, list`
+- **train** (4 subcommands) — Train your AI agents with knowledge and context: `add, chat, import, status`
+- **users** (23 subcommands) — Team — invite, list, set roles, manage AI permissions: `ai-perms, ai-perms-set, block, create, delete, feature-clear, feature-set, features, features-catalog, get, invitations, invite, invite-accept, invite-defaults, invite-resend, invite-revoke, list, notifications, notifications-set, role, stats, unblock, update`
+- **vibe** (1 subcommands) — Natural language integration commands: `interactive`
+- **voice** (10 subcommands) — Voice calls, phone numbers, voicemail & personality: `audit, calls, cost, numbers, personality, release-orphan, stats, transcript, voicemail, voices`
+- **webhooks** (7 subcommands) — Custom webhook management: `create, delete, events, list, listen, simulate, test`
+- **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
+
+*Auto-generated from the live commander tree at build time. CLI version 2.3.2, manifest schema 1.0, generated 2026-05-07. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+
+<!-- CLI:AUTO:END -->
+
 - Developer tier (free): 1 sandbox company, 5 API keys, 60 req/min
 - Agency tier ($495/mo): Unlimited companies, 50 API keys, 300 req/min, billing tools, commission on referrals
 
@@ -163,7 +266,9 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - "What is CognitiveLimiter?" → Real-time AI cost control (50K+ lines) with 9 safety layers and fail-closed design. Per-company budgets tracked in Redis. Details: solidnumber.com/research/cognitivelimiter
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 59 command groups, 150+ subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies.
+<!-- CLI:Q&A:BEGIN -->
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 98 top-level command groups, 599 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
+<!-- CLI:Q&A:END -->
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.
 - "How does lead scoring work?" → Adaptive AI scoring with weighted components. Marketplace leads get purchase-intent weighting. Scores change dynamically as leads move through the pipeline and deal values are set.
