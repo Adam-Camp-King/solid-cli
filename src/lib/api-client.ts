@@ -61,6 +61,36 @@ interface ApiResponse<T = unknown> {
   success: boolean;
 }
 
+/**
+ * Tenant Activity Gate — one company's full decision.
+ *
+ * Returned by both `/api/v1/tenant/my-gate-level` and
+ * `/api/v1/admin/tenant-gate/{id}`. The `reason` field is a stable
+ * machine-readable code — agents can pattern-match on it.
+ *
+ * See Owners-Manual/06-Operations/TENANT-ACTIVITY-GATE/05-API-REFERENCE.md
+ */
+export interface TenantGateDecision {
+  company_id: number;
+  level: 'HOT' | 'WARM' | 'COLD' | 'DORMANT' | 'BLOCKED';
+  level_value: number;
+  reason: string;
+  signals: {
+    billing_exempt: boolean;
+    in_hardcoded_set: boolean;
+    is_deleted: boolean;
+    is_suspended: boolean;
+    is_archived: boolean;
+    onboarding_status: string | null;
+    subscription_status: string | null;
+    last_login_at: string | null;
+    last_token_usage_at: string | null;
+    effective_last_activity_at: string | null;
+  };
+  bypass_reasons: string[];
+  evaluated_at: string;
+}
+
 interface ApiError {
   message: string;
   code?: string;
@@ -1009,6 +1039,38 @@ class ApiClient {
       reason,
     });
     return { data: response.data, status: response.status, success: true };
+  }
+
+  // ── Tenant Activity Gate ────────────────────────────────────────────────
+  // See Owners-Manual/06-Operations/TENANT-ACTIVITY-GATE/ for the full spec.
+
+  async tenantGateMine(): Promise<ApiResponse<TenantGateDecision>> {
+    const response = await this.client.get('/api/v1/tenant/my-gate-level');
+    return { data: response.data as TenantGateDecision, status: response.status, success: true };
+  }
+
+  async tenantGateAdminDebug(companyId: number): Promise<ApiResponse<TenantGateDecision>> {
+    const response = await this.client.get(`/api/v1/admin/tenant-gate/${companyId}`);
+    return { data: response.data as TenantGateDecision, status: response.status, success: true };
+  }
+
+  async tenantGateAdminActive(min: string): Promise<ApiResponse<{
+    min_level: string;
+    count: number;
+    company_ids: number[];
+  }>> {
+    const response = await this.client.get('/api/v1/admin/tenant-gate/active', {
+      params: { min },
+    });
+    return { data: response.data as { min_level: string; count: number; company_ids: number[] }, status: response.status, success: true };
+  }
+
+  async tenantGateAdminAllowlist(): Promise<ApiResponse<{
+    hardcoded_ids: number[];
+    billing_exempt: Array<{ id: number; name: string }>;
+  }>> {
+    const response = await this.client.get('/api/v1/admin/tenant-gate/allowlist');
+    return { data: response.data as { hardcoded_ids: number[]; billing_exempt: Array<{ id: number; name: string }> }, status: response.status, success: true };
   }
 
   // CLI API Keys

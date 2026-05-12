@@ -2,6 +2,34 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.5.0] — 2026-05-12
+
+**`solid tenant ...` — Tenant Activity Gate introspection from the CLI.**
+
+Four new verbs let agents and operators query the platform-level
+compute-budget gate that decides whether per-tenant Celery sweeps fire.
+JSON-first; reason codes are stable for pattern-matching.
+
+### Added
+
+- `solid tenant level` — your own company's current activity level
+  (HOT/WARM/COLD/DORMANT/BLOCKED), reason code, and all signals.
+- `solid tenant gate-debug <company_id>` — admin-only full breakdown for
+  any tenant.
+- `solid tenant active --min warm` — admin-only list of company IDs
+  passing a threshold (same set a Celery fan-out would enqueue).
+- `solid tenant allowlist` — admin-only snapshot of the owner allowlist
+  (hardcoded IDs + `billing_exempt=true` SOLON partners).
+
+### Why
+
+AI agents diagnosing "why didn't last night's sweep run for tenant X?"
+needed a deterministic, JSON-first introspection path. Previously they
+had to SSH into production and run a Python REPL. Now they can ask the
+CLI and pattern-match on `reason`.
+
+Spec: `Owners-Manual/06-Operations/TENANT-ACTIVITY-GATE/`.
+
 ## [2.3.2] — 2026-04-29
 
 **`solid ai` no longer prints "Refusing to write tenant data" when

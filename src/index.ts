@@ -86,6 +86,7 @@ import { cloneCommand } from './commands/clone';
 import { devCommand } from './commands/dev';
 import { dropletCommand } from './commands/droplet';
 import { companyCommand } from './commands/company';
+import { tenantCommand } from './commands/tenant';
 import { switchCommand } from './commands/switch';
 import { agentCommand } from './commands/agent';
 import { antCommand } from './commands/ant';
@@ -498,6 +499,7 @@ program.addCommand(graphCommand);
 // Multi-company
 program.addCommand(companyCommand);
 program.addCommand(switchCommand);
+program.addCommand(tenantCommand);
 
 // Discovery
 program.addCommand(exploreCommand);
