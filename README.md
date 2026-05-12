@@ -2,7 +2,7 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-101 top-level commands, 600+ subcommands, 52 industries, 116 AI agents. One CLI.
+102 top-level commands, 600+ subcommands, 52 industries, 116 AI agents. One CLI.
 
 **v2.2.0** — magic-link install + Homebrew + Scoop. Logged-in dashboard
 users mint a single-use `ist_*` token, paste one command, CLI is
