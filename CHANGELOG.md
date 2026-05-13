@@ -2,6 +2,39 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.6.0] — 2026-05-12
+
+**`solid qchain ...` — Q-Chain substrate verification for external auditors.**
+
+Four verbs that close the "insurance auditor walks in and verifies our
+hash chain without trusting us" loop. JSON-first; the export shape is
+the contract `/.well-known/qchain.json` publishes so an auditor can
+recompute SHA-256 + verify Ed25519 signatures offline.
+
+### Added
+
+- `solid qchain pubkey` — fetch the platform's verification metadata
+  (anonymous, no auth). Returns signer_id, Ed25519 public key, hash +
+  signature algorithm spec, canonical-row-fields contract.
+- `solid qchain export [--since X --until Y]` — pull this tenant's
+  full substrate chain in canonical form. JSON always; the auditor
+  recomputes the hash + signature locally.
+- `solid qchain verify` — server-side chain walk + sig verify. Sanity
+  check before the auditor runs their own offline verification.
+- `solid qchain audit-key --label "Acme Insurance — 2026 SOC 2"` —
+  mint an API key scoped to `audit:substrate:read` only. Hand to the
+  auditor; they can hit export/verify/recent/summary and nothing else.
+
+### Why
+
+Phase 4 substrate attestation (Q-Chain hash chain + Ed25519) is the
+audit source of truth for every agent action and observed outcome.
+Without these CLI verbs, an auditor (or AI agent diagnosing one) had
+to either trust the platform's UI or SSH in and run SQL. Now they
+call the CLI, get JSON, walk the chain locally.
+
+Spec: `Owners-Manual/75-Qchain/08-EXTERNAL-AUDITOR-FLOW.md`.
+
 ## [2.5.0] — 2026-05-12
 
 **`solid tenant ...` — Tenant Activity Gate introspection from the CLI.**

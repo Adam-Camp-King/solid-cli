@@ -70,6 +70,66 @@ interface ApiResponse<T = unknown> {
  *
  * See Owners-Manual/06-Operations/TENANT-ACTIVITY-GATE/05-API-REFERENCE.md
  */
+/**
+ * Q-Chain public verification metadata. Returned by
+ * GET /.well-known/qchain.json (anonymous endpoint).
+ */
+export interface QChainWellKnown {
+  version: number;
+  signer_id: string;
+  signers: Array<{ signer_id: string; algorithm: string; public_key_hex: string }>;
+  hash_algorithm: string;
+  signature_algorithm: string;
+  chain_genesis_prev_hash: string;
+  canonical_form: string;
+  row_fields_in_canonical_form: string[];
+  docs_url: string;
+  verify_endpoint: string;
+  export_endpoint: string;
+  notes: string[];
+}
+
+/** Full row payload included in /substrate/export — every field that enters the hash. */
+export interface QChainExportRow {
+  id: number;
+  company_id: number;
+  agent: string;
+  actor_user_id: number | null;
+  action_type: string;
+  action_input_jsonb: Record<string, unknown> | null;
+  action_output_jsonb: Record<string, unknown> | null;
+  related_entity_type: string | null;
+  related_entity_id: number | null;
+  action_taken_at: string | null;
+  predicted_probability: number | null;
+  predicted_tier: string | null;
+  industry_template_slug: string | null;
+  outcome_label: string | null;
+  outcome_value_jsonb: Record<string, unknown> | null;
+  outcome_value_amount: number | null;
+  outcome_observed_at: string | null;
+  attestation_hash: string | null;
+  attestation_signature: string | null;
+  attestation_signer_id: string | null;
+  prev_hash: string | null;
+}
+
+export interface QChainExportResult {
+  company_id: number;
+  rows: QChainExportRow[];
+  count: number;
+  since: string | null;
+  until: string | null;
+  well_known_url: string;
+}
+
+export interface QChainVerifyResult {
+  ok: boolean;
+  rows_checked: number;
+  rows_broken: Array<Record<string, unknown>>;
+  signature_summary: Record<string, number>;
+}
+
 export interface TenantGateDecision {
   company_id: number;
   level: 'HOT' | 'WARM' | 'COLD' | 'DORMANT' | 'BLOCKED';
@@ -1071,6 +1131,27 @@ class ApiClient {
   }>> {
     const response = await this.client.get('/api/v1/admin/tenant-gate/allowlist');
     return { data: response.data as { hardcoded_ids: number[]; billing_exempt: Array<{ id: number; name: string }> }, status: response.status, success: true };
+  }
+
+  // ── Q-Chain — External auditor surface ──────────────────────────────────
+  // See Owners-Manual/75-Qchain/08-EXTERNAL-AUDITOR-FLOW.md
+
+  async qchainWellKnown(): Promise<ApiResponse<QChainWellKnown>> {
+    // Anonymous endpoint — uses platform host, no auth required, no token leak.
+    const response = await this.client.get('/.well-known/qchain.json');
+    return { data: response.data as QChainWellKnown, status: response.status, success: true };
+  }
+
+  async qchainExport(params: { since?: string; until?: string; limit?: number }): Promise<ApiResponse<QChainExportResult>> {
+    const response = await this.client.get('/api/v1/predictions/substrate/export', { params });
+    return { data: response.data as QChainExportResult, status: response.status, success: true };
+  }
+
+  async qchainVerify(limit?: number): Promise<ApiResponse<QChainVerifyResult>> {
+    const response = await this.client.get('/api/v1/predictions/substrate/verify', {
+      params: limit ? { limit } : {},
+    });
+    return { data: response.data as QChainVerifyResult, status: response.status, success: true };
   }
 
   // CLI API Keys
