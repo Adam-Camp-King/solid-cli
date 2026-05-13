@@ -15,7 +15,7 @@
  * Drift killer: every claim in the rendered section comes straight off
  * the verb manifest. Group counts, subcommand counts, missing verbs,
  * version — all auto-derived. The hand-maintained variant of this
- * section had drifted to ~1/3 truth by v2.3.2 (see ANGL feedback,
+ * section had drifted to ~1/3 truth by v2.3.2 (per tier-1 feedback,
  * 2026-05-07).
  */
 

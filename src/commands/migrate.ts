@@ -200,7 +200,7 @@ export const migrateCommand = new Command('migrate')
 
 import { appendExamples as __ae_migrate } from '../lib/command-kit';
 __ae_migrate(migrateCommand, [
-  { cmd: 'solid migrate --from 2 --to 61 --pages',              why: 'Copy pages between companies' },
-  { cmd: 'solid migrate --from 2 --to 61 --kb --overwrite',     why: 'Copy KB + overwrite conflicts' },
-  { cmd: 'solid migrate --from 2 --to 61 --settings',           why: 'Copy company settings only' },
+  { cmd: 'solid migrate --from <src_id> --to <dst_id> --pages',              why: 'Copy pages between companies' },
+  { cmd: 'solid migrate --from <src_id> --to <dst_id> --kb --overwrite',     why: 'Copy KB + overwrite conflicts' },
+  { cmd: 'solid migrate --from <src_id> --to <dst_id> --settings',           why: 'Copy company settings only' },
 ]);

@@ -206,8 +206,8 @@ export function listTypes(doc: JsonLdDocument): string[] {
  * CLI and returns the full IRI when it can be resolved:
  *
  *   "kb/42"                                    →  docRoot + "/kb/42"
- *   "co/61/service/3"                          →  SOLID + "/co/61/service/3"
- *   "https://solidnumber.com/co/61/kb/42"      →  unchanged (already full)
+ *   "co/123/service/3"                         →  SOLID + "/co/123/service/3"
+ *   "https://solidnumber.com/co/123/kb/42"     →  unchanged (already full)
  *   "tier/builder"                             →  SOLID + "/vocab/tier/builder"
  *
  * ``docRoot`` should be the graph document's own ``@id`` (the tenant

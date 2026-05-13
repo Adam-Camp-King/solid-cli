@@ -103,8 +103,8 @@ export function protectedRootReason(
  *      every platform-team session. This is what happened in the
  *      2026-04-23 audit (§ 700.1).
  *
- * Hardened 2026-04-24 after the ANGL drift incident: before this, only
- * (1) and (2) were protected; tenant writes inside /Desktop/Solid/ were
+ * Hardened 2026-04-24 after a tenant-drift audit: before this, only
+ * (1) and (2) were protected; tenant writes inside the platform repo were
  * only blocked by the "no manifest here" branch, which fails open if
  * anyone places a manifest file in the platform repo.
  */

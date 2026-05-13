@@ -127,7 +127,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 
 <!-- CLI:AUTO:BEGIN -->
 
-- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.6.1
+- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.6.2
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
@@ -243,7 +243,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **webhooks** (7 subcommands) — Custom webhook management: `create, delete, events, list, listen, simulate, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.6.1, manifest schema 1.0, generated 2026-05-13. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.6.2, manifest schema 1.0, generated 2026-05-13. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 

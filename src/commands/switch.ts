@@ -140,6 +140,6 @@ export const switchCommand = new Command('switch')
 import { appendExamples as __ae_switch } from '../lib/command-kit';
 __ae_switch(switchCommand, [
   { cmd: 'solid switch',                why: 'Interactive picker across your companies' },
-  { cmd: 'solid switch 61',             why: 'Switch to company_id=61' },
+  { cmd: 'solid switch <id>',           why: 'Switch to a specific company by ID (find IDs via `solid auth companies`)' },
   { cmd: 'solid whoami',                why: 'Confirm the switch' },
 ]);

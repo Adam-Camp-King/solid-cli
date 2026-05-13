@@ -16,11 +16,11 @@ const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 
 const DOC: JsonLdDocument = {
   '@context': { '@version': 1.1, graph: '@graph' },
-  '@id': `${SOLID}/co/61`,
+  '@id': `${SOLID}/co/123`,
   '@type': ['solid:TenantContext'],
   graph: [
     {
-      '@id': `${SOLID}/co/61`,
+      '@id': `${SOLID}/co/123`,
       '@type': [`${SCHEMA}Organization`, `${SOLID_VOCAB}Company`],
       [`${SCHEMA}name`]: 'Acme Plumbing',
       [`${SOLID_VOCAB}withinTier`]: { '@id': `${SOLID}/vocab/tier/builder` },
@@ -37,44 +37,44 @@ const DOC: JsonLdDocument = {
       [`${SCHEMA}name`]: 'plumbing',
     },
     {
-      '@id': `${SOLID}/co/61/service/1`,
+      '@id': `${SOLID}/co/123/service/1`,
       '@type': [`${SCHEMA}Service`, `${SOLID_VOCAB}ServiceCatalogItem`],
       [`${SCHEMA}name`]: 'Drain cleaning',
       [`${SCHEMA}category`]: 'emergency',
-      [`${SCHEMA}provider`]: { '@id': `${SOLID}/co/61` },
+      [`${SCHEMA}provider`]: { '@id': `${SOLID}/co/123` },
     },
     {
-      '@id': `${SOLID}/co/61/service/2`,
+      '@id': `${SOLID}/co/123/service/2`,
       '@type': [`${SCHEMA}Service`, `${SOLID_VOCAB}ServiceCatalogItem`],
       [`${SCHEMA}name`]: 'Annual inspection',
       [`${SCHEMA}category`]: 'preventive',
-      [`${SCHEMA}provider`]: { '@id': `${SOLID}/co/61` },
+      [`${SCHEMA}provider`]: { '@id': `${SOLID}/co/123` },
     },
     {
-      '@id': `${SOLID}/co/61/product/1`,
+      '@id': `${SOLID}/co/123/product/1`,
       '@type': [`${SCHEMA}Product`, `${SOLID_VOCAB}Product`],
       [`${SCHEMA}name`]: 'Annual maintenance',
-      [`${SCHEMA}provider`]: { '@id': `${SOLID}/co/61` },
+      [`${SCHEMA}provider`]: { '@id': `${SOLID}/co/123` },
     },
     {
-      '@id': `${SOLID}/co/61/agent/sarah`,
+      '@id': `${SOLID}/co/123/agent/sarah`,
       '@type': [`${SOLID_VOCAB}Agent`],
       [`${SCHEMA}name`]: 'Sarah',
       [`${SOLID_VOCAB}handles`]: ['emergency', 'faq'],
     },
     {
-      '@id': `${SOLID}/co/61/kb/1`,
+      '@id': `${SOLID}/co/123/kb/1`,
       '@type': [`${SCHEMA}Article`, `${SOLID_VOCAB}KnowledgeBaseEntry`],
       [`${SCHEMA}name`]: 'Refund policy',
       [`${SCHEMA}category`]: 'faq',
     },
     {
-      '@id': `${SOLID}/co/61/webhook/1`,
+      '@id': `${SOLID}/co/123/webhook/1`,
       '@type': [`${SOLID_VOCAB}InboundWebhook`],
-      [`${SOLID_VOCAB}fires`]: { '@id': `${SOLID}/co/61/chain/1` },
+      [`${SOLID_VOCAB}fires`]: { '@id': `${SOLID}/co/123/chain/1` },
     },
     {
-      '@id': `${SOLID}/co/61/chain/1`,
+      '@id': `${SOLID}/co/123/chain/1`,
       '@type': [`${SOLID_VOCAB}AgentChain`],
       [`${SCHEMA}name`]: 'New lead followup',
     },
@@ -124,7 +124,7 @@ describe('canned queries (spec acceptance)', () => {
   it('1. tier holders — companies with a withinTier edge', () => {
     const r = query(`SELECT ?co ?tier WHERE { ?co solid:withinTier ?tier . }`, DOC);
     expect(r.bindings).toHaveLength(1);
-    expect(r.bindings[0].co).toBe(`${SOLID}/co/61`);
+    expect(r.bindings[0].co).toBe(`${SOLID}/co/123`);
     expect(r.bindings[0].tier).toBe(`${SOLID}/vocab/tier/builder`);
   });
 
@@ -143,14 +143,14 @@ describe('canned queries (spec acceptance)', () => {
   it('3. agents handling a category — `solid:handles` list-valued', () => {
     const r = query(`SELECT ?a WHERE { ?a solid:handles "emergency" . }`, DOC);
     expect(r.bindings).toHaveLength(1);
-    expect(r.bindings[0].a).toBe(`${SOLID}/co/61/agent/sarah`);
+    expect(r.bindings[0].a).toBe(`${SOLID}/co/123/agent/sarah`);
   });
 
   it('4. webhooks firing chains — `solid:fires` edge', () => {
     const r = query(`SELECT ?w ?c WHERE { ?w solid:fires ?c . }`, DOC);
     expect(r.bindings).toHaveLength(1);
-    expect(r.bindings[0].w).toBe(`${SOLID}/co/61/webhook/1`);
-    expect(r.bindings[0].c).toBe(`${SOLID}/co/61/chain/1`);
+    expect(r.bindings[0].w).toBe(`${SOLID}/co/123/webhook/1`);
+    expect(r.bindings[0].c).toBe(`${SOLID}/co/123/chain/1`);
   });
 
   it('5. count distinct types — `SELECT * WHERE { ?s a ?t }`', () => {
@@ -167,7 +167,7 @@ describe('canned queries (spec acceptance)', () => {
     const r = query(`
       SELECT ?s ?n WHERE {
         ?s a schema:Service .
-        ?s schema:provider <${SOLID}/co/61> .
+        ?s schema:provider <${SOLID}/co/123> .
         ?s schema:name ?n .
       }
     `, DOC);
@@ -226,7 +226,7 @@ describe('matcher invariants', () => {
       }
     `, DOC);
     expect(r.bindings).toHaveLength(1);
-    expect(r.bindings[0].x).toBe(`${SOLID}/co/61`);
+    expect(r.bindings[0].x).toBe(`${SOLID}/co/123`);
   });
 
   it('result rows are de-duplicated', () => {

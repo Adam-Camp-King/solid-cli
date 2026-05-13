@@ -148,7 +148,7 @@ domainsCommand.command('add <domain>').description('Attach a custom domain to a 
   });
 
 domainsCommand.command('set-canonical <site> <address>')
-  .description('Force canonical to a specific address (e.g. solid domains set-canonical angl-llc-main angl.net)')
+  .description('Force canonical to a specific address (e.g. solid domains set-canonical main-site example.com)')
   .action(async (siteSlug, address) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;

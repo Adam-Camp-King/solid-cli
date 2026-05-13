@@ -25,7 +25,7 @@ import {
 function makeConfig(overrides: Partial<DoctorEnvDeps['config']> = {}): DoctorEnvDeps['config'] {
   return {
     isLoggedIn: () => true,
-    companyId: 61,
+    companyId: 123,
     accessToken: 'tok',
     tokenExpiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2h out
     ...overrides,
@@ -61,7 +61,7 @@ describe('checkAuth', () => {
     const r = checkAuth(makeDeps({ cwd: tmpDir(), home: tmpDir() }));
     expect(r.status).toBe('pass');
     expect(r.detail).toMatch(/cached access_token/);
-    expect(r.detail).toMatch(/company_id=61/);
+    expect(r.detail).toMatch(/company_id=123/);
   });
 
   test('SOLID_API_KEY env → pass with env label', () => {
@@ -147,11 +147,11 @@ describe('checkManifest', () => {
     fs.mkdirSync(path.join(cwd, '.solid'));
     fs.writeFileSync(
       path.join(cwd, '.solid', 'manifest.json'),
-      JSON.stringify({ company_id: 61, company_name: 'ANGL LLC' }),
+      JSON.stringify({ company_id: 123, company_name: 'Acme Test Co' }),
     );
     const r = checkManifest(makeDeps({ cwd, home }));
     expect(r.status).toBe('pass');
-    expect(r.detail).toMatch(/company_id=61/);
+    expect(r.detail).toMatch(/company_id=123/);
   });
 
   test('manifest mismatch → fail with switch hint', () => {
@@ -164,7 +164,7 @@ describe('checkManifest', () => {
     );
     const r = checkManifest(makeDeps({
       cwd, home,
-      config: makeConfig({ companyId: 61 }),
+      config: makeConfig({ companyId: 123 }),
     }));
     expect(r.status).toBe('fail');
     expect(r.detail).toMatch(/binds company_id=99/);
@@ -313,7 +313,7 @@ describe('runDoctorEnv', () => {
     fs.mkdirSync(path.join(cwd, '.solid'));
     fs.writeFileSync(
       path.join(cwd, '.solid', 'manifest.json'),
-      JSON.stringify({ company_id: 61 }),
+      JSON.stringify({ company_id: 123 }),
     );
     // Install hook
     fs.mkdirSync(path.join(home, '.claude'));
@@ -340,7 +340,7 @@ describe('runDoctorEnv', () => {
     fs.mkdirSync(path.join(cwd, '.solid'));
     fs.writeFileSync(
       path.join(cwd, '.solid', 'manifest.json'),
-      JSON.stringify({ company_id: 61 }),
+      JSON.stringify({ company_id: 123 }),
     );
     fs.mkdirSync(path.join(home, '.claude'));
     fs.writeFileSync(path.join(home, '.claude', 'settings.json'), '{}');

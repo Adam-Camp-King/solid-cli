@@ -5,7 +5,7 @@
  *
  * Why soft (warning, not hard refusal):
  *   Hard refusal would break every existing automation overnight. The
- *   feedback that surfaced this concern (Tier 1 #5, ANGL 2026-05-07)
+ *   tier-1 feedback that surfaced this concern (2026-05-07)
  *   acknowledged the trade-off — implicit state is fine for humans, it
  *   is a data-leak vector for agents because they can forget to switch.
  *   A structured stderr warning gives agents the visibility to gate on

@@ -93,7 +93,7 @@ describe('buildServerEntry', () => {
   });
 
   it('includes SOLID_COMPANY_ID when companyId supplied', () => {
-    expect(buildServerEntry({ companyId: 61 }).env?.SOLID_COMPANY_ID).toBe('61');
+    expect(buildServerEntry({ companyId: 123 }).env?.SOLID_COMPANY_ID).toBe('123');
     expect(buildServerEntry({ companyId: '42' }).env?.SOLID_COMPANY_ID).toBe('42');
   });
 

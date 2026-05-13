@@ -2,10 +2,10 @@
  * `solid ai` — the universal "launch my AI with this company's context" verb.
  *
  * Stupid easy, crazy powerful:
- *   $ solid auth login --company 61
+ *   $ solid auth login
  *   $ solid ai
  *        ↓ detects claude / cursor
- *        ↓ refreshes context for Company 61
+ *        ↓ refreshes context for your current company
  *        ↓ exec's the AI
  *
  * One command. Any AI. Any company. The CLI is the adapter.
