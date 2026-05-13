@@ -14,6 +14,47 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { emit as emitTelemetry } from '../lib/telemetry';
+import { captureEmail, getIdentity } from '../lib/first-run';
+import { input as tuiInput, isInteractive } from '../lib/tui';
+
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Capture email at the highest-intent moment — user is about to receive a
+ * phone number. Skipped if we already have an email, telemetry is disabled,
+ * or stdin is not a TTY (CI, pipes). Never blocks the command on failure.
+ */
+export async function captureEmailForDemo(template: string): Promise<void> {
+  try {
+    if (process.env.SOLID_DISABLE_TELEMETRY === '1') return;
+    if (!isInteractive()) return;
+    const id = getIdentity();
+    if (id?.email) return;
+
+    console.log(chalk.dim('  Where should we send the phone number? (we use this to reach you if the demo needs help)'));
+    const answer = await tuiInput('Email', {
+      validate: (v: string) => {
+        const t = v.trim();
+        if (!t) return 'Email is required to deliver the phone number.';
+        if (!EMAIL_RE.test(t)) return 'That doesn\'t look like a valid email.';
+        return true;
+      },
+    });
+
+    await captureEmail(answer.trim(), 'demo-create');
+
+    try {
+      emitTelemetry('demo_email_captured', {
+        command: 'demo create',
+        extra: { template, source: 'demo-create' },
+      });
+    } catch {
+      /* telemetry never fatal */
+    }
+  } catch {
+    /* never block demo creation on email-capture issues */
+  }
+}
 
 export const demoCommand = new Command('demo')
   .description('Create live demo companies for prospects — AI answers the phone')
@@ -42,6 +83,10 @@ demoCommand
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
     }
+
+    // Highest-intent capture moment: user wants the phone number, they trade
+    // email. No-ops if already captured, telemetry off, or non-TTY.
+    await captureEmailForDemo(template);
 
     const ora = (await import('ora')).default;
     const originalCompanyId = config.companyId;

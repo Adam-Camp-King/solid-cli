@@ -28,6 +28,7 @@ export type TelemetryEventName =
   | 'auth_success'
   | 'auth_failed'
   | 'demo_created'
+  | 'demo_email_captured'
   | 'demo_failed'
   | 'clone_created'
   | 'clone_failed'
