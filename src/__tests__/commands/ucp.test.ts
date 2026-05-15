@@ -16,15 +16,18 @@ jest.mock('ora', () => ({
   }),
 }));
 
+// Mock handleApiError to RETURN an ApiError shape (real api-client
+// behavior — it does NOT throw). See webmcp.test.ts for the rationale.
 jest.mock('../../lib/api-client', () => ({
   apiClient: {
     get: jest.fn(),
     post: jest.fn(),
     delete: jest.fn(),
   },
-  handleApiError: jest.fn((e: unknown) => {
-    throw e;
-  }),
+  handleApiError: jest.fn((e: unknown) => ({
+    message: (e as { message?: string })?.message ?? 'mock api error',
+    status: (e as { status?: number })?.status ?? 500,
+  })),
 }));
 
 jest.mock('../../lib/config', () => ({
@@ -169,6 +172,89 @@ describe('ucp login gate', () => {
     try {
       await expect(runArgs(['manifest'])).rejects.toThrow('exit:1');
       expect(mockGet).not.toHaveBeenCalled();
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+});
+
+
+// ── error-path: backend errors must print + exit 1 ─────────────────────────
+//
+// REGRESSION GUARDS. Same rationale as the matching block in
+// webmcp.test.ts — pin that handleApiError's return value reaches stderr
+// and the command exits non-zero.
+
+describe('ucp error path — every subcommand surfaces backend errors', () => {
+  function setupExitSpy() {
+    return jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+  }
+
+  it('manifest: 404 (UCP not enabled) prints stderr + exits 1', async () => {
+    // Real prod behavior for a tenant that hasn't activated UCP.
+    mockGet.mockRejectedValue(Object.assign(new Error('UCP not enabled for this tenant'), { status: 404 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['manifest'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/UCP not enabled/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('capabilities: 500 prints stderr + exits 1', async () => {
+    mockGet.mockRejectedValue(Object.assign(new Error('signer key not configured'), { status: 500 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['capabilities'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/signer key not configured/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('consent list: network error prints stderr + exits 1', async () => {
+    mockGet.mockRejectedValue(new Error('connect ETIMEDOUT'));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['consent', 'list'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/ETIMEDOUT/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('consent grant: 403 (non-owner) prints stderr + exits 1', async () => {
+    mockPost.mockRejectedValue(Object.assign(new Error('owner role required'), { status: 403 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(
+        runArgs(['consent', 'grant', 'core/booking', '--scope', 'session']),
+      ).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/owner role required/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('consent revoke: 404 prints stderr + exits 1', async () => {
+    mockDelete.mockRejectedValue(Object.assign(new Error('grant not found'), { status: 404 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['consent', 'revoke', 'g-missing'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/grant not found/);
     } finally {
       sink.restore();
       exitSpy.mockRestore();

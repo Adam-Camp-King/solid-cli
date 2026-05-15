@@ -24,15 +24,21 @@ jest.mock('ora', () => ({
   }),
 }));
 
+// Mock handleApiError to RETURN an ApiError-shaped object (matching the
+// real api-client behavior — handleApiError is NOT a throw helper). This
+// is the fix for the bug uncovered in smoke-testing 2026-05-15: the
+// command's catch block depends on the returned `.message` to print +
+// exit. A throwing mock silently swallowed the test for that path.
 jest.mock('../../lib/api-client', () => ({
   apiClient: {
     get: jest.fn(),
     post: jest.fn(),
     delete: jest.fn(),
   },
-  handleApiError: jest.fn((e: unknown) => {
-    throw e;
-  }),
+  handleApiError: jest.fn((e: unknown) => ({
+    message: (e as { message?: string })?.message ?? 'mock api error',
+    status: (e as { status?: number })?.status ?? 500,
+  })),
 }));
 
 jest.mock('../../lib/config', () => ({
@@ -305,6 +311,136 @@ describe('login gate', () => {
     try {
       await expect(runArgs(['manifest'])).rejects.toThrow('exit:1');
       expect(mockGet).not.toHaveBeenCalled();
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+});
+
+
+// ── error-path: backend errors must print + exit 1 ─────────────────────────
+//
+// REGRESSION GUARDS for the Phase 8 smoke-test bug (2026-05-15): every
+// subcommand's catch block must call handleApiError, print the returned
+// .message to stderr, and exit(1). The original Phase 8 commit shipped
+// without these tests — handleApiError's return value was discarded so
+// errors landed silently with exit 0. These tests pin the contract.
+
+describe('error path — every subcommand surfaces backend errors', () => {
+  function setupExitSpy() {
+    return jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+  }
+
+  it('manifest: 401 prints stderr + exits 1', async () => {
+    mockGet.mockRejectedValue(Object.assign(new Error('Not authenticated'), { status: 401 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      // Commander persists option state across parseAsync on the same
+      // Command instance. The earlier "rejects an unknown --surface"
+      // test leaves --surface set to 'rogue', which would short-circuit
+      // this test with exit 2 before hitting the mock. Pass an explicit
+      // valid surface to override that polluted state.
+      await expect(runArgs(['manifest', '--surface', 'dashboard'])).rejects.toThrow('exit:1');
+      // Stderr carries the error; stdout stays silent (no success JSON leak).
+      expect(sink.err.join(' ')).toMatch(/Not authenticated/i);
+      expect(sink.out.join(' ')).not.toMatch(/Not authenticated/i);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('test: handler error prints stderr + exits 1', async () => {
+    mockPost.mockRejectedValue(Object.assign(new Error('handler exploded'), { status: 500 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['test', 'list_sites'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/handler exploded/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('test --confirm: failed pre-grant prints stderr + exits 1 (no execute call)', async () => {
+    // The --confirm pre-grant POSTs to /consent. If that fails, we must
+    // bail out before invoking /execute. Previously this catch swallowed
+    // the error and continued — now it should print + exit 1.
+    mockPost.mockReset();
+    mockPost.mockRejectedValueOnce(Object.assign(new Error('grant failed'), { status: 403 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(
+        runArgs(['test', 'send_email_to_contact', '--confirm']),
+      ).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/grant failed/);
+      // Only one POST attempt (the failed grant). No /execute follow-up.
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      expect(mockPost.mock.calls[0][0]).toBe('/api/v1/webmcp/consent');
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('invocations: network error prints stderr + exits 1', async () => {
+    mockGet.mockRejectedValue(new Error('ECONNREFUSED'));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      // Override --status to a valid value — earlier "rejects an
+      // unknown --status" test left it set to 'halfway' on the
+      // Commander instance, which short-circuits this test with
+      // exit 2 before the mock can fire.
+      await expect(runArgs(['invocations', '--status', 'success'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/ECONNREFUSED/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('consent list: backend 500 prints stderr + exits 1', async () => {
+    mockGet.mockRejectedValue(Object.assign(new Error('server exploded'), { status: 500 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['consent', 'list'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/server exploded/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('consent grant: 403 prints stderr + exits 1', async () => {
+    mockPost.mockRejectedValue(Object.assign(new Error('owner role required'), { status: 403 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(
+        runArgs(['consent', 'grant', 'send_email_to_contact', '--scope', 'session']),
+      ).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/owner role required/);
+    } finally {
+      sink.restore();
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('consent revoke: 404 (no matching grant) prints stderr + exits 1', async () => {
+    mockDelete.mockRejectedValue(Object.assign(new Error('no matching consent grant'), { status: 404 }));
+    const exitSpy = setupExitSpy();
+    const sink = silenceStdoutErr();
+    try {
+      await expect(runArgs(['consent', 'revoke', 'does-not-exist'])).rejects.toThrow('exit:1');
+      expect(sink.err.join(' ')).toMatch(/no matching consent grant/);
     } finally {
       sink.restore();
       exitSpy.mockRestore();
