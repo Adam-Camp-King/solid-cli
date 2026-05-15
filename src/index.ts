@@ -93,6 +93,8 @@ import { agentCommand } from './commands/agent';
 import { antCommand } from './commands/ant';
 import { bidsCommand } from './commands/bids';
 import { predictCommand } from './commands/predict';
+import { webmcpCommand } from './commands/webmcp';
+import { ucpCommand } from './commands/ucp';
 import { nestCommand } from './commands/nest';
 import { connectCommand } from './commands/connect';
 import { flowsCommand } from './commands/flows';
@@ -502,6 +504,8 @@ program.addCommand(companyCommand);
 program.addCommand(switchCommand);
 program.addCommand(tenantCommand);
 program.addCommand(qchainCommand);
+program.addCommand(webmcpCommand);
+program.addCommand(ucpCommand);
 
 // Discovery
 program.addCommand(exploreCommand);
