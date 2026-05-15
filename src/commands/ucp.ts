@@ -78,7 +78,7 @@ ucpCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -112,7 +112,7 @@ ucpCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -144,7 +144,7 @@ ucpConsentCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -177,7 +177,7 @@ ucpConsentCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -201,6 +201,6 @@ ucpConsentCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });

@@ -131,8 +131,8 @@ webmcpCommand
   .command('manifest')
   .description('Dump the tenant\'s WebMCP tool catalog filtered by surface')
   .option('--surface <surface>', `One of: ${VALID_SURFACES.join(', ')}`, 'dashboard')
-  .option('--json', 'Output as JSON')
-  .option('--format <format>', 'Output format: json | table (default json for piping)', 'json')
+  .option('--json', 'Output as JSON (piping-friendly)')
+  .option('--format <format>', 'Output format: table | json. Default table for humans; --json or --format json for agents.', 'table')
   .action(async (options) => {
     requireLogin();
     if (!VALID_SURFACES.includes(options.surface)) {
@@ -164,7 +164,7 @@ webmcpCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -188,7 +188,7 @@ webmcpCommand
       try {
         await apiClient.post('/api/v1/webmcp/consent', { tool_name: toolName, scope: 'once' });
       } catch (e) {
-        handleApiError(e);
+        { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
       }
     }
 
@@ -222,7 +222,7 @@ webmcpCommand
         console.error(chalk.dim(`  Or: re-run with --confirm to auto-grant once.`));
         process.exit(3);
       }
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -276,7 +276,7 @@ webmcpCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -321,7 +321,7 @@ consentCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -355,7 +355,7 @@ consentCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
 
@@ -379,6 +379,6 @@ consentCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
