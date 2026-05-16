@@ -2,6 +2,68 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.7.0] — 2026-05-15
+
+**`solid webmcp ...` + `solid ucp ...` — agent transports go cross-runtime.**
+
+Two verb families that surface Solid#'s in-browser MCP (WebMCP, W3C draft by
+Microsoft + Google) and Universal Commerce Protocol (UCP, Google + retail
+partners) directly from the CLI. Same JSON-LD verb registry on the backend
+serves all three transports (stdio MCP via `@solidnumber/mcp`, WebMCP via
+`navigator.modelContext` on every Solid# page, UCP via signed RFC 9421
+buyer-agent requests). One registry, three transports — the CLI now drives
+all three with symmetric command shapes.
+
+### Added — `solid webmcp ...`
+
+- `solid webmcp manifest [--surface public|tenant-site|dashboard|portal|developer]` —
+  dump the WebMCP tool catalog for the current tenant (or a specific surface).
+  Defaults to dashboard surface; supports `--json` for agent consumption.
+- `solid webmcp verb <name>` — inspect one verb: input schema, annotations,
+  platform-canonical IRI (`https://api.solidnumber.com/webmcp/tools/{name}`)
+  or tenant-scoped IRI for write verbs.
+- `solid webmcp test <tool_name> [--input @payload.json] [--confirm]` —
+  dry-run a tool against the backend. Write tools require `--confirm`.
+- `solid webmcp execute <tool_name> --input '<json>'` — server-side execute
+  with auto-generated idempotency key.
+- `solid webmcp invocations [--limit N] [--tool <name>] [--status success|error|denied]` —
+  recent WebMCP tool invocations for the current tenant.
+- `solid webmcp consent {list|grant|revoke}` — manage the 4-rung consent
+  ladder (once / session / permanent / deny) for write verbs.
+
+### Added — `solid ucp ...`
+
+- `solid ucp manifest` — dump the tenant's signed UCP profile from
+  `/co/{id}/.well-known/ucp`.
+- `solid ucp capabilities` — list capabilities exposed by the current tenant
+  (signed envelope, RFC 9421 ES256).
+- `solid ucp consent {list|grant|revoke}` — manage UCP consent grants for
+  buyer-agent access (owner-only; tied to the same 4-rung ladder).
+
+### Why
+
+Three transports for AI agents to drive Solid# — stdio MCP (`@solidnumber/mcp`
+for AI editors), WebMCP (`navigator.modelContext` for in-browser agents), UCP
+(signed buyer-agent commerce). Before v2.7 you could see the WebMCP/UCP
+verbs by reading the registry source; now the CLI introspects them with the
+same shape as `solid schema verbs --json`. Symmetric with how `solid mcp ...`
+already worked.
+
+### Platform context
+
+- 31 WebMCP verbs across 5 surfaces (public / tenant-site / dashboard /
+  portal / developer). Every solidnumber.com page registers the right
+  catalog at mount time; tenant subdomains register their own per-company
+  catalog.
+- Public discovery file: `https://solidnumber.com/.well-known/webmcp.json`.
+- Anonymous manifest endpoint:
+  `GET /api/v1/webmcp/public/manifest?company_id={id}&surface={public|tenant-site}`.
+- Spec: https://webmachinelearning.github.io/webmcp/ (W3C Web ML Community
+  Group, authored by Microsoft + Google).
+- Docs: https://solidnumber.com/docs/webmcp + https://solidnumber.com/docs/ucp.
+
+---
+
 ## [2.6.0] — 2026-05-12
 
 **`solid qchain ...` — Q-Chain substrate verification for external auditors.**
