@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
+import ora from 'ora';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
@@ -271,8 +272,70 @@ makeQualityAudit('a11y',   'Accessibility audit');
 makeQualityAudit('perf',   'Performance audit');
 makeQualityAudit('mobile', 'Mobile performance audit');
 
+// =====================================================================
+// `solid audit log` — Phase 2.5 of agent-attraction.
+// Hits /api/v1/agent/audit which returns paginated, cursor-based,
+// machine-readable AuditLog rows (default JSON output for AI agents).
+// =====================================================================
+auditCommand
+  .command('log')
+  .description('Machine-readable audit log (paginated, cursor-based)')
+  .option('--since <iso>', 'Only entries on/after this ISO 8601 timestamp')
+  .option('--until <iso>', 'Only entries on/before this ISO 8601 timestamp')
+  .option('--resource <type>', 'Filter by resource_type (e.g. contact)')
+  .option('--action <name>', 'Filter by action (e.g. contact.create)')
+  .option('--limit <n>', 'Page size (1..500)', '100')
+  .option('--cursor <id>', 'Cursor-after-id from a previous page')
+  .option('--format <fmt>', 'Output format: json|jsonl|table', 'json')
+  .action(async (options) => {
+    const spinner = (options.format === 'json' || options.format === 'jsonl')
+      ? null : ora('Fetching audit log...').start();
+    try {
+      const params: Record<string, any> = {};
+      if (options.since) params.since = options.since;
+      if (options.until) params.until = options.until;
+      if (options.resource) params.resource_type = options.resource;
+      if (options.action) params.action = options.action;
+      params.limit = parseInt(options.limit, 10);
+      if (options.cursor) params.cursor_after_id = parseInt(options.cursor, 10);
+
+      const { apiClient } = await import('../lib/api-client');
+      const res = await apiClient.get('/api/v1/agent/audit', { params });
+      spinner?.stop();
+      const data: any = res.data;
+
+      if (options.format === 'jsonl') {
+        for (const row of (data.rows || [])) console.log(JSON.stringify(row));
+        if (data.next_cursor != null) {
+          console.error(chalk.dim(`-- next page: --cursor ${data.next_cursor}`));
+        }
+        return;
+      }
+      if (options.format === 'table') {
+        console.log(chalk.cyan(`AuditLog (${data.count} rows)`));
+        (data.rows || []).forEach((r: any) => {
+          console.log(`${chalk.gray(r.created_at)} ${(r.action || '').padEnd(20)} ${r.resource_type ?? '-'}/${r.resource_id ?? '-'}`);
+        });
+        if (data.next_cursor != null) {
+          console.log(chalk.dim(`-- next page: --cursor ${data.next_cursor}`));
+        }
+        return;
+      }
+      // default: full JSON envelope (cursor + filters + rows)
+      console.log(JSON.stringify(data, null, 2));
+    } catch (e) {
+      spinner?.stop();
+      const { handleApiError } = await import('../lib/api-client');
+      handleApiError(e);
+    }
+  });
+
 import { appendExamples as __ae_audit } from '../lib/command-kit';
 __ae_audit(auditCommand, [
+  { cmd: 'solid audit log --since 2026-05-15T00:00:00Z',
+                                               why: 'Machine-readable audit trail for agents' },
+  { cmd: 'solid audit log --format jsonl --action contact.create',
+                                               why: 'Stream contact.create events as JSONL' },
   { cmd: 'solid audit export --since 30d',     why: 'Dump activity log (who changed what)' },
   { cmd: 'solid audit compliance-report',      why: 'Auditor-ready PDF' },
   { cmd: 'solid audit gdpr-export <email>',    why: 'GDPR subject access request' },
