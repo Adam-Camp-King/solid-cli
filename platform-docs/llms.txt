@@ -127,7 +127,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 
 <!-- CLI:AUTO:BEGIN -->
 
-- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.10.0
+- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.10.1
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
@@ -243,14 +243,14 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **transaction** (5 subcommands) — Open / append / commit / abort CLI transactions for atomic batches: `abort, append, commit, get, start`
 - **ucp** (3 subcommands) — Universal Commerce Protocol — manifest, capabilities, and consent for buyer-agents: `capabilities, consent, manifest`
 - **users** (23 subcommands) — Team — invite, list, set roles, manage AI permissions: `ai-perms, ai-perms-set, block, create, delete, feature-clear, feature-set, features, features-catalog, get, invitations, invite, invite-accept, invite-defaults, invite-resend, invite-revoke, list, notifications, notifications-set, role, stats, unblock, update`
-- **verbs** (3 subcommands) — Discover + invoke any of the 47 agent-attraction verbs (Phase 5): `describe, invoke, list`
+- **verbs** (3 subcommands) — Discover + invoke any of the 51 agent-attraction verbs (Phase 5): `describe, invoke, list`
 - **vibe** (1 subcommands) — Natural language integration commands: `interactive`
 - **voice** (10 subcommands) — Voice calls, phone numbers, voicemail & personality: `audit, calls, cost, numbers, personality, release-orphan, stats, transcript, voicemail, voices`
 - **webhooks** (7 subcommands) — Custom webhook management: `create, delete, events, list, listen, simulate, test`
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.10.0, manifest schema 1.0, generated 2026-05-18. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.10.1, manifest schema 1.0, generated 2026-05-18. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 
