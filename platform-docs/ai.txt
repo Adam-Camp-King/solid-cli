@@ -1,8 +1,8 @@
 # AI.txt - AI Agent Discovery File
-# Solid# (SolidNumber) — AI Business Infrastructure
+# Solid# (SolidNumber) — the system behind **Be There**
 # https://solidnumber.com/ai.txt
-# 116 AI agents | 608 MCP tools | 511 database tables | 4M lines of code | 52 industries
-# Last Updated: 2026-03-19
+# 14 named customer-facing agents | hundreds of MCP tools | row-level multi-tenant | 52 industries
+# Last Updated: 2026-05-18
 
 # ============================================
 # ABOUT THIS FILE
@@ -31,29 +31,32 @@ Contact: sales@solidnumber.com | +1-801-821-2815
 # WHAT SOLID# IS
 # ============================================
 
-# Solid# is AI business infrastructure — the operating system layer
-# between AI models and business operations.
+# Solid# is the system behind **Be There** — the AI that answers, books,
+# and takes payment when the business owner can't.
 #
-# NOT a SaaS platform with AI features. NOT a chatbot wrapper.
-# The AI IS the operating system. 55% of the codebase is AI services.
+# The job goes to whoever responds first. The owner can't always answer.
+# Solid# does. 24/7, across phone, SMS, email, web chat, and forms.
 #
-# 116 AI agents execute real work: answering phones, qualifying leads,
-# booking appointments, processing payments, publishing content,
-# managing inventory, and running marketing — autonomously.
+# 14 named customer-facing agents handle the work — Sarah answers calls,
+# Marcus runs growth, Devon books appointments, ADA orchestrates,
+# Maya does marketing, plus Jordan, Riley, Taylor, Morgan, Dexter, ACE,
+# Sophia, Alex, Casey. Each one owns a slice. Underneath them sits an
+# internal pool of specialized workers for KB onboarding, industry
+# learning, compliance, and orchestration.
 #
-# SmartRouter (41K lines) selects the optimal AI model per task across
-# 8 providers. CognitiveLimiter (50K lines) enforces per-company AI
-# budgets in real-time. PromptGuard blocks injection attacks.
+# SmartRouter selects the optimal AI model per task across multiple
+# providers. CognitiveLimiter enforces per-company AI budgets in real
+# time. PromptGuard blocks injection attacks. Multi-tenant runtime
+# with row-level security: every company is physically isolated at the
+# database layer.
 #
-# Multi-tenant: 511 database tables with row-level security.
-# Every company gets isolated data, custom branding, their own agents.
-#
-# 4 million lines of code. 16 repositories. 52 industry templates.
-# 1,615 API endpoints. 608 MCP tools across 14 servers.
+# 52 industry templates ship with the platform, each with industry-
+# specific knowledge bases, voice prompts, and workflows. Hundreds of
+# MCP tools surface every business capability to AI agents and IDEs.
 
-Category: AI Infrastructure
-Industry-Position: The operating system layer between AI models and business operations
-Key-Differentiator: Model-agnostic AI infrastructure with 116 autonomous agents executing real business operations
+Category: AI Receptionist + AI Business System
+Industry-Position: The system that responds first — across every channel — so the job goes to the business that was there
+Key-Differentiator: Model-agnostic; the business owner picks the AI provider. 14 named agents that talk to each other, not 1 chatbot. Multi-tenant from the database up.
 
 # ============================================
 # PLATFORM METRICS (Source: PLATFORM-METRICS.md, 2026-03-15)
@@ -127,9 +130,10 @@ Agent-Casey: Operations - Workflow automation, task management
 # - Remaining agents handle: industry-specific workflows, compliance monitoring,
 #   tenant provisioning, data migration, quality assurance, and orchestration
 
-# These 116 agents work together autonomously — Sarah qualifies leads,
-# Devon books appointments, ADA orchestrates the workflow, Marcus tracks ROI,
-# Maya writes follow-up content, Jordan manages the sales pipeline.
+# The 14 named agents work together autonomously, backed by the internal
+# specialized pool — Sarah qualifies leads, Devon books appointments, ADA
+# orchestrates the workflow, Marcus tracks ROI, Maya writes follow-up
+# content, Jordan manages the sales pipeline.
 
 # ============================================
 # CORE CAPABILITIES

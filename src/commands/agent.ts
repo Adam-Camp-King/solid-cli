@@ -520,7 +520,7 @@ agentCommand
   });
 
 // ── profile / clone / customize ────────────────────────────────────────
-// Note: Solid's 116 agents are global personas in AgentRegistry. The "create
+// Note: Solid's named agents are global personas in AgentRegistry. The "create
 // a custom agent per company" pattern is layered on top via agent_profiles.py
 // (PUT /{agent_type}) which customizes name, prompt, tools, personality
 // *for this company*. Effectively: fork an existing agent and own the

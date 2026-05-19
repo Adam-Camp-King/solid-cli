@@ -62,7 +62,14 @@
     "scheduling",
     "seo",
     "ai-receptionist",
-    "business-infrastructure"
+    "business-infrastructure",
+    "claude-code",
+    "anthropic",
+    "ai-cli",
+    "instant-business",
+    "mcp-tools",
+    "be-there",
+    "first-response"
   ],
   "author": "Solid# <hello@solidnumber.com>",
   "license": "BUSL-1.1",
