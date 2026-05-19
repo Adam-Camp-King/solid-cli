@@ -11,7 +11,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, CLI_VERSION, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { emit as emitTelemetry } from '../lib/telemetry';
 import { captureEmail, getIdentity } from '../lib/first-run';
@@ -78,9 +78,19 @@ demoCommand
   .option('--password <pass>', 'Set a demo login password')
   .option('--open', 'Open in browser after creation')
   .option('--no-open', "Don't auto-open the browser after creation")
+  .option('--guest', 'No-signup ephemeral demo (default 24h, no email gate). Hits the public anonymous endpoint instead of the authenticated agency flow.')
   .action(async (template, name, options) => {
+    // Guest mode: zero-friction path. POSTs to /api/v1/public/demo/create
+    // directly — no login, no email capture, no agency context. Synthetic
+    // email keeps the audit row intact without surfacing a real address.
+    if (options.guest) {
+      await createGuestDemo(template, name, options);
+      return;
+    }
+
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      console.error(chalk.dim('Or try the guest path: solid demo create ' + template + ' "' + name + '" --guest'));
       process.exit(1);
     }
 
@@ -353,4 +363,160 @@ function parseExpires(duration: string): number {
   if (unit === 'd') return n * 24;
   if (unit === 'w') return n * 24 * 7;
   return 72;
+}
+
+// ── Guest-mode (no signup, no auth, no email gate) ───────────────
+
+interface GuestDemoResponse {
+  demo_token: string;
+  company_id: number;
+  slug: string;
+  site_url: string;
+  phone_number: string | null;
+  expires_at: string;
+  template_label: string;
+}
+
+/**
+ * Generate a synthetic email for the audit row so the public endpoint's
+ * email validator accepts the request. The address routes to a discard
+ * mailbox at @anonymous.solidnumber.com — no real human ever receives mail
+ * sent here. Pattern lets analytics filter on `*@anonymous.solidnumber.com`
+ * to count guest-CLI demos.
+ */
+export function synthesizeGuestEmail(): string {
+  const rand = Math.random().toString(36).slice(2, 12);
+  const ts = Date.now().toString(36);
+  return `cli-guest-${ts}-${rand}@anonymous.solidnumber.com`;
+}
+
+async function createGuestDemo(
+  template: string,
+  name: string,
+  options: { expires?: string; open?: boolean },
+): Promise<void> {
+  const ora = (await import('ora')).default;
+  const startTime = Date.now();
+
+  // Guest default is 24h unless user explicitly overrode --expires.
+  const wasExplicitExpires =
+    options.expires !== undefined && options.expires !== '72h';
+  const expiresHours = wasExplicitExpires
+    ? Math.min(parseExpires(options.expires!), 168)
+    : 24;
+
+  const apiUrl = process.env.SOLID_API_URL || 'https://api.solidnumber.com';
+  const endpoint = `${apiUrl}/api/v1/public/demo/create`;
+
+  console.log('');
+  console.log(
+    chalk.bold.hex('#10b981')(
+      `  ✨ Creating guest demo: ${chalk.white(name)} (${template})`,
+    ),
+  );
+  console.log(
+    chalk.dim(
+      `  No account · expires in ${expiresHours}h · hold tight...`,
+    ),
+  );
+  console.log('');
+
+  const spinner = ora({
+    text: 'Provisioning anonymous demo...',
+    prefixText: ' ',
+  }).start();
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': `solid-cli/${CLI_VERSION || 'dev'} guest-mode`,
+      },
+      body: JSON.stringify({
+        template,
+        business_name: name,
+        email: synthesizeGuestEmail(),
+        consent: true,
+        expires_hours: expiresHours,
+      }),
+    });
+
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const err = (await res.json()) as { detail?: { message?: string } };
+        detail = err.detail?.message ?? '';
+      } catch {
+        /* ignore parse errors */
+      }
+      spinner.fail(chalk.red(`Demo failed (HTTP ${res.status})`));
+      if (res.status === 429) {
+        console.error(
+          chalk.yellow(
+            '  Rate limited (3 demos per IP per hour). Try again in a bit.',
+          ),
+        );
+      } else if (detail) {
+        console.error(chalk.dim(`  ${detail}`));
+      }
+      process.exit(1);
+    }
+
+    const data = (await res.json()) as GuestDemoResponse;
+    const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+    spinner.succeed(chalk.green(`Guest demo live in ${elapsedSec}s`));
+
+    const divider = chalk.hex('#10b981')('━'.repeat(56));
+    console.log('');
+    console.log('  ' + divider);
+    console.log('');
+    console.log(
+      chalk.bold.hex('#10b981')(`  🎉 ${name} is LIVE (guest mode).`),
+    );
+    console.log('');
+    if (data.phone_number) {
+      console.log(chalk.dim('  Call the AI right now:'));
+      console.log('');
+      console.log(chalk.bold.green(`      📞  ${data.phone_number}`));
+      console.log('');
+      console.log(
+        chalk.dim('  A real AI receptionist will answer as your business.'),
+      );
+    } else {
+      console.log(
+        chalk.yellow('  ⚠  Phone provisioning pending or unavailable.'),
+      );
+    }
+    console.log('');
+    console.log(chalk.dim('  Visit the site:'));
+    console.log(`      🌐  ${chalk.cyan(data.site_url)}`);
+    console.log('');
+    console.log('  ' + divider);
+    console.log('');
+    console.log(
+      chalk.dim(
+        `  Company ID: ${data.company_id}  ·  Expires: ${new Date(
+          data.expires_at,
+        ).toLocaleString()}`,
+      ),
+    );
+    console.log('');
+    console.log(
+      chalk.dim(
+        '  Like it? Keep it: `npm i -g @solidnumber/cli && solid auth login`',
+      ),
+    );
+    console.log('');
+
+    if (options.open !== false) {
+      const { exec } = await import('child_process');
+      exec(`open "${data.site_url}"`);
+    }
+  } catch (error) {
+    spinner.fail(chalk.red('Failed to create guest demo'));
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(chalk.dim(`  ${msg}`));
+    process.exit(1);
+  }
 }
