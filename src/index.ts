@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * ================================================================================
- * Solid# CLI — AI Business Infrastructure
+ * Solid# CLI — The CLI, SDK, and MCP tools behind Be There.
  * ================================================================================
  * @solidnumber/cli
  *
@@ -189,7 +189,7 @@ const program = new Command();
 
 program
   .name('solid')
-  .description('Solid# CLI — AI Business Infrastructure')
+  .description('Solid# CLI — Be There. The system that answers, books, and takes payment when you can\'t.')
   .version(pkg.version)
   .option('--dry-run', 'Preview every mutation without touching the server (T11). Global. Also: SOLID_DRY_RUN=1')
   .option('--queue', 'Offline mode: write mutations to .solid/queue/ for later replay (A+.6). Global. Also: SOLID_OFFLINE_QUEUE=1')

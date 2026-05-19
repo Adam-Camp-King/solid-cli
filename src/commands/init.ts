@@ -179,7 +179,7 @@ app.listen(3000, () => console.log('SaaS running on :3000'));
 `,
       'README.md': `# {{name}} — SaaS on Solid#
 
-Multi-tenant SaaS where each customer gets a full AI-powered business.
+Multi-tenant SaaS where each customer gets a full Solid# business — AI that answers, books, and takes payment, plus CRM, website, and the rest.
 
 ## How it works
 - \`POST /signup\` creates a Solid# company + applies industry template
@@ -189,7 +189,7 @@ Multi-tenant SaaS where each customer gets a full AI-powered business.
 ## What you DON'T have to build
 - Auth & multi-tenancy (530 tables with RLS)
 - Payment processing (Stripe wired)
-- AI agents (116 agents, SmartRouter, CognitiveLimiter)
+- The AI workforce (Sarah, Marcus, ADA, and the rest — plus SmartRouter and CognitiveLimiter under the hood)
 - CRM, voice AI, website builder, SEO
 `,
     },

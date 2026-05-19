@@ -3,7 +3,7 @@
  * solid explore — Platform Intelligence Console
  * ================================================================================
  *
- * Interactive AI-powered exploration of the Solid# platform.
+ * Interactive AI exploration of the Solid# platform.
  * Designed for partners, evaluators, and potential acquirers.
  *
  * Features:
@@ -59,7 +59,7 @@ async function fetchDocsIfNeeded(bundled: string): Promise<string> {
     ]);
     return `${llmsRes.data}\n\n---\n\n${aiRes.data}`;
   } catch {
-    return 'Solid# is AI business infrastructure with 116 agents, 608 MCP tools, 511 database tables, and 4M lines of code across 52 industries.';
+    return 'Solid# is the system behind Be There — the AI that answers, books, and takes payment when the business owner can\'t. The CLI, SDK, and MCP tools live behind it for developers and AI agents to build on.';
   }
 }
 
@@ -98,7 +98,7 @@ function displayWelcome(): void {
     chalk.hex(BRAND.dim)('  (Except the source code. That costs extra.)'),
     '',
     chalk.hex(BRAND.dim)('  ╭─────────────────────────────────────────────────────╮'),
-    chalk.hex(BRAND.dim)('  │') + chalk.hex(BRAND.warm)(' 116 agents') + chalk.hex(BRAND.dim)(' · ') + chalk.hex(BRAND.warm)('608 MCP tools') + chalk.hex(BRAND.dim)(' · ') + chalk.hex(BRAND.warm)('511 tables') + chalk.hex(BRAND.dim)(' · ') + chalk.hex(BRAND.warm)('4M LOC') + chalk.hex(BRAND.dim)(' │'),
+    chalk.hex(BRAND.dim)('  │') + chalk.hex(BRAND.warm)(' Be There. ') + chalk.hex(BRAND.dim)('— ') + chalk.hex(BRAND.warm)('the system that answers, books, and takes payment 24/7') + chalk.hex(BRAND.dim)(' │'),
     chalk.hex(BRAND.dim)('  ╰─────────────────────────────────────────────────────╯'),
     '',
     chalk.hex(BRAND.dim)('  Type your question and press Enter. Type "exit" to quit.'),

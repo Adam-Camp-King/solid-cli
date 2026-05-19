@@ -153,19 +153,19 @@ export function bannerTier(): BannerTier {
 // ── Public API ──────────────────────────────────────────────────────
 
 /**
- * Wordmark: `Solid# · AI Business Infrastructure · v1.9.x`
+ * Wordmark: `Solid# · Be There. · v1.9.x`
  * Collapses gracefully on narrow terminals.
  */
 function wordmarkLine(): string {
   const w = termWidth();
   const mark = chalk.bold.hex('#818cf8')('Solid') + chalk.bold.hex('#a5b4fc')('#');
   const dot = chalk.hex('#6366f1')(' · ');
-  const tagline = chalk.dim('AI Business Infrastructure');
+  const tagline = chalk.dim('Be There.');
   const version = chalk.dim(`v${pkg.version}`);
 
-  // Widest form: Solid# · AI Business Infrastructure · v1.9.99  (~50 visible cols w/ margin)
+  // Widest form: Solid# · Be There. · v1.9.99  (~30 visible cols w/ margin)
   if (w >= 52) return `  ${mark}${dot}${tagline}${dot}${version}`;
-  // Medium: Solid#  AI Business Infrastructure
+  // Medium: Solid#  Be There.
   if (w >= 36) return `  ${mark}  ${tagline}`;
   // Tight: Solid# v1.9.99
   return `  ${mark} ${version}`;
@@ -337,7 +337,7 @@ export async function animatedBanner(): Promise<void> {
     await delay(60);
   }
   console.log('');
-  console.log(chalk.dim('  AI Business Infrastructure') + '  ' + chalk.dim(`v${pkg.version}`));
+  console.log(chalk.dim('  Be There.') + '  ' + chalk.dim(`v${pkg.version}`));
   console.log('');
 }
 

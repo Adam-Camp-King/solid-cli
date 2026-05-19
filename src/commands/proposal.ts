@@ -16,7 +16,7 @@ const TIER_DETAILS: Record<string, { name: string; price: string; features: stri
     name: 'Starter',
     price: '$89/mo',
     features: [
-      'AI-powered website with CMS',
+      'Website + CMS (AI keeps it current)',
       'CRM with lead scoring',
       'Appointment scheduling',
       '6 AI agents (Sarah, Marcus + 4 more)',
@@ -92,7 +92,7 @@ const INDUSTRY_BENEFITS: Record<string, string[]> = {
     'Loyalty program automation',
   ],
   default: [
-    'AI-powered customer service 24/7',
+    'Answers customer questions 24/7 — never miss an inquiry',
     'Automatic lead capture and follow-up',
     'Website with industry-specific content',
     'Appointment scheduling and reminders',

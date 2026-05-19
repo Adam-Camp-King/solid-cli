@@ -37,7 +37,7 @@ topic: developer-guide
 
 # Getting Started with Solid#
 
-Welcome to Solid# — AI Business Infrastructure. This guide will get you building in minutes.
+Welcome to Solid#. **Be There.** That's the promise. This guide is the developer path — the CLI, SDK, and MCP tools behind it. You'll be building in minutes.
 
 ## Quick Start
 

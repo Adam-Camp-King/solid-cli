@@ -1,7 +1,7 @@
 {
   "name": "@solidnumber/cli",
-  "version": "2.10.1",
-  "description": "AI business infrastructure from the terminal — CRM, payments, voice AI, 116 agents, 52 industry templates. solid clone plumber → instant business. Also: programmatic TS SDK via @solidnumber/cli/sdk.",
+  "version": "2.10.2",
+  "description": "Be There — the system that answers, books, and takes payment when you can't. CLI + SDK + MCP tools for SMBs, agencies, and AI agents. solid clone plumber → working business in 30 seconds.",
   "main": "dist/index.js",
   "type": "commonjs",
   "bin": {
