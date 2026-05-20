@@ -547,6 +547,123 @@ voiceCommand
     } catch (error) { fail(spinner, 'Diagnose failed', error); }
   });
 
+// ── Outbound dispatch (ADA verbs) ────────────────────────────────────
+//
+// `solid voice call <contact-query>` and `solid voice text <contact-query>`
+// dispatch an outbound voice call or SMS through the same backend verb
+// registry ADA uses on /dashboard/ada. Auth + company come from the
+// active CLI session — never from args. The --confirm flag is required
+// (it's the CLI equivalent of clicking Confirm on the dashboard card).
+//
+// See Owners-Manual/42-UVX-User-Voice-Experience/13-ADA-OUTBOUND-DISPATCH.md.
+
+async function _resolveContactId(query: string): Promise<{ id: number; name: string; phone: string | null } | null> {
+  // Try numeric ID first; otherwise use the typeahead endpoint.
+  const id = Number.parseInt(query, 10);
+  if (!Number.isNaN(id) && /^\d+$/.test(query.trim())) {
+    try {
+      const r = await apiClient.get(`/api/v1/crm/contacts/${id}`);
+      const c = (r.data as any) || {};
+      if (c?.id) return { id: c.id, name: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(), phone: c.phone ?? null };
+    } catch { /* fall through to search */ }
+  }
+  const r = await apiClient.get('/api/v1/crm/contacts/typeahead', { params: { q: query, limit: 5 } });
+  const list = Array.isArray(r.data) ? r.data : [];
+  if (list.length === 0) return null;
+  if (list.length > 1) {
+    console.error(chalk.yellow(`Multiple matches for "${query}":`));
+    for (const c of list) console.error(`  ${chalk.cyan(c.id)}  ${c.name}  ${chalk.dim(c.phone || '')}`);
+    console.error(chalk.dim('Re-run with a numeric ID to disambiguate.'));
+    return null;
+  }
+  return { id: list[0].id, name: list[0].name, phone: list[0].phone };
+}
+
+voiceCommand
+  .command('call <contact-query>')
+  .description('Dispatch an outbound voice call through Sarah (or another agent)')
+  .option('-i, --intent <text>', 'One-sentence purpose of the call (passed to the agent brief)', 'follow-up')
+  .option('-a, --agent <type>', 'Agent type to dispatch', 'customer_service')
+  .option('--confirm', 'Required: confirm this call should be placed')
+  .option('--json', 'Output as JSON')
+  .action(async (contactQuery: string, options) => {
+    requireAuth();
+    if (!options.confirm) {
+      console.error(chalk.red('Refusing to place a call without --confirm.'));
+      console.error(chalk.dim('  Example: solid voice call "Jane Smoke" --intent "follow up on pricing" --confirm'));
+      process.exit(2);
+    }
+    const spinner = ora(`Resolving ${contactQuery}...`).start();
+    try {
+      const match = await _resolveContactId(contactQuery);
+      if (!match) {
+        spinner.fail(chalk.red(`No contact matched "${contactQuery}".`));
+        process.exit(1);
+      }
+      spinner.text = `Dispatching call to ${match.name}...`;
+      const res = await apiClient.post('/api/v1/ada/cli-dispatch', {
+        verb: 'voice.outbound_call',
+        args: {
+          contact_id: match.id,
+          agent_type: options.agent,
+          intent: options.intent,
+        },
+        confirm: true,
+      });
+      const data = (res.data as any) || {};
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (!data.ok) {
+        spinner.fail(chalk.red(`Call denied: ${data?.error?.reason || 'unknown'}`));
+        if (data?.error?.message) console.error(chalk.red(`  ${data.error.message}`));
+        process.exit(1);
+      }
+      const r = data.result || {};
+      spinner.succeed(chalk.green(`Call dispatched to ${match.name} (${match.phone}) — call_id=${r.call_id}`));
+    } catch (error) { fail(spinner, 'Dispatch failed', error); }
+  });
+
+voiceCommand
+  .command('text <contact-query>')
+  .description('Send an outbound SMS to a CRM contact')
+  .requiredOption('-m, --message <text>', 'SMS body (max 1000 chars; STOP is auto-appended for TCPA)')
+  .option('-i, --intent <text>', 'Optional one-sentence reason')
+  .option('--confirm', 'Required: confirm this SMS should be sent')
+  .option('--json', 'Output as JSON')
+  .action(async (contactQuery: string, options) => {
+    requireAuth();
+    if (!options.confirm) {
+      console.error(chalk.red('Refusing to send an SMS without --confirm.'));
+      console.error(chalk.dim('  Example: solid voice text "Jane Smoke" --message "Quick reminder of our 3pm call." --confirm'));
+      process.exit(2);
+    }
+    const spinner = ora(`Resolving ${contactQuery}...`).start();
+    try {
+      const match = await _resolveContactId(contactQuery);
+      if (!match) {
+        spinner.fail(chalk.red(`No contact matched "${contactQuery}".`));
+        process.exit(1);
+      }
+      spinner.text = `Sending SMS to ${match.name}...`;
+      const res = await apiClient.post('/api/v1/ada/cli-dispatch', {
+        verb: 'sms.send',
+        args: {
+          contact_id: match.id,
+          message: options.message,
+          intent: options.intent,
+        },
+        confirm: true,
+      });
+      const data = (res.data as any) || {};
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (!data.ok) {
+        spinner.fail(chalk.red(`SMS denied: ${data?.error?.reason || 'unknown'}`));
+        if (data?.error?.message) console.error(chalk.red(`  ${data.error.message}`));
+        process.exit(1);
+      }
+      spinner.succeed(chalk.green(`SMS sent to ${match.name} (${match.phone}).`));
+    } catch (error) { fail(spinner, 'Dispatch failed', error); }
+  });
+
 import { appendExamples as __appendExamplesVoice } from '../lib/command-kit';
 __appendExamplesVoice(voiceCommand, [
   { cmd: 'solid voice calls list --today', why: "Today's call log" },
@@ -557,4 +674,6 @@ __appendExamplesVoice(voiceCommand, [
   { cmd: 'solid voice numbers buy --area-code 512', why: 'Buy a new number' },
   { cmd: 'solid voice voicemail list --unread', why: 'Unlistened voicemails' },
   { cmd: 'solid voice personality get', why: 'Industry voice profile' },
+  { cmd: 'solid voice call "Jane Smoke" --intent "follow up" --confirm', why: 'Dispatch outbound voice via Sarah' },
+  { cmd: 'solid voice text "Jane Smoke" --message "Confirming 3pm." --confirm', why: 'Outbound SMS through Solid#' },
 ]);
