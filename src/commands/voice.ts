@@ -602,7 +602,7 @@ voiceCommand
       }
       spinner.text = `Dispatching call to ${match.name}...`;
       const res = await apiClient.post('/api/v1/ada/cli-dispatch', {
-        verb: 'voice.outbound_call',
+        verb: 'voice_outbound_call',
         args: {
           contact_id: match.id,
           agent_type: options.agent,
@@ -645,7 +645,7 @@ voiceCommand
       }
       spinner.text = `Sending SMS to ${match.name}...`;
       const res = await apiClient.post('/api/v1/ada/cli-dispatch', {
-        verb: 'sms.send',
+        verb: 'sms_send',
         args: {
           contact_id: match.id,
           message: options.message,
