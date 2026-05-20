@@ -473,10 +473,86 @@ voiceCommand
     } catch (error) { fail(spinner, 'Failed to load cost summary', error); }
   });
 
+// ── Health (per-tenant readiness audit) ─────────────────────────────
+
+voiceCommand
+  .command('health')
+  .description('Per-tenant voice readiness audit — every layer that must work for calls to actually answer')
+  .option('--company <id>', 'Audit a specific company_id (default: authenticated company)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireAuth();
+    const companyId = options.company ?? config.getCompanyId();
+    if (!companyId) {
+      console.error(chalk.red('No company_id available (login or pass --company)'));
+      process.exit(1);
+      return;
+    }
+    const spinner = ora(`Auditing voice readiness for company ${companyId}...`).start();
+    try {
+      const response = await apiClient.get(`/api/v1/voice/health/${companyId}`, {
+        headers: { 'X-Company-ID': String(companyId) },
+      });
+      const r = response.data as Record<string, any>;
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+
+      const overall = r.overall ?? 'unknown';
+      const overallChalk = overall === 'ok' ? chalk.green : overall === 'warn' ? chalk.yellow : chalk.red;
+      spinner.succeed(`Voice readiness for company ${companyId}: ${overallChalk(overall.toUpperCase())}`);
+      console.log('');
+      for (const [name, check] of Object.entries(r.checks ?? {}) as [string, Record<string, any>][]) {
+        const tag = check.status === 'ok' ? chalk.green('  ✓ ') : check.status === 'warn' ? chalk.yellow('  ⚠ ') : chalk.red('  ✗ ');
+        console.log(`${tag}${chalk.bold(name.padEnd(20))}${check.message}`);
+      }
+      console.log('');
+    } catch (error) { fail(spinner, 'Voice health audit failed', error); }
+  });
+
+// ── Diagnose (per-call event timeline) ───────────────────────────────
+
+voiceCommand
+  .command('diagnose <call_id>')
+  .description('Walk the production logs for one voice call and produce a per-event timeline + verdict')
+  .option('--json', 'Output raw JSON (default: human-readable)')
+  .action(async (callId, options) => {
+    requireAuth();
+    const spinner = ora(`Diagnosing call ${callId}...`).start();
+    try {
+      const response = await apiClient.get(`/api/v1/voice/diagnose/${callId}`);
+      const r = response.data as Record<string, any>;
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+
+      const verdict = r.verdict ?? 'unknown';
+      const tag = verdict === 'ok' ? chalk.green('OK') : chalk.red(verdict.toUpperCase());
+      spinner.succeed(`Call ${callId}: ${tag}`);
+      console.log('');
+      console.log(`  ${chalk.bold('Session configured:')}    ${r.session_configured ? chalk.green('yes') : chalk.red('no')}`);
+      console.log(`  ${chalk.bold('Greetings triggered:')}   ${r.greeting_count}`);
+      console.log(`  ${chalk.bold('Response.done events:')}  ${r.response_done_count}`);
+      console.log(`  ${chalk.bold('Barge-ins:')}             ${r.barge_in_count}`);
+      console.log(`  ${chalk.bold('Audio chunks to Twilio:')} ${r.audio_chunks_to_twilio}`);
+      if (r.cost) {
+        console.log('');
+        console.log(`  ${chalk.bold('Cost:')} ${r.cost.cents}¢ across ${r.cost.responses} responses`);
+        if (r.cost.cache_hit_rate_pct !== null) {
+          console.log(`  ${chalk.bold('Cache hit rate:')} ${r.cost.cache_hit_rate_pct}%`);
+        }
+      }
+      if (r.issues?.length) {
+        console.log('');
+        console.log(chalk.yellow('Issues:'));
+        for (const issue of r.issues) console.log(`  ${chalk.yellow('●')} ${issue}`);
+      }
+      console.log('');
+    } catch (error) { fail(spinner, 'Diagnose failed', error); }
+  });
+
 import { appendExamples as __appendExamplesVoice } from '../lib/command-kit';
 __appendExamplesVoice(voiceCommand, [
   { cmd: 'solid voice calls list --today', why: "Today's call log" },
   { cmd: 'solid voice calls get <id>', why: 'Transcript + recording link' },
+  { cmd: 'solid voice diagnose <id>', why: 'Per-call event timeline + verdict' },
+  { cmd: 'solid voice health', why: 'Tenant voice readiness audit' },
   { cmd: 'solid voice numbers list', why: 'Owned phone numbers' },
   { cmd: 'solid voice numbers buy --area-code 512', why: 'Buy a new number' },
   { cmd: 'solid voice voicemail list --unread', why: 'Unlistened voicemails' },
