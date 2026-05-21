@@ -2,14 +2,16 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-113 top-level commands, 600+ subcommands, 52 industries, 116 AI agents. One CLI.
+113 top-level commands, 600+ subcommands, 52 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
 
-**v2.2.0** — magic-link install + Homebrew + Scoop. Logged-in dashboard
-users mint a single-use `ist_*` token, paste one command, CLI is
-authenticated. No browser auth dance. Agent-ready by default — `--json`
-output ships structured error envelopes; every business entity is a
-node in a typed JSON-LD graph; queries via SPARQL; offline reads +
-writes with auto-flush on reconnect. See [Graph (v2)](#graph-v2--vendor-portable-json-ld).
+**v2.11** — outbound voice (`solid voice call` / `solid voice text` /
+`solid voice translate`) + universal `solid agent dispatch <verb>` +
+shortcut commands (`solid deal`, `solid calendar`, `solid lead-promote`).
+Agent-ready by default — `--json` output ships structured error
+envelopes; every business entity is a node in a typed JSON-LD graph;
+queries via SPARQL; offline reads + writes with auto-flush on
+reconnect. Magic-link install via `solid setup --install-token`;
+Homebrew + Scoop distribution. See [Graph (v2)](#graph-v2--vendor-portable-json-ld).
 
 ```bash
 npx @solidnumber/cli clone plumber
