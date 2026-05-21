@@ -981,4 +981,61 @@ __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent install --adapter mcp --url https://ex.com/mcp --display-name Acme', why: 'Install a third-party MCP agent' },
   { cmd: 'solid agent grant <id> --scope kb:read', why: 'Grant scopes after install' },
   { cmd: 'solid agent call <id> "summarize pricing"', why: 'Invoke an installed agent' },
+  { cmd: 'solid agent dispatch kb_entry_create --args \'{"title":"FAQ","content":"...","category_id":1}\' --confirm', why: 'Run any ADA verb directly' },
 ]);
+
+
+// ── solid agent dispatch <verb> — generic verb dispatcher ────────────
+//
+// Every verb registered in the backend's ada_tool_dispatcher.py is
+// reachable through this one command. Provide --args as JSON; pass
+// --confirm to actually run write verbs (the dispatcher returns 400
+// without it). Routes through /api/v1/ada/cli-dispatch which uses the
+// same role gates / nonce signing / audit logging the dashboard does.
+
+agentCommand
+  .command('dispatch <verb>')
+  .description('Run any ADA verb directly (kb_entry_create, google_calendar_event_create, deals_create, crm_lead_promote, …)')
+  .option('-a, --args <json>', 'Verb arguments as JSON. e.g. \'{"contact_id":1,"intent":"follow up"}\'', '{}')
+  .option('--confirm', 'Required for write verbs (the CLI equivalent of clicking Confirm)')
+  .option('--json', 'Output as JSON')
+  .action(async (verb: string, options) => {
+    requireLogin();
+    let args: Record<string, unknown> = {};
+    try {
+      args = options.args ? JSON.parse(options.args) : {};
+    } catch (err) {
+      console.error(chalk.red(`Invalid JSON in --args: ${(err as Error).message}`));
+      process.exit(2);
+    }
+    const spinner = ora(`Dispatching ${verb}...`).start();
+    try {
+      const res = await apiClient.post('/api/v1/ada/cli-dispatch', {
+        verb,
+        args,
+        confirm: Boolean(options.confirm),
+      });
+      const data = (res.data as any) || {};
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (data.ok === false || data.error) {
+        const reason = data?.error?.reason || data?.detail?.error || 'unknown';
+        const msg = data?.error?.message || data?.detail?.message || 'Verb denied or failed.';
+        spinner.fail(chalk.red(`${verb}: ${reason}`));
+        console.error(chalk.red(`  ${msg}`));
+        process.exit(1);
+      }
+      spinner.succeed(chalk.green(`${verb}: ${data?.result?.status || 'ok'}`));
+      const summary = data?.result || data;
+      const compact: Record<string, unknown> = {};
+      for (const key of Object.keys(summary || {}).slice(0, 6)) {
+        const v = (summary as any)[key];
+        compact[key] = typeof v === 'string' ? (v.length > 60 ? v.slice(0, 57) + '...' : v) : v;
+      }
+      if (Object.keys(compact).length > 0) {
+        console.log(chalk.dim('  ' + JSON.stringify(compact, null, 2).replace(/\n/g, '\n  ')));
+      }
+    } catch (error) {
+      spinner.fail(chalk.red(`Dispatch failed: ${(error as Error).message || error}`));
+      process.exit(1);
+    }
+  });
