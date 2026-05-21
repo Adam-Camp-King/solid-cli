@@ -622,6 +622,95 @@ voiceCommand
     } catch (error) { fail(spinner, 'Dispatch failed', error); }
   });
 
+// ── Translate (per-phone live translation toggle) ───────────────────
+//
+// `solid voice translate enable <phone>` / `disable <phone>` / `status <phone>`
+// flips voice_config.translate_enabled on the matching phone row.
+// Backend gating (Professional+ tier) is enforced at call time, not
+// at toggle time — the CLI just sets the flag.
+
+async function _findPhoneNumberRow(phone: string): Promise<{ id: number; phone_number: string; voice_config: Record<string, unknown> } | null> {
+  const res = await apiClient.get('/api/v1/voice/phone-numbers');
+  const data = res.data as any;
+  const list: any[] = Array.isArray(data) ? data : (data?.phone_numbers || data?.items || []);
+  const wanted = phone.replace(/\D/g, '');
+  for (const row of list) {
+    const candidate = String(row.phone_number || '').replace(/\D/g, '');
+    if (candidate.endsWith(wanted) || wanted.endsWith(candidate)) {
+      return {
+        id: row.id,
+        phone_number: row.phone_number,
+        voice_config: (row.voice_config && typeof row.voice_config === 'object') ? row.voice_config : {},
+      };
+    }
+  }
+  return null;
+}
+
+async function _toggleTranslate(phone: string, enabled: boolean, options: { json?: boolean }) {
+  requireAuth();
+  const spinner = ora(`${enabled ? 'Enabling' : 'Disabling'} live translation on ${phone}...`).start();
+  try {
+    const row = await _findPhoneNumberRow(phone);
+    if (!row) {
+      spinner.fail(chalk.red(`No phone number found matching "${phone}".`));
+      process.exit(1);
+    }
+    const nextConfig = { ...row.voice_config, translate_enabled: enabled };
+    const res = await apiClient.patch(`/api/v1/voice/phone-numbers/${row.id}`, {
+      voice_config: nextConfig,
+    });
+    if (isJsonOutput(options)) {
+      spinner.stop();
+      console.log(JSON.stringify({ phone: row.phone_number, translate_enabled: enabled, response: res.data }, null, 2));
+      return;
+    }
+    spinner.succeed(chalk.green(`Live translation ${enabled ? 'enabled' : 'disabled'} on ${row.phone_number}.`));
+    if (enabled) {
+      console.log(chalk.dim('  Note: translate-on-call requires Professional+ tier; the gate runs at call time.'));
+    }
+  } catch (error) { fail(spinner, 'Translate toggle failed', error); }
+}
+
+const translateCmd = voiceCommand
+  .command('translate')
+  .description('Per-phone live translation toggle');
+
+translateCmd
+  .command('enable <phone>')
+  .description('Enable live translation on the given phone number')
+  .option('--json', 'Output as JSON')
+  .action(async (phone: string, options) => _toggleTranslate(phone, true, options));
+
+translateCmd
+  .command('disable <phone>')
+  .description('Disable live translation on the given phone number')
+  .option('--json', 'Output as JSON')
+  .action(async (phone: string, options) => _toggleTranslate(phone, false, options));
+
+translateCmd
+  .command('status <phone>')
+  .description('Show whether live translation is enabled on the given phone number')
+  .option('--json', 'Output as JSON')
+  .action(async (phone: string, options) => {
+    requireAuth();
+    const spinner = ora(`Checking translate status for ${phone}...`).start();
+    try {
+      const row = await _findPhoneNumberRow(phone);
+      if (!row) {
+        spinner.fail(chalk.red(`No phone number found matching "${phone}".`));
+        process.exit(1);
+      }
+      const enabled = Boolean((row.voice_config as any)?.translate_enabled);
+      if (isJsonOutput(options)) {
+        spinner.stop();
+        console.log(JSON.stringify({ phone: row.phone_number, translate_enabled: enabled }, null, 2));
+        return;
+      }
+      spinner.succeed(`${row.phone_number}: translate ${enabled ? chalk.green('enabled') : chalk.dim('disabled')}`);
+    } catch (error) { fail(spinner, 'Translate status check failed', error); }
+  });
+
 voiceCommand
   .command('text <contact-query>')
   .description('Send an outbound SMS to a CRM contact')
