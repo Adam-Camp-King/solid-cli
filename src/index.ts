@@ -556,6 +556,14 @@ program.addCommand(proposalCommand);
 program.addCommand(demoCommand);
 program.addCommand(initCommand);
 
+// Per-domain dispatch shortcuts — thin wrappers over `solid agent
+// dispatch <verb>` for the most-common write verbs. See
+// commands/dispatch_shortcuts.ts.
+import { dealCommand, calendarCommand, leadDispatchCommand } from './commands/dispatch_shortcuts';
+program.addCommand(dealCommand);
+program.addCommand(calendarCommand);
+program.addCommand(leadDispatchCommand);
+
 // Wire webhook listen/test into existing webhooks command
 addWebhookListenCommand(webhooksCommand);
 
