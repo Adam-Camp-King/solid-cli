@@ -482,7 +482,7 @@ voiceCommand
   .option('--json', 'Output as JSON')
   .action(async (options) => {
     requireAuth();
-    const companyId = options.company ?? config.getCompanyId();
+    const companyId = options.company ?? config.companyId;
     if (!companyId) {
       console.error(chalk.red('No company_id available (login or pass --company)'));
       process.exit(1);
@@ -490,9 +490,7 @@ voiceCommand
     }
     const spinner = ora(`Auditing voice readiness for company ${companyId}...`).start();
     try {
-      const response = await apiClient.get(`/api/v1/voice/health/${companyId}`, {
-        headers: { 'X-Company-ID': String(companyId) },
-      });
+      const response = await apiClient.get(`/api/v1/voice/health/${companyId}`);
       const r = response.data as Record<string, any>;
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
 
