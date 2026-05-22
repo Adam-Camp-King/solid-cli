@@ -16,7 +16,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
-import { apiClient, handleApiError, type TenantGateDecision } from '../lib/api-client';
+import { apiClient, handleApiError, type TenantGateDecision, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 export const tenantCommand = new Command('tenant')
@@ -44,7 +44,7 @@ tenantCommand
       printDecision(data);
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -75,7 +75,7 @@ tenantCommand
       printDecision(data);
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -109,7 +109,7 @@ tenantCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -152,7 +152,7 @@ tenantCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 

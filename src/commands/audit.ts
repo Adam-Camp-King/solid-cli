@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
 
@@ -326,7 +326,7 @@ auditCommand
     } catch (e) {
       spinner?.stop();
       const { handleApiError } = await import('../lib/api-client');
-      handleApiError(e);
+      failApi(e);
     }
   });
 

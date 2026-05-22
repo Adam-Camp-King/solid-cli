@@ -21,7 +21,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import * as fs from 'fs';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 interface VerbRecord {
@@ -116,7 +116,7 @@ verbsCommand
       console.log(chalk.dim(`use 'solid verbs describe <name>' for schema details`));
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -151,7 +151,7 @@ verbsCommand
         .split('\n').map((l) => '  ' + l).join('\n'));
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -171,7 +171,7 @@ verbsCommand
       const r = await apiClient.get(`/api/v1/agent/verbs/${encodeURIComponent(verbName)}`);
       verb = r.data as VerbRecord;
     } catch (e) {
-      handleApiError(e);
+      failApi(e);
       return;
     }
 
@@ -184,6 +184,6 @@ verbsCommand
         : await apiClient.post(verb.http_endpoint, payload);
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) {
-      handleApiError(e);
+      failApi(e);
     }
   });

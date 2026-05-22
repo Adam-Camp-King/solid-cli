@@ -16,7 +16,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 export const scopeCommand = new Command('scope')
@@ -40,7 +40,7 @@ scopeCommand
       spinner.stop();
     } catch (e) {
       spinner.fail('scope/whoami failed');
-      handleApiError(e);
+      failApi(e);
       process.exit(1);
     }
 

@@ -16,7 +16,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 export const qchainCommand = new Command('qchain')
@@ -60,7 +60,7 @@ qchainCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -91,7 +91,7 @@ qchainCommand
       console.log(JSON.stringify(data, null, 2));
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -142,7 +142,7 @@ qchainCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -196,6 +196,6 @@ qchainCommand
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });

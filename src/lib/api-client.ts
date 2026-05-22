@@ -1687,6 +1687,34 @@ export function handleApiError(error: unknown): ApiError {
   return enrichApiError({ message, status }, classified);
 }
 
+/**
+ * Print an API error to stderr and exit non-zero.
+ *
+ * `handleApiError` only RETURNS an ApiError — it doesn't print or
+ * throw. Every catch-block that called `handleApiError(e)` and then
+ * fell out of scope was silently swallowing the failure, leaving AI
+ * agents that parse stdout with exit 0 + empty output and the
+ * (incorrect) inference that the call succeeded.
+ *
+ * Use `failApi(e)` in every catch block where you'd otherwise have
+ * called `handleApiError(e)` alone. The `never` return type lets
+ * TypeScript know nothing after it is reachable.
+ *
+ * Caught + fixed 2026-05-22 after `solid verbs invoke` reported
+ * exit 0 on a 502 outage.
+ */
+export function failApi(error: unknown): never {
+  // Local require to avoid forcing every importer to pull chalk just
+  // for the type. Chalk is already a transitive dep of every CLI cmd.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const chalk = require('chalk');
+  const err = handleApiError(error);
+  process.stderr.write(chalk.red(err.message || 'Request failed.') + '\n');
+  if (err.hint) process.stderr.write(chalk.dim(err.hint) + '\n');
+  if (err.docs_url) process.stderr.write(chalk.dim(`  see: ${err.docs_url}`) + '\n');
+  process.exit(1);
+}
+
 /** Copy structured fields from a ClassifiedError onto an ApiError. Pure. */
 function enrichApiError(err: ApiError, c: ClassifiedError): ApiError {
   err.code = c.code;

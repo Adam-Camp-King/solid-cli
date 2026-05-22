@@ -20,7 +20,7 @@ import ora from 'ora';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 interface SiteEntry {
@@ -76,7 +76,7 @@ sitesCommand
       console.log(chalk.dim(`use 'solid sites switch <slug>' to re-bind the working directory`));
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -121,6 +121,6 @@ sitesCommand
       console.log(chalk.dim(`  manifest: ${manifestPath}`));
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });

@@ -22,7 +22,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -91,7 +91,7 @@ predictCommand
       renderPrediction('Deal', dealId, r.data as Record<string, any>, options);
     } catch (e) {
       spinner.fail('Prediction failed');
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -109,7 +109,7 @@ predictCommand
       renderPrediction('Appointment', apptId, r.data as Record<string, any>, options);
     } catch (e) {
       spinner.fail('Prediction failed');
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -127,7 +127,7 @@ predictCommand
       renderPrediction('Invoice', invoiceId, r.data as Record<string, any>, options);
     } catch (e) {
       spinner.fail('Prediction failed');
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -175,7 +175,7 @@ predictCommand
       console.log('');
     } catch (e) {
       spinner.fail('Failed to load targets');
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -197,7 +197,7 @@ predictCommand
       }
     } catch (e) {
       spinner.fail('Approval failed');
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -221,6 +221,6 @@ predictCommand
       }
     } catch (e) {
       spinner.fail('Rejection failed');
-      handleApiError(e);
+      failApi(e);
     }
   });

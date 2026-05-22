@@ -20,7 +20,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireLogin(): void {
@@ -76,7 +76,7 @@ transactionCommand
       });
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -105,7 +105,7 @@ transactionCommand
       });
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -125,7 +125,7 @@ transactionCommand
       });
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -145,7 +145,7 @@ transactionCommand
       });
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
 
@@ -179,6 +179,6 @@ transactionCommand
       });
     } catch (e) {
       spinner?.stop();
-      handleApiError(e);
+      failApi(e);
     }
   });
