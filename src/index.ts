@@ -559,10 +559,25 @@ program.addCommand(initCommand);
 // Per-domain dispatch shortcuts — thin wrappers over `solid agent
 // dispatch <verb>` for the most-common write verbs. See
 // commands/dispatch_shortcuts.ts.
-import { dealCommand, calendarCommand, leadDispatchCommand } from './commands/dispatch_shortcuts';
+import {
+  dealCommand,
+  calendarCommand,
+  leadDispatchCommand,
+  customerContextCommand,
+  dealNextCommand,
+  contactMapCommand,
+  customerUpsellCommand,
+  inventoryReorderCommand,
+} from './commands/dispatch_shortcuts';
 program.addCommand(dealCommand);
 program.addCommand(calendarCommand);
 program.addCommand(leadDispatchCommand);
+// v2.11.1 — agent-attraction verb shortcuts (intelligence reads, no --confirm)
+program.addCommand(customerContextCommand);
+program.addCommand(dealNextCommand);
+program.addCommand(contactMapCommand);
+program.addCommand(customerUpsellCommand);
+program.addCommand(inventoryReorderCommand);
 
 // Wire webhook listen/test into existing webhooks command
 addWebhookListenCommand(webhooksCommand);

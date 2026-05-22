@@ -131,15 +131,19 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
-- 113 top-level command groups, 657 subcommands.
+- 118 top-level command groups, 657 subcommands.
 - Core workflow: `solid auth login` → `solid company create` → `solid clone <industry>` → `solid pull` → edit → `solid push` → `solid pages publish` → `solid billing checkout-link`.
 
 **Top-level commands (no subcommands):**
 
 - `solid ai` — Launch Claude Code / Cursor / Codex with this company's context pre-loaded (stupid easy)
 - `solid clone` — Scaffold a business from an industry template
+- `solid contact-map` — Relationship graph for a contact: company, peers, deals, activities
 - `solid context` — One-shot AI context dump (company state, locks, drafts, tools) — T11 agency mode
+- `solid customer-context` — Aggregate customer view: orders + interactions + lifecycle + payment methods
+- `solid customer-upsell` — Ranked product suggestions based on a customer's purchase history
 - `solid dashboard` — Agency dashboard — all companies at a glance
+- `solid deal-next` — Ranked next-best-action suggestions for a deal
 - `solid deploy` — Create preview deployments with shareable URLs for client approval
 - `solid diff` — Show differences between local files and production
 - `solid docs` — Pull developer documentation into your project
@@ -152,6 +156,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - `solid import` — Convert HTML/JSX into Solid# CMS page blocks
 - `solid init` — Scaffold a LOCAL app template (boilerplate files only — does NOT create a company; use `solid company create` or `solid demo create` for that)
 - `solid install` — One-time setup: wire Claude Code to auto-refresh Solid context at every session start
+- `solid inventory-reorder` — Ranked reorder suggestions per location
 - `solid lead-promote` — Promote a lead_submission to a real CRM contact
 - `solid logs` — View real-time agent activity logs
 - `solid manifest` — Print the tenant JSON-LD manifest (@context, IRIs, capability graph)
@@ -282,7 +287,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 113 top-level command groups, 657 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 118 top-level command groups, 657 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
 <!-- CLI:Q&A:END -->
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.

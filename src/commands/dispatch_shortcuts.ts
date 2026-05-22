@@ -172,3 +172,98 @@ export const leadDispatchCommand = new Command('lead-promote')
     }
     await _dispatch('crm_lead_promote', { lead_id: Number(leadId) }, options, `Promoting lead ${leadId} to contact...`);
   });
+
+
+// ── Agent-attraction verb shortcuts (v2.11.1) ────────────────────────
+//
+// These wrap GET-style intelligence verbs from /api/v1/agent/verbs.
+// Different endpoint shape than the ADA-tool dispatcher above — these
+// hit /api/v1/agent/{namespace}/{verb} directly (the universal verb
+// invoker that ships in solid-public's webmcp.json + ucp.json + the
+// MCP stdio bridge). Promoted from `solid agent dispatch <verb>` to
+// first-class shortcuts because they're the highest-traffic reads
+// per the 2026-05-21 verb-gap analysis.
+
+async function _invokeAgentVerb(verbName: string, payload: Record<string, unknown>, options: { json?: boolean }, spinnerLabel: string) {
+  requireAuth();
+  const spinner = ora(spinnerLabel).start();
+  try {
+    // Look up the verb to know its HTTP endpoint + method.
+    const lookup = await apiClient.get(`/api/v1/agent/verbs/${encodeURIComponent(verbName)}`);
+    const verb = lookup.data as { name: string; http_endpoint: string; http_method?: string };
+    const method = (verb.http_method || 'GET').toUpperCase();
+    const res = method === 'GET'
+      ? await apiClient.get(verb.http_endpoint, { params: payload })
+      : await apiClient.post(verb.http_endpoint, payload);
+    spinner.succeed(chalk.green(`${verbName}: ok`));
+    if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    const data = res.data as Record<string, unknown>;
+    const compact: Record<string, unknown> = {};
+    for (const key of Object.keys(data).slice(0, 8)) {
+      const v = (data as any)[key];
+      compact[key] = typeof v === 'string' ? (v.length > 80 ? v.slice(0, 77) + '...' : v) : v;
+    }
+    console.log(chalk.dim('  ' + JSON.stringify(compact, null, 2).replace(/\n/g, '\n  ')));
+  } catch (error) {
+    spinner.fail(chalk.red(`${verbName} failed: ${handleApiError(error).message}`));
+    process.exit(1);
+  }
+}
+
+
+// solid customer-context <customer_id> — customer.full_context
+export const customerContextCommand = new Command('customer-context')
+  .description('Aggregate customer view: orders + interactions + lifecycle + payment methods')
+  .argument('<customer_id>', 'CRM contact ID')
+  .option('--include-payment-methods', 'Include payment-method snapshots')
+  .option('--json', 'Output as JSON')
+  .action(async (customerId: string, options) => {
+    const payload: Record<string, unknown> = { customer_id: Number(customerId) };
+    if (options.includePaymentMethods) payload.include_payment_methods = true;
+    await _invokeAgentVerb('customer.full_context', payload, options, `Fetching full context for customer ${customerId}...`);
+  });
+
+
+// solid deal-next <deal_id> — deal.suggest_next_action
+export const dealNextCommand = new Command('deal-next')
+  .description('Ranked next-best-action suggestions for a deal')
+  .argument('<deal_id>', 'Deal ID')
+  .option('--json', 'Output as JSON')
+  .action(async (dealId: string, options) => {
+    await _invokeAgentVerb('deal.suggest_next_action', { deal_id: Number(dealId) }, options, `Computing next action for deal ${dealId}...`);
+  });
+
+
+// solid contact-map <contact_id> — contact.relationship_map
+export const contactMapCommand = new Command('contact-map')
+  .description('Relationship graph for a contact: company, peers, deals, activities')
+  .argument('<contact_id>', 'CRM contact ID')
+  .option('--json', 'Output as JSON')
+  .action(async (contactId: string, options) => {
+    await _invokeAgentVerb('contact.relationship_map', { contact_id: Number(contactId) }, options, `Mapping contact ${contactId} relationships...`);
+  });
+
+
+// solid customer-upsell <customer_id> — customer.suggest_upsell
+export const customerUpsellCommand = new Command('customer-upsell')
+  .description('Ranked product suggestions based on a customer\'s purchase history')
+  .argument('<customer_id>', 'CRM contact ID')
+  .option('--limit <n>', 'Max suggestions to return', '5')
+  .option('--json', 'Output as JSON')
+  .action(async (customerId: string, options) => {
+    const payload: Record<string, unknown> = { customer_id: Number(customerId) };
+    if (options.limit) payload.limit = Number(options.limit);
+    await _invokeAgentVerb('customer.suggest_upsell', payload, options, `Computing upsell suggestions for customer ${customerId}...`);
+  });
+
+
+// solid inventory-reorder — inventory.suggest_reorder
+export const inventoryReorderCommand = new Command('inventory-reorder')
+  .description('Ranked reorder suggestions per location')
+  .option('--location-id <id>', 'Limit to one inventory location')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const payload: Record<string, unknown> = {};
+    if (options.locationId) payload.location_id = Number(options.locationId);
+    await _invokeAgentVerb('inventory.suggest_reorder', payload, options, 'Computing reorder suggestions...');
+  });
