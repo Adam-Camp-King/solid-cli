@@ -998,6 +998,13 @@ agentCommand
   .description('Run any ADA verb directly (kb_entry_create, google_calendar_event_create, deals_create, crm_lead_promote, …)')
   .option('-a, --args <json>', 'Verb arguments as JSON. e.g. \'{"contact_id":1,"intent":"follow up"}\'', '{}')
   .option('--confirm', 'Required for write verbs (the CLI equivalent of clicking Confirm)')
+  .option(
+    '--phrase <phrase>',
+    'Typed-phrase confirmation for WRITE_FINANCIAL / IRREVERSIBLE verbs ' +
+    '(charge_invoice, issue_refund, payout_run, gdpr_delete_contact, oauth_revoke, etc.). ' +
+    'Must equal the required_phrase the verb generates from your args ' +
+    '— e.g. "CHARGE $50.00 to invoice #4242". Case-insensitive, whitespace-normalized.'
+  )
   .option('--json', 'Output as JSON')
   .action(async (verb: string, options) => {
     requireLogin();
@@ -1014,6 +1021,7 @@ agentCommand
         verb,
         args,
         confirm: Boolean(options.confirm),
+        typed_phrase: options.phrase || null,
       });
       const data = (res.data as any) || {};
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
