@@ -367,6 +367,16 @@ writes to stderr so pipelines are unaffected.
 - Node.js >= 18.0.0
 - A Solid# account ([solidnumber.com](https://solidnumber.com))
 
+## Verb taxonomy
+
+The 12 verb shapes (aggregate, explain, preview, suggest, transaction, receipt, revert, subscribe, discovery, trail, reputation, macro) are defined in the open **solid-verbs** spec:
+
+- **Spec:** [github.com/Adam-Camp-King/solid-verbs](https://github.com/Adam-Camp-King/solid-verbs) (MIT)
+- **npm:** `npm install @solidnumber/solid-verbs` — validator + JSON schemas
+- **Docs:** [solidnumber.com/docs/verbs](https://solidnumber.com/docs/verbs)
+
+The CLI is one of four transports projecting the same `UNIFIED_VERB_REGISTRY`. The spec defines the contract; this CLI is one implementation.
+
 ## License
 
 [Business Source License 1.1](./LICENSE) (`BUSL-1.1`).
