@@ -202,30 +202,16 @@ export const cloneCommand = new Command('clone')
       console.log('');
       console.log(ui.successBox('Business Scaffolded', lines));
 
-      // Auto-pull files if requested
-      if (options.pull !== false) {
-        console.log('');
-        const pullSpinner = ora('Pulling files to local directory...').start();
-
-        try {
-          // Import and execute pull programmatically via shell
-          // For now, just tell the user
-          pullSpinner.succeed(chalk.green('Files ready'));
-          console.log('');
-          console.log(ui.infoBox('Next Steps', [
-            `${chalk.cyan('1.')} ${chalk.cyan('solid pull')} ${chalk.dim('— Download your new business files')}`,
-            `${chalk.cyan('2.')} ${chalk.dim('Edit pages, KB, services in your editor')}`,
-            `${chalk.cyan('3.')} ${chalk.cyan('solid push')} ${chalk.dim('— Deploy your customizations')}`,
-            `${chalk.cyan('4.')} ${chalk.cyan('solid train chat')} ${chalk.dim('— Test your AI agent')}`,
-            '',
-            chalk.dim('Your AI agents are already trained with industry knowledge.'),
-            chalk.dim('Customize the KB to make them specific to YOUR business.'),
-          ]));
-        } catch {
-          pullSpinner.fail(chalk.yellow('Auto-pull skipped'));
-          console.log(chalk.dim('  Run `solid pull` manually to download files.'));
-        }
-      }
+      console.log('');
+      console.log(ui.infoBox('Next Steps', [
+        `${chalk.cyan('1.')} ${chalk.cyan('solid pull')} ${chalk.dim('— Download your new business files')}`,
+        `${chalk.cyan('2.')} ${chalk.dim('Edit pages, KB, services in your editor')}`,
+        `${chalk.cyan('3.')} ${chalk.cyan('solid push')} ${chalk.dim('— Deploy your customizations')}`,
+        `${chalk.cyan('4.')} ${chalk.cyan('solid train chat')} ${chalk.dim('— Test your AI agent')}`,
+        '',
+        chalk.dim('Your AI agents are already trained with industry knowledge.'),
+        chalk.dim('Customize the KB to make them specific to YOUR business.'),
+      ]));
 
       console.log('');
     } catch (error) {

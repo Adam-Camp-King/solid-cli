@@ -565,13 +565,11 @@ export const importCommand = new Command('import')
 
 importCommand.addHelpText('after', `
 Examples:
-  $ solid import                                   # Interactive (pick source)
-  $ solid import --source squarespace --url https://example.com
-  $ solid import --source wordpress --file ./export.xml
-  $ solid import --source csv ./leads.csv --as contacts
+  $ solid import --page "Home" --slug home < home.html      # Pipe HTML from stdin
+  $ solid import --page "Home" --clipboard                  # Read HTML from clipboard
+  $ solid import --page "Home" --ai                         # Use Claude for block classification
 
 For domain-specific bulk imports, prefer:
   solid crm contacts import ./leads.csv
-  solid orders import ./sales.csv
   solid kb add --file ./docs.md
 `);

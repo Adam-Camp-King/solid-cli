@@ -224,3 +224,32 @@ predictCommand
       failApi(e);
     }
   });
+
+// ── discover (trigger Devon's sweep on demand) ──────────────────────────
+predictCommand
+  .command('discover')
+  .description("Trigger Devon's nightly prediction-target discovery sweep on demand")
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireAuth();
+    const spinner = ora("Running Devon's target discovery sweep...").start();
+    try {
+      const r = await apiClient.post('/api/v1/predictions/discovery/run');
+      spinner.succeed(chalk.green('Discovery sweep complete'));
+      const data = r.data as Record<string, unknown>;
+      if (isJsonOutput(options)) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+      const proposed = (data.proposed_count ?? data.new_targets ?? 0) as number;
+      const scanned = (data.tables_scanned ?? 0) as number;
+      console.log(`  Tables scanned: ${scanned}`);
+      console.log(`  New targets proposed: ${chalk.cyan(String(proposed))}`);
+      if (proposed > 0) {
+        console.log(chalk.dim('  Review with: solid predict targets --status proposed'));
+      }
+    } catch (e) {
+      spinner.fail('Discovery sweep failed');
+      failApi(e);
+    }
+  });

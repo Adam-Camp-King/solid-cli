@@ -256,15 +256,32 @@ export const pushCommand = new Command('push')
         console.log('');
 
         const originalCompanyId = config.companyId;
+        const dir = path.resolve(options.dir || '.');
+        const { execFileSync } = await import('child_process');
+        const nodeBin = process.argv[0];
+        const cliBin = path.join(__dirname, '..', 'index.js');
+
         for (const c of companies) {
           const cSpinner = ora(`Pushing to ${c.name} (ID: ${c.id})...`).start();
           try {
-            await apiClient.companySwitch(c.id);
-            config.companyId = c.id;
-            // Re-run push for this company (recursive call without --all-companies)
-            cSpinner.succeed(chalk.green(`${c.name} — push queued`));
-          } catch (error) {
-            cSpinner.fail(chalk.red(`${c.name} — failed: ${(error as Error).message}`));
+            const result = execFileSync(
+              nodeBin,
+              [cliBin, 'push', '--dir', dir, '--yes', '--company', String(c.id)],
+              {
+                env: { ...process.env, SOLID_NO_TENANT_WARN: '1' },
+                encoding: 'utf-8',
+                stdio: ['ignore', 'pipe', 'pipe'],
+                timeout: 60_000,
+              },
+            );
+            cSpinner.succeed(chalk.green(`${c.name} — pushed`));
+          } catch (error: any) {
+            const stderr = error?.stderr || '';
+            if (stderr.includes('No changes detected') || error?.stdout?.includes('No changes')) {
+              cSpinner.succeed(chalk.dim(`${c.name} — no changes`));
+            } else {
+              cSpinner.fail(chalk.red(`${c.name} — failed: ${stderr.slice(0, 120) || (error as Error).message}`));
+            }
           }
         }
 
@@ -273,10 +290,6 @@ export const pushCommand = new Command('push')
           await apiClient.companySwitch(originalCompanyId).catch(() => {});
           config.companyId = originalCompanyId;
         }
-
-        console.log('');
-        console.log(chalk.dim('  Note: Each company push uses the local files in this directory.'));
-        console.log(chalk.dim('  For per-company files, switch first: solid switch <id> && solid push'));
         console.log('');
       } catch (error) {
         spinner.fail(chalk.red('Failed to load companies'));

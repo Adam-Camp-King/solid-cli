@@ -373,7 +373,7 @@ usersCommand
     requireAuth();
     const spinner = ora('Loading AI permissions...').start();
     try {
-      const res = await apiClient.get(`/api/v1/users/users/${id}/ai-permissions`);
+      const res = await apiClient.get(`/api/v1/users/${id}/ai-permissions`);
       if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('AI permissions'));
       console.log(JSON.stringify(res.data, null, 2));
@@ -389,7 +389,7 @@ usersCommand
     const spinner = ora('Updating AI permissions...').start();
     try {
       const body = JSON.parse(opts.permissions);
-      await apiClient.post(`/api/v1/users/users/${id}/ai-permissions`, body);
+      await apiClient.post(`/api/v1/users/${id}/ai-permissions`, body);
       spinner.succeed(chalk.green('AI permissions updated'));
     } catch (e) { fail(spinner, 'Failed', e); }
   });

@@ -468,9 +468,9 @@ campaignsCmd
 
 import { appendExamples as __appendExamplesInbox } from '../lib/command-kit';
 __appendExamplesInbox(inboxCommand, [
-  { cmd: 'solid inbox list --unread', why: 'Unified unread across channels' },
-  { cmd: 'solid inbox list --channel sms', why: 'SMS only' },
-  { cmd: 'solid inbox reply <id> "..."', why: 'Send a reply on the original channel' },
-  { cmd: 'solid inbox mark-read <id>', why: 'Clear the unread flag' },
-  { cmd: 'solid inbox campaign list', why: 'Outbound campaigns + metrics' },
+  { cmd: 'solid inbox stats', why: 'Unread/total counts across channels' },
+  { cmd: 'solid inbox send <recipient> <message>', why: 'Send a message' },
+  { cmd: 'solid inbox email list', why: 'List emails (paginates)' },
+  { cmd: 'solid inbox email reply <id> <body>', why: 'Reply to an email' },
+  { cmd: 'solid inbox email campaigns', why: 'Outbound campaigns + metrics' },
 ]);

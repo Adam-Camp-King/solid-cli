@@ -477,9 +477,8 @@ leadsCommand
 
 import { appendExamples as __appendExamplesLeads } from '../lib/command-kit';
 __appendExamplesLeads(leadsCommand, [
-  { cmd: 'solid leads list --all', why: 'Every lead (paginates)' },
-  { cmd: 'solid leads list --score-min 70', why: 'Hot leads only' },
-  { cmd: 'solid leads get <id>', why: 'Full enrichment + score breakdown' },
-  { cmd: 'solid leads score <id>', why: 'Re-score on demand' },
-  { cmd: 'solid leads convert <id>', why: 'Promote lead → contact + deal' },
+  { cmd: 'solid leads submissions', why: 'List lead submissions (paginates)' },
+  { cmd: 'solid leads recent', why: 'Latest leads across all forms' },
+  { cmd: 'solid leads score <contact_id>', why: 'Full enrichment + score breakdown' },
+  { cmd: 'solid leads prospect "interested in HVAC service"', why: 'AI-qualify a prospect' },
 ]);
