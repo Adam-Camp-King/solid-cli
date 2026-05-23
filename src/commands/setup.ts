@@ -370,6 +370,9 @@ function printHumanSummary(results: StepResult[]): void {
     '',
     chalk.dim('  Re-run `solid setup` any time — every step is idempotent.'),
     chalk.dim('  Help:  `solid --help`     ·   Docs:  https://solidnumber.com/docs/cli'),
+    '',
+    chalk.cyan('  💡 Wire Claude Desktop / Cursor to this tenant:'),
+    chalk.dim('     solid mcp install claude'),
   ]));
 }
 

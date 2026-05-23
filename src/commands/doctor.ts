@@ -188,6 +188,7 @@ export const doctorCommand = new Command('doctor')
             skipped: results.filter((r) => r.detail === 'tier-skipped' || r.detail === 'tenant-skipped').length,
             total_ms: results.reduce((a, r) => a + r.ms, 0),
             results,
+            mcp_hint: 'Wire Claude Desktop/Cursor with: solid mcp install claude',
           },
           null,
           2,
@@ -195,6 +196,10 @@ export const doctorCommand = new Command('doctor')
       );
     } else {
       renderTable(results);
+      console.log('');
+      console.log(chalk.cyan('💡 Wire Claude Desktop or Cursor to this tenant:'));
+      console.log(chalk.dim('   solid mcp install claude'));
+      console.log(chalk.dim('   173 agent-attraction verbs + 45 platform tools, one config line.'));
     }
 
     process.exit(failed === 0 ? 0 : 1);
