@@ -85,6 +85,7 @@ import { trainCommand } from './commands/train';
 import { cloneCommand } from './commands/clone';
 import { devCommand } from './commands/dev';
 import { dropletCommand } from './commands/droplet';
+import { infraCommand } from './commands/infra';
 import { companyCommand } from './commands/company';
 import { tenantCommand } from './commands/tenant';
 import { qchainCommand } from './commands/qchain';
@@ -547,6 +548,7 @@ program.addCommand(domainsCommand);
 // Dev tools
 program.addCommand(devCommand);
 program.addCommand(dropletCommand);
+program.addCommand(infraCommand);
 
 // Agency & developer tools
 program.addCommand(dashboardCommand);
