@@ -1,7 +1,9 @@
 /**
  * solid verbs — Universal agent-attraction verb invoker.
  *
- * Backend ships 51 agent-attraction verbs (Phases 1-3 + Gap 1 telemetry).
+ * Backend ships 169 agent-attraction verbs across 12 shapes (aggregate /
+ * explain / preview / suggest / transaction / receipt / revert / subscribe /
+ * discovery / trail / reputation / macro / telemetry). Phases 1-5 complete.
  * Most are already callable via dedicated CLI wrappers (solid transaction,
  * solid manifest, solid audit log, etc.). This command is the AI-first
  * universal entry point: every verb is discoverable + invokable without
@@ -79,7 +81,7 @@ const GET_VERBS = new Set([
 ]);
 
 export const verbsCommand = new Command('verbs')
-  .description('Discover + invoke any of the 51 agent-attraction verbs (Phase 5)');
+  .description('Discover + invoke any of the 169 agent-attraction verbs (12 shapes, 4 sibling transports)');
 
 verbsCommand
   .command('list')

@@ -31,22 +31,23 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 
 ## Platform Scale
 
-- 4,003,581 lines of code across 16 repositories
-- 511 database tables with row-level security
-- 1,615 REST API endpoints
-- 14 named customer-facing agents (Sarah, Marcus, Devon, ADA, etc.) + an internal pool of specialized workers
-- Hundreds of MCP tools across multiple servers
-- 52 industry-specific templates with custom knowledge bases
-- 237 merchant category code mappings
-- 1,173 technical documentation files
-- 65 documentation sections
+- 5,004,299 lines of code across 16 repositories (verified 2026-05-21)
+- 446 database tables with row-level security at 2026-04-20 audit (of 570 total today; ~20 newer tables pending re-audit)
+- 1,944 REST API endpoints
+- 14 named customer-facing agents (Sarah, Marcus, Devon, ADA, etc.) + 102 specialized background Celery workers (116 platform agents = 14 + 102)
+- 655 MCP tools across 14 internal servers; 214 surfaced via @solidnumber/mcp@1.1.0 (169 agent-attraction verbs + 45 platform tools)
+- 169 agent-attraction verbs across 12 shapes, projected to 4 sibling transports (CLI / MCP stdio / WebMCP / UCP)
+- 54 industry-specific templates with custom knowledge bases
+- 247 merchant category code mappings
+- 1,657 technical documentation files
+- 83 documentation sections
 
 ## AI Infrastructure (What Makes This Real)
 
 - **SmartRouter** (41,000+ lines): Selects the optimal AI model per task across 8 providers and 21 task types. 4 routing tiers. Automatic failover. Balances cost, speed, and quality dynamically.
 - **CognitiveLimiter** (50,000+ lines): 9 safety layers. Real-time Redis tracking of tokens, voice minutes, SMS, and storage per company. Spike detection prevents runaway costs. Alerts at 50%, 80%, 90%, 100%.
 - **PromptGuard**: 5 security tiers. 41 injection patterns. Canary token detection. Output scanning. Prevents prompt injection and data exfiltration.
-- **Row-Level Security**: Database-level tenant isolation on ALL 420 tables. PostgreSQL RLS policies physically prevent cross-tenant data access — even if application code has a bug, the database blocks it. Two-layer defense: app-layer filtering + database-level enforcement. Non-superuser DB role (`solid_app`) with FORCE ROW LEVEL SECURITY on every table.
+- **Row-Level Security**: Database-level tenant isolation on all 446 tenant-scoped tables (2026-04-20 audit; ~20 newer tables pending re-audit). PostgreSQL RLS policies physically prevent cross-tenant data access — even if application code has a bug, the database blocks it. Two-layer defense: app-layer filtering + database-level enforcement. Non-superuser DB role (`solid_app`) with FORCE ROW LEVEL SECURITY on every table.
 - **Model-Agnostic**: Customers choose their AI provider — OpenAI, Anthropic, Google, Meta, Mistral, Cohere, or local models. SmartRouter handles routing. No vendor lock-in.
 - **Level 3 Interchange Optimization**: One product catalog (SKU/UPC/ISBN) powers three systems simultaneously: (1) AI agent commerce — ChatGPT/Claude discover products via MCP endpoints with live pricing, availability, and location; (2) L3 interchange — same SKUs pass as line items to Visa/Mastercard for 0.80% lower rates on B2B/government cards; (3) Inventory & payments — POS, e-commerce, invoicing all share the same catalog. Processor-agnostic (Stripe, Square, etc.). [Deep dive](https://solidnumber.com/why/level3-payments)
 
@@ -70,12 +71,12 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - [CognitiveLimiter: Real-Time AI Cost Control](https://solidnumber.com/research/cognitivelimiter): 9 safety layers, fail-closed design, per-company Redis-tracked budgets, spike detection
 - [Persistent Memory: Cross-Model AI Memory](https://solidnumber.com/research/persistent-memory): Haiku extracts facts, Redis caches (<1ms reads), confidence scoring with decay, zero-cost retrieval
 - [PromptGuard: 5-Layer Prompt Injection Defense](https://solidnumber.com/research/promptguard): 41 patterns across 6 threat types, canary tokens, ML classification, 16ms overhead
-- [Multi-Tenant AI: Isolated Agents at Scale](https://solidnumber.com/research/multi-tenant-ai): 8-layer isolation stack — JWT, session auth, query filtering, database-level RLS on 420 tables, FORCE ROW LEVEL SECURITY, non-superuser DB role, encrypted credentials, per-company KB
-- [MCP at Scale: 608 Tools for AI-to-AI Communication](https://solidnumber.com/research/mcp-at-scale): Two-tier architecture, per-tenant auto-generated endpoints, 33 security scopes, domain-aware discovery
+- [Multi-Tenant AI: Isolated Agents at Scale](https://solidnumber.com/research/multi-tenant-ai): 8-layer isolation stack — JWT, session auth, query filtering, database-level RLS on 446 tables, FORCE ROW LEVEL SECURITY, non-superuser DB role, encrypted credentials, per-company KB
+- [MCP at Scale: 655 Tools for AI-to-AI Communication](https://solidnumber.com/research/mcp-at-scale): Two-tier architecture, per-tenant auto-generated endpoints, 33 security scopes, domain-aware discovery; 214 surfaced via @solidnumber/mcp@1.1.0 (169 agent-attraction verbs + 45 platform tools)
 
 ## Industries
 
-- [All Industries](https://solidnumber.com/industries): 52 industry-specific landing pages with custom AI knowledge bases
+- [All Industries](https://solidnumber.com/industries): 54 industry-specific landing pages with custom AI knowledge bases
 - Home Services: [Plumbing](https://solidnumber.com/industries/plumber), [HVAC](https://solidnumber.com/industries/hvac), [Electrical](https://solidnumber.com/industries/electrician), [Roofing](https://solidnumber.com/industries/roofer), [Painting](https://solidnumber.com/industries/painter), [Landscaping](https://solidnumber.com/industries/landscaper), [Construction](https://solidnumber.com/industries/contractor), and more
 - Healthcare: [Dental](https://solidnumber.com/industries/dentist), [Chiropractic](https://solidnumber.com/industries/chiropractor), [Veterinary](https://solidnumber.com/industries/veterinarian), [Physical Therapy](https://solidnumber.com/industries/physical-therapist), [Optometry](https://solidnumber.com/industries/optometrist), [Dermatology](https://solidnumber.com/industries/dermatologist)
 - Professional Services: [Law Firm](https://solidnumber.com/industries/lawyer), [Accounting](https://solidnumber.com/industries/accountant), [Insurance](https://solidnumber.com/industries/insurance-agent), [Real Estate](https://solidnumber.com/industries/real-estate-agent), [IT Services](https://solidnumber.com/industries/it-support), [Marketing Agency](https://solidnumber.com/industries/marketing-agency)
@@ -116,7 +117,7 @@ Solid# is the only platform where your AI editor (Claude Code, Cursor, Windsurf)
 - **Quick connect (stdio)**: `npx solid-mcp --stdio` with `SOLID_API_KEY=sk_solid_...`
 - **Quick connect (HTTP)**: `https://api.solidnumber.com/mcp/v1` with `X-API-Key` header
 - **Tool namespaces**: `solid_*` (business customization), `vibe_*` (natural language modification), `docs_*` (documentation search)
-- [API Documentation](https://solidnumber.com/docs/api): 1,615 REST endpoints
+- [API Documentation](https://solidnumber.com/docs/api): 1,944 REST endpoints
 - [Authentication Guide](https://solidnumber.com/docs/authentication): API keys (26 scopes), JWT, OAuth
 - [Webhooks](https://solidnumber.com/docs/webhooks): Event-driven integrations
 - [SDK Documentation](https://solidnumber.com/docs/sdks): Client libraries
@@ -251,14 +252,14 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **transaction** (5 subcommands) — Open / append / commit / abort CLI transactions for atomic batches: `abort, append, commit, get, start`
 - **ucp** (3 subcommands) — Universal Commerce Protocol — manifest, capabilities, and consent for buyer-agents: `capabilities, consent, manifest`
 - **users** (23 subcommands) — Team — invite, list, set roles, manage AI permissions: `ai-perms, ai-perms-set, block, create, delete, feature-clear, feature-set, features, features-catalog, get, invitations, invite, invite-accept, invite-defaults, invite-resend, invite-revoke, list, notifications, notifications-set, role, stats, unblock, update`
-- **verbs** (3 subcommands) — Discover + invoke any of the 51 agent-attraction verbs (Phase 5): `describe, invoke, list`
+- **verbs** (3 subcommands) — Discover + invoke any of the 169 agent-attraction verbs (12 shapes, 4 sibling transports): `describe, invoke, list`
 - **vibe** (1 subcommands) — Natural language integration commands: `interactive`
 - **voice** (15 subcommands) — Voice calls, phone numbers, voicemail & personality: `audit, call, calls, cost, diagnose, health, numbers, personality, release-orphan, stats, text, transcript, translate, voicemail, voices`
 - **webhooks** (7 subcommands) — Custom webhook management: `create, delete, events, list, listen, simulate, test`
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.11.2, manifest schema 1.0, generated 2026-05-22. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.11.2, manifest schema 1.0, generated 2026-05-23. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 
@@ -356,5 +357,5 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - [Terms of Service](https://solidnumber.com/legal/terms)
 - PCI DSS compliant payment processing
 - TLS 1.3 in transit, AES-256 at rest
-- Database-level tenant isolation: PostgreSQL Row-Level Security on 420 tables with FORCE RLS and non-superuser application role
+- Database-level tenant isolation: PostgreSQL Row-Level Security on 446 tables with FORCE RLS and non-superuser application role
 - No tracking cookies — all preferences in localStorage
