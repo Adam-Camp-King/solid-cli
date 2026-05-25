@@ -175,45 +175,41 @@ mcpCommand
 // ---------------------------------------------------------------------------
 mcpCommand
   .command('tools')
-  .description('List MCP tools available on the backend (reads /api/v1/mcp/manifest)')
-  .option('--include-experimental', 'Include tools not yet passed through the safety audit')
+  .description('List MCP tools available to AI clients (reads /api/v1/agent/verbs)')
   .option('--json', 'Emit the full manifest as JSON')
   .action(async (opts: Record<string, unknown>) => {
-    const params: Record<string, string> = {};
-    if (opts.includeExperimental) params.include = 'experimental';
-    const resp = await apiClient.get<Record<string, unknown>>('/api/v1/mcp/manifest', { params });
+    const resp = await apiClient.get<Record<string, unknown>>('/api/v1/agent/verbs', {
+      params: { surface: 'mcp_stdio' },
+    });
     const data = resp.data;
 
     if (isJsonOutput(opts)) {
       process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       return;
     }
-    const total = typeof data.total_tools === 'number' ? data.total_tools : '?';
-    const stable = typeof data.stable_tools === 'number' ? data.stable_tools : '?';
-    const returned = typeof data.returned_tools === 'number' ? data.returned_tools : '?';
+    const verbs = Array.isArray(data.verbs) ? (data.verbs as Array<Record<string, unknown>>) : [];
+    const total = typeof data.count === 'number' ? data.count : verbs.length;
     console.log('');
-    console.log(chalk.bold(`Solid# MCP tools — ${returned} shown (${stable} stable / ${total} total)`));
-    const tools = Array.isArray(data.tools) ? (data.tools as Array<Record<string, unknown>>) : [];
-    const grouped = new Map<string, typeof tools>();
-    for (const t of tools) {
-      const cat = typeof t.category === 'string' ? t.category : 'Other';
-      if (!grouped.has(cat)) grouped.set(cat, []);
-      grouped.get(cat)!.push(t);
+    console.log(chalk.bold(`Solid# MCP tools — ${total} verbs available to AI clients`));
+    const grouped = new Map<string, typeof verbs>();
+    for (const v of verbs) {
+      const ns = typeof v.name === 'string' ? (v.name as string).split('.')[0] : 'other';
+      if (!grouped.has(ns)) grouped.set(ns, []);
+      grouped.get(ns)!.push(v);
     }
     const sorted = [...grouped.entries()].sort((a, b) => b[1].length - a[1].length);
-    for (const [cat, list] of sorted) {
+    for (const [ns, list] of sorted) {
       console.log('');
-      console.log(chalk.cyan(`  ${cat}`), chalk.dim(`(${list.length})`));
-      for (const t of list.slice(0, 8)) {
-        const name = typeof t.name === 'string' ? t.name : '?';
-        const method = typeof t.method === 'string' ? t.method : '?';
-        const stableMark = t.stable === true ? chalk.green('●') : chalk.dim('○');
-        console.log(`    ${stableMark} ${chalk.bold(method.padEnd(6))} ${name}`);
+      console.log(chalk.cyan(`  ${ns}`), chalk.dim(`(${list.length})`));
+      for (const v of list.slice(0, 8)) {
+        const name = typeof v.name === 'string' ? v.name : '?';
+        const shape = typeof v.shape === 'string' ? chalk.dim(`[${v.shape}]`) : '';
+        console.log(`    ${chalk.green('●')} ${chalk.bold(name)} ${shape}`);
       }
       if (list.length > 8) console.log(chalk.dim(`    ... and ${list.length - 8} more`));
     }
     console.log('');
-    console.log(chalk.dim(`  ● stable  ○ experimental  ·  Run with --json for full machine output.`));
+    console.log(chalk.dim(`  Run with --json for full machine output.`));
     console.log('');
   });
 
