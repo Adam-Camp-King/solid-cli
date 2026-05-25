@@ -191,7 +191,9 @@ const voicemailCmd = voiceCommand
     requireAuth();
     const spinner = ora('Loading voicemails...').start();
     try {
-      const response = await apiClient.get('/api/v1/voice/voicemails');
+      const response = await apiClient.get('/api/v1/voice/voicemails', {
+        params: { company_id: config.companyId },
+      });
       const items = (response.data as Record<string, any>).items || response.data || [];
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} voicemails`));
