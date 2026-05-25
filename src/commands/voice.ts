@@ -122,7 +122,7 @@ const numbersCmd = voiceCommand
     requireAuth();
     const spinner = ora('Loading phone numbers...').start();
     try {
-      const response = await apiClient.get('/api/v1/phone-numbers');
+      const response = await apiClient.get('/api/v1/voice/phone-numbers');
       const numbers = (response.data as Record<string, any>).items || response.data || [];
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${numbers.length} phone numbers`));
@@ -148,7 +148,7 @@ numbersCmd
     try {
       const body: Record<string, string> = { number: options.number };
       if (options.label) body.label = options.label;
-      const response = await apiClient.post('/api/v1/phone-numbers', body);
+      const response = await apiClient.post('/api/v1/voice/phone-numbers', body);
       spinner.succeed(chalk.green(`Phone number added: ${options.number}`));
       if ((response.data as Record<string, any>).id) console.log(chalk.dim(`  ID: ${(response.data as Record<string, any>).id}`));
     } catch (error) { fail(spinner, 'Failed to add phone number', error); }
@@ -164,7 +164,7 @@ numbersCmd
     try {
       const body: Record<string, string> = {};
       if (options.label) body.label = options.label;
-      await apiClient.patch(`/api/v1/phone-numbers/${id}`, body);
+      await apiClient.patch(`/api/v1/voice/phone-numbers/${id}`, body);
       spinner.succeed(chalk.green('Phone number updated'));
     } catch (error) { fail(spinner, 'Failed to update phone number', error); }
   });
@@ -176,7 +176,7 @@ numbersCmd
     requireAuth();
     const spinner = ora('Removing phone number...').start();
     try {
-      await apiClient.delete(`/api/v1/phone-numbers/${id}`);
+      await apiClient.delete(`/api/v1/voice/phone-numbers/${id}`);
       spinner.succeed(chalk.green('Phone number removed'));
     } catch (error) { fail(spinner, 'Failed to remove phone number', error); }
   });
@@ -191,7 +191,7 @@ const voicemailCmd = voiceCommand
     requireAuth();
     const spinner = ora('Loading voicemails...').start();
     try {
-      const response = await apiClient.get('/api/v1/voicemails');
+      const response = await apiClient.get('/api/v1/voice/voicemails');
       const items = (response.data as Record<string, any>).items || response.data || [];
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       spinner.succeed(chalk.green(`${items.length} voicemails`));
@@ -220,7 +220,7 @@ voicemailCmd
     requireAuth();
     const spinner = ora('Loading voicemail...').start();
     try {
-      const response = await apiClient.get(`/api/v1/voicemails/${id}`);
+      const response = await apiClient.get(`/api/v1/voice/voicemails/${id}`);
       const vm = response.data as Record<string, any>;
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(vm, null, 2)); return; }
       spinner.succeed(chalk.green('Voicemail details'));
@@ -245,7 +245,7 @@ voicemailCmd
     requireAuth();
     const spinner = ora('Marking as read...').start();
     try {
-      await apiClient.post(`/api/v1/voicemails/${id}/read`, {});
+      await apiClient.post(`/api/v1/voice/voicemails/${id}/read`, {});
       spinner.succeed(chalk.green('Voicemail marked as read'));
     } catch (error) { fail(spinner, 'Failed to mark voicemail', error); }
   });
