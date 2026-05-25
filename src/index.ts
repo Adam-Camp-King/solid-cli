@@ -86,6 +86,7 @@ import { cloneCommand } from './commands/clone';
 import { codeCommand } from './commands/code';
 import { devCommand } from './commands/dev';
 import { dropletCommand } from './commands/droplet';
+import { notesCommand } from './commands/notes';
 import { infraCommand } from './commands/infra';
 import { companyCommand } from './commands/company';
 import { tenantCommand } from './commands/tenant';
@@ -550,6 +551,7 @@ program.addCommand(domainsCommand);
 program.addCommand(codeCommand);
 program.addCommand(devCommand);
 program.addCommand(dropletCommand);
+program.addCommand(notesCommand);
 program.addCommand(infraCommand);
 
 // Agency & developer tools
