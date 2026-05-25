@@ -302,12 +302,80 @@ moduleCmd
     } catch (error) { fail(spinner, 'Delete failed', error); }
   });
 
+// ── Module Version History ───────────────────────────────────────
+moduleCmd
+  .command('history <folder>')
+  .description('List version history for a module')
+  .option('-l, --limit <n>', 'Max versions', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (folder: string, opts: any) => {
+    requireAuth();
+    const spinner = ora(`Loading history for ${folder}...`).start();
+    try {
+      const res = await apiClient.get(`/api/v1/modules/${folder}/versions`, { params: { limit: parseInt(opts.limit) } });
+      const data = res.data as Record<string, any>;
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const versions = data.versions || [];
+      spinner.succeed(chalk.green(`${versions.length} versions for ${folder}`));
+      if (versions.length === 0) { console.log(chalk.dim('  No version history yet. Push code to create the first snapshot.')); return; }
+      console.log('');
+      for (const v of versions as Record<string, any>[]) {
+        const date = v.created_at ? chalk.dim(new Date(v.created_at).toLocaleString()) : '';
+        const summary = v.change_summary ? chalk.cyan(` — ${v.change_summary}`) : '';
+        console.log(`  v${v.version}  ${v.file_count} files  ${chalk.dim(v.source)}  ${date}${summary}`);
+      }
+    } catch (error) { fail(spinner, 'Failed to load history', error); }
+  });
+
+moduleCmd
+  .command('snapshot <folder>')
+  .description('Create a named snapshot of a module\'s current state')
+  .option('-m, --message <text>', 'Snapshot description')
+  .option('--json', 'Output as JSON')
+  .action(async (folder: string, opts: any) => {
+    requireAuth();
+    const spinner = ora(`Creating snapshot of ${folder}...`).start();
+    try {
+      const body: Record<string, any> = {};
+      if (opts.message) body.message = opts.message;
+      const res = await apiClient.post(`/api/v1/modules/${folder}/snapshot`, body);
+      const data = res.data as Record<string, any>;
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      spinner.succeed(chalk.green(`Snapshot v${data.version} created (${data.file_count} files, ${data.snapshot_size_bytes} bytes)`));
+    } catch (error) { fail(spinner, 'Failed to create snapshot', error); }
+  });
+
+moduleCmd
+  .command('rollback <folder>')
+  .description('Rollback a module to a previous version')
+  .requiredOption('--to <version>', 'Version number to restore')
+  .option('--yes', 'Skip confirmation')
+  .option('--json', 'Output as JSON')
+  .action(async (folder: string, opts: any) => {
+    requireAuth();
+    const version = parseInt(opts.to);
+    if (!opts.yes) {
+      const inquirer = (await import('inquirer')).default;
+      const { confirm } = await inquirer.prompt([{ type: 'confirm', name: 'confirm', message: `Rollback ${folder} to version ${version}? Current state will be auto-snapshotted.`, default: false }]);
+      if (!confirm) { console.log(chalk.dim('Cancelled.')); return; }
+    }
+    const spinner = ora(`Rolling back ${folder} to v${version}...`).start();
+    try {
+      const res = await apiClient.post(`/api/v1/modules/${folder}/rollback`, { version });
+      const data = res.data as Record<string, any>;
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      spinner.succeed(chalk.green(`Rolled back to v${version} (${data.files_restored} files restored, backup saved as v${data.backup_version})`));
+    } catch (error) { fail(spinner, 'Rollback failed', error); }
+  });
+
 devCommand.addCommand(moduleCmd);
 
 import { appendExamples as __ae_dev } from '../lib/command-kit';
 __ae_dev(devCommand, [
   { cmd: 'solid dev list',                       why: 'Your custom modules' },
   { cmd: 'solid dev scaffold <name>',            why: 'New custom module boilerplate' },
-  { cmd: 'solid dev push',                       why: 'Upload local custom module code' },
-  { cmd: 'solid dev deploy',                     why: 'Build + activate custom module' },
+  { cmd: 'solid dev push <folder>',              why: 'Upload local custom module code' },
+  { cmd: 'solid dev deploy <folder>',            why: 'Build + activate custom module' },
+  { cmd: 'solid dev module history <folder>',    why: 'Version history for a module' },
+  { cmd: 'solid dev module rollback <folder> --to 1', why: 'Restore a module to a previous version' },
 ]);

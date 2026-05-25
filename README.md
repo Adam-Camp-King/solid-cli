@@ -2,7 +2,7 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-119 top-level commands, 600+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+120 top-level commands, 600+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
 
 **v2.11** — outbound voice (`solid voice call` / `solid voice text` /
 `solid voice translate`) + universal `solid agent dispatch <verb>` +

@@ -131,17 +131,57 @@ transactionCommand
 
 transactionCommand
   .command('abort <transactionId>')
-  .description('Seal a transaction as aborted (rollback intent recorded)')
+  .description('Abort a transaction — reverses all mutations via entity versioning')
   .option('--json', 'Output as JSON')
   .action(async (transactionId, options) => {
     requireLogin();
-    const spinner = options.json ? null : ora('Aborting transaction...').start();
+    const spinner = options.json ? null : ora('Reversing transaction...').start();
     try {
       const res = await apiClient.post(`/api/v1/agent/transaction/${transactionId}/abort`);
       spinner?.stop();
       const data: any = res.data;
       emit(data, options, () => {
-        console.log(chalk.yellow(`✗ aborted (${data.op_count} ops rolled back)`));
+        const reversed = data.reversed_count || 0;
+        const failed = (data.failed_reversals || []).length;
+        console.log(chalk.yellow(`✗ aborted — ${reversed} ops reversed${failed > 0 ? `, ${failed} failed` : ''}`));
+        if (failed > 0) {
+          for (const f of data.failed_reversals) {
+            console.log(chalk.red(`  ✗ ${f}`));
+          }
+        }
+      });
+    } catch (e) {
+      spinner?.stop();
+      failApi(e);
+    }
+  });
+
+transactionCommand
+  .command('rollback <transactionId>')
+  .description('Reverse a committed transaction — restores all entities to pre-transaction state')
+  .option('--yes', 'Skip confirmation')
+  .option('--json', 'Output as JSON')
+  .action(async (transactionId, options) => {
+    requireLogin();
+    if (!options.yes) {
+      const inquirer = (await import('inquirer')).default;
+      const { confirm } = await inquirer.prompt([{ type: 'confirm', name: 'confirm', message: `Rollback committed transaction ${transactionId}? All mutations will be reversed.`, default: false }]);
+      if (!confirm) { console.log(chalk.dim('Cancelled.')); return; }
+    }
+    const spinner = options.json ? null : ora('Reversing committed transaction...').start();
+    try {
+      const res = await apiClient.post(`/api/v1/agent/transaction/${transactionId}/rollback`);
+      spinner?.stop();
+      const data: any = res.data;
+      emit(data, options, () => {
+        const reversed = data.reversed_count || 0;
+        const failed = (data.failed_reversals || []).length;
+        console.log(chalk.green(`✓ Transaction rolled back — ${reversed} ops reversed${failed > 0 ? `, ${failed} failed` : ''}`));
+        if (failed > 0) {
+          for (const f of data.failed_reversals) {
+            console.log(chalk.red(`  ✗ ${f}`));
+          }
+        }
       });
     } catch (e) {
       spinner?.stop();

@@ -423,9 +423,96 @@ export const rollbackCommand = new Command('rollback')
     console.error(chalk.red(`Unknown type: ${type}. Use 'page' or 'kb'.`));
   });
 
+// ── Universal Entity History ─────────────────────────────────────
+historyCommand
+  .command('entity <type> [id]')
+  .description('Version history for any business entity (contacts, products, deals, services, orders, appointments)')
+  .option('-l, --limit <n>', 'Max versions', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (type: string, id: string | undefined, opts: any) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const spinner = ora(`Loading ${type} history...`).start();
+    try {
+      const params: Record<string, any> = { entity_type: type, limit: parseInt(opts.limit) };
+      if (id) params.entity_id = parseInt(id);
+      const res = await apiClient.post('/api/v1/agent/history/entity', params);
+      const data = res.data as Record<string, any>;
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const versions = data.versions || [];
+      spinner.succeed(chalk.green(`${versions.length} changes for ${type}${id ? ` #${id}` : ''}`));
+      if (versions.length === 0) { console.log(chalk.dim('  No changes recorded.')); return; }
+      console.log('');
+      for (const v of versions as Record<string, any>[]) {
+        const date = v.created_at ? chalk.dim(new Date(v.created_at).toLocaleString()) : '';
+        const verb = v.verb_name ? chalk.cyan(v.verb_name) : chalk.dim('unknown');
+        const changes = v.field_changes ? Object.keys(v.field_changes).join(', ') : '';
+        console.log(`  v${v.version}  ${type} #${v.entity_id}  ${verb}  ${date}`);
+        if (changes) console.log(chalk.dim(`    changed: ${changes}`));
+      }
+    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+  });
+
+historyCommand
+  .command('recent')
+  .description('All recent changes across the entire company')
+  .option('-l, --limit <n>', 'Max changes', '30')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: any) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const spinner = ora('Loading recent changes...').start();
+    try {
+      const res = await apiClient.post('/api/v1/agent/history/recent', { limit: parseInt(opts.limit) });
+      const data = res.data as Record<string, any>;
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const changes = data.changes || [];
+      spinner.succeed(chalk.green(`${changes.length} recent changes`));
+      if (changes.length === 0) { console.log(chalk.dim('  No changes recorded.')); return; }
+      console.log('');
+      for (const c of changes as Record<string, any>[]) {
+        const date = c.created_at ? chalk.dim(new Date(c.created_at).toLocaleString()) : '';
+        const verb = c.verb_name ? chalk.cyan(c.verb_name) : '';
+        console.log(`  ${chalk.bold(c.entity_type)} #${c.entity_id}  v${c.version}  ${verb}  ${date}`);
+      }
+    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+  });
+
+// ── Universal Entity Rollback ───────────────────────────────────
+rollbackCommand
+  .command('entity <type> <id>')
+  .description('Rollback any entity to a previous version')
+  .requiredOption('--to <version>', 'Version to restore')
+  .option('--yes', 'Skip confirmation')
+  .option('--json', 'Output as JSON')
+  .action(async (type: string, id: string, opts: any) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const version = parseInt(opts.to);
+    if (!opts.yes) {
+      const inquirer = (await import('inquirer')).default;
+      const { confirm } = await inquirer.prompt([{ type: 'confirm', name: 'confirm', message: `Rollback ${type} #${id} to version ${version}?`, default: false }]);
+      if (!confirm) { console.log(chalk.dim('Cancelled.')); return; }
+    }
+    const spinner = ora(`Rolling back ${type} #${id} to v${version}...`).start();
+    try {
+      const res = await apiClient.post('/api/v1/agent/history/rollback', {
+        entity_type: type, entity_id: parseInt(id), version,
+      });
+      const data = res.data as Record<string, any>;
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (data.status === 'rolled_back') {
+        spinner.succeed(chalk.green(`Rolled back ${type} #${id} to v${version} (${(data.restored_fields || []).length} fields restored)`));
+      } else {
+        spinner.fail(chalk.red(data.summary || 'Rollback failed'));
+      }
+    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+  });
+
+
 import { appendExamples as __ae_history } from '../lib/command-kit';
 __ae_history(historyCommand, [
-  { cmd: 'solid history pages <slug>', why: 'Version history for a page' },
-  { cmd: 'solid history kb <id>',      why: 'KB entry versions' },
-  { cmd: 'solid rollback pages <slug> --version 3', why: 'Rollback is a separate top-level cmd' },
+  { cmd: 'solid history pages <slug>',           why: 'Version history for a page' },
+  { cmd: 'solid history kb <id>',                why: 'KB entry versions' },
+  { cmd: 'solid history entity contacts 42',     why: 'Contact change history' },
+  { cmd: 'solid history entity products',        why: 'All product changes' },
+  { cmd: 'solid history recent',                 why: 'All recent changes across the company' },
+  { cmd: 'solid rollback entity contacts 42 --to 1', why: 'Restore contact to version 1' },
 ]);

@@ -132,7 +132,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
-- 119 top-level command groups, 665 subcommands.
+- 120 top-level command groups, 676 subcommands.
 - Core workflow: `solid auth login` → `solid company create` → `solid clone <industry>` → `solid pull` → edit → `solid push` → `solid pages publish` → `solid billing checkout-link`.
 
 **Top-level commands (no subcommands):**
@@ -153,7 +153,6 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - `solid feedback` — Send a message directly to the founder — response within 5 minutes
 - `solid graph` — Navigate the tenant JSON-LD context graph — counts, types, and N-hop neighbourhoods around any entity
 - `solid health` — Health check commands
-- `solid history` — View version history for pages and KB entries
 - `solid import` — Convert HTML/JSX into Solid# CMS page blocks
 - `solid init` — Scaffold a LOCAL app template (boilerplate files only — does NOT create a company; use `solid company create` or `solid demo create` for that)
 - `solid install` — One-time setup: wire Claude Code to auto-refresh Solid context at every session start
@@ -168,7 +167,6 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - `solid pull` — Download your business data as local files
 - `solid push` — Push local file changes to your Solid# business
 - `solid render` — Screenshot any page (A.1 — visible-gap close for AI agents)
-- `solid rollback` — Rollback a page or KB entry to a previous version
 - `solid serve` — Start a local preview server for your pulled site
 - `solid setup` — One-command onboarding: auth + editor MCP + Claude hook + completion + first action
 - `solid status` — Show your business status and setup overview
@@ -196,6 +194,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **calendar** (1 subcommands) — Google Calendar event create (requires Google linked): `event`
 - **chains** (17 subcommands) — Agent chains — multi-step AI workflows (build, execute, approve): `activate, approve, archive, cancel, create, delete, execute, execution, executions, from-template, get, list, pause, pending-approvals, template, templates, update`
 - **chat-widgets** (6 subcommands) — Chat widgets for external sites (CRUD + embed code): `create, delete, embed, get, list, update`
+- **code** (4 subcommands) — Unified code surface — status, history, diff, rollback across all systems: `diff, history, rollback, status`
 - **company** (11 subcommands) — Manage companies (agencies & multi-company developers): `create, create-for-client, current, info, invite, list, lock, lock-status, members, request-unlock, unlock`
 - **completion** (2 subcommands) — Generate or install shell completion (reflects the live command tree): `install, uninstall`
 - **connect** (11 subcommands) — Import external data into your Solid# business: `csv, docs, figma, github, history, list, notion, sheets, slack, status, wordpress`
@@ -212,6 +211,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **emails** (6 subcommands) — Email — addresses, templates, send transactional messages: `addresses, send, send-invoice, send-payment-link, template-vars, templates`
 - **flow** (11 subcommands) — Commerce flows — payment flows and subscriptions: `activate, agents, archive, clone, create, get, list, metrics, pause, test, update`
 - **forms** (11 subcommands) — Forms & surveys — CRUD, AI generate, export CSV/Excel/PDF: `analyze, create, delete, embed, export, followup, generate, get, list, optimize, update`
+- **history** (2 subcommands) — View version history for pages and KB entries: `entity, recent`
 - **inbound** (9 subcommands) — Inbound webhooks — receive events from Zapier/Stripe/external systems and fire chains: `create, delete, event, events, get, list, replay, rotate, update`
 - **inbox** (7 subcommands) — Unified inbox — messages, email, and campaigns: `campaigns, email, list, mark-read, reply, send, stats`
 - **infra** (4 subcommands) — Managed droplet infrastructure — diagnose, preview, resize, scale workers: `diagnose, preview-resize, resize, scale-workers`
@@ -236,6 +236,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **products** (8 subcommands) — Product catalog (CRUD, pricing, components): `catalog, components, create, delete, get, list, pricing, update`
 - **qchain** (4 subcommands) — Q-Chain substrate verification — for external auditors (insurance, SOC 2, compliance): `audit-key, export, pubkey, verify`
 - **reports** (5 subcommands) — Business reports & analytics: `export, list, revenue, run, top-products`
+- **rollback** (1 subcommands) — Rollback a page or KB entry to a previous version: `entity`
 - **sandbox** (9 subcommands) — Isolated sandbox for safe site editing: `create, diff, exit, fork, preview, promote, push, reset, status`
 - **schedule** (15 subcommands) — Appointment scheduling & calendar: `action, actions, book, calendar, cancel, cancel-action, create, due, fire, get, hold, list, reschedule, slots, update`
 - **schema** (3 subcommands) — CMS / page block schema for AI coding agents: `blocks, pages, verbs`
@@ -250,7 +251,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **support** (2 subcommands) — Customer support tickets: `get, list`
 - **tenant** (4 subcommands) — Tenant Activity Gate — compute-budget introspection for sweeps: `active, allowlist, gate-debug, level`
 - **train** (4 subcommands) — Train your AI agents with knowledge and context: `add, chat, import, status`
-- **transaction** (5 subcommands) — Open / append / commit / abort CLI transactions for atomic batches: `abort, append, commit, get, start`
+- **transaction** (6 subcommands) — Open / append / commit / abort CLI transactions for atomic batches: `abort, append, commit, get, rollback, start`
 - **ucp** (3 subcommands) — Universal Commerce Protocol — manifest, capabilities, and consent for buyer-agents: `capabilities, consent, manifest`
 - **users** (23 subcommands) — Team — invite, list, set roles, manage AI permissions: `ai-perms, ai-perms-set, block, create, delete, feature-clear, feature-set, features, features-catalog, get, invitations, invite, invite-accept, invite-defaults, invite-resend, invite-revoke, list, notifications, notifications-set, role, stats, unblock, update`
 - **verbs** (3 subcommands) — Discover + invoke any of the 169 agent-attraction verbs (12 shapes, 4 sibling transports): `describe, invoke, list`
@@ -289,7 +290,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 119 top-level command groups, 665 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 120 top-level command groups, 676 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
 <!-- CLI:Q&A:END -->
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.

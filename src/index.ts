@@ -83,6 +83,7 @@ import { renderCommand } from './commands/render';
 import { docsCommand } from './commands/docs';
 import { trainCommand } from './commands/train';
 import { cloneCommand } from './commands/clone';
+import { codeCommand } from './commands/code';
 import { devCommand } from './commands/dev';
 import { dropletCommand } from './commands/droplet';
 import { infraCommand } from './commands/infra';
@@ -546,6 +547,7 @@ program.addCommand(notificationsCommand);
 program.addCommand(domainsCommand);
 
 // Dev tools
+program.addCommand(codeCommand);
 program.addCommand(devCommand);
 program.addCommand(dropletCommand);
 program.addCommand(infraCommand);

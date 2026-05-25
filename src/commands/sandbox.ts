@@ -335,7 +335,8 @@ sandboxCommand
 sandboxCommand
   .command('fork')
   .description('Create a server-side sandbox (isolated copy for safe editing)')
-  .action(async () => {
+  .option('--scope <scope>', 'Sandbox scope: pages, data, or all (default: all)', 'all')
+  .action(async (opts: any) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
