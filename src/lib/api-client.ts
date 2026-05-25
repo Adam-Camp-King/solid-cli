@@ -572,6 +572,8 @@ class ApiClient {
       }
       if (response.data.expires_at) {
         config.tokenExpiresAt = new Date(response.data.expires_at);
+      } else if (response.data.expires_in) {
+        config.tokenExpiresAt = new Date(Date.now() + response.data.expires_in * 1000);
       }
 
       return true;

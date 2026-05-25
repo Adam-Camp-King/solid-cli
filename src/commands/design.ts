@@ -24,24 +24,9 @@ import chalk from 'chalk';
 import ora from 'ora';
 import * as fs from 'fs';
 import * as path from 'path';
+import { apiClient, handleApiError } from '../lib/api-client';
 
 // ── API helpers ────────────────────────────────────────────────────
-
-function getApiBase(): string {
-  return process.env.SOLID_API_URL || 'https://api.solidnumber.com';
-}
-
-function getToken(): string | null {
-  const configDir = path.join(
-    process.env.HOME || process.env.USERPROFILE || '.',
-    '.solid'
-  );
-  const tokenFile = path.join(configDir, 'token');
-  if (fs.existsSync(tokenFile)) {
-    return fs.readFileSync(tokenFile, 'utf-8').trim();
-  }
-  return null;
-}
 
 interface ErrorLike {
   message?: string;
@@ -71,25 +56,13 @@ async function apiCall<T = unknown>(
   endpoint: string,
   body?: unknown,
 ): Promise<T> {
-  const axios = (await import('axios')).default;
-  const token = getToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const url = `${getApiBase()}/api/v1${endpoint}`;
-  const response = await axios({
-    method,
-    url,
-    data: body,
-    headers,
-    timeout: 60000,
-  });
+  const fullPath = `/api/v1${endpoint}`;
+  const response = method === 'GET'
+    ? await apiClient.get(fullPath)
+    : await apiClient.post(fullPath, body);
   return response.data as T;
 }
+
 
 // ── Commands ───────────────────────────────────────────────────────
 
