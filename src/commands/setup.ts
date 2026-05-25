@@ -31,11 +31,14 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { execSync, spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
-import { getResolvedApiUrl } from '../lib/api-client';
+import { getResolvedApiUrl, apiClient } from '../lib/api-client';
 
 type StepStatus = 'done' | 'skipped' | 'failed' | 'pending';
 
@@ -248,12 +251,52 @@ async function stepAuth(opts: SetupOptions): Promise<StepResult> {
     : { step: 'auth', status: 'failed', detail: r.detail };
 }
 
+const MCP_KEY_NAME = 'mcp-server (auto-provisioned by solid setup)';
+const MCP_KEY_FILE = path.join(os.homedir(), '.solid', 'mcp-key');
+
+function readMcpKey(): string | null {
+  try {
+    if (!fs.existsSync(MCP_KEY_FILE)) return null;
+    const key = fs.readFileSync(MCP_KEY_FILE, 'utf-8').trim();
+    return key.startsWith('sk_') ? key : null;
+  } catch { return null; }
+}
+
+function writeMcpKey(key: string): void {
+  try {
+    const dir = path.dirname(MCP_KEY_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(MCP_KEY_FILE, key, { mode: 0o600 });
+  } catch { /* best-effort */ }
+}
+
+async function getOrCreateMcpApiKey(): Promise<string | null> {
+  const cached = readMcpKey();
+  if (cached) return cached;
+
+  try {
+    const listRes = await apiClient.apiKeyList();
+    const allScopes = listRes.data.available_scopes || [];
+    if (allScopes.length === 0) return null;
+
+    const createRes = await apiClient.apiKeyCreate(MCP_KEY_NAME, allScopes);
+    const key = createRes.data.key;
+    if (key) writeMcpKey(key);
+    return key || null;
+  } catch {
+    return null;
+  }
+}
+
 async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
   if (opts.skipMcp) return [{ step: 'mcp', status: 'skipped', detail: '--skip-mcp' }];
   const present = EDITORS.filter((e) => isInstalled(e.binary));
   if (present.length === 0) {
     return [{ step: 'mcp', status: 'skipped', detail: 'no supported editor on PATH (claude/cursor/windsurf)' }];
   }
+
+  const mcpKey = config.isLoggedIn() ? await getOrCreateMcpApiKey() : null;
+
   const results: StepResult[] = [];
   for (const editor of present) {
     const ok = await confirm(`Wire Solid# MCP into ${editor.pretty}?`, true, !!opts.yes);
@@ -261,7 +304,9 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
       results.push({ step: `mcp.${editor.clientFlag}`, status: 'skipped', detail: 'user declined' });
       continue;
     }
-    const r = runVerb(['mcp', 'install', editor.clientFlag]);
+    const args = ['mcp', 'install', editor.clientFlag];
+    if (mcpKey) args.push('--api-key', mcpKey);
+    const r = runVerb(args);
     results.push({
       step: `mcp.${editor.clientFlag}`,
       status: r.ok ? 'done' : 'failed',
