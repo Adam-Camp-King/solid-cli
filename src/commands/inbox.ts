@@ -47,6 +47,15 @@ export const inboxCommand = new Command('inbox')
   .option('--limit <n>', 'Number of messages to show', '20')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
+    const known = ['stats', 'send', 'email', 'campaigns'];
+    const cmdIdx = process.argv.indexOf('inbox');
+    const afterInbox = cmdIdx >= 0 ? process.argv.slice(cmdIdx + 1).filter(a => !a.startsWith('-')) : [];
+    const unknownSub = afterInbox.find(a => !known.includes(a));
+    if (unknownSub) {
+      process.stderr.write(chalk.red(`\n  ✗ Unknown command: solid inbox ${unknownSub}\n\n`));
+      process.stderr.write(chalk.dim(`  Run solid inbox --help to see all subcommands.\n\n`));
+      process.exit(1);
+    }
     requireAuth();
     const spinner = ora('Loading inbox...').start();
 
