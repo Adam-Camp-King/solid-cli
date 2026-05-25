@@ -86,6 +86,58 @@ export const inboxCommand = new Command('inbox')
     }
   });
 
+// ── List (top-level alias so `solid inbox list` works) ──────────────
+inboxCommand
+  .command('list').alias('ls')
+  .description('List inbox messages')
+  .option('--limit <n>', 'Number of messages', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (options: any) => {
+    requireAuth();
+    const spinner = ora('Loading inbox...').start();
+    try {
+      const response = await apiClient.get('/api/v1/communications/inbox', { params: { limit: parseInt(options.limit) } });
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
+      const data = response.data as Record<string, any>;
+      const messages = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      spinner.succeed(chalk.green(`${messages.length} messages`));
+      if (messages.length === 0) { console.log(chalk.dim('  Inbox is empty.')); return; }
+      for (const raw of messages as unknown[]) {
+        const msg = raw as Record<string, string>;
+        const ch = msg.channel ? chalk.cyan(`[${msg.channel}]`) : '';
+        const dir = msg.direction === 'inbound' ? chalk.yellow('←') : chalk.blue('→');
+        console.log(`  ${dir} ${ch} ${chalk.bold(msg.contact_name || 'Unknown')}  ${formatDate(msg.created_at)}`);
+        console.log(chalk.dim(`    ${truncate(msg.message || msg.body || msg.subject, 80)}`));
+      }
+    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+  });
+
+// ── Reply (top-level) ───────────────────────────────────────────────
+inboxCommand
+  .command('reply <message_id> <body>')
+  .description('Reply to an inbox message')
+  .action(async (messageId: string, body: string) => {
+    requireAuth();
+    const spinner = ora('Sending reply...').start();
+    try {
+      await apiClient.post(`/api/v1/communications/inbox/${messageId}/reply`, { body });
+      spinner.succeed(chalk.green('Reply sent'));
+    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+  });
+
+// ── Mark Read (top-level) ───────────────────────────────────────────
+inboxCommand
+  .command('mark-read <message_id>')
+  .description('Mark a message as read')
+  .action(async (messageId: string) => {
+    requireAuth();
+    const spinner = ora('Marking as read...').start();
+    try {
+      await apiClient.post(`/api/v1/communications/inbox/${messageId}/read`, {});
+      spinner.succeed(chalk.green('Marked as read'));
+    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+  });
+
 // ── Stats ────────────────────────────────────────────────────────────
 
 inboxCommand

@@ -28,7 +28,6 @@ export const cloneCommand = new Command('clone')
   .option('-d, --dir <directory>', 'Output directory for pulled files', '.')
   .option('--list', 'List all available templates')
   .option('--preview', 'Preview template contents without cloning')
-  .option('--pull', 'Also pull files after cloning (default: true)')
   .option('--company <names...>', 'Create + clone for multiple companies (agency bulk mode)')
   .action(async (templateName, options) => {
     if (!config.isLoggedIn()) {

@@ -34,6 +34,7 @@ export const leadsCommand = new Command('leads')
 
 leadsCommand
   .command('submissions')
+  .alias('list')
   .description('List form submissions')
   .option('--status <status>', 'Filter by status (new, contacted, qualified, etc.)')
   .option('-l, --limit <n>', 'Max results', '50')
@@ -164,7 +165,8 @@ leadsCommand
 
 leadsCommand
   .command('score <contact_id>')
-  .description('Get lead score for a contact')
+  .alias('get')
+  .description('Get lead score and details for a contact')
   .option('--json', 'Output as JSON')
   .action(async (contactId, opts) => {
     requireAuth();
@@ -244,7 +246,8 @@ leadsCommand
 
 leadsCommand
   .command('prospect <message...>')
-  .description('Chat with Marcus via the Prospecting Console')
+  .alias('convert')
+  .description('AI-qualify/convert a lead via the Prospecting Console')
   .option('--conversation <id>', 'Continue an existing conversation')
   .option('--json', 'Output as JSON')
   .action(async (messageParts, opts) => {

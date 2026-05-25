@@ -534,13 +534,17 @@ shippingCmd
 
 shippingCmd
   .command('methods')
-  .description('List shipping methods')
+  .description('List shipping methods for a destination')
+  .requiredOption('--zip <zip>', 'Destination ZIP/postal code')
+  .requiredOption('--weight <lbs>', 'Package weight in pounds')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
     requireAuth();
     const spinner = ora('Loading methods...').start();
     try {
-      const res = await apiClient.get('/api/v1/crm/ecommerce/shipping/methods');
+      const res = await apiClient.get('/api/v1/crm/ecommerce/shipping/methods', {
+        params: { destination_zip: opts.zip, weight_lbs: parseFloat(opts.weight) },
+      });
       const data = res.data as Record<string, any>;
       const items = data.methods || data.items || [];
       if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
