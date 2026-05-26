@@ -380,12 +380,13 @@ class ApiClient {
             // dispatcher uses the same axios client so each replay
             // re-enters this interceptor (and is short-circuited by
             // the in-flight guard).
-            const dispatch = async (method: string, url: string, body: unknown) => {
+            const dispatch = async (method: string, url: string, body: unknown, idempotencyKey?: string) => {
               const m = method.toLowerCase();
-              if (m === 'post') await this.client.post(url, body);
-              else if (m === 'put') await this.client.put(url, body);
-              else if (m === 'patch') await this.client.patch(url, body);
-              else if (m === 'delete') await this.client.delete(url);
+              const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined;
+              if (m === 'post') await this.client.post(url, body, { headers });
+              else if (m === 'put') await this.client.put(url, body, { headers });
+              else if (m === 'patch') await this.client.patch(url, body, { headers });
+              else if (m === 'delete') await this.client.delete(url, { headers });
               else throw new Error(`unknown queued method: ${method}`);
             };
             void autoFlushQueue(dispatch).then((stats) => {
@@ -396,7 +397,11 @@ class ApiClient {
                     `.\n`,
                 );
               }
-            }).catch(() => { /* best-effort */ });
+            }).catch((err) => {
+              process.stderr.write(
+                `\x1b[36m[auto-flush]\x1b[0m queue replay error: ${(err as Error).message}\n`,
+              );
+            });
           }
         } catch {
           // never break a response over auto-flush plumbing
@@ -577,9 +582,12 @@ class ApiClient {
       }
 
       return true;
-    } catch {
-      // Don't nuke the session — let the command fail with 401 instead
-      // User can re-login manually. Prevents token wipe on network blips.
+    } catch (err) {
+      if (process.env.SOLID_DEBUG) {
+        process.stderr.write(
+          `\x1b[33m[auth]\x1b[0m token refresh failed: ${(err as Error).message}\n`,
+        );
+      }
       return false;
     }
   }

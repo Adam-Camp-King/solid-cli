@@ -257,7 +257,7 @@ export interface AutoFlushStats {
 /** Replay every queued mutation using the supplied dispatcher.
  *  The dispatcher is injected so this module stays free of axios. */
 export async function autoFlushQueue(
-  dispatch: (method: string, url: string, body: unknown) => Promise<void>,
+  dispatch: (method: string, url: string, body: unknown, idempotencyKey?: string) => Promise<void>,
   cwd: string = process.cwd(),
 ): Promise<AutoFlushStats> {
   if (_autoFlushInFlight) return { succeeded: 0, failed: 0, total: 0 };
@@ -270,7 +270,7 @@ export async function autoFlushQueue(
   try {
     for (const { path: filepath, mutation } of items) {
       try {
-        await dispatch(mutation.method, mutation.url, mutation.body);
+        await dispatch(mutation.method, mutation.url, mutation.body, mutation.idempotencyKey);
         deleteQueued(filepath);
         succeeded++;
       } catch {
