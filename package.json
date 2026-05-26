@@ -32,6 +32,7 @@
     "test": "jest --forceExit --detectOpenHandles",
     "test:coverage": "jest --coverage --forceExit --detectOpenHandles",
     "test:smoke": "jest --testPathPattern=integration --forceExit",
+    "test:contracts": "jest --testPathPattern='integration/(contracts|smoke|http-behavior)' --forceExit",
     "test:security": "jest --testPathPattern=company-isolation --forceExit",
     "verify:schemas": "ts-node scripts/verify-schemas.ts",
     "audit": "npm audit --audit-level=high",
@@ -39,7 +40,7 @@
     "prepublish:check": "bash scripts/prepublish.sh",
     "test:tarball": "bash scripts/test-tarball.sh",
     "verify:deps": "node scripts/verify-runtime-deps.mjs",
-    "prepublishOnly": "npm run build && npm test && npm run test:security && npm run audit:prod && npm run verify:deps"
+    "prepublishOnly": "npm run build && npm test && npm run test:contracts && npm run test:security && npm run audit:prod && npm run verify:deps"
   },
   "keywords": [
     "cli",

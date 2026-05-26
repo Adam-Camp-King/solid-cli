@@ -14,6 +14,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
+import { frontendUrlFor } from '../lib/url-utils';
 
 // ---------------------------------------------------------------------------
 // Browser login (loopback OAuth — like `npm login`, `gh auth login`)
@@ -32,24 +33,7 @@ function openBrowser(url: string): void {
   }
 }
 
-function frontendUrlFor(apiUrl: string): string {
-  // Frontend lives on the same domain in production (app.solidnumber.com),
-  // and on a sibling host (api.solidnumber.com → solidnumber.com / app.solidnumber.com).
-  // Heuristic: strip an "api." prefix; otherwise return the host as-is.
-  // For local dev (http://localhost:8090) → http://localhost:3000.
-  try {
-    const u = new URL(apiUrl);
-    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
-      return `${u.protocol}//${u.hostname}:3000`;
-    }
-    if (u.hostname.startsWith('api.')) {
-      return `${u.protocol}//app.${u.hostname.slice(4)}`;
-    }
-    return `${u.protocol}//${u.hostname}`;
-  } catch {
-    return 'https://app.solidnumber.com';
-  }
-}
+export { frontendUrlFor } from '../lib/url-utils';
 
 interface BrowserLoginResult {
   accessToken: string;

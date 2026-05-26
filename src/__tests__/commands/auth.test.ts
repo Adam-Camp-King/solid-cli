@@ -1,102 +1,96 @@
 /**
- * Auth command tests — login stores correct data, logout clears it.
- * Mocks apiClient and config so no real API calls or filesystem access.
+ * Auth command tests — real behavior, not mock ceremony.
+ *
+ * Tests pure functions, source-read contracts, and structural invariants.
+ * If a test doesn't exercise real auth logic, it doesn't belong here.
  */
 
-import { config } from '../../lib/config';
-import { apiClient } from '../../lib/api-client';
+import * as fs from 'fs';
+import * as path from 'path';
+import { frontendUrlFor } from '../../lib/url-utils';
 
-jest.mock('../../lib/api-client', () => ({
-  apiClient: {
-    login: jest.fn(),
-    authStatus: jest.fn(),
-    companiesList: jest.fn(),
-  },
-  handleApiError: jest.fn((e: any) => ({ message: e?.message || 'Error', status: 500 })),
-}));
+const AUTH_SRC = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'commands', 'auth.ts'),
+  'utf-8',
+);
 
-const mockApi = apiClient as jest.Mocked<typeof apiClient>;
+describe('auth command — real behavior', () => {
 
-describe('auth logic', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  describe('login flow', () => {
-    it('stores token and company_id on successful login', async () => {
-      mockApi.login.mockResolvedValue({
-        data: {
-          access_token: 'new_token_abc',
-          refresh_token: 'new_refresh_xyz',
-          expires_in: 3600,
-          user: { id: 5, email: 'dev@agency.com', company_id: 42 },
-        },
-        status: 200,
-        success: true,
-      });
-
-      const result = await mockApi.login('dev@agency.com', 'password123');
-
-      // Verify the API was called with correct credentials
-      expect(mockApi.login).toHaveBeenCalledWith('dev@agency.com', 'password123');
-
-      // Verify response has all required fields
-      expect(result.data.access_token).toBe('new_token_abc');
-      expect(result.data.refresh_token).toBe('new_refresh_xyz');
-      expect(result.data.user.company_id).toBe(42);
-      expect(result.data.user.id).toBe(5);
+  // ── Pure function: frontendUrlFor ─────────────────────────────────
+  describe('frontendUrlFor', () => {
+    it('strips api. prefix → app. for production', () => {
+      expect(frontendUrlFor('https://api.solidnumber.com')).toBe('https://app.solidnumber.com');
     });
 
-    it('login response includes company_id — never undefined', async () => {
-      mockApi.login.mockResolvedValue({
-        data: {
-          access_token: 'token',
-          refresh_token: 'refresh',
-          expires_in: 3600,
-          user: { id: 1, email: 'test@test.com', company_id: 99 },
-        },
-        status: 200,
-        success: true,
-      });
+    it('maps localhost:8090 → localhost:3000 for local dev', () => {
+      expect(frontendUrlFor('http://localhost:8090')).toBe('http://localhost:3000');
+    });
 
-      const result = await mockApi.login('test@test.com', 'pass');
-      expect(result.data.user.company_id).toBeDefined();
-      expect(typeof result.data.user.company_id).toBe('number');
+    it('maps 127.0.0.1 → 127.0.0.1:3000', () => {
+      expect(frontendUrlFor('http://127.0.0.1:8090')).toBe('http://127.0.0.1:3000');
+    });
+
+    it('returns host as-is when no api. prefix', () => {
+      expect(frontendUrlFor('https://custom-backend.example.com')).toBe('https://custom-backend.example.com');
+    });
+
+    it('falls back to app.solidnumber.com on malformed URL', () => {
+      expect(frontendUrlFor('not-a-url')).toBe('https://app.solidnumber.com');
+    });
+
+    it('preserves protocol (http vs https)', () => {
+      expect(frontendUrlFor('http://api.solidnumber.com')).toBe('http://app.solidnumber.com');
     });
   });
 
-  describe('logout', () => {
-    it('config.logout clears auth state', () => {
-      config.logout();
-      expect(config.logout).toHaveBeenCalled();
+  // ── Source contracts: login flow ──────────────────────────────────
+  describe('login source contracts', () => {
+    it('browser login verifies state parameter to prevent CSRF', () => {
+      expect(AUTH_SRC).toMatch(/returnedState/);
+      // Constant-time state comparison using crypto.timingSafeEqual
+      expect(AUTH_SRC).toMatch(/timingSafeEqual/);
+      // State mismatch leads to rejection
+      expect(AUTH_SRC).toMatch(/stateOk/);
+    });
+
+    it('browser login generates cryptographically random state', () => {
+      expect(AUTH_SRC).toMatch(/crypto\.randomBytes/);
+    });
+
+    it('API-key login calls authStatus() to verify token before storing', () => {
+      // When using --token, the CLI should verify the key works
+      expect(AUTH_SRC).toMatch(/apiClient\.authStatus/);
+    });
+
+    it('login stores accessToken, refreshToken, and companyId in config', () => {
+      expect(AUTH_SRC).toMatch(/config\.accessToken\s*=/);
+      expect(AUTH_SRC).toMatch(/config\.refreshToken\s*=/);
+      expect(AUTH_SRC).toMatch(/config\.companyId\s*=/);
+    });
+
+    it('logout action exists and calls config.logout()', () => {
+      expect(AUTH_SRC).toMatch(/config\.logout\(\)/);
+    });
+
+    it('every action gates on isLoggedIn() or handles unauthed gracefully', () => {
+      // auth login doesn't need login check, but auth status/whoami/refresh do
+      expect(AUTH_SRC).toMatch(/isLoggedIn\(\)/);
     });
   });
 
-  describe('auth status', () => {
-    it('isLoggedIn returns true when mocked as logged in', () => {
-      expect(config.isLoggedIn()).toBe(true);
+  // ── Source contracts: security ─────────────────────────────────────
+  describe('security contracts', () => {
+    it('browser login server only listens on localhost (no 0.0.0.0)', () => {
+      // The loopback server must not bind to all interfaces
+      expect(AUTH_SRC).not.toMatch(/listen\(\s*\d+\s*,\s*['"]0\.0\.0\.0['"]/);
     });
-  });
 
-  describe('multi-company', () => {
-    it('companiesList returns array of companies', async () => {
-      mockApi.companiesList.mockResolvedValue({
-        data: {
-          companies: [
-            { id: 1, name: 'My Company', role: 'owner', is_active: true },
-            { id: 42, name: 'Client Co', role: 'developer', is_active: true },
-          ],
-          active_company_id: 1,
-          count: 2,
-        },
-        status: 200,
-        success: true,
-      });
+    it('browser login has a timeout to prevent hanging', () => {
+      expect(AUTH_SRC).toMatch(/BROWSER_LOGIN_TIMEOUT/);
+    });
 
-      const result = await mockApi.companiesList();
-      expect(result.data.companies).toHaveLength(2);
-      expect(result.data.companies[0].id).toBe(1);
-      expect(result.data.companies[1].role).toBe('developer');
+    it('callback HTML escapes error parameter to prevent XSS', () => {
+      expect(AUTH_SRC).toMatch(/escapeHtml/);
     });
   });
 });

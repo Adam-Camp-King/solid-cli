@@ -21,39 +21,9 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { requireTenantManifest, PullManifest } from '../lib/tenant-guard';
 import { requireCompanyContext } from '../lib/command-kit';
+import { parseKbMarkdown, detectChanges, ChangeSet } from '../lib/push-utils';
 
-interface ChangeSet {
-  pages: { file: string; action: 'create' | 'update'; data: Record<string, unknown> }[];
-  kb: { file: string; action: 'create' | 'update'; data: { title: string; content: string; category: string; id?: number } }[];
-  settings: { changed: boolean; data: Record<string, unknown> };
-  summary: { creates: number; updates: number; settings: boolean };
-}
-
-function parseKbMarkdown(content: string): { id?: number; title: string; category: string; content: string } {
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-
-  if (!frontmatterMatch) {
-    return { title: 'Untitled', category: 'general', content: content.trim() };
-  }
-
-  const frontmatter = frontmatterMatch[1];
-  const body = frontmatterMatch[2].trim();
-
-  let id: number | undefined;
-  let title = 'Untitled';
-  let category = 'general';
-
-  for (const line of frontmatter.split('\n')) {
-    const [key, ...valueParts] = line.split(':');
-    const value = valueParts.join(':').trim();
-
-    if (key.trim() === 'id') id = parseInt(value, 10);
-    if (key.trim() === 'title') title = value.replace(/^["']|["']$/g, '');
-    if (key.trim() === 'category') category = value;
-  }
-
-  return { id, title, category, content: body };
-}
+export { parseKbMarkdown, detectChanges, ChangeSet };
 
 function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -64,75 +34,6 @@ function confirm(question: string): Promise<boolean> {
     });
   });
 }
-
-function detectChanges(baseDir: string, manifest: PullManifest): ChangeSet {
-  const changes: ChangeSet = {
-    pages: [],
-    kb: [],
-    settings: { changed: false, data: {} },
-    summary: { creates: 0, updates: 0, settings: false },
-  };
-
-  // ── Detect page changes ───────────────────────────────────────────
-  const pagesDir = path.join(baseDir, 'pages');
-  if (fs.existsSync(pagesDir)) {
-    const pageFiles = fs.readdirSync(pagesDir).filter((f) => f.endsWith('.json'));
-
-    for (const file of pageFiles) {
-      const filePath = path.join(pagesDir, file);
-      const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-
-      if (manifest.pages[file]) {
-        // Existing page — update
-        changes.pages.push({ file, action: 'update', data: content });
-        changes.summary.updates++;
-      } else {
-        // New page — create
-        changes.pages.push({ file, action: 'create', data: content });
-        changes.summary.creates++;
-      }
-    }
-  }
-
-  // ── Detect KB changes ─────────────────────────────────────────────
-  const kbDir = path.join(baseDir, 'kb');
-  if (fs.existsSync(kbDir)) {
-    const kbFiles = fs.readdirSync(kbDir).filter((f) => f.endsWith('.md'));
-
-    for (const file of kbFiles) {
-      const filePath = path.join(kbDir, file);
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      const parsed = parseKbMarkdown(raw);
-
-      if (manifest.kb[file]) {
-        // Existing entry — update
-        changes.kb.push({
-          file,
-          action: 'update',
-          data: { ...parsed, id: manifest.kb[file].id },
-        });
-        changes.summary.updates++;
-      } else {
-        // New entry — create
-        changes.kb.push({ file, action: 'create', data: parsed });
-        changes.summary.creates++;
-      }
-    }
-  }
-
-  // ── Detect settings changes ───────────────────────────────────────
-  const configPath = path.join(baseDir, 'solid.config.json');
-  if (fs.existsSync(configPath)) {
-    const localConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    if (localConfig.website_settings && Object.keys(localConfig.website_settings).length > 0) {
-      changes.settings = { changed: true, data: localConfig.website_settings };
-      changes.summary.settings = true;
-    }
-  }
-
-  return changes;
-}
-
 
 // ---------------------------------------------------------------------------
 // A+.6 — `solid push --flush` replays the offline mutation queue.

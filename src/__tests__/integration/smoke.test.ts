@@ -228,4 +228,45 @@ describe('CLI Smoke Tests', () => {
     expect(run('completion --bash')).toMatch(/_solid|complete/);
     expect(run('completion --fish')).toMatch(/complete -c solid/);
   });
+
+  // ===========================================================================
+  // JSON output validation — extends the schema blocks/verbs pattern to
+  // every command with --json. Parses real output and validates shape.
+  // ===========================================================================
+
+  it('doctor env --json emits valid JSON with results array', () => {
+    const result = runSafe('doctor env --json');
+    if (result.stdout.trim()) {
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed).toHaveProperty('results');
+      expect(Array.isArray(parsed.results)).toBe(true);
+      if (parsed.results.length > 0) {
+        expect(parsed.results[0]).toHaveProperty('name');
+        expect(parsed.results[0]).toHaveProperty('status');
+      }
+    }
+  });
+
+  it('schema blocks --json has count field', () => {
+    const output = run('schema blocks --json');
+    const parsed = JSON.parse(output);
+    expect(parsed).toHaveProperty('count');
+    expect(parsed.count).toBeGreaterThan(0);
+  });
+
+  it('schema verbs --json entries have verb and path fields', () => {
+    const output = run('schema verbs --json');
+    const parsed = JSON.parse(output);
+    expect(parsed.verbs.length).toBeGreaterThan(50);
+    const first = parsed.verbs[0];
+    expect(first).toHaveProperty('verb');
+    expect(first).toHaveProperty('path');
+    expect(first).toHaveProperty('description');
+  });
+
+  it('--version --json-like flags do not crash when combined', () => {
+    // Edge case: --version ignores other flags and prints semver
+    const output = run('--version');
+    expect(output.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
 });

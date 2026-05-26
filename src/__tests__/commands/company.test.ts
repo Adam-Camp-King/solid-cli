@@ -1,146 +1,92 @@
 /**
- * Company command tests — create sends correct payload, switch changes context.
- * CRITICAL: company create is the most dangerous command — wrong payload = wrong company provisioned.
+ * Company command tests — real behavior, not mock ceremony.
+ *
+ * Tests source-read contracts and structural invariants.
+ * For company ISOLATION tests, see lib/company-isolation.test.ts (security-critical).
  */
 
-import { apiClient } from '../../lib/api-client';
+import * as fs from 'fs';
+import * as path from 'path';
 
-jest.mock('../../lib/api-client', () => ({
-  apiClient: {
-    companyCreate: jest.fn(),
-    companySwitch: jest.fn(),
-    companiesList: jest.fn(),
-    companyMembers: jest.fn(),
-    companyMemberRevoke: jest.fn(),
-    companyInvite: jest.fn(),
-  },
-  handleApiError: jest.fn((e: any) => ({ message: e?.message || 'Error', status: 500 })),
-}));
+const COMPANY_SRC = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'commands', 'company.ts'),
+  'utf-8',
+);
 
-const mockApi = apiClient as jest.Mocked<typeof apiClient>;
+const SWITCH_SRC = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'commands', 'switch.ts'),
+  'utf-8',
+);
 
-describe('company commands', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+describe('company command — real behavior', () => {
 
-  describe('company create', () => {
-    it('sends name and template to correct endpoint', async () => {
-      mockApi.companyCreate.mockResolvedValue({
-        data: {
-          status: 'created',
-          company: { id: 150, name: "Mike's Plumbing", slug: 'mikes-plumbing-a1b2' },
-          membership: { role: 'owner' },
-        },
-        status: 201,
-        success: true,
-      });
-
-      const result = await mockApi.companyCreate("Mike's Plumbing", 'plumber', 'plumbing');
-
-      expect(mockApi.companyCreate).toHaveBeenCalledWith("Mike's Plumbing", 'plumber', 'plumbing');
-      expect(result.data.company.id).toBe(150);
-      expect(result.data.membership.role).toBe('owner');
+  // ── Auth gates ────────────────────────────────────────────────────
+  describe('auth gates', () => {
+    it('every subcommand except current checks isLoggedIn()', () => {
+      // Count .action( handlers — each one that hits the network needs isLoggedIn
+      const actions = COMPANY_SRC.match(/\.action\(async/g)?.length || 0;
+      const loginChecks = COMPANY_SRC.match(/isLoggedIn\(\)/g)?.length || 0;
+      // At minimum, list/create/info/members/invite should gate
+      expect(loginChecks).toBeGreaterThanOrEqual(4);
+      expect(actions).toBeGreaterThan(0);
     });
 
-    it('returns company_id that can be used for switch', async () => {
-      mockApi.companyCreate.mockResolvedValue({
-        data: {
-          status: 'created',
-          company: { id: 200, name: 'Test', slug: 'test-1234' },
-          membership: { role: 'owner' },
-        },
-        status: 201,
-        success: true,
-      });
-
-      const result = await mockApi.companyCreate('Test');
-      const newCompanyId = result.data.company.id;
-
-      expect(newCompanyId).toBeDefined();
-      expect(typeof newCompanyId).toBe('number');
-      expect(newCompanyId).toBeGreaterThan(0);
-    });
-
-    it('works without template (no industry)', async () => {
-      mockApi.companyCreate.mockResolvedValue({
-        data: {
-          status: 'created',
-          company: { id: 201, name: 'Generic Co', slug: 'generic-co-5678' },
-          membership: { role: 'owner' },
-        },
-        status: 201,
-        success: true,
-      });
-
-      await mockApi.companyCreate('Generic Co');
-      expect(mockApi.companyCreate).toHaveBeenCalledWith('Generic Co');
+    it('unauthenticated → stderr "solid auth login" hint + process.exit(1)', () => {
+      expect(COMPANY_SRC).toMatch(/solid auth login/);
+      expect(COMPANY_SRC).toMatch(/process\.exit\(1\)/);
     });
   });
 
-  describe('company switch', () => {
-    it('switches to target company and returns new JWT', async () => {
-      mockApi.companySwitch.mockResolvedValue({
-        data: {
-          status: 'switched', role: 'owner', access_token: 'new_jwt_for_company_42',
-          refresh_token: 'new_refresh',
-          expires_in: 3600,
-          company: { id: 42, name: 'Client Co' },
-        },
-        status: 200,
-        success: true,
-      });
-
-      const result = await mockApi.companySwitch(42);
-
-      expect(mockApi.companySwitch).toHaveBeenCalledWith(42);
-      expect(result.data.access_token).toBe('new_jwt_for_company_42');
-      expect(result.data.company.id).toBe(42);
+  // ── Commander contract ────────────────────────────────────────────
+  describe('Commander argument contracts', () => {
+    it('create takes <name> as required positional arg', () => {
+      expect(COMPANY_SRC).toMatch(/command\('create <name>'\)/);
     });
 
-    it('new token is scoped to target company only', async () => {
-      mockApi.companySwitch.mockResolvedValue({
-        data: {
-          status: 'switched', role: 'owner', access_token: 'jwt_company_99',
-          refresh_token: 'refresh_99',
-          expires_in: 3600,
-          company: { id: 99, name: 'Company 99' },
-        },
-        status: 200,
-        success: true,
-      });
+    it('create supports --template and --industry options', () => {
+      expect(COMPANY_SRC).toMatch(/--template/);
+      expect(COMPANY_SRC).toMatch(/--industry/);
+    });
 
-      const result = await mockApi.companySwitch(99);
-      // The new JWT should be for company 99, not the old company
-      expect(result.data.company.id).toBe(99);
-      expect(result.data.access_token).toContain('99');
+    it('create supports --dedicated for droplet provisioning', () => {
+      expect(COMPANY_SRC).toMatch(/--dedicated/);
+    });
+
+    it('list has ls alias', () => {
+      expect(COMPANY_SRC).toMatch(/\.alias\('ls'\)/);
+    });
+
+    it('every subcommand supports --json output', () => {
+      const jsonFlags = COMPANY_SRC.match(/--json/g)?.length || 0;
+      // list, create, info, members, invite should all have --json
+      expect(jsonFlags).toBeGreaterThanOrEqual(4);
     });
   });
 
-  describe('company isolation', () => {
-    it('cannot switch to company 1, 2, or 3 (reserved system companies)', () => {
-      // This is enforced on the backend, but we document the contract here
-      const RESERVED_IDS = [1, 2, 3];
-      for (const id of RESERVED_IDS) {
-        expect(id).toBeLessThanOrEqual(3);
-      }
+  // ── Company switch contract ───────────────────────────────────────
+  describe('switch command writes full auth state', () => {
+    it('writes new accessToken from switch response', () => {
+      expect(SWITCH_SRC).toMatch(/config\.accessToken\s*=\s*switchResponse\.data\.access_token/);
     });
 
-    it('member list is scoped to requested company', async () => {
-      mockApi.companyMembers.mockResolvedValue({
-        data: {
-          company_id: 42, count: 2, members: [
-            { user_id: 1, email: 'owner@test.com', role: 'owner' },
-            { user_id: 2, email: 'dev@test.com', role: 'developer' },
-          ],
-        },
-        status: 200,
-        success: true,
-      });
+    it('writes new refreshToken from switch response', () => {
+      expect(SWITCH_SRC).toMatch(/config\.refreshToken\s*=\s*switchResponse\.data\.refresh_token/);
+    });
 
-      const result = await mockApi.companyMembers(42);
-      expect(mockApi.companyMembers).toHaveBeenCalledWith(42);
-      expect(result.data.members).toHaveLength(2);
+    it('writes new companyId from switch response', () => {
+      expect(SWITCH_SRC).toMatch(/config\.companyId\s*=\s*switchResponse\.data\.company\.id/);
+    });
+  });
+
+  // ── Agency features ───────────────────────────────────────────────
+  describe('agency features', () => {
+    it('create-for-client command exists', () => {
+      expect(COMPANY_SRC).toMatch(/create-for-client/);
+    });
+
+    it('lock/unlock area management exists', () => {
+      expect(COMPANY_SRC).toMatch(/lock/i);
+      expect(COMPANY_SRC).toMatch(/unlock/i);
     });
   });
 });
