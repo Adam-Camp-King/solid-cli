@@ -105,7 +105,7 @@ export function queueDir(cwd: string = process.cwd()): string {
 
 function ensureQueueDir(cwd: string = process.cwd()): string {
   const dir = queueDir(cwd);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
 
