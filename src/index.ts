@@ -115,6 +115,7 @@ import { designCommand } from './commands/design';
 import { visualCommand } from './commands/visual';
 import { feedbackCommand } from './commands/feedback';
 import { paymentCommand } from './commands/payment';
+import { salesCommand } from './commands/sales';
 import { contextCommand } from './commands/context';
 import { aiCommand } from './commands/ai';
 import { installCommand } from './commands/install';
@@ -251,6 +252,7 @@ program
         const groups: Record<Persona, typeof commands> = {
           common: [],
           customer: [],
+          sales: [],
           developer: [],
           agency: [],
         };
@@ -467,6 +469,9 @@ program.addCommand(inboundCommand);
 
 // Voice
 program.addCommand(voiceCommand);
+
+// Sales
+program.addCommand(salesCommand);
 
 // Commerce
 program.addCommand(flowsCommand);

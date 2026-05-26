@@ -17,11 +17,12 @@
  * not listed ends up in `common` as a safe default (visible but ungrouped).
  */
 
-export type Persona = 'common' | 'customer' | 'developer' | 'agency';
+export type Persona = 'common' | 'customer' | 'developer' | 'agency' | 'sales';
 
 export const PERSONA_TITLES: Record<Persona, string> = {
   common: 'Common — everyone',
   customer: 'Customer — run your business',
+  sales: 'Sales — grow your business',
   developer: 'Developer — build your site & integrations',
   agency: 'Agency / Agent — manage multiple companies',
 };
@@ -74,6 +75,9 @@ export const COMMAND_PERSONAS: Record<string, Persona> = {
 
   flow: 'customer',
   widget: 'customer',
+
+  // ── Sales (grows the business) ───────────────────────────────────
+  sales: 'sales',
 
   // ── Developer (builds on a company) ──────────────────────────────
   pages: 'developer',
@@ -140,7 +144,7 @@ export const COMMAND_PERSONAS: Record<string, Persona> = {
  * customer first (running a biz), then developer (customizing), then
  * agency (scaling to many).
  */
-export const PERSONA_ORDER: Persona[] = ['common', 'customer', 'developer', 'agency'];
+export const PERSONA_ORDER: Persona[] = ['common', 'customer', 'sales', 'developer', 'agency'];
 
 export function personaFor(commandName: string): Persona {
   return COMMAND_PERSONAS[commandName] || 'common';

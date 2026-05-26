@@ -45,6 +45,8 @@ export const MODE_ALLOWLIST: Record<Exclude<AgentMode, 'full'>, readonly string[
     'notifications', 'emails', 'marketplace', 'brand', 'flow', 'widget',
     // Reading is fine across modes
     'pages', 'kb', 'blog', 'site',
+    // Sales surface (read-only Phase 1 verbs)
+    'sales',
   ],
   developer: [
     // Common
@@ -69,6 +71,7 @@ export const MODE_ALLOWLIST: Record<Exclude<AgentMode, 'full'>, readonly string[
     // Customer + developer are visible so agency devs can work inside a tenant
     'dashboard', 'analytics', 'reports', 'insights',
     'pages', 'site', 'kb', 'push', 'pull', 'diff', 'deploy',
+    'sales',
   ],
 };
 
