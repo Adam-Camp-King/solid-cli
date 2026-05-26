@@ -10,13 +10,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-
-function requireAuth(): void {
-  if (!config.isLoggedIn()) {
-    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-    process.exit(1);
-  }
-}
+import { requireAuth } from '../lib/command-kit';
 
 export const dropletCommand = new Command('droplet')
   .description('Manage customer droplets (Type 2: Managed Instance)');

@@ -12,13 +12,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
-
-function requireAuth(): void {
-  if (!config.isLoggedIn()) {
-    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-    process.exit(1);
-  }
-}
+import { requireAuth } from '../lib/command-kit';
 
 export const antCommand = new Command('ant')
   .description('Ant Farm — code import system');

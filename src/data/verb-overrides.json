@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "description": "Explicit verb metadata overrides. Takes precedence over heuristic inference in lib/verb-metadata.ts.",
+    "format": "verb-name → { mutation?: boolean, side_effects?: string }"
+  },
+  "audit": {
+    "mutation": false,
+    "side_effects": "Some audit subcommands (a11y, perf, mobile) trigger Lighthouse scans that consume CPU and network. Classify as read but note resource cost."
+  },
+  "clone": {
+    "mutation": true,
+    "side_effects": "Creates a full company from template (KB entries, pages, services). Idempotent only if the company already exists."
+  },
+  "import": {
+    "mutation": true,
+    "side_effects": "Parses external HTML/data and writes to KB or pages. May create many entities in a single call."
+  }
+}

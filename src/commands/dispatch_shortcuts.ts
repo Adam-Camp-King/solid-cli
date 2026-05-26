@@ -20,13 +20,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
-
-function requireAuth(): void {
-  if (!config.isLoggedIn()) {
-    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-    process.exit(1);
-  }
-}
+import { requireAuth } from '../lib/command-kit';
 
 async function _dispatch(verb: string, args: Record<string, unknown>, options: { json?: boolean }, spinnerLabel: string) {
   requireAuth();

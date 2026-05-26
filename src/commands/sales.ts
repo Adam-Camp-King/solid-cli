@@ -22,15 +22,9 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 import { ui } from '../lib/ui';
+import { requireAuth } from '../lib/command-kit';
 
 type Rec = Record<string, unknown>;
-
-function requireAuth(): void {
-  if (!config.isLoggedIn()) {
-    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-    process.exit(1);
-  }
-}
 
 function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown): void {
   spinner.fail(chalk.red(msg));

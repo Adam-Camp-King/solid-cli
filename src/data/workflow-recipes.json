@@ -2,7 +2,8 @@
   "_meta": {
     "version": "1.0",
     "description": "Per-industry workflow recipes for AI agents. Agents execute known-good sequences instead of planning from scratch.",
-    "note": "Steps reference CLI verbs. Agents should run `solid schema describe <verb>` for each step's contract before executing."
+    "note": "Steps reference CLI verbs. Agents should run `solid schema describe <verb>` for each step's contract before executing.",
+    "extensibility": "Each recipe supports a future `source` field (default: \"static\", later: \"aggregate\") for recipes derived from cross-tenant business data. Adding source is non-breaking."
   },
   "workflows": [
     {
