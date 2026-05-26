@@ -236,6 +236,97 @@ function clientLaunchName(client: McpClient): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// solid mcp doctor
+// ---------------------------------------------------------------------------
+mcpCommand
+  .command('doctor')
+  .description('Diagnose MCP server health: API connectivity, auth, verb count, version alignment')
+  .action(async () => {
+    const ora = (await import('ora')).default;
+    const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
+
+    // 1. Auth check
+    const hasAuth = config.isLoggedIn();
+    checks.push({
+      label: 'Authentication',
+      ok: hasAuth,
+      detail: hasAuth ? 'Logged in' : 'Not logged in — run `solid auth login`',
+    });
+
+    // 2. API connectivity
+    let apiOk = false;
+    let verbCount = 0;
+    const spinner = ora('Checking API connectivity...').start();
+    try {
+      const res = await apiClient.get<{ verbs: Array<Record<string, unknown>>; count: number }>(
+        '/api/v1/agent/verbs?surface=mcp_stdio',
+      );
+      apiOk = true;
+      verbCount = res.data?.count ?? res.data?.verbs?.length ?? 0;
+      spinner.stop();
+    } catch (err) {
+      spinner.stop();
+    }
+    checks.push({
+      label: 'API connectivity',
+      ok: apiOk,
+      detail: apiOk ? `Reachable at ${config.apiUrl || 'default'}` : 'Cannot reach backend',
+    });
+
+    // 3. Verb count
+    checks.push({
+      label: 'Verb count',
+      ok: verbCount > 0,
+      detail: verbCount > 0 ? `${verbCount} verbs on mcp_stdio surface` : 'No verbs returned',
+    });
+
+    // 4. MCP package installed check
+    let packageInstalled = false;
+    try {
+      const { execSync } = await import('child_process');
+      const out = execSync('npm list -g @solidnumber/mcp --depth=0 2>/dev/null', { encoding: 'utf-8' });
+      packageInstalled = out.includes('@solidnumber/mcp');
+    } catch { /* not installed globally */ }
+    checks.push({
+      label: '@solidnumber/mcp installed',
+      ok: packageInstalled,
+      detail: packageInstalled ? 'Installed globally' : 'Not found globally — clients use npx on demand',
+    });
+
+    // 5. Client config check
+    for (const client of SUPPORTED_CLIENTS) {
+      const cfgPath = configPathForClient(client);
+      const exists = cfgPath && fs.existsSync(cfgPath);
+      let wired = false;
+      if (exists && cfgPath) {
+        try {
+          const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+          const servers = raw?.mcpServers || {};
+          wired = 'solidnumber' in servers || 'solid' in servers;
+        } catch { /* corrupt config */ }
+      }
+      checks.push({
+        label: `${client} config`,
+        ok: wired,
+        detail: wired ? 'Solid# MCP wired' : exists ? 'Config exists, Solid# not wired' : 'No config file',
+      });
+    }
+
+    // Print results
+    console.log('');
+    console.log(chalk.bold('  MCP Doctor'));
+    console.log('');
+    for (const c of checks) {
+      const icon = c.ok ? chalk.green('✓') : chalk.red('✗');
+      console.log(`  ${icon} ${chalk.bold(c.label)}: ${c.ok ? chalk.dim(c.detail) : chalk.yellow(c.detail)}`);
+    }
+    const passing = checks.filter(c => c.ok).length;
+    console.log('');
+    console.log(chalk.dim(`  ${passing}/${checks.length} checks passing`));
+    console.log('');
+  });
+
 import { appendExamples as __ae_mcp } from '../lib/command-kit';
 __ae_mcp(mcpCommand, [
   { cmd: 'solid mcp install claude',            why: 'Wire Solid# into Claude Desktop' },
@@ -243,4 +334,5 @@ __ae_mcp(mcpCommand, [
   { cmd: 'solid mcp install claude --preview',  why: 'Show what WOULD be written — no disk write' },
   { cmd: 'solid mcp tools --json',              why: 'Machine-readable tool manifest' },
   { cmd: 'solid mcp serve',                      why: 'Launch the stdio server directly' },
+  { cmd: 'solid mcp doctor',                     why: 'Check MCP server health and client wiring' },
 ]);
