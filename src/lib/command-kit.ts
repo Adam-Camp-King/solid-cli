@@ -92,6 +92,25 @@ export function requireAuth(): void {
   }
 }
 
+/**
+ * Guard: exit 1 if the user is logged in but has no company selected.
+ *
+ * A user who partially deleted their config (or never ran `solid switch`)
+ * could reach mutation endpoints with no `company_id` header, causing
+ * 400/403 errors or — worse — orphaned rows on the backend. Call this
+ * right after `requireAuth()` in every command that does
+ * POST / PUT / PATCH / DELETE.
+ */
+export function requireCompanyContext(): void {
+  if (!config.companyId) {
+    console.error(
+      chalk.red('Error: No company selected. Run `solid switch` to select a company.'),
+    );
+    // eslint-disable-next-line no-process-exit
+    process.exit(1);
+  }
+}
+
 /** Returns true when any caller in the process explicitly asked for quiet mode. */
 export function quietFromEnv(): boolean {
   if (process.env.SOLID_QUIET === '1' || process.env.SOLID_QUIET === 'true') return true;

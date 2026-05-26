@@ -4,6 +4,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
+import { requireCompanyContext } from '../lib/command-kit';
 
 export const billingCommand = new Command('billing')
   .description('Subscription, usage, and invoices')
@@ -77,6 +78,7 @@ billingCommand.command('checkout-link <companyId>')
   .option('-t, --tier <tier>', 'Subscription tier', 'starter')
   .action(async (companyId: string, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora('Generating checkout link...').start();
     try {
@@ -105,6 +107,7 @@ billingCommand.command('invoice <companyIdOrEmail>')
   .option('--type <type>', 'Invoice type (agency_service, platform_subscription)', 'agency_service')
   .action(async (target: string, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const amountCents = parseInt(options.amount, 10);
     if (isNaN(amountCents) || amountCents <= 0) {
@@ -187,6 +190,7 @@ billingCommand.command('method-add').description('Attach a new payment method fr
   .requiredOption('--token <pm>', 'Stripe payment method token (pm_...)')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora('Attaching payment method...').start();
     try {
@@ -198,6 +202,7 @@ billingCommand.command('method-add').description('Attach a new payment method fr
 billingCommand.command('method-default <id>').description('Set a payment method as default')
   .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora(`Setting ${id} as default...`).start();
     try {
@@ -210,6 +215,7 @@ billingCommand.command('method-nickname <id>').description('Rename a payment met
   .requiredOption('--nickname <text>', 'Nickname')
   .action(async (id, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora('Updating nickname...').start();
     try {
@@ -221,6 +227,7 @@ billingCommand.command('method-nickname <id>').description('Rename a payment met
 billingCommand.command('method-remove <id>').description('Remove a payment method')
   .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora(`Removing ${id}...`).start();
     try {
@@ -295,6 +302,7 @@ billingCommand.command('upgrade-trial').description('Convert trial to paid subsc
   .requiredOption('--plan <slug>', 'Target plan slug')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora('Upgrading trial...').start();
     try {

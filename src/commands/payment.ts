@@ -28,6 +28,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { requireCompanyContext } from '../lib/command-kit';
 
 const BRAND = {
   primary: '#818cf8',
@@ -396,6 +397,7 @@ paymentCommand
   .option('--account <id>', 'Stripe Connect account ID')
   .action(async (processor: string, options: { account?: string }) => {
     requireAuth();
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora(`Connecting ${processor}...`).start();
 
@@ -425,6 +427,7 @@ paymentCommand
   .option('--reader <name>', 'Terminal reader name', 'Default Reader')
   .action(async (options: { amount: string; reader: string }) => {
     requireAuth();
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const amount = parseFloat(options.amount);
 

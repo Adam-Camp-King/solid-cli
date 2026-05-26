@@ -20,6 +20,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { requireTenantManifest, PullManifest } from '../lib/tenant-guard';
+import { requireCompanyContext } from '../lib/command-kit';
 
 interface ChangeSet {
   pages: { file: string; action: 'create' | 'update'; data: Record<string, unknown> }[];
@@ -150,6 +151,7 @@ async function runFlush(options: { dryRun?: boolean; yes?: boolean }): Promise<v
     console.error(chalk.dim('  (Replay needs a live backend. The queue is preserved.)'));
     process.exit(1);
   }
+  requireCompanyContext();
 
   console.log('');
   console.log(chalk.bold(`Offline queue — ${total} mutation${total === 1 ? '' : 's'} to replay`));

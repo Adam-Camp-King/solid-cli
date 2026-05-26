@@ -12,6 +12,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { requireCompanyContext } from '../lib/command-kit';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -31,6 +32,7 @@ export const publishCommand = new Command('publish')
   .option('--all', 'Publish every pending draft in this company')
   .action(async (pageId: string | undefined, opts) => {
     requireAuth();
+    requireCompanyContext();
 
     if (opts.all && pageId) {
       console.error(chalk.red('Pass EITHER a <page_id> OR --all, not both.'));

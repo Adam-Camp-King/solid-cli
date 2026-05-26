@@ -7,6 +7,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
+import { requireCompanyContext } from '../lib/command-kit';
 
 export const webhooksCommand = new Command('webhooks')
   .description('Custom webhook management')
@@ -51,6 +52,7 @@ webhooksCommand.command('create <url>').description('Create a webhook')
   .option('-n, --name <name>', 'Name').option('-e, --events <events>', 'Comma-separated events')
   .action(async (url, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora('Creating...').start();
     try {
@@ -67,6 +69,7 @@ webhooksCommand.command('create <url>').description('Create a webhook')
 webhooksCommand.command('delete <id>').description('Delete a webhook')
   .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
     const spinner = ora('Deleting...').start();
     try {
@@ -81,6 +84,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
   .option('--json', 'JSON output')
   .action(async (event, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    requireCompanyContext();
     const ora = (await import('ora')).default;
 
     const VALID_EVENTS = [

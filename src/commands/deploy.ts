@@ -6,6 +6,7 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
 import { isJsonOutput } from '../lib/json-output';
+import { requireCompanyContext } from '../lib/command-kit';
 
 function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -49,6 +50,7 @@ export const deployCommand = new Command('deploy')
       console.error(chalk.red('Not logged in. Run: solid auth login'));
       return;
     }
+    requireCompanyContext();
 
     // Default action = preview (create a new one)
     if (!action || action === 'preview' || action === 'create') {
