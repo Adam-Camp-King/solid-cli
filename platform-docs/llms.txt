@@ -132,7 +132,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
-- 122 top-level command groups, 701 subcommands.
+- 122 top-level command groups, 705 subcommands.
 - Core workflow: `solid auth login` → `solid company create` → `solid clone <industry>` → `solid pull` → edit → `solid push` → `solid pages publish` → `solid billing checkout-link`.
 
 **Top-level commands (no subcommands):**
@@ -241,7 +241,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **sales** (18 subcommands) — Sales pipeline, forecasting, and growth intelligence: `advance, close, compare, followup, forecast, nurture, opportunities, outreach, pipeline, prospects, qualify, report, score, sequence, sources, suggest, velocity, win-rate`
 - **sandbox** (9 subcommands) — Isolated sandbox for safe site editing: `create, diff, exit, fork, preview, promote, push, reset, status`
 - **schedule** (15 subcommands) — Appointment scheduling & calendar: `action, actions, book, calendar, cancel, cancel-action, create, due, fire, get, hold, list, reschedule, slots, update`
-- **schema** (3 subcommands) — CMS / page block schema for AI coding agents: `blocks, pages, verbs`
+- **schema** (7 subcommands) — CMS / page block schema for AI coding agents: `blocks, contracts, describe, envelopes, pages, verbs, workflows`
 - **scope** (1 subcommands) — Inspect your agent scope (what you can read/write): `whoami`
 - **seo** (6 subcommands) — SEO — site audit, local SEO, rankings, citations: `audit, citations, gaps, rank, report, site-audit`
 - **services** (4 subcommands) — Service catalog management: `create, delete, list, update`
@@ -292,7 +292,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 122 top-level command groups, 701 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 122 top-level command groups, 705 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
 <!-- CLI:Q&A:END -->
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.

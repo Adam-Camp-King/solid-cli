@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Per-industry workflow recipes for AI agents. Agents execute known-good sequences instead of planning from scratch.",
+    "note": "Steps reference CLI verbs. Agents should run `solid schema describe <verb>` for each step's contract before executing."
+  },
+  "workflows": [
+    {
+      "id": "setup-new-business",
+      "name": "Set Up New Business",
+      "description": "Complete initial setup for any new business on the platform",
+      "industry": "*",
+      "steps": [
+        { "command": "solid status --full --json", "description": "Check current state", "mutates": false },
+        { "command": "solid kb add", "description": "Add business hours, services, and FAQs to knowledge base", "mutates": true, "repeat": true },
+        { "command": "solid pages list --json", "description": "Review scaffolded pages", "mutates": false },
+        { "command": "solid push", "description": "Push changes to platform", "mutates": true },
+        { "command": "solid status --full --json", "description": "Verify setup completeness", "mutates": false }
+      ],
+      "inputs": {},
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "setup-home-services",
+      "name": "Set Up Home Services Business",
+      "description": "Plumber, HVAC, electrician, roofer, landscaper — complete setup with service areas and booking",
+      "industry": "home_services",
+      "steps": [
+        { "command": "solid status --full --json", "description": "Check current state", "mutates": false },
+        { "command": "solid kb add --category company_identity", "description": "Add company name, phone, service area", "mutates": true },
+        { "command": "solid kb add --category services", "description": "Add each service with pricing", "mutates": true, "repeat": true },
+        { "command": "solid kb add --category hours", "description": "Add business hours and emergency availability", "mutates": true },
+        { "command": "solid kb add --category faq", "description": "Add common customer questions", "mutates": true, "repeat": true },
+        { "command": "solid push", "description": "Push all changes", "mutates": true },
+        { "command": "solid pages list --json", "description": "Verify pages were generated", "mutates": false }
+      ],
+      "inputs": { "service_type": "string" },
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "setup-restaurant",
+      "name": "Set Up Restaurant",
+      "description": "Restaurant, cafe, bar — menu, hours, reservations, online ordering",
+      "industry": "restaurant",
+      "steps": [
+        { "command": "solid status --full --json", "description": "Check current state", "mutates": false },
+        { "command": "solid kb add --category company_identity", "description": "Restaurant name, cuisine type, location", "mutates": true },
+        { "command": "solid kb add --category hours", "description": "Operating hours, happy hour, brunch hours", "mutates": true },
+        { "command": "solid products create", "description": "Add menu items with prices and categories", "mutates": true, "repeat": true },
+        { "command": "solid kb add --category faq", "description": "Parking, reservations, dietary options, private events", "mutates": true, "repeat": true },
+        { "command": "solid push", "description": "Push all changes", "mutates": true }
+      ],
+      "inputs": { "cuisine_type": "string" },
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "setup-retail",
+      "name": "Set Up Retail Store",
+      "description": "Retail shop — products, inventory, POS, online store",
+      "industry": "retail",
+      "steps": [
+        { "command": "solid status --full --json", "description": "Check current state", "mutates": false },
+        { "command": "solid kb add --category company_identity", "description": "Store name, location, brand story", "mutates": true },
+        { "command": "solid kb add --category hours", "description": "Store hours", "mutates": true },
+        { "command": "solid products create", "description": "Add products with images, prices, SKUs", "mutates": true, "repeat": true },
+        { "command": "solid inventory check --json", "description": "Verify inventory tracking", "mutates": false },
+        { "command": "solid push", "description": "Push all changes", "mutates": true }
+      ],
+      "inputs": {},
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "setup-professional-services",
+      "name": "Set Up Professional Services",
+      "description": "Lawyer, accountant, consultant, coach — appointments, intake forms, client portal",
+      "industry": "professional_services",
+      "steps": [
+        { "command": "solid status --full --json", "description": "Check current state", "mutates": false },
+        { "command": "solid kb add --category company_identity", "description": "Firm name, specialties, credentials", "mutates": true },
+        { "command": "solid kb add --category services", "description": "Service offerings with pricing tiers", "mutates": true, "repeat": true },
+        { "command": "solid kb add --category hours", "description": "Office hours and consultation availability", "mutates": true },
+        { "command": "solid kb add --category faq", "description": "Consultation process, fees, what to expect", "mutates": true, "repeat": true },
+        { "command": "solid push", "description": "Push all changes", "mutates": true }
+      ],
+      "inputs": { "specialty": "string" },
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "setup-healthcare",
+      "name": "Set Up Healthcare Practice",
+      "description": "Doctor, dentist, chiropractor, therapist — appointments, patient intake, insurance info",
+      "industry": "healthcare",
+      "steps": [
+        { "command": "solid status --full --json", "description": "Check current state", "mutates": false },
+        { "command": "solid kb add --category company_identity", "description": "Practice name, providers, specialties", "mutates": true },
+        { "command": "solid kb add --category services", "description": "Services and procedures offered", "mutates": true, "repeat": true },
+        { "command": "solid kb add --category hours", "description": "Office hours, emergency contact", "mutates": true },
+        { "command": "solid kb add --category faq", "description": "Insurance accepted, new patient process, forms needed", "mutates": true, "repeat": true },
+        { "command": "solid push", "description": "Push all changes", "mutates": true }
+      ],
+      "inputs": { "practice_type": "string" },
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "add-product-catalog",
+      "name": "Add Product Catalog",
+      "description": "Bulk add products to an existing business",
+      "industry": "*",
+      "steps": [
+        { "command": "solid products list --json", "description": "Check existing products", "mutates": false },
+        { "command": "solid products create", "description": "Add each product with name, price, description, category", "mutates": true, "repeat": true },
+        { "command": "solid push", "description": "Push changes", "mutates": true },
+        { "command": "solid products list --json", "description": "Verify products were added", "mutates": false }
+      ],
+      "inputs": {},
+      "preconditions": ["authenticated", "company_selected"]
+    },
+    {
+      "id": "update-kb",
+      "name": "Update Knowledge Base",
+      "description": "Review and update a business's knowledge base entries",
+      "industry": "*",
+      "steps": [
+        { "command": "solid kb list --json", "description": "List current KB entries", "mutates": false },
+        { "command": "solid kb update", "description": "Update outdated entries", "mutates": true, "repeat": true },
+        { "command": "solid push", "description": "Push changes", "mutates": true }
+      ],
+      "inputs": {},
+      "preconditions": ["authenticated", "company_selected"]
+    }
+  ]
+}

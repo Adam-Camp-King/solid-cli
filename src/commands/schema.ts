@@ -296,9 +296,229 @@ schemaCommand
     console.log('');
   });
 
+// ---------------------------------------------------------------------------
+// solid schema describe <verb> — rich contract introspection for agents
+// ---------------------------------------------------------------------------
+schemaCommand
+  .command('describe')
+  .description('Describe a verb contract — input, output, errors, mutates flag')
+  .argument('<verb>', 'Verb path to describe (e.g., "kb list", "crm contacts create")')
+  .option('--json', 'Output as JSON')
+  .action((verbPath: string, opts: Record<string, unknown>) => {
+    const { inferVerbContract, inferAllContracts } = require('../lib/verb-metadata');
+    const program = getProgram();
+    if (!program) {
+      console.error(chalk.red('program-registry not initialized'));
+      process.exit(1);
+    }
+
+    const { walkVerbs } = require('../lib/verb-manifest');
+    const entries = walkVerbs(program, { prefix: 'solid', skipRoot: true });
+
+    // Normalize: "kb list" → "solid kb list", or already full path
+    const searchPath = verbPath.startsWith('solid ') ? verbPath : `solid ${verbPath}`;
+    const entry = entries.find((e: any) => e.path === searchPath);
+
+    if (!entry) {
+      // Fuzzy match — find closest
+      const candidates = entries
+        .filter((e: any) => e.path.includes(verbPath) || e.verb === verbPath.split(' ').pop())
+        .slice(0, 5);
+
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify({
+          error: { code: 'NOT_FOUND', message: `Verb not found: ${verbPath}` },
+          suggestions: candidates.map((c: any) => c.path),
+        }, null, 2) + '\n');
+      } else {
+        console.error(chalk.red(`Verb not found: ${verbPath}`));
+        if (candidates.length > 0) {
+          console.error(chalk.dim('  Did you mean:'));
+          for (const c of candidates) console.error(chalk.dim(`    ${c.path}`));
+        }
+      }
+      process.exit(1);
+    }
+
+    const contract = inferVerbContract(entry);
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify(contract, null, 2) + '\n');
+      return;
+    }
+
+    console.log('');
+    console.log(chalk.bold.cyan(contract.path));
+    console.log(chalk.dim(`  ${contract.description}`));
+    console.log('');
+    console.log(`  ${chalk.dim('mutates:')}     ${contract.mutates ? chalk.yellow('yes') : chalk.green('no')}`);
+    console.log(`  ${chalk.dim('idempotent:')}  ${contract.idempotent ? chalk.green('yes') : chalk.yellow('no')}`);
+    console.log(`  ${chalk.dim('auth:')}        ${contract.requires_auth ? 'required' : chalk.dim('none')}`);
+    console.log(`  ${chalk.dim('envelope:')}    ${contract.output_envelope}`);
+    console.log(`  ${chalk.dim('category:')}    ${contract.category}`);
+    console.log(`  ${chalk.dim('errors:')}      ${contract.errors.join(', ')}`);
+    console.log(`  ${chalk.dim('example:')}     ${contract.example}`);
+
+    if (contract.input.options.length > 0) {
+      console.log('');
+      console.log(chalk.dim('  options:'));
+      for (const o of contract.input.options) {
+        const req = o.required ? chalk.red('*') : ' ';
+        console.log(`    ${req}${chalk.green(o.flag.padEnd(30))} ${chalk.dim(o.type.padEnd(10))} ${chalk.dim(o.description)}`);
+      }
+    }
+    if (contract.input.args.length > 0) {
+      console.log('');
+      console.log(chalk.dim('  args:'));
+      for (const a of contract.input.args) {
+        const req = a.required ? chalk.red('*') : ' ';
+        console.log(`    ${req}${chalk.green(a.name.padEnd(30))} ${chalk.dim(a.type.padEnd(10))} ${chalk.dim(a.description || '')}`);
+      }
+    }
+    console.log('');
+  });
+
+// ---------------------------------------------------------------------------
+// solid schema contracts — bulk export all verb contracts
+// ---------------------------------------------------------------------------
+schemaCommand
+  .command('contracts')
+  .description('Emit all verb contracts — full introspection for agent tool manifests')
+  .option('--json', 'Output as JSON')
+  .option('--mutates-only', 'Only show commands that mutate state')
+  .option('--reads-only', 'Only show read-only commands')
+  .option('--category <name>', 'Filter by category (e.g., commerce, ai, cms)')
+  .action((opts: Record<string, unknown>) => {
+    const { inferAllContracts } = require('../lib/verb-metadata');
+    const program = getProgram();
+    if (!program) {
+      console.error(chalk.red('program-registry not initialized'));
+      process.exit(1);
+    }
+
+    const { walkVerbs } = require('../lib/verb-manifest');
+    const entries = walkVerbs(program, { prefix: 'solid', skipRoot: true });
+    let contracts = inferAllContracts(entries);
+
+    if (opts.mutatesOnly) contracts = contracts.filter((c: any) => c.mutates);
+    if (opts.readsOnly) contracts = contracts.filter((c: any) => !c.mutates);
+    if (opts.category) contracts = contracts.filter((c: any) => c.category === opts.category);
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify({
+        version: '1.0',
+        cli_version: CLI_VERSION,
+        count: contracts.length,
+        contracts,
+      }, null, 2) + '\n');
+      return;
+    }
+
+    console.log('');
+    console.log(chalk.bold(`${contracts.length} verb contracts`));
+    console.log('');
+    for (const c of contracts) {
+      const mut = c.mutates ? chalk.yellow('W') : chalk.green('R');
+      console.log(`  ${mut} ${chalk.cyan(c.path.padEnd(40))} ${chalk.dim(c.output_envelope.padEnd(10))} ${chalk.dim(c.category)}`);
+    }
+    console.log('');
+    console.log(chalk.dim('  R = read-only, W = mutates. Use --json for full contracts.'));
+    console.log('');
+  });
+
+// ---------------------------------------------------------------------------
+// solid schema envelopes — document the response envelope contracts
+// ---------------------------------------------------------------------------
+schemaCommand
+  .command('envelopes')
+  .description('Response envelope contracts — what shape each command type returns')
+  .option('--json', 'Output as JSON')
+  .action((opts: Record<string, unknown>) => {
+    const { ENVELOPE_SCHEMAS } = require('../lib/verb-metadata');
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify({ envelopes: ENVELOPE_SCHEMAS }, null, 2) + '\n');
+      return;
+    }
+
+    console.log('');
+    console.log(chalk.bold('Response Envelope Contracts'));
+    console.log(chalk.dim('  Every API response follows one of these shapes.'));
+    console.log('');
+    for (const [name, schema] of Object.entries(ENVELOPE_SCHEMAS) as [string, any][]) {
+      console.log(`  ${chalk.bold.cyan(name)}`);
+      console.log(chalk.dim(`    ${schema.description}`));
+      console.log(chalk.dim(`    shape: ${JSON.stringify(schema.shape)}`));
+      if (schema.note) console.log(chalk.dim(`    ${schema.note}`));
+      console.log('');
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// solid schema workflows — per-industry workflow recipes for agents
+// ---------------------------------------------------------------------------
+schemaCommand
+  .command('workflows')
+  .description('Per-industry workflow recipes — agents execute known-good sequences')
+  .option('--json', 'Output as JSON')
+  .option('--industry <name>', 'Filter by industry (e.g., home_services, restaurant, retail)')
+  .option('--id <id>', 'Show a specific workflow by ID')
+  .action((opts: Record<string, unknown>) => {
+    const recipePath = path.join(__dirname, '..', 'data', 'workflow-recipes.json');
+    let data: { _meta: Record<string, string>; workflows: any[] };
+    try {
+      data = JSON.parse(fs.readFileSync(recipePath, 'utf-8'));
+    } catch {
+      const err = { error: { code: 'NOT_FOUND', message: 'workflow-recipes.json not found' } };
+      if (isJsonOutput(opts)) process.stdout.write(JSON.stringify(err, null, 2) + '\n');
+      else console.error(chalk.red('Workflow recipes data file not found'));
+      process.exit(1);
+    }
+
+    let workflows = data.workflows;
+
+    if (opts.id) {
+      workflows = workflows.filter((w: any) => w.id === opts.id);
+    }
+    if (opts.industry) {
+      workflows = workflows.filter((w: any) => w.industry === opts.industry || w.industry === '*');
+    }
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(JSON.stringify({
+        version: data._meta.version,
+        count: workflows.length,
+        workflows,
+      }, null, 2) + '\n');
+      return;
+    }
+
+    console.log('');
+    console.log(chalk.bold(`Workflow Recipes (${workflows.length})`));
+    console.log('');
+    for (const w of workflows) {
+      const industry = w.industry === '*' ? chalk.dim('all industries') : chalk.hex('#818cf8')(w.industry);
+      console.log(`  ${chalk.bold.cyan(w.id)}  ${industry}`);
+      console.log(chalk.dim(`    ${w.description}`));
+      console.log(chalk.dim(`    ${w.steps.length} steps:`));
+      for (let i = 0; i < w.steps.length; i++) {
+        const s = w.steps[i];
+        const mut = s.mutates ? chalk.yellow('W') : chalk.green('R');
+        const rep = s.repeat ? chalk.dim(' (repeat)') : '';
+        console.log(`      ${i + 1}. ${mut} ${chalk.cyan(s.command)}${rep}`);
+      }
+      console.log('');
+    }
+    console.log(chalk.dim('  Use --json for machine-readable output. Use --industry <name> to filter.'));
+    console.log('');
+  });
+
 import { appendExamples as __ae_schema } from '../lib/command-kit';
 __ae_schema(schemaCommand, [
-  { cmd: 'solid schema pages',             why: 'Page block schema — feed this to AI coding agents' },
-  { cmd: 'solid schema pages --format yaml', why: 'YAML instead of JSON' },
-  { cmd: 'solid schema verbs --json',      why: 'Full CLI verb manifest for agent discovery' },
+  { cmd: 'solid schema pages',                        why: 'Page block schema — feed this to AI coding agents' },
+  { cmd: 'solid schema verbs --json',                 why: 'Full CLI verb manifest for agent discovery' },
+  { cmd: 'solid schema describe "kb list" --json',    why: 'Rich contract for a single verb' },
+  { cmd: 'solid schema contracts --json',             why: 'Bulk export all verb contracts' },
+  { cmd: 'solid schema contracts --category commerce', why: 'Filter contracts by domain' },
+  { cmd: 'solid schema workflows --json',             why: 'Per-industry workflow recipes' },
 ]);
