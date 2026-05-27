@@ -7,7 +7,6 @@
  */
 
 import { handleApiError } from '../../lib/api-client';
-import axios from 'axios';
 
 function mockAxiosError(opts: {
   status?: number;
@@ -30,12 +29,7 @@ function mockAxiosError(opts: {
 
 describe('handleApiError — status-specific hints', () => {
   beforeEach(() => {
-    jest.spyOn(axios, 'isAxiosError').mockReturnValue(true);
     delete process.env.SOLID_DEBUG;
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   it('401 → actionable "run solid auth login" hint', () => {
@@ -130,13 +124,6 @@ describe('handleApiError — status-specific hints', () => {
 });
 
 describe('handleApiError — redaction', () => {
-  beforeEach(() => {
-    jest.spyOn(axios, 'isAxiosError').mockReturnValue(true);
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
 
   it('redacts Bearer tokens from server messages', () => {
     const r = handleApiError(mockAxiosError({
@@ -167,12 +154,7 @@ describe('handleApiError — redaction', () => {
 });
 
 describe('handleApiError — --debug mode', () => {
-  beforeEach(() => {
-    jest.spyOn(axios, 'isAxiosError').mockReturnValue(true);
-  });
-
   afterEach(() => {
-    jest.restoreAllMocks();
     delete process.env.SOLID_DEBUG;
   });
 
@@ -201,9 +183,6 @@ describe('handleApiError — --debug mode', () => {
 });
 
 describe('handleApiError — non-axios paths', () => {
-  beforeEach(() => {
-    jest.spyOn(axios, 'isAxiosError').mockReturnValue(false);
-  });
 
   afterEach(() => {
     jest.restoreAllMocks();

@@ -61,16 +61,24 @@ describe('Company Isolation — Security Critical', () => {
   });
 
   describe('logout clears all company context', () => {
-    it('logout is callable', () => {
-      expect(typeof config.logout).toBe('function');
+    it('logout() executes without error', () => {
+      config.logout();
+      expect(config.logout).toHaveBeenCalled();
     });
 
-    // The actual logout behavior is tested in config.test.ts
-    // Here we verify the CONTRACT: logout must clear company_id
-    it('after logout, a re-login is required before any API call', () => {
-      // The isLoggedIn check gates every command
-      // If logout works correctly, isLoggedIn() returns false after
-      expect(config.isLoggedIn).toBeDefined();
+    it('real logout deletes every auth field (source contract)', () => {
+      const configSrc = fs.readFileSync(
+        path.join(__dirname, '..', '..', 'lib', 'config.ts'),
+        'utf-8',
+      );
+      const logoutBlock = configSrc.match(/logout\(\)[\s\S]*?^\s*\}/m);
+      expect(logoutBlock).not.toBeNull();
+      const body = logoutBlock![0];
+      expect(body).toContain('delete this.data.access_token');
+      expect(body).toContain('delete this.data.refresh_token');
+      expect(body).toContain('delete this.data.company_id');
+      expect(body).toContain('delete this.data.user_id');
+      expect(body).toContain('delete this.data.user_email');
     });
   });
 
@@ -89,11 +97,13 @@ describe('Company Isolation — Security Critical', () => {
   });
 
   describe('cross-company protection contract', () => {
-    it('API client sends X-Company-ID header from config', () => {
-      // The api-client.ts interceptor attaches X-Company-ID from config.companyId
-      // This test documents the CONTRACT — the interceptor is tested in api-client tests
-      // Backend rejects requests where JWT company_id != X-Company-ID
-      expect(config.companyId).toBeDefined();
+    it('request interceptor attaches X-Company-ID from config.companyId (source contract)', () => {
+      const apiSrc = fs.readFileSync(
+        path.join(__dirname, '..', '..', 'lib', 'api-client.ts'),
+        'utf-8',
+      );
+      expect(apiSrc).toMatch(/const companyId\s*=\s*config\.companyId/);
+      expect(apiSrc).toMatch(/headers\[['"]X-Company-ID['"]\]\s*=\s*companyId\.toString\(\)/);
     });
 
     it('company switch requires a new JWT, not just a header change', () => {

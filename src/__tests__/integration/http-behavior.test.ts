@@ -55,7 +55,7 @@ function runCli(
   args: string,
   port: number,
   env: Record<string, string> = {},
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+): Promise<{ stdout: string; stderr: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     exec(
       `node ${CLI_PATH} ${args}`,
@@ -77,7 +77,8 @@ function runCli(
         resolve({
           stdout: stdout || '',
           stderr: stderr || '',
-          exitCode: error ? (error as any).code ?? 1 : 0,
+          exitCode: error ? (typeof (error as any).code === 'number' ? (error as any).code : 1) : 0,
+          timedOut: !!(error && (error as any).killed),
         });
       },
     );
@@ -176,7 +177,7 @@ describe('CLI HTTP Behavior', () => {
       try {
         const result = await runCli('company list', port);
         const combined = result.stdout + result.stderr;
-        expect(combined).toMatch(/no companies|0/i);
+        expect(combined).toMatch(/no companies|0 compan|"count":\s*0/i);
       } finally {
         server.close();
       }
@@ -246,7 +247,7 @@ describe('CLI HTTP Behavior', () => {
       try {
         const result = await runCli('health', port);
         const combined = result.stdout + result.stderr;
-        expect(combined).toMatch(/fail|error|unhealthy|502|backend/i);
+        expect(combined).toMatch(/unhealthy|502|backend error|request failed/i);
       } finally {
         server.close();
       }
@@ -289,10 +290,14 @@ describe('CLI HTTP Behavior', () => {
           });
 
           if (route?.captureBody) {
+            let parsedBody: any = null;
+            if (body) {
+              try { parsedBody = JSON.parse(body); } catch { parsedBody = body; }
+            }
             captured.push({
               method: req.method || '',
               url: req.url || '',
-              body: body ? JSON.parse(body) : null,
+              body: parsedBody,
             });
           }
 

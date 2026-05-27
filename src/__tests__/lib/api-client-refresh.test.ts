@@ -70,6 +70,15 @@ import { apiClient } from '../../lib/api-client';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
+// Capture interceptor callbacks at module scope — beforeEach calls
+// jest.clearAllMocks() which wipes mock.calls/mock.results. The callback
+// functions themselves survive; we just need to grab them before the wipe.
+const _mockCreate = (axios as any).create as jest.Mock;
+const _mockInstance = _mockCreate.mock.results[0]?.value;
+const _authInterceptorCb = _mockInstance?.interceptors?.request?.use?.mock?.calls?.[1]?.[0] as
+  | ((cfg: any) => Promise<any>)
+  | undefined;
+
 beforeEach(() => {
   // Reset in-memory token state to a known good baseline.
   config.accessToken = 'access_ABC';
@@ -179,6 +188,58 @@ describe('proactive refresh — expiry detection', () => {
     config.refreshToken = undefined;
     const ok = await apiClient.forceRefreshToken();
     expect(ok).toBe(false);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('proactive refresh — interceptor path', () => {
+  it('interceptor callback was registered as a function', () => {
+    expect(_authInterceptorCb).toBeInstanceOf(Function);
+  });
+
+  it('triggers refresh when token is within 60s of expiry', async () => {
+    delete process.env.SOLID_API_KEY;
+    delete process.env.SOLID_TOKEN;
+
+    config.tokenExpiresAt = new Date(Date.now() + 30_000);
+    config.refreshToken = 'refresh_XYZ';
+
+    mockedAxios.post = jest.fn().mockResolvedValue({
+      data: {
+        access_token: 'access_PROACTIVE',
+        refresh_token: 'refresh_PROACTIVE',
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      },
+    }) as any;
+
+    await _authInterceptorCb!({ headers: {}, url: '/api/v1/company/list', method: 'get' });
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(config.accessToken).toBe('access_PROACTIVE');
+  });
+
+  it('skips refresh when token has plenty of time left', async () => {
+    delete process.env.SOLID_API_KEY;
+    delete process.env.SOLID_TOKEN;
+
+    config.tokenExpiresAt = new Date(Date.now() + 2 * 3600_000);
+    config.refreshToken = 'refresh_XYZ';
+
+    await _authInterceptorCb!({ headers: {}, url: '/api/v1/company/list', method: 'get' });
+
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it('skips refresh on auth endpoints to avoid loops', async () => {
+    delete process.env.SOLID_API_KEY;
+    delete process.env.SOLID_TOKEN;
+
+    config.tokenExpiresAt = new Date(Date.now() + 30_000);
+    config.refreshToken = 'refresh_XYZ';
+
+    await _authInterceptorCb!({ headers: {}, url: '/api/v1/auth/refresh', method: 'post' });
+
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 });

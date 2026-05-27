@@ -1,41 +1,87 @@
 /**
  * Import command tests — HTML parsing to layout_json blocks.
+ *
+ * Calls the actual parseHtmlToBlocks parser and asserts on classified output.
  */
 
-// We test the parser directly by importing the module
-// The actual command reads files/clipboard, but the core logic is parsing
+jest.mock('ora', () => ({
+  __esModule: true,
+  default: () => ({ start: jest.fn().mockReturnThis(), stop: jest.fn(), succeed: jest.fn(), fail: jest.fn() }),
+}));
+
+import { parseHtmlToBlocks } from '../../commands/import';
 
 describe('import: HTML-to-blocks parser', () => {
-  // We'll test via the command's internal parse logic
-  // Since the parser is not exported separately, we test the output files
-
   describe('block detection', () => {
     it('detects hero sections from H1 + button', () => {
-      const html = `<section><h1>Welcome to Our Business</h1><p>Best service in town</p><a href="/contact" class="btn">Get Started</a></section>`;
-      // Hero: has h1 + button/link
-      expect(html).toContain('<h1');
-      expect(html).toContain('btn');
+      const blocks = parseHtmlToBlocks(
+        `<section><h1>Welcome to Our Business</h1><p>Best service in town</p><a href="/contact" class="btn">Get Started</a></section>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).toBe('hero');
+      expect(blocks[0].content.headline).toContain('Welcome');
+      expect(blocks[0].content.cta_text).toBeTruthy();
     });
 
     it('detects pricing from dollar amounts', () => {
-      const html = `<div><h2>Pricing</h2><div><h3>Basic</h3><p>$29/mo</p></div><div><h3>Pro</h3><p>$99/mo</p></div></div>`;
-      const priceCount = (html.match(/\$\d/g) || []).length;
-      expect(priceCount).toBeGreaterThanOrEqual(2);
+      const blocks = parseHtmlToBlocks(
+        `<section><h2>Pricing</h2><div><h3>Basic</h3><p>$29/mo</p></div><div><h3>Pro</h3><p>$99/mo</p></div></section>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).toBe('pricing');
+      expect(blocks[0].content.plans).toBeDefined();
     });
 
     it('detects FAQ from question/answer patterns', () => {
-      const html = `<section><h2>FAQ</h2><div><h3>How does it work?</h3><p>Simple.</p></div></section>`;
-      expect(html.toLowerCase()).toContain('faq');
+      const blocks = parseHtmlToBlocks(
+        `<section><h2>FAQ</h2><div><h3>How does it work?</h3><p>Simple.</p></div></section>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).toBe('faq');
+      expect(blocks[0].content.title).toBeDefined();
     });
 
     it('detects testimonials from quotes', () => {
-      const html = `<div><h2>Reviews</h2><blockquote><p>"Great service!"</p><cite>John</cite></blockquote></div>`;
-      expect(html.toLowerCase()).toContain('review');
+      const blocks = parseHtmlToBlocks(
+        `<section><h2>Reviews</h2><blockquote><p>"Great service!"</p><cite>John</cite></blockquote></section>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).toBe('testimonials');
     });
 
     it('detects contact forms', () => {
-      const html = `<section><h2>Contact Us</h2><form><input placeholder="Name"><textarea></textarea><button>Send</button></form></section>`;
-      expect(html.toLowerCase()).toContain('<form');
+      const blocks = parseHtmlToBlocks(
+        `<div><form action=#><input type=text><textarea></textarea><button>Send</button></form></div>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).toBe('contact');
+    });
+
+    it('returns empty array for empty HTML', () => {
+      expect(parseHtmlToBlocks('')).toEqual([]);
+      expect(parseHtmlToBlocks('   ')).toEqual([]);
+    });
+
+    it('strips script and style tags before parsing', () => {
+      const blocks = parseHtmlToBlocks(
+        `<script>alert(1)</script><style>.x{}</style><section><h1>Real Content</h1><p>Description here</p><a class=btn>Go</a></section>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0]).toHaveProperty('type');
+      expect(blocks[0]).toHaveProperty('content');
+    });
+  });
+
+  describe('multi-section parsing', () => {
+    it('parses multiple sections into multiple blocks', () => {
+      const blocks = parseHtmlToBlocks(`
+        <section><h1>Hero Title</h1><p>Sub</p><a href="/go" class="btn">CTA</a></section>
+        <section><h2>FAQ</h2><div><h3>How does it work?</h3><p>Like this.</p></div></section>
+      `);
+      expect(blocks.length).toBeGreaterThanOrEqual(2);
+      const types = blocks.map((b) => b.type);
+      expect(types).toContain('hero');
+      expect(types).toContain('faq');
     });
   });
 

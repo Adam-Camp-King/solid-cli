@@ -17,16 +17,16 @@ function run(args: string): string {
   }).toString();
 }
 
-function runSafe(args: string): { stdout: string; exitCode: number } {
+function runSafe(args: string): { stdout: string; stderr: string; exitCode: number } {
   try {
     const stdout = execSync(`node ${CLI_PATH} ${args}`, {
       timeout: 10000,
       env: { ...process.env, HOME: '/tmp/solid-test-home', SOLID_API_KEY: '' },
       stdio: ['pipe', 'pipe', 'pipe'],
     }).toString();
-    return { stdout, exitCode: 0 };
+    return { stdout, stderr: '', exitCode: 0 };
   } catch (e: any) {
-    return { stdout: e.stdout?.toString() || '', exitCode: e.status || 1 };
+    return { stdout: e.stdout?.toString() || '', stderr: e.stderr?.toString() || '', exitCode: e.status || 1 };
   }
 }
 
@@ -235,16 +235,16 @@ describe('CLI Smoke Tests', () => {
   // ===========================================================================
 
   it('doctor env --json emits valid JSON with results array', () => {
+    expect.hasAssertions();
     const result = runSafe('doctor env --json');
-    if (result.stdout.trim()) {
-      const parsed = JSON.parse(result.stdout);
-      expect(parsed).toHaveProperty('results');
-      expect(Array.isArray(parsed.results)).toBe(true);
-      if (parsed.results.length > 0) {
-        expect(parsed.results[0]).toHaveProperty('name');
-        expect(parsed.results[0]).toHaveProperty('status');
-      }
-    }
+    const output = (result.stdout || result.stderr).trim();
+    expect(output).not.toBe('');
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed).toHaveProperty('results');
+    expect(Array.isArray(parsed.results)).toBe(true);
+    expect(parsed.results.length).toBeGreaterThan(0);
+    expect(parsed.results[0]).toHaveProperty('name');
+    expect(parsed.results[0]).toHaveProperty('status');
   });
 
   it('schema blocks --json has count field', () => {

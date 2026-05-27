@@ -19,12 +19,12 @@ import { config } from '../lib/config';
 
 // ─── HTML-to-Blocks Parser ──────────────────────────────────────────
 
-interface Block {
+export interface Block {
   type: string;
   content: Record<string, any>;
 }
 
-function parseHtmlToBlocks(html: string): Block[] {
+export function parseHtmlToBlocks(html: string): Block[] {
   const blocks: Block[] = [];
 
   // Strip doctype, html, head, body wrappers

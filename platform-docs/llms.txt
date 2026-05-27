@@ -263,7 +263,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.11.12, manifest schema 1.0, generated 2026-05-26. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.11.12, manifest schema 1.0, generated 2026-05-27. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 

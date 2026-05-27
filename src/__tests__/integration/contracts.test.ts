@@ -77,7 +77,7 @@ function runCliAsync(
   args: string,
   port: number,
   env: Record<string, string> = {},
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+): Promise<{ stdout: string; stderr: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     exec(
       `node ${CLI_PATH} ${args}`,
@@ -99,7 +99,8 @@ function runCliAsync(
         resolve({
           stdout: stdout || '',
           stderr: stderr || '',
-          exitCode: error ? (error as any).code ?? 1 : 0,
+          exitCode: error ? (typeof (error as any).code === 'number' ? (error as any).code : 1) : 0,
+          timedOut: !!(error && (error as any).killed),
         });
       },
     );
@@ -218,6 +219,7 @@ describe('CLI Contract Tests', () => {
 
       it('failed probes include a hint field', () => {
         const failed = parsed.results.filter((p: any) => p.status === 'fail');
+        expect(failed.length).toBeGreaterThan(0);
         for (const probe of failed) {
           expect(probe).toHaveProperty('hint');
           expect(probe.hint.length).toBeGreaterThan(0);
@@ -504,12 +506,13 @@ describe('CLI Contract Tests', () => {
       ['doctor env'],
     ])('solid %s --json returns an object, not a bare array', (cmd) => {
       it('is an object', () => {
+        expect.hasAssertions();
         const { stdout, exitCode } = runSafe(`${cmd} --json`);
-        if (exitCode === 0 && stdout.trim()) {
-          const parsed = JSON.parse(stdout);
-          expect(typeof parsed).toBe('object');
-          expect(Array.isArray(parsed)).toBe(false);
-        }
+        expect([0, 1]).toContain(exitCode);
+        expect(stdout.trim()).not.toBe('');
+        const parsed = JSON.parse(stdout);
+        expect(typeof parsed).toBe('object');
+        expect(Array.isArray(parsed)).toBe(false);
       });
     });
 
@@ -531,11 +534,11 @@ describe('CLI Contract Tests', () => {
       try {
         for (const cmd of ['company list', 'pages list', 'services list']) {
           const result = await runCliAsync(`${cmd} --json`, port);
-          if (result.exitCode === 0 && result.stdout.trim()) {
-            const parsed = JSON.parse(result.stdout);
-            expect(typeof parsed).toBe('object');
-            expect(Array.isArray(parsed)).toBe(false);
-          }
+          expect(result.exitCode).toBe(0);
+          expect(result.stdout.trim()).not.toBe('');
+          const parsed = JSON.parse(result.stdout);
+          expect(typeof parsed).toBe('object');
+          expect(Array.isArray(parsed)).toBe(false);
         }
       } finally {
         server.close();
