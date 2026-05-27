@@ -77,18 +77,29 @@ function classifySection(html: string): Block | null {
   const text = stripTags(html).trim();
   if (!text && !lower.includes('<img') && !lower.includes('<video')) return null;
 
-  // Hero detection: large heading + optional subheading + optional CTA
-  if (isHero(lower)) {
+  // ── Skip patterns (structural, cheap) ───────────────────────────────
+
+  if (lower.includes('<footer') || lower.includes('copyright') || lower.includes('©')) {
+    return null;
+  }
+
+  if (lower.includes('<nav')) {
+    return null;
+  }
+
+  // ── Structural signals (unambiguous HTML tags) ──────────────────────
+
+  if (lower.includes('<form') || lower.includes('<input') || text.toLowerCase().includes('contact')) {
     return {
-      type: 'hero',
+      type: 'contact',
       content: {
-        headline: extractFirst(html, 'h1') || extractFirst(html, 'h2') || '',
-        subheadline: extractFirst(html, 'p') || '',
-        cta_text: extractButtonText(html) || '',
-        cta_url: extractHref(html) || '#',
+        title: extractFirst(html, 'h2') || extractFirst(html, 'h3') || 'Contact Us',
+        button_text: extractButtonText(html) || 'Send Message',
       },
     };
   }
+
+  // ── Keyword signals (strong, specific terms) ────────────────────────
 
   // Pricing detection: multiple price-like elements
   if (lower.includes('pricing') || lower.includes('/mo') || lower.includes('$') && countPattern(lower, /\$\d/) >= 2) {
@@ -112,8 +123,8 @@ function classifySection(html: string): Block | null {
     };
   }
 
-  // Testimonials detection
-  if (lower.includes('testimonial') || lower.includes('review') || lower.includes('what our') || countPattern(lower, /[""\u201c]/) >= 2) {
+  // Testimonials detection — count quotes in visible text, not HTML attributes
+  if (lower.includes('testimonial') || lower.includes('review') || lower.includes('what our') || countPattern(text, /[""\u201c]/) >= 2) {
     return {
       type: 'testimonials',
       content: {
@@ -135,30 +146,6 @@ function classifySection(html: string): Block | null {
         },
       };
     }
-  }
-
-  // CTA detection
-  if (lower.includes('get started') || lower.includes('sign up') || lower.includes('contact us') || lower.includes('book now') || lower.includes('call now')) {
-    return {
-      type: 'cta',
-      content: {
-        headline: extractFirst(html, 'h2') || extractFirst(html, 'h3') || '',
-        subheadline: extractFirst(html, 'p') || '',
-        cta_text: extractButtonText(html) || 'Get Started',
-        cta_url: extractHref(html) || '#',
-      },
-    };
-  }
-
-  // Contact/form detection
-  if (lower.includes('<form') || lower.includes('<input') || lower.includes('contact')) {
-    return {
-      type: 'contact',
-      content: {
-        title: extractFirst(html, 'h2') || extractFirst(html, 'h3') || 'Contact Us',
-        button_text: extractButtonText(html) || 'Send Message',
-      },
-    };
   }
 
   // Stats detection: numbers
@@ -196,17 +183,34 @@ function classifySection(html: string): Block | null {
     };
   }
 
-  // Footer detection
-  if (lower.includes('<footer') || lower.includes('copyright') || lower.includes('\u00a9')) {
-    return null; // Skip footers — TenantShell handles this
+  // ── Pattern signals (looser, order matters) ─────────────────────────
+
+  if (isHero(lower)) {
+    return {
+      type: 'hero',
+      content: {
+        headline: extractFirst(html, 'h1') || extractFirst(html, 'h2') || '',
+        subheadline: extractFirst(html, 'p') || '',
+        cta_text: extractButtonText(html) || '',
+        cta_url: extractHref(html) || '#',
+      },
+    };
   }
 
-  // Navigation detection
-  if (lower.includes('<nav')) {
-    return null; // Skip nav — TenantShell handles this
+  if (lower.includes('get started') || lower.includes('sign up') || lower.includes('book now') || lower.includes('call now')) {
+    return {
+      type: 'cta',
+      content: {
+        headline: extractFirst(html, 'h2') || extractFirst(html, 'h3') || '',
+        subheadline: extractFirst(html, 'p') || '',
+        cta_text: extractButtonText(html) || 'Get Started',
+        cta_url: extractHref(html) || '#',
+      },
+    };
   }
 
-  // Default: text block
+  // ── Fallback ────────────────────────────────────────────────────────
+
   return {
     type: 'text',
     content: {

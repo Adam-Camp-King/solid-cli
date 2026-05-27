@@ -49,9 +49,17 @@ describe('import: HTML-to-blocks parser', () => {
       expect(blocks[0].type).toBe('testimonials');
     });
 
-    it('detects contact forms', () => {
+    it('detects contact forms even with quoted attributes', () => {
       const blocks = parseHtmlToBlocks(
-        `<div><form action=#><input type=text><textarea></textarea><button>Send</button></form></div>`,
+        `<section><h2>Contact Us</h2><form><input placeholder="Name"><input placeholder="Email"><textarea></textarea><button>Send</button></form></section>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).toBe('contact');
+    });
+
+    it('contact wins over hero when form is present', () => {
+      const blocks = parseHtmlToBlocks(
+        `<section><h2>Get In Touch</h2><p>We'd love to hear from you</p><form><input placeholder="Name"><button>Submit</button></form></section>`,
       );
       expect(blocks.length).toBeGreaterThanOrEqual(1);
       expect(blocks[0].type).toBe('contact');
@@ -69,6 +77,14 @@ describe('import: HTML-to-blocks parser', () => {
       expect(blocks.length).toBeGreaterThanOrEqual(1);
       expect(blocks[0]).toHaveProperty('type');
       expect(blocks[0]).toHaveProperty('content');
+    });
+
+    it('does not misclassify forms as testimonials from attribute quotes', () => {
+      const blocks = parseHtmlToBlocks(
+        `<div><form><input placeholder="Your name"><input placeholder="Your email"><button>Send</button></form></div>`,
+      );
+      expect(blocks.length).toBeGreaterThanOrEqual(1);
+      expect(blocks[0].type).not.toBe('testimonials');
     });
   });
 
