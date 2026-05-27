@@ -560,6 +560,7 @@ authCommand
 
     config.logout();
     console.log(chalk.green('Logged out successfully'));
+    console.log(chalk.dim('  Browser session still active. Use `solid auth login --fresh` to sign in as a different user.'));
   });
 
 // Status command
