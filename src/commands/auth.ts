@@ -20,7 +20,7 @@ import { frontendUrlFor } from '../lib/url-utils';
 // Browser login (loopback OAuth — like `npm login`, `gh auth login`)
 // ---------------------------------------------------------------------------
 
-const BROWSER_LOGIN_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 function openBrowser(url: string): void {
   const platform = process.platform;
@@ -42,7 +42,7 @@ interface BrowserLoginResult {
 }
 
 async function browserLogin(
-  opts: { companyId?: number } = {},
+  opts: { companyId?: number; fresh?: boolean } = {},
   onReady?: (url: string) => void,
 ): Promise<BrowserLoginResult> {
   const state = crypto.randomBytes(32).toString('hex');
@@ -128,6 +128,7 @@ async function browserLogin(
       const port = addr.port;
       const params = new URLSearchParams({ port: String(port), state });
       if (opts.companyId) params.set('company', String(opts.companyId));
+      if (opts.fresh) params.set('fresh', '1');
       const url = `${frontendUrlFor(config.apiUrl)}/auth/cli-auth?${params.toString()}`;
       if (onReady) onReady(url);
       openBrowser(url);
@@ -251,6 +252,7 @@ authCommand
   .option('-t, --token <token>', 'Login with API key (sk_solid_...)')
   .option('-p, --password', 'Use email/password prompt instead of browser')
   .option('-c, --company <id>', 'Skip multi-company picker — auth directly into this company ID', (v) => parseInt(v, 10))
+  .option('--fresh', 'Force a new login — ignore any existing browser session')
   .action(async (options) => {
     try {
       // API key login (for scripts/CI)
@@ -285,7 +287,7 @@ authCommand
       if (!usePassword) {
         let spinner: ReturnType<typeof ora> | null = null;
         try {
-          const result = await browserLogin({ companyId: options.company }, (url) => {
+          const result = await browserLogin({ companyId: options.company, fresh: options.fresh }, (url) => {
             console.log('');
             console.log(chalk.dim('  Opening browser to authenticate...'));
             console.log(chalk.dim(`  If it does not open, visit: ${url}`));
