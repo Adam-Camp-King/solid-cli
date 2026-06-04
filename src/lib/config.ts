@@ -65,6 +65,21 @@ class ConfigManager {
   }
 
   get companyId(): number | undefined {
+    // Env pins take precedence over the cached config — mirrors the
+    // auth-source precedence in isLoggedIn()/the request interceptor.
+    // Both vars are part of the public surface and must actually work:
+    //   1. SOLID_COMPANY_OVERRIDE — set by `solid ai --company <id>` for
+    //      the editor session it launches
+    //   2. SOLID_COMPANY_ID — the documented pin (tenant-warn hint,
+    //      `solid mcp install --company` writes it into MCP configs)
+    //   3. cached company from `solid auth login`
+    for (const envVar of ['SOLID_COMPANY_OVERRIDE', 'SOLID_COMPANY_ID'] as const) {
+      const raw = process.env[envVar];
+      if (raw) {
+        const id = parseInt(raw, 10);
+        if (Number.isFinite(id) && id > 0) return id;
+      }
+    }
     return this.data.company_id;
   }
 

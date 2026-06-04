@@ -155,3 +155,69 @@ describe('solid ai — option → env wiring', () => {
     expect(codexCall?.[1]).toEqual(['context', '--codex', '--if-tenant']);
   });
 });
+
+describe('solid ai — preflight fallthrough (installed but cannot run)', () => {
+  beforeEach(() => {
+    clearCaptured();
+    // Commander keeps option values across parseAsync calls on the same
+    // command instance — earlier `--as codex` tests would leak into the
+    // auto-detect path here. Reset to a clean slate.
+    aiCommand.setOptionValue('as', undefined);
+  });
+
+  // 2026-06-04 iMac case: claude on PATH but its binary needs a newer macOS.
+  // Auto-detect must fall through to the next WORKING editor instead of
+  // handing the terminal to a dyld crash dump.
+  it('auto-detect skips a dyld-broken claude and picks cursor', async () => {
+    const { spawnSync } = jest.requireMock('child_process') as { spawnSync: jest.Mock };
+    spawnSync.mockClear();
+    spawnSync.mockImplementation((bin: string) => {
+      if (bin === 'claude') {
+        return {
+          status: null,
+          signal: 'SIGABRT',
+          stdout: '',
+          stderr: 'dyld: Symbol not found: _ubrk_clone\n  Referenced from: /x/bin/claude (which was built for Mac OS X 13.0)',
+        };
+      }
+      return { status: 0, signal: null, stdout: '', stderr: '' };
+    });
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await runAi(['ai']);
+      expect(process.env.SOLID_AGENT).toBe('cursor');
+      // The user is told WHY claude was skipped, in plain language.
+      const errOutput = errSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(errOutput).toMatch(/cannot run on this Mac/);
+      expect(errOutput).toMatch(/macOS 13\.0\+/);
+    } finally {
+      errSpy.mockRestore();
+      spawnSync.mockImplementation(() => ({ status: 0 }));
+    }
+  });
+
+  it('forced --as claude fails loudly with the macOS reason when claude is broken', async () => {
+    const { spawnSync } = jest.requireMock('child_process') as { spawnSync: jest.Mock };
+    spawnSync.mockClear();
+    spawnSync.mockImplementation((bin: string) => {
+      if (bin === 'claude') {
+        return { status: null, signal: 'SIGABRT', stdout: '', stderr: 'dyld: Symbol not found: _ubrk_clone' };
+      }
+      return { status: 0, signal: null, stdout: '', stderr: '' };
+    });
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await runAi(['ai', '--as', 'claude']);
+      // No agent env set — we refused to hand off.
+      expect(process.env.SOLID_AGENT).toBeUndefined();
+      const errOutput = errSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(errOutput).toMatch(/newer macOS|cannot run on this Mac/);
+      expect(errOutput).toMatch(/No working AI found/);
+    } finally {
+      errSpy.mockRestore();
+      spawnSync.mockImplementation(() => ({ status: 0 }));
+    }
+  });
+});

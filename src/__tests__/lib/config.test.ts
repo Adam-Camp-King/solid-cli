@@ -133,4 +133,54 @@ describe('ConfigManager', () => {
       expect(0o600).toBe(384); // rw-------
     });
   });
+
+  // Real singleton (fs mocked → empty config file). The env pins are part
+  // of the public surface: the tenant-warn hint says "set SOLID_COMPANY_ID",
+  // `solid mcp install --company` writes it into MCP configs, and
+  // `solid ai --company` sets SOLID_COMPANY_OVERRIDE. config.companyId must
+  // actually honor them — it silently ignored both until 2026-06-04.
+  describe('companyId env pins (real getter)', () => {
+    const { config: realConfig } = jest.requireActual('../../lib/config') as {
+      config: { companyId: number | undefined };
+    };
+    const PINS = ['SOLID_COMPANY_ID', 'SOLID_COMPANY_OVERRIDE'] as const;
+    const saved: Record<string, string | undefined> = {};
+
+    beforeEach(() => {
+      for (const k of PINS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+    });
+    afterEach(() => {
+      for (const k of PINS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    it('returns undefined with no pins and no cached company', () => {
+      expect(realConfig.companyId).toBeUndefined();
+    });
+
+    it('honors SOLID_COMPANY_ID', () => {
+      process.env.SOLID_COMPANY_ID = '76';
+      expect(realConfig.companyId).toBe(76);
+    });
+
+    it('SOLID_COMPANY_OVERRIDE wins over SOLID_COMPANY_ID', () => {
+      process.env.SOLID_COMPANY_ID = '76';
+      process.env.SOLID_COMPANY_OVERRIDE = '61';
+      expect(realConfig.companyId).toBe(61);
+    });
+
+    it('ignores non-numeric and non-positive pins', () => {
+      process.env.SOLID_COMPANY_ID = 'banana';
+      expect(realConfig.companyId).toBeUndefined();
+      process.env.SOLID_COMPANY_ID = '-5';
+      expect(realConfig.companyId).toBeUndefined();
+      process.env.SOLID_COMPANY_ID = '0';
+      expect(realConfig.companyId).toBeUndefined();
+    });
+  });
 });

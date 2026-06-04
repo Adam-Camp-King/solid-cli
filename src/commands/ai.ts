@@ -20,23 +20,46 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { parseAgentMode, modeDescriptor, type AgentMode } from '../lib/agent-mode';
+import { preflightEditor } from '../lib/editor-preflight';
 
 type AiKind = 'claude' | 'cursor' | 'codex';
 
-function whichAi(override?: string): AiKind | null {
+const AI_PREFERENCE: AiKind[] = ['claude', 'cursor', 'codex'];
+
+interface AiPick {
+  kind: AiKind | null;
+  /** Editors that are on PATH but failed preflight (can't actually run). */
+  broken: Array<{ kind: AiKind; reason: string; hint?: string }>;
+}
+
+// "On PATH" is not "can run" — a binary built for a newer macOS aborts at
+// launch (dyld symbol errors). Preflight each candidate so auto-detect
+// falls through to the next working editor instead of handing the terminal
+// to a crash dump. See lib/editor-preflight.ts for the real-world case.
+function whichAi(override?: string): AiPick {
   if (override) {
     const normalized = override.toLowerCase();
     if (normalized === 'claude' || normalized === 'cursor' || normalized === 'codex') {
-      return normalized as AiKind;
+      const kind = normalized as AiKind;
+      if (!resolveBinary(kind)) return { kind: null, broken: [] };
+      const pf = preflightEditor(kind);
+      if (!pf.ok) {
+        return { kind: null, broken: [{ kind, reason: pf.reason!, hint: pf.hint }] };
+      }
+      return { kind, broken: [] };
     }
-    return null;
+    return { kind: null, broken: [] };
   }
   // Auto-detect. Preference order reflects what we ship first-class support
   // for: claude > cursor > codex. Change this when product priorities shift.
-  if (resolveBinary('claude')) return 'claude';
-  if (resolveBinary('cursor')) return 'cursor';
-  if (resolveBinary('codex')) return 'codex';
-  return null;
+  const broken: AiPick['broken'] = [];
+  for (const kind of AI_PREFERENCE) {
+    if (!resolveBinary(kind)) continue;
+    const pf = preflightEditor(kind);
+    if (pf.ok) return { kind, broken };
+    broken.push({ kind, reason: pf.reason!, hint: pf.hint });
+  }
+  return { kind: null, broken };
 }
 
 // Resolve a binary via PATH without depending on `which` being installed.
@@ -130,10 +153,20 @@ export const aiCommand = new Command('ai')
     // allowlist on every subsequent `solid ...` invocation inside the AI.
     const mode: AgentMode = parseAgentMode(options.mode) || 'full';
 
-    // 4. Pick the AI
-    const kind = whichAi(options.as);
+    // 4. Pick the AI — preflighted, so "installed but can't run on this
+    // machine" produces a plain explanation instead of a dyld crash dump.
+    const pick = whichAi(options.as);
+    for (const b of pick.broken) {
+      console.error(chalk.yellow(`  ⚠ ${b.reason}`));
+      if (b.hint) console.error(chalk.dim(`    ${b.hint}`));
+    }
+    const kind = pick.kind;
     if (!kind) {
-      console.error(chalk.red('No AI detected on PATH.'));
+      if (pick.broken.length === 0) {
+        console.error(chalk.red('No AI detected on PATH.'));
+      } else {
+        console.error(chalk.red('No working AI found on this machine.'));
+      }
       console.error('');
       console.error(chalk.dim('  Install Claude Code:  https://claude.com/product/claude-code'));
       console.error(chalk.dim('  Install Cursor:       https://cursor.com'));

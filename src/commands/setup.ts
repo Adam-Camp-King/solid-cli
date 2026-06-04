@@ -39,8 +39,12 @@ import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
 import { getResolvedApiUrl, apiClient } from '../lib/api-client';
+import { preflightEditor, type PreflightResult } from '../lib/editor-preflight';
 
-type StepStatus = 'done' | 'skipped' | 'failed' | 'pending';
+// 'warn' = environment problem that isn't the wizard's fault (e.g. an editor
+// is installed but its binary can't run on this macOS). Loud in the summary,
+// but doesn't flip the exit code — the CLI itself is fully set up.
+type StepStatus = 'done' | 'skipped' | 'failed' | 'warn' | 'pending';
 
 interface StepResult {
   step: string;
@@ -92,7 +96,7 @@ function isInstalled(binary: string): boolean {
   }
 }
 
-function runVerb(args: string[]): { ok: boolean; detail: string } {
+function runVerb(args: string[], opts?: { interactive?: boolean }): { ok: boolean; detail: string } {
   // Spawn a child `solid <verb>` so step actions reuse the same auth /
   // config / interceptor stack as a real invocation. We invoke node on
   // our own bin entry so the child sees the same dist/ — works in dev
@@ -101,13 +105,24 @@ function runVerb(args: string[]): { ok: boolean; detail: string } {
   // The bin path is derived from process.argv[1] (the file the user
   // ran). Tests can override via SOLID_SELF_BIN env var.
   const selfBin = process.env.SOLID_SELF_BIN || process.argv[1];
+  // SOLID_NO_TENANT_WARN: the IMPLICIT_TENANT advisory is for interactive
+  // use; inside the wizard it would get captured as the step's "detail" and
+  // dump a raw JSON blob into the summary box (seen 2026-06-04).
+  //
+  // interactive: steps that hand the terminal to the child (auth login's
+  // browser-URL fallback, the first-action verbs — `solid ai` launches a
+  // full-screen editor). Piping those swallows their UI: a fresh user
+  // staring at a silent terminal while a login waits on a URL they never
+  // saw. Inherited stdio means no captured detail — that's the trade.
   const result = spawnSync(process.execPath, [selfBin, ...args], {
-    stdio: 'pipe',
+    stdio: opts?.interactive ? 'inherit' : 'pipe',
     encoding: 'utf-8',
-    env: { ...process.env, SOLID_SKIP_VERSION_CHECK: '1' },
+    env: { ...process.env, SOLID_SKIP_VERSION_CHECK: '1', SOLID_NO_TENANT_WARN: '1' },
   });
   const ok = result.status === 0;
-  const detail = (result.stderr || result.stdout || '').toString().trim().slice(0, 500);
+  const detail = opts?.interactive
+    ? (ok ? '' : `exited with code ${result.status}`)
+    : (result.stderr || result.stdout || '').toString().trim().slice(0, 500);
   return { ok, detail };
 }
 
@@ -245,7 +260,7 @@ async function stepAuth(opts: SetupOptions): Promise<StepResult> {
     return { step: 'auth', status: 'skipped', detail: 'no TTY (run `solid auth login` manually or pass SOLID_API_KEY)' };
   }
   // Spawn `solid auth login` so it shows its own UI in this terminal.
-  const r = runVerb(['auth', 'login']);
+  const r = runVerb(['auth', 'login'], { interactive: true });
   return r.ok
     ? { step: 'auth', status: 'done', detail: 'logged in' }
     : { step: 'auth', status: 'failed', detail: r.detail };
@@ -288,16 +303,45 @@ async function getOrCreateMcpApiKey(): Promise<string | null> {
   }
 }
 
+// One preflight per binary per wizard run — both the MCP step and the
+// Claude-hook step ask about `claude`, no reason to spawn it twice.
+const preflightCache = new Map<string, PreflightResult>();
+function preflightCached(binary: string): PreflightResult {
+  const hit = preflightCache.get(binary);
+  if (hit) return hit;
+  const r = preflightEditor(binary);
+  preflightCache.set(binary, r);
+  return r;
+}
+
 async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
   if (opts.skipMcp) return [{ step: 'mcp', status: 'skipped', detail: '--skip-mcp' }];
-  const present = EDITORS.filter((e) => isInstalled(e.binary));
-  if (present.length === 0) {
+  const onPath = EDITORS.filter((e) => isInstalled(e.binary));
+  if (onPath.length === 0) {
     return [{ step: 'mcp', status: 'skipped', detail: 'no supported editor on PATH (claude/cursor/windsurf)' }];
   }
 
+  // "On PATH" ≠ "can run". A binary built for a newer macOS aborts at launch
+  // (dyld) — wiring MCP into it would report ✓ for an editor the user can
+  // never open. Surface the real problem as a loud ⚠ instead.
+  const results: StepResult[] = [];
+  const present: typeof onPath = [];
+  for (const editor of onPath) {
+    const pf = preflightCached(editor.binary);
+    if (pf.ok) {
+      present.push(editor);
+    } else {
+      results.push({
+        step: `mcp.${editor.clientFlag}`,
+        status: 'warn',
+        detail: `${pf.reason} ${pf.hint || ''}`.trim(),
+      });
+    }
+  }
+  if (present.length === 0) return results;
+
   const mcpKey = config.isLoggedIn() ? await getOrCreateMcpApiKey() : null;
 
-  const results: StepResult[] = [];
   for (const editor of present) {
     const ok = await confirm(`Wire Solid# MCP into ${editor.pretty}?`, true, !!opts.yes);
     if (!ok) {
@@ -320,6 +364,12 @@ async function stepClaudeHook(opts: SetupOptions): Promise<StepResult> {
   if (opts.skipMcp) return { step: 'claude_hook', status: 'skipped', detail: '--skip-mcp' };
   if (!isInstalled('claude')) {
     return { step: 'claude_hook', status: 'skipped', detail: 'Claude Code not on PATH' };
+  }
+  const pf = preflightCached('claude');
+  if (!pf.ok) {
+    // Wiring a SessionStart hook for an editor that can't launch would just
+    // bury the real problem under a green checkmark.
+    return { step: 'claude_hook', status: 'warn', detail: `${pf.reason} ${pf.hint || ''}`.trim() };
   }
   const r = runVerb(['install']);
   return r.ok
@@ -384,7 +434,9 @@ async function stepFirstAction(opts: SetupOptions): Promise<StepResult> {
     demo: ['demo', 'create'],
     ai: ['ai'],
   };
-  const r = runVerb(verbMap[choice]);
+  // Interactive: these verbs own the terminal (clone's wizard, `solid ai`
+  // launching a full-screen editor). Piping them shows the user nothing.
+  const r = runVerb(verbMap[choice], { interactive: true });
   return {
     step: 'first_action',
     status: r.ok ? 'done' : 'failed',
@@ -401,6 +453,7 @@ function statusGlyph(s: StepStatus): string {
     case 'done':    return chalk.green('✓');
     case 'skipped': return chalk.dim('○');
     case 'failed':  return chalk.red('✗');
+    case 'warn':    return chalk.yellow('⚠');
     default:        return chalk.dim('•');
   }
 }

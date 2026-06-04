@@ -94,7 +94,7 @@ describeOrSkip('solid setup — Phase 2 wizard', () => {
       expect(row).toHaveProperty('status');
       // detail is optional but should be a string when present
       if (row.detail !== undefined) expect(typeof row.detail).toBe('string');
-      expect(['done', 'skipped', 'failed', 'pending']).toContain(row.status);
+      expect(['done', 'skipped', 'failed', 'warn', 'pending']).toContain(row.status);
     }
   });
 
@@ -121,6 +121,71 @@ describeOrSkip('solid setup — Phase 2 wizard', () => {
     // first_action should be skipped (no TTY OR --yes both route to skip)
     const fa = envelope.results.find((x: { step: string }) => x.step === 'first_action');
     expect(fa.status).toBe('skipped');
+  });
+});
+
+// Reproduces the 2026-06-04 iMac case: `claude` is on PATH but its binary
+// was built for a newer macOS, so every launch dies in dyld. Setup must
+// report ⚠ warn with the real reason — not ✓ "wired into Claude Code".
+const describePosix = process.platform === 'win32' ? describe.skip : describeOrSkip;
+describePosix('solid setup — editor on PATH but unable to run', () => {
+  const os = require('os') as typeof import('os');
+  let fakeBinDir: string;
+
+  beforeAll(() => {
+    fakeBinDir = fs.mkdtempSync(path.join(os.tmpdir(), 'solid-fake-claude-'));
+    const fakeClaude = path.join(fakeBinDir, 'claude');
+    fs.writeFileSync(
+      fakeClaude,
+      [
+        '#!/bin/sh',
+        'echo "dyld: Symbol not found: _ubrk_clone" >&2',
+        'echo "  Referenced from: /x/bin/claude (which was built for Mac OS X 13.0)" >&2',
+        'echo "  Expected in: /usr/lib/libicucore.A.dylib" >&2',
+        'exit 134',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+  });
+
+  afterAll(() => {
+    fs.rmSync(fakeBinDir, { recursive: true, force: true });
+  });
+
+  it('reports warn (not done) for mcp.claude and claude_hook with a macOS hint', () => {
+    const result = spawnSync(
+      process.execPath,
+      [distEntry, 'setup', '--yes', '--skip-auth', '--skip-completion', '--skip-render', '--skip-first-action', '--json'],
+      {
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          SOLID_SKIP_VERSION_CHECK: '1',
+          SOLID_SKIP_FIRST_RUN_WIZARD: '1',
+          // Fake bin dir FIRST so our broken `claude` shadows any real one.
+          // PATH is otherwise restricted to system dirs so the wizard can
+          // never find a REAL cursor/windsurf and write actual MCP config
+          // on the machine running the tests. node + sh resolve absolutely.
+          PATH: `${fakeBinDir}:/usr/bin:/bin`,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    expect(result.status).toBe(0); // warn must NOT fail the wizard
+    const envelope = JSON.parse(result.stdout || '{}');
+    expect(envelope.ok).toBe(true);
+
+    const mcpClaude = envelope.results.find((x: { step: string }) => x.step === 'mcp.claude');
+    expect(mcpClaude).toBeDefined();
+    expect(mcpClaude.status).toBe('warn');
+    expect(mcpClaude.detail).toMatch(/cannot run on this Mac/);
+    expect(mcpClaude.detail).toMatch(/macOS 13\.0\+/);
+    expect(mcpClaude.detail).not.toMatch(/_ubrk_clone/); // no raw dyld noise
+
+    const hook = envelope.results.find((x: { step: string }) => x.step === 'claude_hook');
+    expect(hook).toBeDefined();
+    expect(hook.status).toBe('warn');
+    expect(hook.detail).toMatch(/cannot run on this Mac/);
   });
 });
 
