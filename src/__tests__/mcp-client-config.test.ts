@@ -20,7 +20,7 @@ describe('isSupportedClient', () => {
     expect(isSupportedClient(c)).toBe(true);
   });
 
-  it.each([undefined, null, '', 'vscode', 'zed', 'claude-web'])('%s → false', (v) => {
+  it.each([undefined, null, '', 'zed', 'claude-web'])('%s → false', (v) => {
     expect(isSupportedClient(v as string | null | undefined)).toBe(false);
   });
 });
@@ -71,6 +71,17 @@ describe('configPathForClient', () => {
     expect(configPathForClient('windsurf', { platform: 'win32', homeDir: home })).toBe(
       path.join(home, 'AppData', 'Roaming', 'Codeium', 'Windsurf', 'mcp_config.json'),
     );
+  });
+
+  // vscode = Claude Code VS Code extension — user-scope ~/.claude.json on
+  // every OS. The older-device path (extension runs where the native
+  // `claude` binary can't).
+  it('vscode uses ~/.claude.json regardless of platform', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(configPathForClient('vscode', { platform, homeDir: home })).toBe(
+        path.join(home, '.claude.json'),
+      );
+    }
   });
 });
 
@@ -155,6 +166,26 @@ describe('mergeIntoConfig', () => {
     const out = mergeIntoConfig(existing as any, entry) as any;
     expect(out.theme).toBe('dark');
     expect(out.fontSize).toBe(14);
+  });
+
+  // ~/.claude.json (the vscode client target) holds ALL of Claude Code's
+  // user state — projects, history, oauth. Clobbering any of it on
+  // `solid mcp install vscode` would wreck the user's Claude setup.
+  it('preserves a realistic ~/.claude.json structure untouched', () => {
+    const entry = buildServerEntry({ apiKey: 'k', companyId: 76 });
+    const existing = {
+      numStartups: 42,
+      oauthAccount: { accountUuid: 'abc', emailAddress: 'user@example.com' },
+      projects: { '/Users/x/proj': { allowedTools: [], history: [{ display: 'hi' }] } },
+      mcpServers: { github: { command: 'npx', args: ['-y', '@github/mcp'] } },
+    };
+    const out = mergeIntoConfig(existing as any, entry) as any;
+    expect(out.numStartups).toBe(42);
+    expect(out.oauthAccount).toEqual(existing.oauthAccount);
+    expect(out.projects).toEqual(existing.projects);
+    expect(out.mcpServers.github).toEqual(existing.mcpServers.github);
+    expect(out.mcpServers.solid).toEqual(entry);
+    expect(out.mcpServers.solid.env.SOLID_COMPANY_ID).toBe('76');
   });
 
   it('supports a custom serverKey', () => {

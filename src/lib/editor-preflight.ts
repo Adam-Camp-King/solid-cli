@@ -54,8 +54,10 @@ const defaultRunner: PreflightRunner = (binary, args) => {
 
 // Per-editor alternatives shown when the binary can't run on this machine.
 const ALTERNATIVES: Record<string, string> = {
-  claude: 'Use claude.ai/code in the browser, or Cursor on this machine.',
-  cursor: 'Use claude.ai/code in the browser, or Claude Code on this machine.',
+  claude:
+    'Use the Claude Code VS Code extension (runs on older macOS — `solid mcp install vscode`), claude.ai/code in the browser, or Cursor.',
+  cursor: 'Use the Claude Code VS Code extension, claude.ai/code in the browser, or Claude Code.',
+  code: 'Use claude.ai/code in the browser, or another editor on this machine.',
   codex: 'Use another editor on this machine.',
 };
 

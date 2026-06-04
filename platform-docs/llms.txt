@@ -128,7 +128,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 
 <!-- CLI:AUTO:BEGIN -->
 
-- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.11.14
+- [npm](https://www.npmjs.com/package/@solidnumber/cli): `@solidnumber/cli` v2.11.15
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
@@ -224,7 +224,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **leads** (19 subcommands) — Lead pipeline, scoring, prospecting, forms, and analytics: `activities, activity, analytics, attribution, budget, connections, enrich-status, forms, performance, pipeline, plan-subscribe, preferences, preferences-set, prospect, recent, score, score-update, stats, submissions`
 - **llms** (2 subcommands) — AI discovery — manage your llms.txt for AI shopping agents: `check, preview`
 - **marketplace** (10 subcommands) — Cross-company marketplace — publish products + services: `disable, enable, products, publish-all, publish-product, publish-service, services, status, unpublish-product, unpublish-service`
-- **mcp** (4 subcommands) — Install / run the Solid# MCP server for Claude Desktop, Cursor, or Windsurf: `doctor, install, serve, tools`
+- **mcp** (4 subcommands) — Install / run the Solid# MCP server for Claude Desktop, Cursor, Windsurf, or VS Code (Claude Code extension): `doctor, install, serve, tools`
 - **nest** (5 subcommands) — Nest — drop anything, we make it real. (paste/url/file → live page): `from-file, from-url, list, outcomes, promote`
 - **notes** (5 subcommands) — Work notes — cross-session, cross-model AI memory: `add, archive, context, list, search`
 - **notifications** (2 subcommands) — View and manage notifications: `list, read-all`
@@ -263,7 +263,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.11.14, manifest schema 1.0, generated 2026-06-04. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.11.15, manifest schema 1.0, generated 2026-06-04. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 

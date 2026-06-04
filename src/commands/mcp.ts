@@ -37,7 +37,7 @@ import {
 // Root
 // ---------------------------------------------------------------------------
 export const mcpCommand = new Command('mcp').description(
-  'Install / run the Solid# MCP server for Claude Desktop, Cursor, or Windsurf',
+  'Install / run the Solid# MCP server for Claude Desktop, Cursor, Windsurf, or VS Code (Claude Code extension)',
 );
 
 // ---------------------------------------------------------------------------
@@ -233,6 +233,7 @@ function clientLaunchName(client: McpClient): string {
     case 'claude': return 'Claude Desktop';
     case 'cursor': return 'Cursor';
     case 'windsurf': return 'Windsurf';
+    case 'vscode': return 'VS Code (Claude Code extension)';
   }
 }
 
@@ -330,6 +331,7 @@ mcpCommand
 import { appendExamples as __ae_mcp } from '../lib/command-kit';
 __ae_mcp(mcpCommand, [
   { cmd: 'solid mcp install claude',            why: 'Wire Solid# into Claude Desktop' },
+  { cmd: 'solid mcp install vscode',            why: 'Wire Solid# into the Claude Code VS Code extension (works on older macOS)' },
   { cmd: 'solid mcp install cursor --company <id>', why: 'Install pinned to a specific company (find IDs via `solid auth companies`)' },
   { cmd: 'solid mcp install claude --preview',  why: 'Show what WOULD be written — no disk write' },
   { cmd: 'solid mcp tools --json',              why: 'Machine-readable tool manifest' },

@@ -81,6 +81,11 @@ const EDITORS: Array<{ binary: string; clientFlag: string; pretty: string }> = [
   { binary: 'claude', clientFlag: 'claude', pretty: 'Claude Code' },
   { binary: 'cursor', clientFlag: 'cursor', pretty: 'Cursor' },
   { binary: 'windsurf', clientFlag: 'windsurf', pretty: 'Windsurf' },
+  // The Claude Code VS Code extension runs inside VS Code's own runtime,
+  // so it works on older macOS where the native `claude` binary can't
+  // launch (needs 13+). Detecting `code` gives those machines a working
+  // path instead of a dead end.
+  { binary: 'code', clientFlag: 'vscode', pretty: 'VS Code (Claude Code extension)' },
 ];
 
 function isInstalled(binary: string): boolean {
@@ -318,7 +323,7 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
   if (opts.skipMcp) return [{ step: 'mcp', status: 'skipped', detail: '--skip-mcp' }];
   const onPath = EDITORS.filter((e) => isInstalled(e.binary));
   if (onPath.length === 0) {
-    return [{ step: 'mcp', status: 'skipped', detail: 'no supported editor on PATH (claude/cursor/windsurf)' }];
+    return [{ step: 'mcp', status: 'skipped', detail: 'no supported editor on PATH (claude/cursor/windsurf/code)' }];
   }
 
   // "On PATH" ≠ "can run". A binary built for a newer macOS aborts at launch

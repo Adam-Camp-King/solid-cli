@@ -18,13 +18,21 @@
  *   Cursor (~/.cursor/mcp.json): same shape as Claude Desktop
  *
  *   Windsurf (~/.codeium/windsurf/mcp_config.json): same shape
+ *
+ *   VS Code — Claude Code extension (~/.claude.json): same mcpServers
+ *     shape, but the file holds LOTS of other Claude Code state — the
+ *     merge MUST preserve unknown top-level keys (it does). This is the
+ *     older-device path: the extension runs inside VS Code's own runtime,
+ *     so it works on macOS versions where the native `claude` binary
+ *     can't launch (needs 13+). Added 2026-06-04 after a real user hit
+ *     exactly that wall.
  */
 import * as os from 'os';
 import * as path from 'path';
 
-export type McpClient = 'claude' | 'cursor' | 'windsurf';
+export type McpClient = 'claude' | 'cursor' | 'windsurf' | 'vscode';
 
-export const SUPPORTED_CLIENTS: McpClient[] = ['claude', 'cursor', 'windsurf'];
+export const SUPPORTED_CLIENTS: McpClient[] = ['claude', 'cursor', 'windsurf', 'vscode'];
 
 /** Returns true if the string is a known supported client. */
 export function isSupportedClient(value: string | undefined | null): value is McpClient {
@@ -82,6 +90,11 @@ export function configPathForClient(
         return path.join(base, 'Codeium', 'Windsurf', 'mcp_config.json');
       }
       return path.join(home, '.codeium', 'windsurf', 'mcp_config.json');
+
+    case 'vscode':
+      // User-scope MCP config shared by the Claude Code CLI and the
+      // VS Code extension. Same path on every OS.
+      return path.join(home, '.claude.json');
   }
 }
 

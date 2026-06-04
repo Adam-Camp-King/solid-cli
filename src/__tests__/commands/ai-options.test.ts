@@ -70,6 +70,11 @@ describe('solid ai — option → env wiring', () => {
     expect(process.env.SOLID_AGENT).toBe('cursor');
   });
 
+  it('--as vscode forces the Claude Code VS Code extension (older-device path)', async () => {
+    await runAi(['ai', '--as', 'vscode']);
+    expect(process.env.SOLID_AGENT).toBe('vscode');
+  });
+
   it('--as codex forces codex', async () => {
     await runAi(['ai', '--as', 'codex']);
     expect(process.env.SOLID_AGENT).toBe('codex');

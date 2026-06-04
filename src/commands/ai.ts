@@ -22,9 +22,20 @@ import { ui } from '../lib/ui';
 import { parseAgentMode, modeDescriptor, type AgentMode } from '../lib/agent-mode';
 import { preflightEditor } from '../lib/editor-preflight';
 
-type AiKind = 'claude' | 'cursor' | 'codex';
+type AiKind = 'claude' | 'cursor' | 'vscode' | 'codex';
 
-const AI_PREFERENCE: AiKind[] = ['claude', 'cursor', 'codex'];
+// vscode = the Claude Code VS Code extension. Runs inside VS Code's own
+// runtime, so it works on older macOS where the native `claude` binary
+// can't launch — the older-device fallback path.
+const AI_PREFERENCE: AiKind[] = ['claude', 'cursor', 'vscode', 'codex'];
+
+// CLI binary each kind launches with. Only vscode differs (`code`).
+const AI_BINARY: Record<AiKind, string> = {
+  claude: 'claude',
+  cursor: 'cursor',
+  vscode: 'code',
+  codex: 'codex',
+};
 
 interface AiPick {
   kind: AiKind | null;
@@ -39,10 +50,10 @@ interface AiPick {
 function whichAi(override?: string): AiPick {
   if (override) {
     const normalized = override.toLowerCase();
-    if (normalized === 'claude' || normalized === 'cursor' || normalized === 'codex') {
+    if ((AI_PREFERENCE as string[]).includes(normalized)) {
       const kind = normalized as AiKind;
-      if (!resolveBinary(kind)) return { kind: null, broken: [] };
-      const pf = preflightEditor(kind);
+      if (!resolveBinary(AI_BINARY[kind])) return { kind: null, broken: [] };
+      const pf = preflightEditor(AI_BINARY[kind]);
       if (!pf.ok) {
         return { kind: null, broken: [{ kind, reason: pf.reason!, hint: pf.hint }] };
       }
@@ -51,11 +62,12 @@ function whichAi(override?: string): AiPick {
     return { kind: null, broken: [] };
   }
   // Auto-detect. Preference order reflects what we ship first-class support
-  // for: claude > cursor > codex. Change this when product priorities shift.
+  // for: claude > cursor > vscode > codex. Change this when product
+  // priorities shift.
   const broken: AiPick['broken'] = [];
   for (const kind of AI_PREFERENCE) {
-    if (!resolveBinary(kind)) continue;
-    const pf = preflightEditor(kind);
+    if (!resolveBinary(AI_BINARY[kind])) continue;
+    const pf = preflightEditor(AI_BINARY[kind]);
     if (pf.ok) return { kind, broken };
     broken.push({ kind, reason: pf.reason!, hint: pf.hint });
   }
@@ -94,7 +106,9 @@ function refreshContext(kind: AiKind): boolean {
   // launch anyway." Mismatched-company manifests still loud-fail because
   // silent skip there would let stale or wrong-tenant context flow into
   // the AI session.
-  const flag = kind === 'claude' ? '--claude' : kind === 'cursor' ? '--cursor' : '--codex';
+  // vscode shares --claude: the Claude Code extension reads the same
+  // .claude/CLAUDE.md + .claude/solid-context.json as terminal Claude Code.
+  const flag = kind === 'claude' || kind === 'vscode' ? '--claude' : kind === 'cursor' ? '--cursor' : '--codex';
   const solidBin = resolveBinary('solid') || 'solid';
   const result = spawnSync(solidBin, ['context', flag, '--if-tenant'], { stdio: 'inherit' });
   return result.status === 0;
@@ -108,6 +122,10 @@ function launchAi(kind: AiKind): void {
   } else if (kind === 'cursor') {
     // Cursor expects a path argument to open the current project.
     execFileSync('cursor', ['.'], { stdio: 'inherit' });
+  } else if (kind === 'vscode') {
+    // VS Code opens the current project; the Claude Code extension picks
+    // up .claude/CLAUDE.md from the workspace root.
+    execFileSync('code', ['.'], { stdio: 'inherit' });
   } else {
     // Codex (OpenAI's CLI) launches in the current directory; no args needed.
     execFileSync('codex', [], { stdio: 'inherit' });
@@ -116,7 +134,7 @@ function launchAi(kind: AiKind): void {
 
 export const aiCommand = new Command('ai')
   .description('Launch Claude Code / Cursor / Codex with this company\'s context pre-loaded (stupid easy)')
-  .option('--as <tool>', 'Force a specific AI: claude | cursor | codex (default: auto-detect)')
+  .option('--as <tool>', 'Force a specific AI: claude | cursor | vscode | codex (default: auto-detect)')
   .option('--no-context', 'Skip the context refresh — just launch the AI')
   .option('--company <id>', 'Use a specific company for this session (overrides cached)')
   .option('--mode <mode>', 'Cap the AI to a role: customer | developer | agency | full (default: full)')
@@ -197,7 +215,11 @@ export const aiCommand = new Command('ai')
 
     // 6. Arrival: one clean line so the user (and any AI tail-ing) knows
     // exactly what's happening before the terminal hands off.
-    const tool = kind === 'claude' ? 'Claude Code' : kind === 'cursor' ? 'Cursor' : 'Codex';
+    const tool =
+      kind === 'claude' ? 'Claude Code'
+      : kind === 'cursor' ? 'Cursor'
+      : kind === 'vscode' ? 'VS Code (Claude Code extension)'
+      : 'Codex';
     console.log('');
     console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);
     if (mode !== 'full') {
