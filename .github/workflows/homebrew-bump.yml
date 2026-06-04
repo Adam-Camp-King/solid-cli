@@ -1,69 +1,98 @@
 name: Homebrew tap auto-bump
 
-# Fires when a v* tag lands on this repo (which `npm version <bump>` creates
-# automatically and `git push --follow-tags` ships). Reads the new version
-# from package.json, computes the npm tarball sha256, and opens a PR to
-# Solidnumber/homebrew-tap updating Formula/cli.rb.
+# Instant fast path: fires on v* tags AND any push to main that touches
+# package.json, computes the npm tarball sha256, and commits the bump
+# directly to Solidnumber/homebrew-tap.
 #
-# Setup (one-time): create a fine-grained PAT scoped to
-# Solidnumber/homebrew-tap with `contents:write` and `pull-requests:write`,
-# then add it as a repo secret named HOMEBREW_TAP_TOKEN in solid-cli.
+# This path is OPTIONAL. The tap repo has its own self-bump workflow
+# (.github/workflows/auto-bump.yml there) that polls npm every 4 hours
+# with the built-in GITHUB_TOKEN — so the tap converges even if this
+# workflow never runs. If HOMEBREW_TAP_TOKEN is absent, this job skips
+# green instead of failing.
+#
+# Setup (optional, for instant bumps): create a fine-grained PAT scoped
+# to Solidnumber/homebrew-tap with `contents:write`, then add it as a
+# repo secret named HOMEBREW_TAP_TOKEN in solid-cli.
 
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
+    paths:
+      - package.json
+  workflow_dispatch:
 
 jobs:
   bump-tap:
     runs-on: ubuntu-latest
     steps:
+      - name: Check for PAT
+        id: token
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set — skipping instant bump." \
+                 "The tap's scheduled self-bump converges within 4h regardless."
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout solid-cli (for package.json)
-        uses: actions/checkout@v4
+        if: steps.token.outputs.have == 'true'
+        uses: actions/checkout@v5
 
       - name: Read version
+        if: steps.token.outputs.have == 'true'
         id: version
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Tag: $VERSION"
+          echo "Version: $VERSION"
 
       - name: Compute npm tarball sha256
+        if: steps.token.outputs.have == 'true'
         id: sha
         run: |
-          # Wait briefly for npm registry to surface the new version. The
-          # tag is usually pushed AFTER `npm publish` so this is a no-op
-          # most of the time, but the registry's CDN can lag a few seconds.
-          rm -f /tmp/cli.tgz  # ensure no stale file from a prior run
+          # Wait for the npm registry to surface the version. A push can
+          # land before `npm publish` completes, so retry for ~5 minutes,
+          # then bow out gracefully — the tap's self-bump catches it.
+          rm -f /tmp/cli.tgz
           downloaded=false
-          for i in 1 2 3 4 5; do
+          for i in $(seq 1 15); do
             if curl -fsSL "https://registry.npmjs.org/@solidnumber/cli/-/cli-${{ steps.version.outputs.version }}.tgz" -o /tmp/cli.tgz; then
               downloaded=true
               break
             fi
-            echo "tarball not yet on registry CDN, retrying in 10s..."
-            sleep 10
+            echo "tarball not yet on registry CDN, retrying in 20s..."
+            sleep 20
           done
-          # Critical: a successful exit from the retry loop doesn't mean
-          # success. Verify we actually have a non-empty file before
+          # Critical: verify we actually have a non-empty file before
           # hashing — otherwise we'd silently bump the formula to a
           # wrong sha and ship a checksum-mismatch to brew users.
           if ! $downloaded || [ ! -s /tmp/cli.tgz ]; then
-            echo "✗ tarball download failed after 5 attempts — refusing to compute sha256 of stale/empty file"
-            exit 1
+            echo "version not on npm yet — skipping; the tap's scheduled self-bump will pick it up post-publish"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           SHA="$(sha256sum /tmp/cli.tgz | awk '{print $1}')"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "sha256: $SHA"
 
       - name: Checkout homebrew-tap
-        uses: actions/checkout@v4
+        if: steps.token.outputs.have == 'true' && steps.sha.outputs.ready == 'true'
+        uses: actions/checkout@v5
         with:
           repository: Solidnumber/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
-      - name: Update Formula/cli.rb
+      - name: Bump Formula/cli.rb and push
+        if: steps.token.outputs.have == 'true' && steps.sha.outputs.ready == 'true'
         working-directory: tap
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -74,27 +103,8 @@ jobs:
             -e "s|url \"https://registry\\.npmjs\\.org/@solidnumber/cli/-/cli-[^\"]+\\.tgz\"|url \"https://registry.npmjs.org/@solidnumber/cli/-/cli-${VERSION}.tgz\"|" \
             -e "s|sha256 \"[a-f0-9]{64}\"|sha256 \"${SHA}\"|" \
             Formula/cli.rb
-          git diff --stat Formula/cli.rb || true
-
-      - name: Open PR
-        working-directory: tap
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="bump-cli-$VERSION"
           git config user.name  "solid-cli-bot"
           git config user.email "bot@solidnumber.com"
-          # Use -B (capital) so a re-run of the workflow on the same tag
-          # resets the branch instead of failing on "branch already exists".
-          # --force-with-lease on the push protects against clobbering
-          # someone else's work on the same branch.
-          git checkout -B "$BRANCH"
           git add Formula/cli.rb
-          git commit -m "bump cli to $VERSION" || { echo "no changes — already at $VERSION"; exit 0; }
-          git push --force-with-lease origin "$BRANCH"
-          gh pr create \
-            --title "bump cli to $VERSION" \
-            --body "Automated bump from solid-cli tag v$VERSION. Tarball sha256 verified against the npm registry. Merge to publish to the Homebrew tap." \
-            --base main \
-            --head "$BRANCH"
+          git commit -m "bump cli → ${VERSION}" || { echo "no changes — already at $VERSION"; exit 0; }
+          git push origin main
