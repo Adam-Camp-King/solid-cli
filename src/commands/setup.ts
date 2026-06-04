@@ -39,7 +39,7 @@ import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
 import { getResolvedApiUrl, apiClient } from '../lib/api-client';
-import { preflightEditor, type PreflightResult } from '../lib/editor-preflight';
+import { preflightEditor, ensureVsCodeClaudeExtension, type PreflightResult } from '../lib/editor-preflight';
 
 // 'warn' = environment problem that isn't the wizard's fault (e.g. an editor
 // is installed but its binary can't run on this macOS). Loud in the summary,
@@ -356,10 +356,19 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
     const args = ['mcp', 'install', editor.clientFlag];
     if (mcpKey) args.push('--api-key', mcpKey);
     const r = runVerb(args);
+    let detail = r.ok ? `wired into ${editor.pretty}` : r.detail;
+    // VS Code path: also make sure the Claude Code extension is installed,
+    // so Claude is just there when the user opens VS Code — they never
+    // have to learn what an extension is.
+    if (r.ok && editor.clientFlag === 'vscode') {
+      const ext = ensureVsCodeClaudeExtension();
+      if (ext.justInstalled) detail += ' + installed Claude Code extension';
+      else if (!ext.installed) detail += ` (install the Claude Code extension in VS Code manually${ext.detail ? ` — ${ext.detail}` : ''})`;
+    }
     results.push({
       step: `mcp.${editor.clientFlag}`,
       status: r.ok ? 'done' : 'failed',
-      detail: r.ok ? `wired into ${editor.pretty}` : r.detail,
+      detail,
     });
   }
   return results;

@@ -20,7 +20,7 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { parseAgentMode, modeDescriptor, type AgentMode } from '../lib/agent-mode';
-import { preflightEditor } from '../lib/editor-preflight';
+import { preflightEditor, ensureVsCodeClaudeExtension, CLAUDE_VSCODE_EXTENSION } from '../lib/editor-preflight';
 
 type AiKind = 'claude' | 'cursor' | 'vscode' | 'codex';
 
@@ -186,10 +186,13 @@ export const aiCommand = new Command('ai')
         console.error(chalk.red('No working AI found on this machine.'));
       }
       console.error('');
-      console.error(chalk.dim('  Install Claude Code:  https://claude.com/product/claude-code'));
-      console.error(chalk.dim('  Install Cursor:       https://cursor.com'));
-      console.error(chalk.dim('  Install Codex CLI:    https://github.com/openai/codex'));
-      console.error(chalk.dim('  Or pick explicitly:   solid ai --as claude'));
+      console.error(chalk.bold('  No problem — Claude works in the browser on any device:'));
+      console.error(`  ${chalk.cyan('https://claude.ai/code')}`);
+      console.error('');
+      console.error(chalk.dim('  Or install one locally:'));
+      console.error(chalk.dim('    Claude Code:  https://claude.com/product/claude-code (needs macOS 13+)'));
+      console.error(chalk.dim('    VS Code:      https://code.visualstudio.com (works on older Macs — then `solid ai --as vscode`)'));
+      console.error(chalk.dim('    Cursor:       https://cursor.com'));
       process.exit(1);
     }
 
@@ -235,6 +238,19 @@ export const aiCommand = new Command('ai')
       const ok = refreshContext(kind);
       if (!ok) {
         console.error(chalk.yellow('  ⚠ Context refresh failed — launching anyway with cached files.'));
+      }
+    }
+
+    // 7b. VS Code path: make sure the Claude Code extension is actually in
+    // VS Code before we open it. A normal user shouldn't have to know
+    // extensions exist — Claude should just be there when the window opens.
+    if (kind === 'vscode') {
+      const ext = ensureVsCodeClaudeExtension();
+      if (ext.justInstalled) {
+        console.log(`  ${chalk.dim('Installed the Claude Code extension into VS Code.')}`);
+      } else if (!ext.installed) {
+        console.error(chalk.yellow(`  ⚠ Couldn't auto-install the Claude Code extension${ext.detail ? ` (${ext.detail})` : ''}.`));
+        console.error(chalk.dim(`    In VS Code: Extensions panel → search "Claude Code" → Install (${CLAUDE_VSCODE_EXTENSION}).`));
       }
     }
 

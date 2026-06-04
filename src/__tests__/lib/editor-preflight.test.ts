@@ -2,7 +2,12 @@
  * editor-preflight — translate "installed but can't run" into a clear
  * reason + remediation instead of a raw dyld dump.
  */
-import { preflightEditor, type PreflightRunner } from '../../lib/editor-preflight';
+import {
+  preflightEditor,
+  ensureVsCodeClaudeExtension,
+  CLAUDE_VSCODE_EXTENSION,
+  type PreflightRunner,
+} from '../../lib/editor-preflight';
 
 function runnerWith(result: Partial<ReturnType<PreflightRunner>>): PreflightRunner {
   return () => ({
@@ -71,5 +76,61 @@ describe('preflightEditor', () => {
     );
     expect(r.ok).toBe(false);
     expect(r.reason).toContain('failed to launch');
+  });
+});
+
+describe('ensureVsCodeClaudeExtension', () => {
+  // A normal user never learns what an extension is — `solid ai` installs
+  // it for them before opening VS Code.
+
+  it('no-ops when the extension is already installed', () => {
+    const calls: string[][] = [];
+    const runner: PreflightRunner = (_bin, args) => {
+      calls.push(args);
+      return { status: 0, signal: null, stdout: `ms-python.python\n${CLAUDE_VSCODE_EXTENSION}\n`, stderr: '' };
+    };
+    const r = ensureVsCodeClaudeExtension(runner);
+    expect(r).toEqual({ installed: true, justInstalled: false });
+    expect(calls).toEqual([['--list-extensions']]); // never tried to install
+  });
+
+  it('detects the extension case-insensitively', () => {
+    const runner: PreflightRunner = () => ({
+      status: 0, signal: null, stdout: 'Anthropic.Claude-Code\n', stderr: '',
+    });
+    expect(ensureVsCodeClaudeExtension(runner).installed).toBe(true);
+  });
+
+  it('installs the extension when missing', () => {
+    const calls: string[][] = [];
+    const runner: PreflightRunner = (_bin, args) => {
+      calls.push(args);
+      if (args[0] === '--list-extensions') {
+        return { status: 0, signal: null, stdout: 'ms-python.python\n', stderr: '' };
+      }
+      return { status: 0, signal: null, stdout: `Extension '${CLAUDE_VSCODE_EXTENSION}' was successfully installed.`, stderr: '' };
+    };
+    const r = ensureVsCodeClaudeExtension(runner);
+    expect(r.installed).toBe(true);
+    expect(r.justInstalled).toBe(true);
+    expect(calls[1]).toEqual(['--install-extension', CLAUDE_VSCODE_EXTENSION]);
+  });
+
+  it('reports failure detail when the marketplace install fails', () => {
+    const runner: PreflightRunner = (_bin, args) =>
+      args[0] === '--list-extensions'
+        ? { status: 0, signal: null, stdout: '', stderr: '' }
+        : { status: 1, signal: null, stdout: '', stderr: 'Failed: ETIMEDOUT marketplace.visualstudio.com' };
+    const r = ensureVsCodeClaudeExtension(runner);
+    expect(r.installed).toBe(false);
+    expect(r.justInstalled).toBe(false);
+    expect(r.detail).toContain('ETIMEDOUT');
+  });
+
+  it('reports failure when even --list-extensions fails', () => {
+    const runner: PreflightRunner = () => ({ status: 1, signal: null, stdout: '', stderr: 'broken code CLI' });
+    const r = ensureVsCodeClaudeExtension(runner);
+    expect(r.installed).toBe(false);
+    expect(r.detail).toContain('broken code CLI');
   });
 });

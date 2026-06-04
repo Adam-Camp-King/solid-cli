@@ -27,7 +27,7 @@ export interface PreflightResult {
 }
 
 export interface PreflightRunner {
-  (binary: string, args: string[]): {
+  (binary: string, args: string[], opts?: { timeoutMs?: number }): {
     status: number | null;
     signal: string | null;
     stdout: string;
@@ -36,11 +36,11 @@ export interface PreflightRunner {
   };
 }
 
-const defaultRunner: PreflightRunner = (binary, args) => {
+const defaultRunner: PreflightRunner = (binary, args, opts) => {
   const r = spawnSync(binary, args, {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 15_000,
+    timeout: opts?.timeoutMs ?? 15_000,
     env: { ...process.env, SOLID_SKIP_VERSION_CHECK: '1' },
   });
   return {
@@ -60,6 +60,62 @@ const ALTERNATIVES: Record<string, string> = {
   code: 'Use claude.ai/code in the browser, or another editor on this machine.',
   codex: 'Use another editor on this machine.',
 };
+
+/** Marketplace id of the Claude Code extension for VS Code. */
+export const CLAUDE_VSCODE_EXTENSION = 'anthropic.claude-code';
+
+export interface EnsureExtensionResult {
+  installed: boolean;
+  /** true when this call performed the install (vs already present). */
+  justInstalled: boolean;
+  detail?: string;
+}
+
+/**
+ * Make sure the Claude Code extension is installed in VS Code. Normal
+ * users shouldn't have to know extensions exist — `solid ai` calls this
+ * before opening VS Code so Claude is just THERE when the window opens.
+ * Uses `code --list-extensions` / `code --install-extension`, both
+ * supported headlessly by VS Code's CLI.
+ */
+export function ensureVsCodeClaudeExtension(
+  runner: PreflightRunner = defaultRunner,
+): EnsureExtensionResult {
+  let listed: ReturnType<PreflightRunner>;
+  try {
+    listed = runner('code', ['--list-extensions']);
+  } catch (e) {
+    return { installed: false, justInstalled: false, detail: (e as Error).message };
+  }
+  if (listed.error || listed.status !== 0) {
+    return {
+      installed: false,
+      justInstalled: false,
+      detail: (listed.error?.message || listed.stderr || `exit ${listed.status}`).trim().slice(0, 160),
+    };
+  }
+  const have = listed.stdout
+    .split('\n')
+    .map((l) => l.trim().toLowerCase())
+    .includes(CLAUDE_VSCODE_EXTENSION);
+  if (have) return { installed: true, justInstalled: false };
+
+  let install: ReturnType<PreflightRunner>;
+  try {
+    // Marketplace download — allow well past the 15s preflight default.
+    install = runner('code', ['--install-extension', CLAUDE_VSCODE_EXTENSION], { timeoutMs: 120_000 });
+  } catch (e) {
+    return { installed: false, justInstalled: false, detail: (e as Error).message };
+  }
+  if (install.error || install.status !== 0) {
+    return {
+      installed: false,
+      justInstalled: false,
+      detail: (install.error?.message || install.stderr || `exit ${install.status}`).trim().slice(0, 160),
+    };
+  }
+  return { installed: true, justInstalled: true };
+}
 
 /**
  * Run `<binary> --version` and translate any launch failure into a
