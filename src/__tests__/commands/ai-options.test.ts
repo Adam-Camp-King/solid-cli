@@ -177,7 +177,8 @@ describe('solid ai — preflight fallthrough (installed but cannot run)', () => 
     const { spawnSync } = jest.requireMock('child_process') as { spawnSync: jest.Mock };
     spawnSync.mockClear();
     spawnSync.mockImplementation((bin: string) => {
-      if (bin === 'claude') {
+      // Preflight may receive a resolved full path — match by basename.
+      if (bin === 'claude' || bin.endsWith('/claude')) {
         return {
           status: null,
           signal: 'SIGABRT',
@@ -206,7 +207,8 @@ describe('solid ai — preflight fallthrough (installed but cannot run)', () => 
     const { spawnSync } = jest.requireMock('child_process') as { spawnSync: jest.Mock };
     spawnSync.mockClear();
     spawnSync.mockImplementation((bin: string) => {
-      if (bin === 'claude') {
+      // Preflight may receive a resolved full path — match by basename.
+      if (bin === 'claude' || bin.endsWith('/claude')) {
         return { status: null, signal: 'SIGABRT', stdout: '', stderr: 'dyld: Symbol not found: _ubrk_clone' };
       }
       return { status: 0, signal: null, stdout: '', stderr: '' };

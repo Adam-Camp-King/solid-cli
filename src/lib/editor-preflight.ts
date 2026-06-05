@@ -17,6 +17,9 @@
  * is actually wrong and what to do about it.
  */
 import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export interface PreflightResult {
   ok: boolean;
@@ -64,6 +67,62 @@ const ALTERNATIVES: Record<string, string> = {
 /** Marketplace id of the Claude Code extension for VS Code. */
 export const CLAUDE_VSCODE_EXTENSION = 'anthropic.claude-code';
 
+/**
+ * Find the VS Code CLI even when `code` is NOT on PATH.
+ *
+ * A fresh VS Code install does NOT add `code` to the shell — the user has
+ * to run "Shell Command: Install 'code' command in PATH" from inside
+ * VS Code, which a normal user never does. So we check PATH first, then
+ * the standard install locations per OS. Returns the launchable path, or
+ * null when VS Code genuinely isn't installed.
+ */
+export function resolveVsCodeBinary(
+  opts: { platform?: NodeJS.Platform; homeDir?: string; pathEnv?: string; systemRoot?: string } = {},
+): string | null {
+  const platform = opts.platform ?? process.platform;
+  const home = opts.homeDir ?? os.homedir();
+  const pathEnv = opts.pathEnv ?? process.env.PATH ?? '';
+  // Injectable so tests stay hermetic on machines that have a real
+  // /Applications/Visual Studio Code.app.
+  const root = opts.systemRoot ?? path.sep;
+
+  // 1. PATH — the happy case.
+  for (const entry of pathEnv.split(path.delimiter)) {
+    if (!entry) continue;
+    const candidate = path.join(entry, platform === 'win32' ? 'code.cmd' : 'code');
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch { /* keep looking */ }
+  }
+
+  // 2. Standard install locations.
+  const candidates: string[] =
+    platform === 'darwin'
+      ? [
+          path.join(root, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'),
+          path.join(home, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'),
+        ]
+      : platform === 'win32'
+        ? [
+            path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd'),
+            path.join(root, 'Program Files', 'Microsoft VS Code', 'bin', 'code.cmd'),
+          ]
+        : [
+            path.join(root, 'usr', 'share', 'code', 'bin', 'code'),
+            path.join(root, 'usr', 'bin', 'code'),
+            path.join(root, 'snap', 'bin', 'code'),
+            path.join(home, '.local', 'share', 'code', 'bin', 'code'),
+          ];
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch { /* keep looking */ }
+  }
+  return null;
+}
+
 export interface EnsureExtensionResult {
   installed: boolean;
   /** true when this call performed the install (vs already present). */
@@ -80,10 +139,12 @@ export interface EnsureExtensionResult {
  */
 export function ensureVsCodeClaudeExtension(
   runner: PreflightRunner = defaultRunner,
+  codeBin?: string,
 ): EnsureExtensionResult {
+  const bin = codeBin ?? resolveVsCodeBinary() ?? 'code';
   let listed: ReturnType<PreflightRunner>;
   try {
-    listed = runner('code', ['--list-extensions']);
+    listed = runner(bin, ['--list-extensions']);
   } catch (e) {
     return { installed: false, justInstalled: false, detail: (e as Error).message };
   }
@@ -103,7 +164,7 @@ export function ensureVsCodeClaudeExtension(
   let install: ReturnType<PreflightRunner>;
   try {
     // Marketplace download — allow well past the 15s preflight default.
-    install = runner('code', ['--install-extension', CLAUDE_VSCODE_EXTENSION], { timeoutMs: 120_000 });
+    install = runner(bin, ['--install-extension', CLAUDE_VSCODE_EXTENSION], { timeoutMs: 120_000 });
   } catch (e) {
     return { installed: false, justInstalled: false, detail: (e as Error).message };
   }
@@ -126,22 +187,27 @@ export function preflightEditor(
   binary: string,
   runner: PreflightRunner = defaultRunner,
 ): PreflightResult {
+  // `binary` may be a bare name (claude) or a resolved full path (the
+  // VS Code app-bundle case). Messages and the alternatives lookup use
+  // the short name either way.
+  const name = path.basename(binary).replace(/\.(cmd|exe|bat)$/i, '');
+
   let r: ReturnType<PreflightRunner>;
   try {
     r = runner(binary, ['--version']);
   } catch (e) {
     return {
       ok: false,
-      reason: `${binary} failed to launch: ${(e as Error).message}`,
-      hint: `Reinstall ${binary}, then re-run this command.`,
+      reason: `${name} failed to launch: ${(e as Error).message}`,
+      hint: `Reinstall ${name}, then re-run this command.`,
     };
   }
 
   if (r.error) {
     return {
       ok: false,
-      reason: `${binary} failed to launch: ${r.error.message}`,
-      hint: `Reinstall ${binary}, then re-run this command.`,
+      reason: `${name} failed to launch: ${r.error.message}`,
+      hint: `Reinstall ${name}, then re-run this command.`,
     };
   }
 
@@ -157,23 +223,23 @@ export function preflightEditor(
     const needs = built ? `macOS ${built[1]}+` : 'a newer macOS than this machine is running';
     return {
       ok: false,
-      reason: `${binary} is installed but cannot run on this Mac — its binary requires ${needs}.`,
-      hint: `Update macOS${built ? ` to ${built[1]} or later` : ''}, or: ${ALTERNATIVES[binary] || 'use another editor.'}`,
+      reason: `${name} is installed but cannot run on this Mac — its binary requires ${needs}.`,
+      hint: `Update macOS${built ? ` to ${built[1]} or later` : ''}, or: ${ALTERNATIVES[name] || 'use another editor.'}`,
     };
   }
 
   if (r.signal) {
     return {
       ok: false,
-      reason: `${binary} is installed but crashed on launch (signal ${r.signal}).`,
-      hint: `Reinstall ${binary}. If it keeps crashing: ${ALTERNATIVES[binary] || 'use another editor.'}`,
+      reason: `${name} is installed but crashed on launch (signal ${r.signal}).`,
+      hint: `Reinstall ${name}. If it keeps crashing: ${ALTERNATIVES[name] || 'use another editor.'}`,
     };
   }
 
   const firstLine = output.trim().split('\n')[0]?.slice(0, 160) || `exit code ${r.status}`;
   return {
     ok: false,
-    reason: `${binary} is installed but exited with an error on launch: ${firstLine}`,
-    hint: `Reinstall ${binary}, then re-run this command.`,
+    reason: `${name} is installed but exited with an error on launch: ${firstLine}`,
+    hint: `Reinstall ${name}, then re-run this command.`,
   };
 }

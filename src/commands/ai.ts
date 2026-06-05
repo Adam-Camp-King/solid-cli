@@ -20,7 +20,12 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { parseAgentMode, modeDescriptor, type AgentMode } from '../lib/agent-mode';
-import { preflightEditor, ensureVsCodeClaudeExtension, CLAUDE_VSCODE_EXTENSION } from '../lib/editor-preflight';
+import {
+  preflightEditor,
+  ensureVsCodeClaudeExtension,
+  resolveVsCodeBinary,
+  CLAUDE_VSCODE_EXTENSION,
+} from '../lib/editor-preflight';
 
 type AiKind = 'claude' | 'cursor' | 'vscode' | 'codex';
 
@@ -29,13 +34,13 @@ type AiKind = 'claude' | 'cursor' | 'vscode' | 'codex';
 // can't launch — the older-device fallback path.
 const AI_PREFERENCE: AiKind[] = ['claude', 'cursor', 'vscode', 'codex'];
 
-// CLI binary each kind launches with. Only vscode differs (`code`).
-const AI_BINARY: Record<AiKind, string> = {
-  claude: 'claude',
-  cursor: 'cursor',
-  vscode: 'code',
-  codex: 'codex',
-};
+// CLI binary each kind launches with. Only vscode differs (`code`) — and a
+// fresh VS Code install does NOT put `code` on PATH, so vscode resolves via
+// resolveVsCodeBinary() (PATH first, then the app-bundle locations).
+function binaryFor(kind: AiKind): string | null {
+  if (kind === 'vscode') return resolveVsCodeBinary();
+  return resolveBinary(kind);
+}
 
 interface AiPick {
   kind: AiKind | null;
@@ -47,28 +52,35 @@ interface AiPick {
 // launch (dyld symbol errors). Preflight each candidate so auto-detect
 // falls through to the next working editor instead of handing the terminal
 // to a crash dump. See lib/editor-preflight.ts for the real-world case.
-function whichAi(override?: string): AiPick {
+interface ResolvedPick extends AiPick {
+  /** Launchable binary path/name for `kind` (set when kind != null). */
+  bin?: string;
+}
+
+function whichAi(override?: string): ResolvedPick {
   if (override) {
     const normalized = override.toLowerCase();
     if ((AI_PREFERENCE as string[]).includes(normalized)) {
       const kind = normalized as AiKind;
-      if (!resolveBinary(AI_BINARY[kind])) return { kind: null, broken: [] };
-      const pf = preflightEditor(AI_BINARY[kind]);
+      const bin = binaryFor(kind);
+      if (!bin) return { kind: null, broken: [] };
+      const pf = preflightEditor(bin);
       if (!pf.ok) {
         return { kind: null, broken: [{ kind, reason: pf.reason!, hint: pf.hint }] };
       }
-      return { kind, broken: [] };
+      return { kind, bin, broken: [] };
     }
     return { kind: null, broken: [] };
   }
   // Auto-detect. Preference order reflects what we ship first-class support
   // for: claude > cursor > vscode > codex. Change this when product
   // priorities shift.
-  const broken: AiPick['broken'] = [];
+  const broken: ResolvedPick['broken'] = [];
   for (const kind of AI_PREFERENCE) {
-    if (!resolveBinary(AI_BINARY[kind])) continue;
-    const pf = preflightEditor(AI_BINARY[kind]);
-    if (pf.ok) return { kind, broken };
+    const bin = binaryFor(kind);
+    if (!bin) continue;
+    const pf = preflightEditor(bin);
+    if (pf.ok) return { kind, bin, broken };
     broken.push({ kind, reason: pf.reason!, hint: pf.hint });
   }
   return { kind: null, broken };
@@ -114,21 +126,22 @@ function refreshContext(kind: AiKind): boolean {
   return result.status === 0;
 }
 
-function launchAi(kind: AiKind): void {
+function launchAi(kind: AiKind, bin: string): void {
   if (kind === 'claude') {
     // Hand the terminal over to Claude Code. stdio: 'inherit' makes this a
     // proper takeover — spinners, inquirer, etc. all work.
-    execFileSync('claude', [], { stdio: 'inherit' });
+    execFileSync(bin, [], { stdio: 'inherit' });
   } else if (kind === 'cursor') {
     // Cursor expects a path argument to open the current project.
-    execFileSync('cursor', ['.'], { stdio: 'inherit' });
+    execFileSync(bin, ['.'], { stdio: 'inherit' });
   } else if (kind === 'vscode') {
     // VS Code opens the current project; the Claude Code extension picks
-    // up .claude/CLAUDE.md from the workspace root.
-    execFileSync('code', ['.'], { stdio: 'inherit' });
+    // up .claude/CLAUDE.md from the workspace root. `bin` may be the
+    // app-bundle path when `code` isn't on the user's PATH.
+    execFileSync(bin, ['.'], { stdio: 'inherit' });
   } else {
     // Codex (OpenAI's CLI) launches in the current directory; no args needed.
-    execFileSync('codex', [], { stdio: 'inherit' });
+    execFileSync(bin, [], { stdio: 'inherit' });
   }
 }
 
@@ -245,7 +258,7 @@ export const aiCommand = new Command('ai')
     // VS Code before we open it. A normal user shouldn't have to know
     // extensions exist — Claude should just be there when the window opens.
     if (kind === 'vscode') {
-      const ext = ensureVsCodeClaudeExtension();
+      const ext = ensureVsCodeClaudeExtension(undefined, pick.bin);
       if (ext.justInstalled) {
         console.log(`  ${chalk.dim('Installed the Claude Code extension into VS Code.')}`);
       } else if (!ext.installed) {
@@ -256,7 +269,7 @@ export const aiCommand = new Command('ai')
 
     // 8. Hand off. This replaces our process output with the AI's.
     try {
-      launchAi(kind);
+      launchAi(kind, pick.bin || kind);
     } catch (err) {
       // execFileSync throws on non-zero exit — that's fine, just mirror status.
       const code = (err as { status?: number })?.status ?? 1;

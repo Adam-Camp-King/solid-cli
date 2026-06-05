@@ -2,9 +2,13 @@
  * editor-preflight — translate "installed but can't run" into a clear
  * reason + remediation instead of a raw dyld dump.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   preflightEditor,
   ensureVsCodeClaudeExtension,
+  resolveVsCodeBinary,
   CLAUDE_VSCODE_EXTENSION,
   type PreflightRunner,
 } from '../../lib/editor-preflight';
@@ -129,8 +133,73 @@ describe('ensureVsCodeClaudeExtension', () => {
 
   it('reports failure when even --list-extensions fails', () => {
     const runner: PreflightRunner = () => ({ status: 1, signal: null, stdout: '', stderr: 'broken code CLI' });
-    const r = ensureVsCodeClaudeExtension(runner);
+    const r = ensureVsCodeClaudeExtension(runner, 'code');
     expect(r.installed).toBe(false);
     expect(r.detail).toContain('broken code CLI');
+  });
+});
+
+describe('resolveVsCodeBinary', () => {
+  // A fresh VS Code install does NOT put `code` on PATH — a normal user
+  // never runs "Shell Command: Install 'code' command in PATH". So the
+  // resolver must find the app bundle too.
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'solid-vscode-resolve-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  function makeExecutable(p: string): void {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  }
+
+  it('prefers `code` on PATH', () => {
+    const binDir = path.join(tmp, 'bin');
+    makeExecutable(path.join(binDir, 'code'));
+    const r = resolveVsCodeBinary({ platform: 'darwin', homeDir: tmp, pathEnv: binDir });
+    expect(r).toBe(path.join(binDir, 'code'));
+  });
+
+  it('falls back to the user-Applications app bundle on macOS', () => {
+    const bundleBin = path.join(
+      tmp, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code',
+    );
+    makeExecutable(bundleBin);
+    const r = resolveVsCodeBinary({
+      platform: 'darwin',
+      homeDir: tmp,
+      pathEnv: path.join(tmp, 'empty'),
+      systemRoot: path.join(tmp, 'sysroot'),
+    });
+    expect(r).toBe(bundleBin);
+  });
+
+  it('finds the system /Applications bundle on macOS', () => {
+    const sysroot = path.join(tmp, 'sysroot');
+    const bundleBin = path.join(
+      sysroot, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code',
+    );
+    makeExecutable(bundleBin);
+    const r = resolveVsCodeBinary({
+      platform: 'darwin',
+      homeDir: path.join(tmp, 'home'),
+      pathEnv: path.join(tmp, 'empty'),
+      systemRoot: sysroot,
+    });
+    expect(r).toBe(bundleBin);
+  });
+
+  it('returns null when VS Code is genuinely not installed', () => {
+    const r = resolveVsCodeBinary({
+      platform: 'darwin',
+      homeDir: tmp,
+      pathEnv: path.join(tmp, 'empty'),
+      systemRoot: path.join(tmp, 'sysroot'),
+    });
+    expect(r).toBeNull();
   });
 });

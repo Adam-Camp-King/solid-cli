@@ -39,7 +39,12 @@ import { config } from '../lib/config';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
 import { getResolvedApiUrl, apiClient } from '../lib/api-client';
-import { preflightEditor, ensureVsCodeClaudeExtension, type PreflightResult } from '../lib/editor-preflight';
+import {
+  preflightEditor,
+  ensureVsCodeClaudeExtension,
+  resolveVsCodeBinary,
+  type PreflightResult,
+} from '../lib/editor-preflight';
 
 // 'warn' = environment problem that isn't the wizard's fault (e.g. an editor
 // is installed but its binary can't run on this macOS). Loud in the summary,
@@ -87,6 +92,15 @@ const EDITORS: Array<{ binary: string; clientFlag: string; pretty: string }> = [
   // path instead of a dead end.
   { binary: 'code', clientFlag: 'vscode', pretty: 'VS Code (Claude Code extension)' },
 ];
+
+// Resolve an editor to a launchable binary. VS Code needs special handling:
+// a fresh install does NOT put `code` on PATH (the user has to run "Shell
+// Command: Install 'code' command in PATH" inside VS Code, which a normal
+// user never does), so it falls back to the app-bundle locations.
+function resolveEditorBinary(binary: string): string | null {
+  if (binary === 'code') return resolveVsCodeBinary();
+  return isInstalled(binary) ? binary : null;
+}
 
 function isInstalled(binary: string): boolean {
   // Use `command -v` on POSIX and `where` on Windows; both exit 0 when found.
@@ -321,18 +335,20 @@ function preflightCached(binary: string): PreflightResult {
 
 async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
   if (opts.skipMcp) return [{ step: 'mcp', status: 'skipped', detail: '--skip-mcp' }];
-  const onPath = EDITORS.filter((e) => isInstalled(e.binary));
-  if (onPath.length === 0) {
-    return [{ step: 'mcp', status: 'skipped', detail: 'no supported editor on PATH (claude/cursor/windsurf/code)' }];
+  const found = EDITORS
+    .map((e) => ({ ...e, resolvedBin: resolveEditorBinary(e.binary) }))
+    .filter((e): e is typeof e & { resolvedBin: string } => !!e.resolvedBin);
+  if (found.length === 0) {
+    return [{ step: 'mcp', status: 'skipped', detail: 'no supported editor found (claude/cursor/windsurf/VS Code)' }];
   }
 
-  // "On PATH" ≠ "can run". A binary built for a newer macOS aborts at launch
-  // (dyld) — wiring MCP into it would report ✓ for an editor the user can
-  // never open. Surface the real problem as a loud ⚠ instead.
+  // "Installed" ≠ "can run". A binary built for a newer macOS aborts at
+  // launch (dyld) — wiring MCP into it would report ✓ for an editor the
+  // user can never open. Surface the real problem as a loud ⚠ instead.
   const results: StepResult[] = [];
-  const present: typeof onPath = [];
-  for (const editor of onPath) {
-    const pf = preflightCached(editor.binary);
+  const present: typeof found = [];
+  for (const editor of found) {
+    const pf = preflightCached(editor.resolvedBin);
     if (pf.ok) {
       present.push(editor);
     } else {
@@ -361,7 +377,7 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
     // so Claude is just there when the user opens VS Code — they never
     // have to learn what an extension is.
     if (r.ok && editor.clientFlag === 'vscode') {
-      const ext = ensureVsCodeClaudeExtension();
+      const ext = ensureVsCodeClaudeExtension(undefined, editor.resolvedBin);
       if (ext.justInstalled) detail += ' + installed Claude Code extension';
       else if (!ext.installed) detail += ` (install the Claude Code extension in VS Code manually${ext.detail ? ` — ${ext.detail}` : ''})`;
     }
