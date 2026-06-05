@@ -157,11 +157,31 @@ describe('resolveVsCodeBinary', () => {
     fs.writeFileSync(p, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   }
 
+  // Hermetic defaults: empty env (so a dev running tests inside VS Code's
+  // own terminal doesn't leak VSCODE_* vars in) and no Spotlight.
+  const hermetic = { env: {} as NodeJS.ProcessEnv, mdfind: null };
+
   it('prefers `code` on PATH', () => {
     const binDir = path.join(tmp, 'bin');
     makeExecutable(path.join(binDir, 'code'));
-    const r = resolveVsCodeBinary({ platform: 'darwin', homeDir: tmp, pathEnv: binDir });
+    const r = resolveVsCodeBinary({ ...hermetic, platform: 'darwin', homeDir: tmp, pathEnv: binDir });
     expect(r).toBe(path.join(binDir, 'code'));
+  });
+
+  it('derives the bundle from VSCODE_GIT_ASKPASS_MAIN (running inside VS Code terminal)', () => {
+    // The 2026-06-04 iMac case: user ran `solid ai` from VS Code's own
+    // integrated terminal and we said "no VS Code found."
+    const appRoot = path.join(tmp, 'Anywhere', 'My Code.app', 'Contents', 'Resources', 'app');
+    makeExecutable(path.join(appRoot, 'bin', 'code'));
+    const r = resolveVsCodeBinary({
+      ...hermetic,
+      platform: 'darwin',
+      homeDir: path.join(tmp, 'home'),
+      pathEnv: path.join(tmp, 'empty'),
+      systemRoot: path.join(tmp, 'sysroot'),
+      env: { VSCODE_GIT_ASKPASS_MAIN: path.join(appRoot, 'extensions', 'git', 'dist', 'askpass-main.js') },
+    });
+    expect(r).toBe(path.join(appRoot, 'bin', 'code'));
   });
 
   it('falls back to the user-Applications app bundle on macOS', () => {
@@ -170,6 +190,7 @@ describe('resolveVsCodeBinary', () => {
     );
     makeExecutable(bundleBin);
     const r = resolveVsCodeBinary({
+      ...hermetic,
       platform: 'darwin',
       homeDir: tmp,
       pathEnv: path.join(tmp, 'empty'),
@@ -178,13 +199,14 @@ describe('resolveVsCodeBinary', () => {
     expect(r).toBe(bundleBin);
   });
 
-  it('finds the system /Applications bundle on macOS', () => {
+  it('finds the system /Applications bundle on macOS (incl. Insiders)', () => {
     const sysroot = path.join(tmp, 'sysroot');
     const bundleBin = path.join(
-      sysroot, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code',
+      sysroot, 'Applications', 'Visual Studio Code - Insiders.app', 'Contents', 'Resources', 'app', 'bin', 'code',
     );
     makeExecutable(bundleBin);
     const r = resolveVsCodeBinary({
+      ...hermetic,
       platform: 'darwin',
       homeDir: path.join(tmp, 'home'),
       pathEnv: path.join(tmp, 'empty'),
@@ -193,8 +215,23 @@ describe('resolveVsCodeBinary', () => {
     expect(r).toBe(bundleBin);
   });
 
+  it('rescues non-standard installs via Spotlight (mdfind)', () => {
+    const weird = path.join(tmp, 'Downloads', 'Visual Studio Code.app');
+    makeExecutable(path.join(weird, 'Contents', 'Resources', 'app', 'bin', 'code'));
+    const r = resolveVsCodeBinary({
+      ...hermetic,
+      platform: 'darwin',
+      homeDir: path.join(tmp, 'home'),
+      pathEnv: path.join(tmp, 'empty'),
+      systemRoot: path.join(tmp, 'sysroot'),
+      mdfind: (id) => (id === 'com.microsoft.VSCode' ? [weird] : []),
+    });
+    expect(r).toBe(path.join(weird, 'Contents', 'Resources', 'app', 'bin', 'code'));
+  });
+
   it('returns null when VS Code is genuinely not installed', () => {
     const r = resolveVsCodeBinary({
+      ...hermetic,
       platform: 'darwin',
       homeDir: tmp,
       pathEnv: path.join(tmp, 'empty'),

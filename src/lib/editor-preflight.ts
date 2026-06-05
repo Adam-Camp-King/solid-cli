@@ -77,11 +77,20 @@ export const CLAUDE_VSCODE_EXTENSION = 'anthropic.claude-code';
  * null when VS Code genuinely isn't installed.
  */
 export function resolveVsCodeBinary(
-  opts: { platform?: NodeJS.Platform; homeDir?: string; pathEnv?: string; systemRoot?: string } = {},
+  opts: {
+    platform?: NodeJS.Platform;
+    homeDir?: string;
+    pathEnv?: string;
+    systemRoot?: string;
+    env?: NodeJS.ProcessEnv;
+    /** Spotlight lookup (darwin). Injectable for tests; null disables. */
+    mdfind?: ((bundleId: string) => string[]) | null;
+  } = {},
 ): string | null {
   const platform = opts.platform ?? process.platform;
   const home = opts.homeDir ?? os.homedir();
   const pathEnv = opts.pathEnv ?? process.env.PATH ?? '';
+  const env = opts.env ?? process.env;
   // Injectable so tests stay hermetic on machines that have a real
   // /Applications/Visual Studio Code.app.
   const root = opts.systemRoot ?? path.sep;
@@ -96,13 +105,39 @@ export function resolveVsCodeBinary(
     } catch { /* keep looking */ }
   }
 
-  // 2. Standard install locations.
+  // 2. Running INSIDE VS Code's integrated terminal — the environment
+  //    tells us exactly where the app lives. VSCODE_GIT_ASKPASS_MAIN looks
+  //    like <bundle>/Contents/Resources/app/extensions/git/dist/askpass-main.js
+  //    (or <install>/resources/app/... on Windows/Linux). Derive the CLI
+  //    from it. Real case 2026-06-04: user ran `solid ai` from VS Code's
+  //    own terminal on an old iMac and we said "no VS Code found."
+  const askpass = env.VSCODE_GIT_ASKPASS_MAIN || '';
+  if (askpass) {
+    for (const marker of [
+      `${path.sep}Resources${path.sep}app${path.sep}`,
+      `${path.sep}resources${path.sep}app${path.sep}`,
+    ]) {
+      const idx = askpass.indexOf(marker);
+      if (idx === -1) continue;
+      const appRoot = askpass.slice(0, idx + marker.length - 1); // …/Resources/app
+      const candidate = platform === 'win32'
+        ? path.join(appRoot, 'bin', 'code.cmd')
+        : path.join(appRoot, 'bin', 'code');
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return candidate;
+      } catch { /* fall through */ }
+    }
+  }
+
+  // 3. Standard install locations (incl. Insiders).
+  const macBundles = ['Visual Studio Code.app', 'Visual Studio Code - Insiders.app'];
   const candidates: string[] =
     platform === 'darwin'
-      ? [
-          path.join(root, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'),
-          path.join(home, 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'),
-        ]
+      ? macBundles.flatMap((bundle) => [
+          path.join(root, 'Applications', bundle, 'Contents', 'Resources', 'app', 'bin', 'code'),
+          path.join(home, 'Applications', bundle, 'Contents', 'Resources', 'app', 'bin', 'code'),
+        ])
       : platform === 'win32'
         ? [
             path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd'),
@@ -120,7 +155,40 @@ export function resolveVsCodeBinary(
       return candidate;
     } catch { /* keep looking */ }
   }
+
+  // 4. Spotlight (macOS) — finds the bundle wherever the user dragged it
+  //    (Desktop, Downloads, a renamed copy). Last resort because mdfind
+  //    costs ~100-300ms and needs the index, but it's what rescues "I
+  //    definitely have VS Code" machines with non-standard installs.
+  if (platform === 'darwin') {
+    const lookup = opts.mdfind === null ? null : (opts.mdfind ?? defaultMdfind);
+    if (lookup) {
+      for (const bundleId of ['com.microsoft.VSCode', 'com.microsoft.VSCodeInsiders']) {
+        for (const bundlePath of lookup(bundleId)) {
+          const candidate = path.join(bundlePath, 'Contents', 'Resources', 'app', 'bin', 'code');
+          try {
+            fs.accessSync(candidate, fs.constants.X_OK);
+            return candidate;
+          } catch { /* keep looking */ }
+        }
+      }
+    }
+  }
   return null;
+}
+
+function defaultMdfind(bundleId: string): string[] {
+  try {
+    const r = spawnSync('mdfind', [`kMDItemCFBundleIdentifier == '${bundleId}'`], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3_000,
+    });
+    if (r.status !== 0 || !r.stdout) return [];
+    return r.stdout.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3);
+  } catch {
+    return [];
+  }
 }
 
 export interface EnsureExtensionResult {
