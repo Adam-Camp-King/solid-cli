@@ -26,13 +26,15 @@ import {
   resolveVsCodeBinary,
   CLAUDE_VSCODE_EXTENSION,
 } from '../lib/editor-preflight';
+import { renderAiInstallOptions } from '../lib/ai-install-options';
 
-type AiKind = 'claude' | 'cursor' | 'vscode' | 'codex';
+type AiKind = 'claude' | 'cursor' | 'vscode' | 'codex' | 'gemini' | 'grok';
 
 // vscode = the Claude Code VS Code extension. Runs inside VS Code's own
 // runtime, so it works on older macOS where the native `claude` binary
-// can't launch — the older-device fallback path.
-const AI_PREFERENCE: AiKind[] = ['claude', 'cursor', 'vscode', 'codex'];
+// can't launch — the older-device fallback path. gemini/grok launch
+// whatever CLI the user installed under those names.
+const AI_PREFERENCE: AiKind[] = ['claude', 'cursor', 'vscode', 'codex', 'gemini', 'grok'];
 
 // CLI binary each kind launches with. Only vscode differs (`code`) — and a
 // fresh VS Code install does NOT put `code` on PATH, so vscode resolves via
@@ -120,6 +122,7 @@ function refreshContext(kind: AiKind): boolean {
   // the AI session.
   // vscode shares --claude: the Claude Code extension reads the same
   // .claude/CLAUDE.md + .claude/solid-context.json as terminal Claude Code.
+  // gemini/grok read AGENTS.md (the codex-style convention).
   const flag = kind === 'claude' || kind === 'vscode' ? '--claude' : kind === 'cursor' ? '--cursor' : '--codex';
   const solidBin = resolveBinary('solid') || 'solid';
   const result = spawnSync(solidBin, ['context', flag, '--if-tenant'], { stdio: 'inherit' });
@@ -140,14 +143,14 @@ function launchAi(kind: AiKind, bin: string): void {
     // app-bundle path when `code` isn't on the user's PATH.
     execFileSync(bin, ['.'], { stdio: 'inherit' });
   } else {
-    // Codex (OpenAI's CLI) launches in the current directory; no args needed.
+    // Codex / Gemini / Grok CLIs launch in the current directory; no args.
     execFileSync(bin, [], { stdio: 'inherit' });
   }
 }
 
 export const aiCommand = new Command('ai')
   .description('Launch Claude Code / Cursor / Codex with this company\'s context pre-loaded (stupid easy)')
-  .option('--as <tool>', 'Force a specific AI: claude | cursor | vscode | codex (default: auto-detect)')
+  .option('--as <tool>', 'Force a specific AI: claude | cursor | vscode | codex | gemini | grok (default: auto-detect)')
   .option('--no-context', 'Skip the context refresh — just launch the AI')
   .option('--company <id>', 'Use a specific company for this session (overrides cached)')
   .option('--mode <mode>', 'Cap the AI to a role: customer | developer | agency | full (default: full)')
@@ -199,13 +202,7 @@ export const aiCommand = new Command('ai')
         console.error(chalk.red('No working AI found on this machine.'));
       }
       console.error('');
-      console.error(chalk.bold('  No problem — Claude works in the browser on any device:'));
-      console.error(`  ${chalk.cyan('https://claude.ai/code')}`);
-      console.error('');
-      console.error(chalk.dim('  Or install one locally:'));
-      console.error(chalk.dim('    Claude Code:  https://claude.com/product/claude-code (needs macOS 13+)'));
-      console.error(chalk.dim('    VS Code:      https://code.visualstudio.com (works on older Macs — then `solid ai --as vscode`)'));
-      console.error(chalk.dim('    Cursor:       https://cursor.com'));
+      for (const line of renderAiInstallOptions()) console.error(line);
       process.exit(1);
     }
 
@@ -235,6 +232,8 @@ export const aiCommand = new Command('ai')
       kind === 'claude' ? 'Claude Code'
       : kind === 'cursor' ? 'Cursor'
       : kind === 'vscode' ? 'VS Code (Claude Code extension)'
+      : kind === 'gemini' ? 'Gemini'
+      : kind === 'grok' ? 'Grok'
       : 'Codex';
     console.log('');
     console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);

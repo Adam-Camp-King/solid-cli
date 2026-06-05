@@ -19,18 +19,30 @@ npx @solidnumber/cli clone plumber
 
 ## Install
 
-Pick whichever package manager you already trust:
+**Easiest — one paste, everything handled** (installs Node if needed, runs
+setup, connects your AI). Or just visit [solidnumber.com/install](https://solidnumber.com/install):
 
 ```bash
 # macOS / Linux
+curl -fsSL https://solidnumber.com/install.sh | sh
+
+# Windows (PowerShell)
+iwr -useb https://solidnumber.com/install.ps1 | iex
+```
+
+Other ways, if you already have a package manager you trust:
+
+```bash
+# any platform with Node 20+
+npm install -g @solidnumber/cli
+
+# macOS / Linux — note: on macOS older than 13 (Ventura), brew may compile
+# Node from source (slow). Prefer the one-paste installer there.
 brew install solidnumber/tap/cli
 
 # Windows
 scoop bucket add solidnumber https://github.com/Solidnumber/scoop-bucket
 scoop install solidnumber/solid
-
-# any platform with Node 20+
-npm install -g @solidnumber/cli
 
 # one-paste install + magic-link auth (logged-in dashboard users only)
 # get your personal command at https://app.solidnumber.com/dashboard/install-command
@@ -364,7 +376,7 @@ writes to stderr so pipelines are unaffected.
 
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 20.0.0 (the one-paste installer above sets this up for you)
 - A Solid# account ([solidnumber.com](https://solidnumber.com))
 
 ## Verb taxonomy

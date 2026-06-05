@@ -40,7 +40,8 @@
     "prepublish:check": "bash scripts/prepublish.sh",
     "test:tarball": "bash scripts/test-tarball.sh",
     "verify:deps": "node scripts/verify-runtime-deps.mjs",
-    "prepublishOnly": "npm run build && npm test && npm run test:contracts && npm run test:security && npm run audit:prod && npm run verify:deps"
+    "prepublishOnly": "npm run build && npm test && npm run test:contracts && npm run test:security && npm run audit:prod && npm run verify:deps",
+    "postinstall": "node -e \"try{if(!process.env.CI)console.log('\\n  Solid# CLI installed. Get started:  solid setup\\n')}catch(e){}\""
   },
   "keywords": [
     "cli",

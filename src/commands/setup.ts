@@ -45,6 +45,7 @@ import {
   resolveVsCodeBinary,
   type PreflightResult,
 } from '../lib/editor-preflight';
+import { renderAiInstallOptions } from '../lib/ai-install-options';
 
 // 'warn' = environment problem that isn't the wizard's fault (e.g. an editor
 // is installed but its binary can't run on this macOS). Loud in the summary,
@@ -364,7 +365,9 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
   const mcpKey = config.isLoggedIn() ? await getOrCreateMcpApiKey() : null;
 
   for (const editor of present) {
-    const ok = await confirm(`Wire Solid# MCP into ${editor.pretty}?`, true, !!opts.yes);
+    // Plain language — a business owner doesn't know what "MCP" is. This
+    // is "let your AI see your business" in their words.
+    const ok = await confirm(`Connect ${editor.pretty} to your business data?`, true, !!opts.yes);
     if (!ok) {
       results.push({ step: `mcp.${editor.clientFlag}`, status: 'skipped', detail: 'user declined' });
       continue;
@@ -409,7 +412,7 @@ async function stepClaudeHook(opts: SetupOptions): Promise<StepResult> {
 
 async function stepCompletion(opts: SetupOptions): Promise<StepResult> {
   if (opts.skipCompletion) return { step: 'completion', status: 'skipped', detail: '--skip-completion' };
-  const ok = await confirm('Install shell tab-completion?', true, !!opts.yes);
+  const ok = await confirm('Enable tab-completion (press Tab to finish solid commands)?', true, !!opts.yes);
   if (!ok) return { step: 'completion', status: 'skipped', detail: 'user declined' };
   const r = runVerb(['completion', 'install']);
   return r.ok
@@ -421,7 +424,7 @@ async function stepRenderChromium(opts: SetupOptions): Promise<StepResult> {
   if (opts.skipRender) return { step: 'render_chromium', status: 'skipped', detail: '--skip-render' };
   // Default NO for the optional ~150MB download — opt-in only.
   const ok = await confirm(
-    'Install headless Chromium for `solid render --png` (~150MB)?',
+    'Install the page-preview engine? Optional, ~150MB — lets `solid render` screenshot your pages.',
     false,
     !!opts.yes,
   );
@@ -440,23 +443,25 @@ async function stepFirstAction(opts: SetupOptions): Promise<StepResult> {
   if (!process.stdin.isTTY) {
     return { step: 'first_action', status: 'skipped', detail: 'no TTY' };
   }
+  // "Chat with my AI about my business" is the goal most users came for —
+  // it leads, and it's the default.
   const { choice } = await inquirer.prompt<{ choice: string }>([
     {
       type: 'list',
       name: 'choice',
       message: 'What would you like to do first?',
       choices: [
-        { name: 'Scaffold a new business (52 industry templates)', value: 'clone' },
-        { name: 'Pull an existing company\'s data locally', value: 'pull' },
+        { name: 'Chat with your AI about this business (Claude / Cursor / VS Code)', value: 'ai' },
+        { name: 'Start a new business site (52 industry templates)', value: 'clone' },
+        { name: 'Download this company\'s content to edit locally', value: 'pull' },
         { name: 'Spin up a live demo company', value: 'demo' },
-        { name: 'Launch Claude Code / Cursor with this company\'s context', value: 'ai' },
         { name: 'I\'ll explore on my own', value: 'none' },
       ],
-      default: 'clone',
+      default: 'ai',
     },
   ]);
   if (choice === 'none') {
-    return { step: 'first_action', status: 'done', detail: 'no action chosen' };
+    return { step: 'first_action', status: 'done', detail: 'explore on your own — try `solid ai` to chat with your AI' };
   }
   const verbMap: Record<string, string[]> = {
     clone: ['clone'],
@@ -488,20 +493,55 @@ function statusGlyph(s: StepStatus): string {
   }
 }
 
+// Human labels for the summary box. The JSON envelope keeps the machine
+// step ids (scripts depend on them) — but a business owner should never
+// read `claude_hook` or `render_chromium` on their screen.
+const STEP_LABELS: Record<string, string> = {
+  install_token: 'Sign-in token',
+  auth: 'Sign in',
+  mcp: 'AI apps',
+  'mcp.claude': 'Claude Code',
+  'mcp.cursor': 'Cursor',
+  'mcp.windsurf': 'Windsurf',
+  'mcp.vscode': 'VS Code',
+  claude_hook: 'Auto-refresh',
+  completion: 'Tab-completion',
+  render_chromium: 'Page previews',
+  first_action: 'First action',
+  wizard: 'Setup',
+};
+
+function stepLabel(step: string): string {
+  return STEP_LABELS[step] || step;
+}
+
 function printHumanSummary(results: StepResult[]): void {
   console.log('');
   console.log(ui.banner());
-  console.log(ui.successBox('Setup complete', [
-    chalk.bold('Solid# CLI is wired up. Run `solid` from any terminal.'),
+
+  const lines: string[] = [
+    chalk.bold('Solid# CLI is set up. Run `solid` from any terminal.'),
     '',
-    ...results.map((r) => `  ${statusGlyph(r.status)} ${chalk.dim(r.step.padEnd(18))} ${r.detail || ''}`),
+    ...results.map((r) => `  ${statusGlyph(r.status)} ${chalk.dim(stepLabel(r.step).padEnd(16))} ${r.detail || ''}`),
     '',
-    chalk.dim('  Re-run `solid setup` any time — every step is idempotent.'),
+  ];
+
+  // The payoff line — every novice's actual goal is "chat with my AI about
+  // my business." Always tell them the one command that gets them there.
+  const noEditor = results.some((r) => r.step === 'mcp' && r.status === 'skipped' && /no supported editor/i.test(r.detail || ''));
+  if (noEditor) {
+    lines.push(...renderAiInstallOptions());
+  } else {
+    lines.push(chalk.bold('  Chat with your AI about this business:'), `    ${chalk.cyan('solid ai')}`);
+  }
+
+  lines.push(
+    '',
+    chalk.dim('  Safe to re-run `solid setup` any time.'),
     chalk.dim('  Help:  `solid --help`     ·   Docs:  https://solidnumber.com/docs/cli'),
-    '',
-    chalk.cyan('  💡 Wire Claude Desktop / Cursor to this tenant:'),
-    chalk.dim('     solid mcp install claude'),
-  ]));
+  );
+
+  console.log(ui.successBox('Setup complete', lines));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
