@@ -40,33 +40,12 @@ activateQueueModeIfRequested(process.argv);
 import { activateProgramJsonIfRequested } from './lib/json-output';
 activateProgramJsonIfRequested(process.argv);
 
-// AI-first I/O — soft warn when a non-TTY caller (agent / MCP / CI)
-// is about to operate on the implicit current company without --company.
-// Lazy-loaded after a quick gate to keep --help / --version paths quiet.
-{
-  const verb = process.argv[2];
-  const DISCOVERY_FLAGS = ['--help', '-h', 'help', '--version', '-v'];
-  // Skip when no command, top-level help/version, OR any --help/-h appears
-  // anywhere in the argv (e.g. `solid schema --help`, `solid pages list -h`).
-  const isDiscovery =
-    !verb ||
-    DISCOVERY_FLAGS.includes(verb) ||
-    process.argv.some((a) => a === '--help' || a === '-h');
-  if (!isDiscovery) {
-    // Defer the import so the warning module's side-effect-free code
-    // doesn't load on `solid --help` / `solid --version` invocations.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { maybeWarnImplicitTenant } = require('./lib/tenant-warn');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { config: __cfg } = require('./lib/config');
-    maybeWarnImplicitTenant({
-      argv: process.argv,
-      env: process.env,
-      hasCurrentCompany: typeof __cfg.companyId === 'number',
-      companyId: typeof __cfg.companyId === 'number' ? __cfg.companyId : null,
-    });
-  }
-}
+// AI-first I/O — soft warn when a non-TTY caller (agent / MCP / CI) is
+// about to operate on the implicit current company without --company.
+// Emitted from a commander `preAction` hook (see `program.hook` below)
+// so it fires ONLY when a real command action runs — never ahead of an
+// "Unknown command" error, never on `--help` / `--version`. Commander
+// short-circuits discovery and unknown-command paths before preAction.
 import { authCommand, whoamiCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
 import { kbCommand } from './commands/kb';
@@ -190,6 +169,20 @@ updateNotifier({ pkg, updateCheckInterval: 1000 * 60 * 60 * 4 }).notify({
 });
 
 const program = new Command();
+
+// Implicit-tenant warning (see note near the top of this file). preAction
+// runs only for a matched command action, so this never races ahead of an
+// unknown-command error or fires on `--help` / `--version`.
+program.hook('preAction', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { maybeWarnImplicitTenant } = require('./lib/tenant-warn');
+  maybeWarnImplicitTenant({
+    argv: process.argv,
+    env: process.env,
+    hasCurrentCompany: typeof config.companyId === 'number',
+    companyId: typeof config.companyId === 'number' ? config.companyId : null,
+  });
+});
 
 program
   .name('solid')
