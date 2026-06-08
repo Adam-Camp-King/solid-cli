@@ -3,6 +3,7 @@
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Centralised type for Axios request configs that carry our internal
@@ -196,6 +197,37 @@ export function getResolvedApiUrl(): string {
 // agent runs in the last minute of a token's life.
 const REFRESH_LEAD_SECONDS = 60;
 
+/**
+ * Build the axios config fragment that pins a caller-supplied Idempotency-Key.
+ * Returns `undefined` when no key is given, so the request interceptor falls
+ * back to auto-generating a per-call key. Centralised so post/put/patch/delete
+ * stay one-liners and the header name lives in exactly one place.
+ */
+function idempotencyConfig(options?: { idempotencyKey?: string }): { headers: Record<string, string> } | undefined {
+  return options?.idempotencyKey ? { headers: { 'Idempotency-Key': options.idempotencyKey } } : undefined;
+}
+
+/**
+ * Decide the Idempotency-Key for an outgoing request. Returns a fresh UUID for
+ * mutating methods that don't already carry a key, else `null` (leave as-is).
+ * Pure + exported so the interceptor rule is unit-testable without HTTP mocking.
+ *   - GET/HEAD                    → null (reads need no idempotency)
+ *   - existing key present        → null (caller pinned it; never overwrite)
+ *   - SOLID_NO_IDEMPOTENCY set    → null (global opt-out)
+ *   - POST/PUT/PATCH/DELETE       → new randomUUID()
+ */
+export function nextIdempotencyKey(
+  method: string | undefined,
+  hasExistingKey: boolean,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (env.SOLID_NO_IDEMPOTENCY) return null;
+  if (hasExistingKey) return null;
+  const m = (method || 'get').toLowerCase();
+  if (m === 'post' || m === 'put' || m === 'patch' || m === 'delete') return randomUUID();
+  return null;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -337,6 +369,18 @@ class ApiClient {
       // Sandbox flag — lets the backend record the event as dry-run so the
       // activity dashboard counts sandboxed vs real mutations separately.
       if (process.env.SOLID_AGENT_SANDBOX) requestConfig.headers['X-Solid-Agent-Sandbox'] = '1';
+
+      // Idempotency — attach a key to every mutation so an internal retry
+      // (401 refresh, transient network failure) can't double-execute the
+      // write. Generated once here and reused on the 401-retry because axios
+      // re-sends the SAME config object (the header is already present, so
+      // nextIdempotencyKey returns null) — the key is stable across retries of
+      // one logical request. A caller that set its own key (offline-queue
+      // replay, or `solid apply` with a content-derived key) keeps it.
+      // Backends that honor Idempotency-Key (payments, crm, orders,
+      // onboarding, ...) dedupe; others ignore the header harmlessly.
+      const idemKey = nextIdempotencyKey(requestConfig.method, !!requestConfig.headers['Idempotency-Key']);
+      if (idemKey) requestConfig.headers['Idempotency-Key'] = idemKey;
 
       return requestConfig;
     });
@@ -607,23 +651,33 @@ class ApiClient {
 
   // Dry-run interception happens at the request-interceptor layer —
   // every mutation (incl. those using this.client.* directly) is caught.
-  async post<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-    const response = await this.client.post(url, data);
+  // The optional `idempotencyKey` lets callers (offline-queue replay,
+  // `solid apply`) pin a STABLE key so re-issuing the same logical write is a
+  // server-side no-op. When omitted, the request interceptor auto-generates a
+  // per-call key (stable across internal retries only). See the interceptor.
+  async post<T = unknown>(url: string, data?: unknown, options?: { idempotencyKey?: string }): Promise<ApiResponse<T>> {
+    const response = await this.client.post(url, data, idempotencyConfig(options));
     return { data: response.data, status: response.status, success: true };
   }
 
-  async put<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-    const response = await this.client.put(url, data);
+  async put<T = unknown>(url: string, data?: unknown, options?: { idempotencyKey?: string }): Promise<ApiResponse<T>> {
+    const response = await this.client.put(url, data, idempotencyConfig(options));
     return { data: response.data, status: response.status, success: true };
   }
 
-  async patch<T = unknown>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-    const response = await this.client.patch(url, data);
+  async patch<T = unknown>(url: string, data?: unknown, options?: { idempotencyKey?: string }): Promise<ApiResponse<T>> {
+    const response = await this.client.patch(url, data, idempotencyConfig(options));
     return { data: response.data, status: response.status, success: true };
   }
 
-  async delete<T = unknown>(url: string, options?: { params?: Record<string, unknown> }): Promise<ApiResponse<T>> {
-    const response = await this.client.delete(url, options);
+  async delete<T = unknown>(
+    url: string,
+    options?: { params?: Record<string, unknown>; idempotencyKey?: string },
+  ): Promise<ApiResponse<T>> {
+    const response = await this.client.delete(url, {
+      params: options?.params,
+      ...idempotencyConfig(options),
+    });
     return { data: response.data, status: response.status, success: true };
   }
 
