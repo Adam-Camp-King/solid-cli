@@ -20,6 +20,10 @@
       "types": "./dist/lib/config.d.ts",
       "default": "./dist/lib/config.js"
     },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

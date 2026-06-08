@@ -10,6 +10,9 @@ import * as yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
 import { Reconciler, reconcilerFor } from './registry';
 
+export interface ReconcileOptions { dryRun?: boolean; prune?: boolean }
+export interface ReconcileReport { dryRun: boolean; results: ExecResult[]; counts: Record<string, number> }
+
 export interface DesiredResource {
   kind: string;
   /** Resolved identity VALUE (e.g. the email / sku / url). */
@@ -201,6 +204,46 @@ export function actionIdempotencyKey(a: PlannedAction): string {
 export interface ExecResult extends PlannedAction {
   status: 'done' | 'skipped' | 'failed';
   error?: string;
+}
+
+/** Count results by action (+ failed) for a summary line. */
+export function tallyResults(results: ExecResult[]): Record<string, number> {
+  const c = { create: 0, update: 0, noop: 0, prune: 0, unsupported: 0, failed: 0 };
+  for (const r of results) {
+    if (r.status === 'failed') c.failed++;
+    if (r.action in c) (c as Record<string, number>)[r.action]++;
+  }
+  return c;
+}
+
+/**
+ * Reconcile a set of desired resources end-to-end: group by kind, fetch current
+ * state, plan, execute. Pure orchestration with NO prompting — the interactive
+ * prune confirmation lives in the `apply` command, not here, so this is safe to
+ * call programmatically (the @solidnumber/cli/client facade uses it). Unknown
+ * kinds are skipped (parseManifest already validates when used via the CLI).
+ */
+export async function reconcile(
+  client: ApplyClient,
+  resources: DesiredResource[],
+  opts: ReconcileOptions = {},
+): Promise<ReconcileReport> {
+  const byKind = new Map<string, DesiredResource[]>();
+  for (const r of resources) {
+    const arr = byKind.get(r.kind) ?? [];
+    arr.push(r);
+    byKind.set(r.kind, arr);
+  }
+  const results: ExecResult[] = [];
+  for (const [kind, desired] of byKind) {
+    const recon = reconcilerFor(kind);
+    if (!recon) continue;
+    const resp = await client.get(recon.list);
+    const current = extractList(resp.data, recon);
+    const actions = planKind(recon, desired, current, { prune: opts.prune });
+    results.push(...(await executePlan(client, recon, actions, !!opts.dryRun)));
+  }
+  return { dryRun: !!opts.dryRun, results, counts: tallyResults(results) };
 }
 
 /** Execute a plan. `dryRun` returns the plan annotated as skipped, no writes. */

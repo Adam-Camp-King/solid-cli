@@ -21,7 +21,7 @@ import { isJsonOutput, emitJson } from '../lib/json-output';
 import { requireCompanyContext, confirm } from '../lib/command-kit';
 import { isDryRun } from '../lib/dry-run';
 import {
-  parseManifest, extractList, planKind, executePlan,
+  parseManifest, extractList, planKind, executePlan, tallyResults,
   DesiredResource, PlannedAction, ExecResult,
 } from '../lib/apply/engine';
 import { reconcilerFor, knownKinds } from '../lib/apply/registry';
@@ -127,7 +127,7 @@ export const applyCommand = new Command('apply')
       results.push(...(await executePlan(apiClient, recon, actions, dryRun)));
     }
 
-    const counts = tally(results);
+    const counts = tallyResults(results);
     if (isJsonOutput(options)) {
       return void emitJson({ dryRun, counts, actions: results });
     }
@@ -148,12 +148,3 @@ export const applyCommand = new Command('apply')
     if (dryRun && changes.length > 0) console.log(chalk.dim('Run without --dry-run to apply.'));
     if (counts.failed > 0) process.exit(1);
   });
-
-function tally(results: ExecResult[]): Record<string, number> {
-  const c = { create: 0, update: 0, noop: 0, prune: 0, unsupported: 0, failed: 0 };
-  for (const r of results) {
-    if (r.status === 'failed') c.failed++;
-    if (r.action in c) (c as Record<string, number>)[r.action]++;
-  }
-  return c;
-}
