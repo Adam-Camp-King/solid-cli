@@ -88,8 +88,13 @@ export function externalDepsInDist(distDir) {
   function walkFs(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, entry.name);
-      if (entry.isDirectory()) walkFs(p);
-      else if (entry.name.endsWith('.js')) {
+      // Skip test trees — they're excluded from the published tarball
+      // (`!dist/__tests__` in package.json `files`), so their imports (incl.
+      // deliberately-fake module names in fixtures) are not runtime deps.
+      if (entry.isDirectory()) {
+        if (entry.name === '__tests__') continue;
+        walkFs(p);
+      } else if (entry.name.endsWith('.js')) {
         const src = readFileSync(p, 'utf8');
         for (const s of specsInFile(src)) found.add(s);
       }

@@ -109,6 +109,7 @@ import { insightsCommand } from './commands/insights';
 import { llmsCommand } from './commands/llms';
 import { accountingCommand } from './commands/accounting';
 import { webhooksCommand } from './commands/webhooks';
+import { applyCommand } from './commands/apply';
 import { supportCommand } from './commands/support';
 import { exportCommand } from './commands/export';
 import { billingCommand } from './commands/billing';
@@ -549,6 +550,7 @@ program.addCommand(insightsCommand);
 // Integrations & Operations
 program.addCommand(accountingCommand);
 program.addCommand(webhooksCommand);
+program.addCommand(applyCommand);
 program.addCommand(supportCommand);
 program.addCommand(exportCommand);
 program.addCommand(billingCommand);
