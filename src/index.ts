@@ -161,12 +161,23 @@ import { mcpCommand } from './commands/mcp';
 import { doctorCommand } from './commands/doctor';
 import { graphCommand } from './commands/graph';
 import { ui } from './lib/ui';
+import { importESM } from './lib/esm-import';
 
-// Check for updates (non-blocking, runs in background)
-import updateNotifier from 'update-notifier';
-updateNotifier({ pkg, updateCheckInterval: 1000 * 60 * 60 * 4 }).notify({
-  message: `Update available: {currentVersion} → {latestVersion}\nRun {updateCommand} to update`,
-});
+// Check for updates (non-blocking, best-effort). update-notifier v7 is
+// ESM-only, so load it through importESM (see lib/esm-import) rather than a
+// static import that tsc would lower to require() — that throws
+// ERR_REQUIRE_ESM on Node < 20.19 and would crash every command at startup.
+void (async () => {
+  try {
+    const { default: updateNotifier } =
+      await importESM<typeof import('update-notifier')>('update-notifier');
+    updateNotifier({ pkg, updateCheckInterval: 1000 * 60 * 60 * 4 }).notify({
+      message: `Update available: {currentVersion} → {latestVersion}\nRun {updateCommand} to update`,
+    });
+  } catch {
+    // Update check is non-essential — never let it break the CLI.
+  }
+})();
 
 const program = new Command();
 

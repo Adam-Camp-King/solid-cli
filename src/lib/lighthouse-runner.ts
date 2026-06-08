@@ -11,6 +11,7 @@
  */
 
 import { ensureChromium } from './browser-install';
+import { importESM } from './esm-import';
 
 
 export type LighthouseCategory = 'a11y' | 'perf' | 'mobile';
@@ -126,8 +127,9 @@ export async function runLighthouse(
   // pay zero cost.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const puppeteer = require('puppeteer-core');
-  // Lighthouse v13 ESM-only — use dynamic import.
-  const lighthouseModule = await import('lighthouse');
+  // Lighthouse v13 is ESM-only — load it through importESM so tsc's CommonJS
+  // transform doesn't downlevel it to require() (ERR_REQUIRE_ESM on Node<20.19).
+  const lighthouseModule = await importESM<typeof import('lighthouse')>('lighthouse');
   const lighthouse = (lighthouseModule.default ?? lighthouseModule) as unknown as (
     url: string,
     flags?: Record<string, unknown>,

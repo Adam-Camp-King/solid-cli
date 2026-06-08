@@ -2,7 +2,9 @@
 //
 // Walks a directory tree of compiled JS, parses each file with acorn, and
 // extracts every external package referenced via static `import`,
-// `export ... from`, dynamic `import('<pkg>')`, or `require('<pkg>')`.
+// `export ... from`, dynamic `import('<pkg>')`, `require('<pkg>')`, or the
+// `importESM('<pkg>')` ESM-interop helper (lib/esm-import) — the last so that
+// ESM-only deps loaded through it still count as "used" and must be declared.
 //
 // Returns ROOT package names only — `lighthouse/foo/bar` and `@scope/pkg/sub`
 // normalize to `lighthouse` and `@scope/pkg`. Node builtins (`fs`,
@@ -51,6 +53,22 @@ function specsInFile(src) {
         && n.arguments && n.arguments.length === 1
         && n.arguments[0].type === 'Literal' && typeof n.arguments[0].value === 'string') {
       specs.add(n.arguments[0].value);
+    }
+    // importESM('<pkg>') — the ESM-interop helper. tsc compiles the call as
+    // `(0, esm_import_1.importESM)('<pkg>')`, so the callee is a SequenceExpression
+    // wrapping a MemberExpression; in un-transpiled src it's a bare Identifier.
+    if (n.type === 'CallExpression' && n.arguments && n.arguments.length === 1
+        && n.arguments[0].type === 'Literal' && typeof n.arguments[0].value === 'string') {
+      let callee = n.callee;
+      if (callee && callee.type === 'SequenceExpression' && callee.expressions.length) {
+        callee = callee.expressions[callee.expressions.length - 1];
+      }
+      const calleeName = callee && (
+        (callee.type === 'Identifier' && callee.name)
+        || (callee.type === 'MemberExpression' && callee.property
+            && callee.property.type === 'Identifier' && callee.property.name)
+      );
+      if (calleeName === 'importESM') specs.add(n.arguments[0].value);
     }
   });
   return specs;
