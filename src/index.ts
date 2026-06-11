@@ -147,6 +147,7 @@ import { draftsCommand } from './commands/drafts';
 import { publishCommand } from './commands/publish';
 import { inboundCommand } from './commands/inbound';
 import { formsCommand } from './commands/forms';
+import { embedCommand } from './commands/embed';
 import { emailsCommand } from './commands/emails';
 import { landingCommand } from './commands/landing';
 import { chatWidgetsCommand } from './commands/chat_widgets';
@@ -494,6 +495,7 @@ program.addCommand(blogCommand);
 program.addCommand(landingCommand);
 program.addCommand(chatWidgetsCommand);
 program.addCommand(formsCommand);
+program.addCommand(embedCommand);
 
 // Email
 program.addCommand(emailsCommand);

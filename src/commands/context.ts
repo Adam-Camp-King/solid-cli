@@ -478,6 +478,10 @@ export const contextCommand = new Command('context')
         const writeRes = writeLadder(spineRes.content, shelvesRes.shelves, process.cwd());
         jsonPath = path.join(writeRes.libraryDir, '..', 'solid-context.json');
         if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+        // Ship the commerce wiring skill alongside the context — tenant-guard
+        // already passed above, so this stays inside the bound directory.
+        const { installCommerceSkill } = await import('../lib/commerce-skill');
+        installCommerceSkill(process.cwd());
         let jsonLdPath: string | null = null;
         let jsonLdBytes = 0;
         if (jsonLdDoc) {
@@ -511,6 +515,10 @@ export const contextCommand = new Command('context')
       jsonPath = path.join(claudeDir, 'solid-context.json');
       fs.writeFileSync(markdownPath, doc);
       if (jsonDoc) fs.writeFileSync(jsonPath, jsonDoc);
+      {
+        const { installCommerceSkill } = await import('../lib/commerce-skill');
+        installCommerceSkill(process.cwd());
+      }
       if (jsonLdDoc) {
         fs.writeFileSync(path.join(claudeDir, 'solid-context.jsonld'), jsonLdDoc);
       }
