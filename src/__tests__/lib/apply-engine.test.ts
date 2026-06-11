@@ -174,3 +174,113 @@ describe('actionIdempotencyKey', () => {
     expect(actionIdempotencyKey(a)).not.toBe(actionIdempotencyKey(c));
   });
 });
+
+describe('site-publish kinds (page / site / domain / survey)', () => {
+  const page = RECONCILERS.page;
+  const site = RECONCILERS.site;
+  const domain = RECONCILERS.domain;
+  const survey = RECONCILERS.survey;
+
+  it('registers the kinds with the real API shapes', () => {
+    expect(page).toMatchObject({
+      identity: 'slug', list: '/api/v1/cms/pages', updateMethod: 'patch', listKey: 'pages',
+    });
+    expect(site).toMatchObject({
+      identity: 'slug', list: '/api/v1/sites', updateMethod: null, listKey: 'sites',
+    });
+    expect(domain).toMatchObject({
+      identity: 'domain', list: '/api/v1/domains/custom', updateMethod: null,
+    });
+    expect(survey).toMatchObject({
+      identity: 'title', list: '/api/v1/surveys', create: '/api/v1/surveys/create', updateMethod: 'put',
+    });
+  });
+
+  it('resolves slug/domain/title identities from flat manifest entries', () => {
+    const r = parseManifest(JSON.stringify([
+      { kind: 'page', slug: 'about-us', title: 'About Us' },
+      { kind: 'site', slug: 'main', template: 'basecamp' },
+      { kind: 'domain', domain: 'acme.com', site_id: 4 },
+      { kind: 'survey', title: 'Contact Us', fields: [{ name: 'email' }] },
+    ]));
+    expect(r.map((x) => x.identity)).toEqual(['about-us', 'main', 'acme.com', 'Contact Us']);
+  });
+
+  it('plans page create + patch update keyed by slug', () => {
+    const desired = parseManifest(JSON.stringify([
+      { kind: 'page', slug: 'home', title: 'Home', is_published: true },
+      { kind: 'page', slug: 'contact', title: 'Contact' },
+    ]));
+    const current = [{ id: 11, slug: 'home', title: 'Old Home', is_published: true }];
+    const actions = planKind(page, desired, current);
+    const upd = actions.find((a) => a.identity === 'home')!;
+    expect(upd.action).toBe('update');
+    expect(upd.id).toBe(11);
+    expect(actions.find((a) => a.identity === 'contact')!.action).toBe('create');
+  });
+
+  it('reports site and domain drift as unsupported (immutable kinds)', () => {
+    const ds = parseManifest(JSON.stringify([{ kind: 'site', slug: 'main', template: 'horizon' }]));
+    const sActions = planKind(site, ds, [{ id: 4, slug: 'main', template: 'basecamp' }]);
+    expect(sActions[0].action).toBe('unsupported');
+
+    const dd = parseManifest(JSON.stringify([{ kind: 'domain', domain: 'acme.com', site_id: 9 }]));
+    const dActions = planKind(domain, dd, [{ id: 7, domain: 'acme.com', site_id: 4 }]);
+    expect(dActions[0].action).toBe('unsupported');
+  });
+
+  it('extracts the bare-array domain list response', () => {
+    expect(extractList([{ id: 7, domain: 'acme.com' }], domain)).toHaveLength(1);
+    expect(extractList({ domains: [{ id: 7, domain: 'acme.com' }] }, domain)).toHaveLength(1);
+  });
+
+  it('updates surveys with PUT at the item path', async () => {
+    const calls: Array<{ method: string; url: string }> = [];
+    const client: ApplyClient = {
+      get: (() => Promise.resolve({ data: {} })) as ApplyClient['get'],
+      post: ((url: string) => { calls.push({ method: 'post', url }); return Promise.resolve({}); }) as ApplyClient['post'],
+      put: ((url: string) => { calls.push({ method: 'put', url }); return Promise.resolve({}); }) as ApplyClient['put'],
+      patch: ((url: string) => { calls.push({ method: 'patch', url }); return Promise.resolve({}); }) as ApplyClient['patch'],
+      delete: ((url: string) => { calls.push({ method: 'delete', url }); return Promise.resolve({}); }) as ApplyClient['delete'],
+    };
+    const actions: PlannedAction[] = [
+      { kind: 'survey', identity: 'Contact Us', action: 'create', spec: { title: 'Contact Us' } },
+      { kind: 'survey', identity: 'Feedback', action: 'update', id: 3, spec: { title: 'Feedback' } },
+    ];
+    await executePlan(client, survey, actions, false);
+    expect(calls).toEqual([
+      { method: 'post', url: '/api/v1/surveys/create' },
+      { method: 'put', url: '/api/v1/surveys/3' },
+    ]);
+  });
+
+  it('parses one site manifest declaring the whole business surface', () => {
+    const manifest = [
+      'kind: site',
+      'slug: main',
+      'template: basecamp',
+      '---',
+      'kind: page',
+      'slug: home',
+      'title: Home',
+      'is_published: true',
+      '---',
+      'kind: page',
+      'slug: contact',
+      'title: Contact Us',
+      '---',
+      'kind: domain',
+      'domain: acme.com',
+      '---',
+      'kind: survey',
+      'title: Contact Form',
+      '---',
+      'kind: product',
+      'sku: SVC-1',
+      'name: Consultation',
+      'price: 99',
+    ].join('\n');
+    const r = parseManifest(manifest);
+    expect(r.map((x) => x.kind)).toEqual(['site', 'page', 'page', 'domain', 'survey', 'product']);
+  });
+});

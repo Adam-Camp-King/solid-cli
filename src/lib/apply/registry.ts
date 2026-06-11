@@ -4,7 +4,8 @@
  * delete one). Adding a kind = one entry here; the engine stays generic.
  *
  * Endpoints below are taken verbatim from the matching CLI command files
- * (commands/products.ts, crm.ts, webhooks.ts) so they track the real API.
+ * (commands/products.ts, crm.ts, webhooks.ts, pages.ts, site.ts, domains.ts,
+ * forms.ts / lib/api-client.ts) so they track the real API.
  * A kind with `updateMethod: null` is immutable (create/delete only) — on
  * drift the engine reports it rather than silently mutating.
  */
@@ -67,6 +68,45 @@ export const RECONCILERS: Record<string, Reconciler> = {
     updateMethod: null, // webhooks are immutable — recreate to change
     idField: 'id',
     listKey: 'webhooks',
+  },
+  page: {
+    kind: 'page',
+    identity: 'slug',
+    list: '/api/v1/cms/pages',
+    create: '/api/v1/cms/pages',
+    itemPath: '/api/v1/cms/pages/{id}',
+    updateMethod: 'patch',
+    idField: 'id',
+    listKey: 'pages',
+  },
+  site: {
+    kind: 'site',
+    identity: 'slug',
+    list: '/api/v1/sites',
+    create: '/api/v1/sites',
+    itemPath: '/api/v1/sites/{id}',
+    updateMethod: null, // no in-place site update endpoint — recreate to change
+    idField: 'id',
+    listKey: 'sites',
+  },
+  domain: {
+    kind: 'domain',
+    identity: 'domain',
+    list: '/api/v1/domains/custom', // returns a bare array
+    create: '/api/v1/domains/custom',
+    itemPath: '/api/v1/domains/custom/{id}',
+    updateMethod: null, // domains are verify-then-live — recreate to change
+    idField: 'id',
+  },
+  survey: {
+    kind: 'survey',
+    identity: 'title',
+    list: '/api/v1/surveys',
+    create: '/api/v1/surveys/create',
+    itemPath: '/api/v1/surveys/{id}',
+    updateMethod: 'put',
+    idField: 'id',
+    listKey: 'surveys',
   },
 };
 
