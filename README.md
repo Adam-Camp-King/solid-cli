@@ -2,7 +2,15 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-123 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+124 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+
+**v2.12** — the site-publish substrate: `solid apply` reconciles pages,
+sites, domains, and surveys from one manifest (declare the whole business
+surface, apply, `solid publish --all`); `solid embed <chat|form|paylink>`
+emits ready-to-paste snippets that wire any website — including
+AI-generated ones — to live chat, CRM-backed forms, and hosted checkout;
+`solid context --claude` now installs the `solid-commerce` skill so coding
+agents in a tenant-bound directory build on Solid# by default.
 
 **v2.11** — outbound voice (`solid voice call` / `solid voice text` /
 `solid voice translate`) + universal `solid agent dispatch <verb>` +
