@@ -48,6 +48,7 @@ activateProgramJsonIfRequested(process.argv);
 // short-circuits discovery and unknown-command paths before preAction.
 import { authCommand, whoamiCommand } from './commands/auth';
 import { statusCommand } from './commands/status';
+import { todayCommand } from './commands/today';
 import { kbCommand } from './commands/kb';
 import { pagesCommand } from './commands/pages';
 import { siteCommand } from './commands/site';
@@ -420,6 +421,7 @@ program.addCommand(onboardingCommand);
 program.addCommand(authCommand);
 program.addCommand(whoamiCommand);
 program.addCommand(statusCommand);
+program.addCommand(todayCommand);
 program.addCommand(pullCommand);
 program.addCommand(pushCommand);
 program.addCommand(renderCommand);
