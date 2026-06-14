@@ -2,7 +2,13 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-124 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+126 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+
+**v2.13** — the operator brief: `solid today` is your one-command daily
+brief (revenue, pipeline, urgent work, recommended next actions), and
+`solid how-to` answers in plain language how to connect Solid# to
+Claude/ChatGPT and what the CLI can do — discoverability for non-technical
+owners and agents alike.
 
 **v2.12** — the site-publish substrate: `solid apply` reconciles pages,
 sites, domains, and surveys from one manifest (declare the whole business
