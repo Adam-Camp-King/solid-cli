@@ -93,4 +93,25 @@ describe('auth command — real behavior', () => {
       expect(AUTH_SRC).toMatch(/escapeHtml/);
     });
   });
+
+  // ── Source contracts: whoami context enrichment ───────────────────
+  describe('whoami context', () => {
+    it('resolveWhoamiContext is best-effort (allSettled, never throws)', () => {
+      expect(AUTH_SRC).toMatch(/function resolveWhoamiContext/);
+      // Both lookups run independently; one failing must not break whoami.
+      expect(AUTH_SRC).toMatch(/Promise\.allSettled/);
+    });
+
+    it('status output surfaces which company + permission level', () => {
+      expect(AUTH_SRC).toMatch(/Company:\s+\$\{companyName\}/);
+      expect(AUTH_SRC).toMatch(/Role:/);
+      expect(AUTH_SRC).toMatch(/Tier:/);
+    });
+
+    it('JSON payload includes company_name, role, and tier', () => {
+      expect(AUTH_SRC).toMatch(/payload\.company_name\s*=/);
+      expect(AUTH_SRC).toMatch(/payload\.role\s*=/);
+      expect(AUTH_SRC).toMatch(/payload\.tier\s*=/);
+    });
+  });
 });

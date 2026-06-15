@@ -579,6 +579,33 @@ function formatTokenTTL(): string | null {
   return `expires in ${mins}m`;
 }
 
+/**
+ * Best-effort lookup of the bound company name + role + tier for `whoami`.
+ * Both calls are independent and may fail (offline / restricted token); a
+ * failed lookup just yields `undefined` for that field — never throws.
+ */
+async function resolveWhoamiContext(
+  companyId: number | null | undefined,
+): Promise<{ companyName?: string; role?: string; tier?: string }> {
+  if (!companyId) return {};
+  const out: { companyName?: string; role?: string; tier?: string } = {};
+  const [companies, features] = await Promise.allSettled([
+    apiClient.companiesList(),
+    apiClient.get<{ tier?: string }>(`/api/v1/companies/${companyId}/features`),
+  ]);
+  if (companies.status === 'fulfilled') {
+    const active = companies.value.data.companies?.find((c) => c.id === companyId);
+    if (active) {
+      out.companyName = active.name;
+      out.role = active.role;
+    }
+  }
+  if (features.status === 'fulfilled' && features.value.data.tier) {
+    out.tier = features.value.data.tier;
+  }
+  return out;
+}
+
 async function runAuthStatus(options: { json?: boolean; features?: boolean } = {}): Promise<void> {
   // Detect --json from any of: local option, root --json, SOLID_JSON env.
   // Detect --output from the root-level global. The prior impl only read
@@ -615,6 +642,14 @@ async function runAuthStatus(options: { json?: boolean; features?: boolean } = {
       } catch {
         payload.authenticated = config.userEmail || config.companyId ? 'offline' : false;
       }
+    }
+
+    // Best-effort: which company (name) + role + tier the session is bound to.
+    if (payload.authenticated === true && payload.company_id) {
+      const ctx = await resolveWhoamiContext(payload.company_id as number);
+      if (ctx.companyName) payload.company_name = ctx.companyName;
+      if (ctx.role) payload.role = ctx.role;
+      if (ctx.tier) payload.tier = ctx.tier;
     }
 
     // --features: include the tier's feature allowlist so agents can
@@ -660,8 +695,20 @@ async function runAuthStatus(options: { json?: boolean; features?: boolean } = {
 
     if (response.data.authenticated && response.data.user) {
       spinner.succeed(chalk.green('Authenticated'));
+      const cid = response.data.user.company_id;
+      // Best-effort: resolve the bound company name + role (which company)
+      // and tier (permission level) so `whoami` answers "what am I bound to"
+      // at a glance. Either lookup may fail (network/permissions) — we just
+      // omit that line rather than erroring.
+      const { companyName, role, tier } = await resolveWhoamiContext(cid);
       console.log(chalk.dim(`  Email:       ${response.data.user.email}`));
-      console.log(chalk.dim(`  Company ID:  ${response.data.user.company_id}`));
+      if (companyName) {
+        console.log(chalk.dim(`  Company:     ${companyName} (ID ${cid})`));
+      } else {
+        console.log(chalk.dim(`  Company ID:  ${cid}`));
+      }
+      if (role) console.log(chalk.dim(`  Role:        ${role}`));
+      if (tier) console.log(chalk.dim(`  Tier:        ${tier}`));
       console.log(chalk.dim(`  Environment: ${config.environment}`));
       console.log(chalk.dim(`  API URL:     ${config.apiUrl}`));
       const ttl = formatTokenTTL();
