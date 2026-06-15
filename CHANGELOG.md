@@ -2,6 +2,15 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.13.1] — 2026-06-15
+
+**`solid whoami` now shows which company + permission level you're bound to.**
+
+`solid whoami` / `solid auth status` add the bound **company name**, **role**,
+and **tier** to the human-readable output (was company id only). The same
+fields land in `--json` for agents. Best-effort lookups that never block the
+status check.
+
 ## [2.7.0] — 2026-05-15
 
 **`solid webmcp ...` + `solid ucp ...` — agent transports go cross-runtime.**
