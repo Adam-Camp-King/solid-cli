@@ -86,6 +86,7 @@ import { brandCommand } from './commands/brand';
 import { widgetsCommand } from './commands/widgets';
 import { crmCommand } from './commands/crm';
 import { voiceCommand } from './commands/voice';
+import { callCommand } from './commands/call';
 import { inboxCommand } from './commands/inbox';
 import { scheduleCommand } from './commands/schedule';
 import { reportsCommand } from './commands/reports';
@@ -479,6 +480,7 @@ program.addCommand(inboundCommand);
 
 // Voice
 program.addCommand(voiceCommand);
+program.addCommand(callCommand);
 
 // Sales
 program.addCommand(salesCommand);
