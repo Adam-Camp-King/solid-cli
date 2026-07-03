@@ -181,6 +181,123 @@ numbersCmd
     } catch (error) { fail(spinner, 'Failed to remove phone number', error); }
   });
 
+// ── Lines (Telephony Platform: shared human+AI lines) ───────────────
+
+const ROUTING_LABELS: Record<string, string> = {
+  ring: 'Ring me — my phone first, AI backs up',
+  ask: 'Ask me — I decide per call',
+  ai: 'All to AI — the agent answers',
+  off: 'Off — the AI never touches this line',
+};
+
+const linesCmd = voiceCommand
+  .command('lines')
+  .description('My phone lines — owner, routing mode, agent')
+  .option('--company', 'Every company line (admins; default: lines you may see)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireAuth();
+    const spinner = ora('Loading lines...').start();
+    try {
+      const scope = options.company ? 'company' : 'mine';
+      const response = await apiClient.get('/api/v1/phone/numbers', { params: { scope } });
+      const lines = Array.isArray(response.data) ? response.data : (response.data as Record<string, any>)?.items || [];
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
+      spinner.succeed(chalk.green(`${lines.length} line${lines.length === 1 ? '' : 's'}`));
+      console.log('');
+      for (const l of lines as Record<string, any>[]) {
+        const owner = l.owner_type === 'user' ? chalk.blue(`personal · ${l.user_name || 'unassigned'}`)
+          : l.owner_type === 'agent' ? chalk.magenta(`agent · ${l.agent_name || '—'}`)
+          : chalk.dim('company');
+        const mode = l.routing_mode ? chalk.cyan(l.routing_mode) : chalk.dim('—');
+        const def = l.is_default ? chalk.yellow(' ★default') : '';
+        console.log(`  ${chalk.bold(l.phone_number)}${def} — ${owner}`);
+        console.log(chalk.dim(`    ID: ${l.id}  routing: `) + mode + (l.agent_name && l.owner_type !== 'agent' ? chalk.dim(`  AI: ${l.agent_name}`) : ''));
+      }
+    } catch (error) { fail(spinner, 'Failed to load lines', error); }
+  });
+
+linesCmd
+  .command('routing <line_id> <mode>')
+  .description('Set who fields a line: ring | ask | ai | off')
+  .action(async (lineId, mode) => {
+    requireAuth();
+    if (!ROUTING_LABELS[mode]) {
+      console.error(chalk.red(`  mode must be one of: ${Object.keys(ROUTING_LABELS).join(' | ')}`));
+      process.exitCode = 1;
+      return;
+    }
+    const spinner = ora(`Setting routing on line ${lineId}...`).start();
+    try {
+      await apiClient.patch(`/api/v1/phone/settings/${lineId}`, { routing_mode: mode });
+      spinner.succeed(chalk.green(`Line ${lineId} → ${ROUTING_LABELS[mode]}`));
+    } catch (error) { fail(spinner, 'Failed to set routing mode', error); }
+  });
+
+linesCmd
+  .command('context')
+  .description('My default line + today\'s counts (one call)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireAuth();
+    const spinner = ora('Loading my line...').start();
+    try {
+      const response = await apiClient.get('/api/v1/phone/me/context');
+      const d = response.data as Record<string, any>;
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
+      spinner.succeed(chalk.green('My line'));
+      const line = d.default_line;
+      if (!line) { console.log(chalk.dim('  No line visible to you yet.')); return; }
+      console.log(`  ${chalk.bold(line.phone_number)} — ${chalk.cyan(line.routing_mode || 'ai')}${line.agent_name ? chalk.dim(`  AI: ${line.agent_name}`) : ''}`);
+      const t = d.today || {};
+      console.log(chalk.dim(`  Today: ${t.calls || 0} calls · AI ${t.ai_handled || 0} · human ${t.human_handled || 0} · missed ${t.missed || 0}`));
+    } catch (error) { fail(spinner, 'Failed to load line context', error); }
+  });
+
+voiceCommand
+  .command('spend')
+  .description('Usage & spend per line/user/agent (customer charges)')
+  .option('-m, --months <n>', 'Trailing months incl. current', '1')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireAuth();
+    const spinner = ora('Loading spend...').start();
+    try {
+      const response = await apiClient.get('/api/v1/phone/billing/by-owner', { params: { months: options.months } });
+      const d = response.data as Record<string, any>;
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
+      const t = d.totals || {};
+      spinner.succeed(chalk.green(`Last ${d.months} month${d.months === 1 ? '' : 's'}: $${((t.charge_cents || 0) / 100).toFixed(2)}`));
+      console.log(chalk.dim(`  ${t.calls || 0} calls · ${t.minutes || 0} min · ${t.sms || 0} texts · ${Math.round((t.transcription_seconds || 0) / 60)} min transcribed`));
+      for (const row of (d.lines || []) as Record<string, any>[]) {
+        const who = row.user_name ? chalk.blue(row.user_name) : row.agent_name ? chalk.magenta(row.agent_name) : chalk.dim('company');
+        console.log(`  ${chalk.bold(row.phone_number || '(company)')} ${chalk.dim(row.period)} — ${who} — $${((row.charge_cents || 0) / 100).toFixed(2)} ${chalk.dim(`(${row.calls} calls, ${row.minutes} min, ${row.sms} sms)`)}`);
+      }
+    } catch (error) { fail(spinner, 'Failed to load spend', error); }
+  });
+
+voiceCommand
+  .command('pricing')
+  .description('Phone pricing — rentals, plans, transcription')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireAuth();
+    const spinner = ora('Loading pricing...').start();
+    try {
+      const response = await apiClient.get('/api/v1/phone/pricing');
+      const d = response.data as Record<string, any>;
+      if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(d, null, 2)); return; }
+      spinner.succeed(chalk.green('Phone pricing'));
+      console.log(`  Local number: ${chalk.bold(d.rental?.local?.display || '—')}   Toll-free: ${chalk.bold(d.rental?.toll_free?.display || '—')}`);
+      for (const p of (d.plans || []) as Record<string, any>[]) {
+        console.log(chalk.dim(`  ${p.name}: $${(p.price_cents / 100).toFixed(0)}/mo — ${p.minutes_included} min included`));
+      }
+      if (d.transcription?.price_cents_per_minute) {
+        console.log(chalk.dim(`  Call transcription: ${d.transcription.price_cents_per_minute}¢/min`));
+      }
+    } catch (error) { fail(spinner, 'Failed to load pricing', error); }
+  });
+
 // ── Voicemail ────────────────────────────────────────────────────────
 
 const voicemailCmd = voiceCommand
