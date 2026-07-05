@@ -232,6 +232,161 @@ blogCommand
     }
   });
 
+// ── Publish / Unpublish ─────────────────────────────────────────────
+
+/**
+ * Resolve a positional argument that may be either a numeric post ID or a
+ * slug into a numeric post ID. Slugs are looked up company-scoped via the
+ * by-slug endpoint. Numeric args are returned unchanged.
+ */
+async function resolvePostId(idOrSlug: string): Promise<string> {
+  if (/^\d+$/.test(idOrSlug)) return idOrSlug;
+  const response = await apiClient.get(
+    `/api/v1/cms/blog/posts/slug/${encodeURIComponent(idOrSlug)}`,
+  );
+  const post = response.data as Record<string, any>;
+  return String(post.id);
+}
+
+blogCommand
+  .command('publish <idOrSlug>')
+  .description('Publish a blog post (accepts post ID or slug)')
+  .option('--json', 'Output as JSON')
+  .action(async (idOrSlug: string, options) => {
+    requireAuth();
+    const spinner = ora(`Publishing post ${idOrSlug}...`).start();
+
+    try {
+      const postId = await resolvePostId(idOrSlug);
+      const response = await apiClient.post(`/api/v1/cms/blog/posts/${postId}/publish`);
+      const post = response.data as Record<string, any>;
+
+      if (isJsonOutput(options)) {
+        spinner.stop();
+        console.log(JSON.stringify(post, null, 2));
+        return;
+      }
+
+      spinner.succeed(chalk.green(`Blog post published: "${post.title || `#${postId}`}"`));
+      if (post.published_at) console.log(chalk.dim(`  Published: ${post.published_at}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to publish blog post'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+blogCommand
+  .command('unpublish <idOrSlug>')
+  .description('Unpublish a blog post (accepts post ID or slug)')
+  .option('--json', 'Output as JSON')
+  .action(async (idOrSlug: string, options) => {
+    requireAuth();
+    const spinner = ora(`Unpublishing post ${idOrSlug}...`).start();
+
+    try {
+      const postId = await resolvePostId(idOrSlug);
+      const response = await apiClient.post(`/api/v1/cms/blog/posts/${postId}/unpublish`);
+      const post = response.data as Record<string, any>;
+
+      if (isJsonOutput(options)) {
+        spinner.stop();
+        console.log(JSON.stringify(post, null, 2));
+        return;
+      }
+
+      spinner.succeed(chalk.green(`Blog post unpublished: "${post.title || `#${postId}`}"`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to unpublish blog post'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+// ── AI Generation ───────────────────────────────────────────────────
+
+blogCommand
+  .command('generate')
+  .description('Generate a blog post with AI (blog engine)')
+  .option('--topic <topic>', 'Topic / keyword to write about')
+  .option('--title <title>', 'Exact post title (optional)')
+  .option('--count <n>', 'Number of posts to generate (>1 runs in the background)')
+  .option('--auto-publish', 'Publish generated post(s) immediately')
+  .option('--json', 'Output as JSON')
+  .action(async (options: {
+    topic?: string;
+    title?: string;
+    count?: string;
+    autoPublish?: boolean;
+    json?: boolean;
+  }) => {
+    requireAuth();
+
+    const count = options.count ? parseInt(options.count, 10) : 1;
+    if (options.count && (isNaN(count) || count < 1)) {
+      console.error(chalk.red('Invalid --count. Provide a positive integer.'));
+      process.exit(1);
+    }
+
+    // Batch path — background generation, returns a job id (async).
+    if (count > 1) {
+      if (options.autoPublish) {
+        console.error(chalk.yellow('  Note: --auto-publish is ignored for batch generation; posts land as drafts.'));
+      }
+      const spinner = ora(`Queuing generation of ${count} blog posts...`).start();
+      try {
+        const response = await apiClient.post('/api/v1/blog-engine/generate/batch', { count });
+        const data = response.data as Record<string, any>;
+
+        if (isJsonOutput(options)) {
+          spinner.stop();
+          console.log(JSON.stringify(data, null, 2));
+          return;
+        }
+
+        spinner.succeed(chalk.green(data.message || `Generating ${count} blog posts in the background`));
+        if (data.task_id) console.log(chalk.dim(`  Job: ${data.task_id}`));
+        console.log(chalk.dim('  Run `solid blog list --status draft` shortly to see them.'));
+      } catch (error) {
+        spinner.fail(chalk.red('Failed to queue blog generation'));
+        const apiError = handleApiError(error);
+        console.error(chalk.red(`  ${apiError.message}`));
+        process.exit(1);
+      }
+      return;
+    }
+
+    // Single path — synchronous generate + save.
+    const spinner = ora('Generating blog post...').start();
+    try {
+      const body: Record<string, unknown> = { publish: !!options.autoPublish };
+      if (options.title) body.title = options.title;
+      if (options.topic) body.keyword = options.topic;
+
+      const response = await apiClient.post('/api/v1/blog-engine/generate', body);
+      const data = response.data as Record<string, any>;
+
+      if (isJsonOutput(options)) {
+        spinner.stop();
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      const post = (data.blog_post || data.post || data) as Record<string, any>;
+      spinner.succeed(chalk.green(`Blog post generated${post.title ? `: "${post.title}"` : ''}`));
+      if (post.id) console.log(chalk.dim(`  ID: ${post.id}`));
+      const published = data.published ?? post.published ?? !!options.autoPublish;
+      console.log(chalk.dim(`  Status: ${published ? 'published' : 'draft'}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Failed to generate blog post'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
 // ── SEO Subcommands ─────────────────────────────────────────────────
 
 const seoCommand = blogCommand
@@ -395,6 +550,10 @@ __appendExamplesBlog(blogCommand, [
   { cmd: 'solid blog list --status draft', why: 'Drafts only' },
   { cmd: 'solid blog create --title "..." --file post.md', why: 'Publish from markdown' },
   { cmd: 'solid blog update <slug> --status published', why: 'Flip draft → published' },
+  { cmd: 'solid blog publish <id|slug>', why: 'Publish a post' },
+  { cmd: 'solid blog unpublish <id|slug>', why: 'Pull a post back to draft' },
+  { cmd: 'solid blog generate --topic "spring HVAC tune-ups" --auto-publish', why: 'AI-write + publish one post' },
+  { cmd: 'solid blog generate --count 3', why: 'Batch-generate 3 drafts in the background' },
   { cmd: 'solid blog get <slug> --json', why: 'Scriptable fetch' },
   { cmd: 'solid seo audit <slug>', why: 'SEO pass on a post' },
 ]);
