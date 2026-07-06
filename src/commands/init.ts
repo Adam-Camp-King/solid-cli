@@ -256,10 +256,152 @@ Manage all your Solid# client companies from one place.
   },
 };
 
+// ---------------------------------------------------------------------------
+// Starter-kit layer — the tenant stamp + operating rules + connector wiring
+// that turn a bare template into a project bound to ONE business (company_id).
+// Kept as pure builders so the real output is unit-tested, not simulated.
+// ---------------------------------------------------------------------------
+
+/** Bumped when the scaffold's shape changes; recorded in .solid/config.json. */
+export const STARTER_VERSION = '1.0.0';
+
+const DEFAULT_API_URL = 'https://api.solidnumber.com';
+const DEFAULT_CONNECTOR_URL = 'https://api.solidnumber.com/mcp/connector';
+
+export interface StarterContext {
+  name: string;
+  type: string;
+  typeLabel: string;
+  companyId: number | null;
+  apiUrl: string;
+  connectorUrl: string;
+}
+
+/**
+ * The operating-rules CLAUDE.md — the sleeper feature. Every local AI session
+ * that opens this project inherits the SAME discipline the Solid# connector runs
+ * by (`_OPERATING_RULES` in solid-backend), so client work grounds and persists
+ * instead of hallucinating and evaporating. Keep these five in parity with the
+ * backend contract.
+ */
+export function renderStarterClaudeMd(ctx: StarterContext): string {
+  const cid = ctx.companyId != null ? String(ctx.companyId) : '<set in .solid/config.json>';
+  return `# ${ctx.name}
+
+This project was scaffolded by Solid# for **company_id ${cid}** and is bound to that one
+business. It builds ON Solid# infrastructure — the same CRM, brand, knowledge base, pages,
+and AI the company already runs — reached through the Solid# connector.
+
+> Your source lives in YOUR git. Solid#'s platform is never handed to you. The only Solid#
+> credential in this project is a scoped token in \`.env\` that can touch company_id ${cid}
+> and nothing else. It is gitignored — never commit it.
+
+## Operating rules — how to work in this project
+
+You are an AI building for a real business. Nothing you make here is throwaway. Follow these
+five rules; they are the same rules the Solid# connector runs by.
+
+1. **Ground, don't guess.** Write only facts that come from a Solid# tool result (company
+   profile, brand truth, knowledge base). Never invent a partner, payment processor,
+   certification, price, award, or year in business. If it isn't in a tool result, say you
+   don't have it and ask the owner.
+
+2. **Persist everything — nothing is session-ephemeral.** Every design, brand decision, page,
+   and durable fact must be WRITTEN BACK to company_id ${cid} through the connector
+   (\`set_brand_truth\`, \`set_capability\`, \`edit_page_content\`, \`add_memory\`, …). Generating a
+   preview is NOT persisting: if you generate and don't commit, the work evaporates and the
+   business is left exactly as un-changed as before.
+
+3. **Preview → confirm → written.** Solid# write tools preview by default; call again with
+   \`confirm=true\` to commit. Money and irreversible actions also need the owner to type the
+   approval phrase. Every write is auditable and reversible (\`list_changes\` / \`approve_change\`
+   / \`rollback_change\`).
+
+4. **Close the grounding gaps first.** If the company's brand/positioning is unconfigured, do
+   NOT write public copy yet — ask the owner the grounding questions and persist each answer
+   with \`set_brand_truth\` / \`set_capability\`.
+
+5. **Leave a handoff.** Open every Solid# session with \`start_here\` (it orients you to this
+   business) and close it with \`end_session\` (it persists what you did and what's next), so
+   the next session — and the owner — continue from where you stopped instead of starting cold.
+
+## The connector
+
+- Connector URL: ${ctx.connectorUrl}
+- Bound company_id: ${cid}
+- Config: \`.solid/config.json\`
+
+**Call \`start_here\` before you build. Call \`end_session\` when you finish.**
+
+## Deploy
+
+Your build deploys back to THIS company's own slot (keyed by company_id ${cid}) — never to a
+shared or wrong place:
+
+\`\`\`bash
+solid deploy
+\`\`\`
+
+## Resources
+- CLI: \`npm i -g @solidnumber/cli\`
+- Docs: https://solidnumber.com/docs
+- App type: ${ctx.typeLabel}
+`;
+}
+
+/** The tenant stamp — who this project is, so every tool call is scoped right. */
+export function renderSolidConfig(ctx: StarterContext): string {
+  return JSON.stringify(
+    {
+      companyId: ctx.companyId,
+      connectorUrl: ctx.connectorUrl,
+      apiUrl: ctx.apiUrl,
+      appType: ctx.type,
+      starterVersion: STARTER_VERSION,
+      createdWith: '@solidnumber/cli',
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+/**
+ * Build EVERY file the starter lands on the client's drive — template files plus
+ * the starter-kit layer (CLAUDE.md operating rules, .solid/config.json tenant
+ * stamp, token-safe .gitignore, tenant-stamped .env.example). Pure → testable.
+ */
+export function buildStarterFiles(ctx: StarterContext): Record<string, string> {
+  const appType = APP_TYPES[ctx.type];
+  const files: Record<string, string> = {};
+
+  // 1. Template files, {{name}}-rendered.
+  for (const [filename, content] of Object.entries(appType.files)) {
+    files[filename] = content.replace(/\{\{name\}\}/g, ctx.name);
+  }
+
+  // 2. Tenant stamp — the scoped token slot + bound company_id. Never a real secret.
+  const cidEnv = ctx.companyId != null ? String(ctx.companyId) : '';
+  files['.env.example'] =
+    `# Scoped Solid# token — can touch company_id ${cidEnv || '<yours>'} ONLY.\n` +
+    `# Get one: solid auth token create -n "${ctx.name}"\n` +
+    `# Copy this file to .env and fill it in. NEVER commit .env.\n` +
+    `SOLID_TOKEN=\n` +
+    `SOLID_COMPANY_ID=${cidEnv}\n`;
+
+  // 3. Config, CLAUDE.md, .gitignore (token-safe).
+  files['.solid/config.json'] = renderSolidConfig(ctx);
+  files['CLAUDE.md'] = renderStarterClaudeMd(ctx);
+  files['.gitignore'] = ['node_modules/', 'dist/', '.env', '.env.local', '.solid/token', '*.log', ''].join('\n');
+
+  return files;
+}
+
 export const initCommand = new Command('init')
-  .description('Scaffold a LOCAL app template (boilerplate files only — does NOT create a company; use `solid company create` or `solid demo create` for that)')
+  .description('Scaffold a LOCAL starter project bound to one Solid# company (tenant-stamped, operating-rules + connector wired). Does NOT create a company; use `solid company create` or `solid demo create` for that.')
   .argument('<name>', 'Project name')
   .option('-t, --type <type>', 'App type (basic, marketplace, saas, agency-dashboard)', 'basic')
+  .option('-c, --company <id>', 'Bind the project to this Solid# company_id (tenant stamp)')
+  .option('--no-git', 'Skip initializing a local git repo for the project')
   .option('--list', 'List available app types')
   .action(async (name, options) => {
     if (options.list) {
@@ -293,60 +435,72 @@ export const initCommand = new Command('init')
     const ora = (await import('ora')).default;
     const spinner = ora(`Scaffolding ${appType.name}...`).start();
 
-    fs.mkdirSync(projectDir, { recursive: true });
-
-    for (const [filename, content] of Object.entries(appType.files)) {
-      const filePath = path.join(projectDir, filename);
-      const rendered = content.replace(/\{\{name\}\}/g, name);
-      fs.writeFileSync(filePath, rendered);
+    // Resolve the tenant stamp: --company > stored config > env > unset.
+    const rawCompany = options.company
+      ?? (config as any).companyId
+      ?? process.env.SOLID_COMPANY_ID;
+    const hasCompany = rawCompany != null && String(rawCompany).trim() !== '';
+    const companyId = hasCompany ? parseInt(String(rawCompany), 10) : null;
+    if (hasCompany && Number.isNaN(companyId)) {
+      console.error(chalk.red(`Invalid --company id: ${rawCompany}`));
+      process.exit(1);
     }
 
-    // Copy .gitignore
-    fs.writeFileSync(path.join(projectDir, '.gitignore'), 'node_modules/\n.env\ndist/\n');
+    const ctx: StarterContext = {
+      name,
+      type: options.type,
+      typeLabel: appType.name,
+      companyId,
+      apiUrl: config.apiUrl || DEFAULT_API_URL,
+      connectorUrl: DEFAULT_CONNECTOR_URL,
+    };
 
-    // Generate CLAUDE.md for AI context
-    const claudeMd = `# ${name}
+    fs.mkdirSync(projectDir, { recursive: true });
+    const files = buildStarterFiles(ctx);
+    for (const [filename, content] of Object.entries(files)) {
+      const filePath = path.join(projectDir, filename);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });  // nested .solid/
+      fs.writeFileSync(filePath, content);
+    }
 
-Built on [Solid#](https://solidnumber.com) infrastructure.
-
-## Architecture
-- Backend: Solid# API (${config.apiUrl || 'https://api.solidnumber.com'})
-- SDK: @solidnumber/sdk
-- Type: ${appType.name}
-
-## API Key
-Set \`SOLID_API_KEY\` in \`.env\`. Create one with:
-\`\`\`bash
-solid auth token create -n "${name}" -s "crm:read,pages:read,kb:read,agents:read"
-\`\`\`
-
-## Solid# Resources
-- API Docs: https://solidnumber.com/docs/api
-- SDK Docs: https://solidnumber.com/docs/sdks
-- CLI: npm i -g @solidnumber/cli
-`;
-    fs.writeFileSync(path.join(projectDir, 'CLAUDE.md'), claudeMd);
+    // The client's OWN git — their source, their repo, never ours. --no-git opts out.
+    let gitInitialized = false;
+    if (options.git !== false) {
+      try {
+        const { execFileSync } = await import('node:child_process');
+        const gopts = { cwd: projectDir, stdio: 'ignore' as const };
+        execFileSync('git', ['init', '-q'], gopts);
+        execFileSync('git', ['add', '-A'], gopts);
+        execFileSync('git', ['commit', '-q', '-m',
+          `chore: scaffold ${name} (Solid# starter${companyId != null ? `, company ${companyId}` : ''})`], gopts);
+        gitInitialized = true;
+      } catch {
+        // git absent, or commit blocked (no identity) — non-fatal.
+      }
+    }
 
     spinner.succeed(chalk.green(`${appType.name} scaffolded`));
     console.log('');
-    console.log(`  ${chalk.bold('Project:')}  ${name}`);
-    console.log(`  ${chalk.bold('Type:')}     ${appType.name}`);
-    console.log(`  ${chalk.bold('Path:')}     ${projectDir}`);
+    console.log(`  ${chalk.bold('Project:')}    ${name}`);
+    console.log(`  ${chalk.bold('Type:')}       ${appType.name}`);
+    console.log(`  ${chalk.bold('Company:')}    ${companyId != null ? companyId : chalk.yellow('unset — add it to .solid/config.json')}`);
+    console.log(`  ${chalk.bold('Path:')}       ${projectDir}`);
     console.log('');
 
-    const files = Object.keys(appType.files);
-    for (const f of files) {
+    for (const f of Object.keys(files).sort()) {
       console.log(chalk.dim(`    ${f}`));
     }
-    console.log(chalk.dim('    .gitignore'));
-    console.log(chalk.dim('    CLAUDE.md'));
+    console.log('');
+    console.log(gitInitialized
+      ? chalk.dim('  ✓ git initialized — your source, your git (Solid# is never in it)')
+      : chalk.dim('  (no git repo — run `git init` yourself, or drop --no-git)'));
     console.log('');
 
     console.log(chalk.bold('  Next steps:'));
     console.log(`  ${chalk.cyan(`cd ${name}`)}`);
     console.log(`  ${chalk.cyan('npm install')}`);
-    console.log(`  ${chalk.cyan('cp .env.example .env')}  ${chalk.dim('← add your API key')}`);
-    console.log(`  ${chalk.cyan('npm start')}`);
+    console.log(`  ${chalk.cyan('cp .env.example .env')}  ${chalk.dim('← add your scoped token')}`);
+    console.log(`  ${chalk.dim('Open in Claude Code — CLAUDE.md carries the operating rules; call start_here first.')}`);
     console.log('');
   });
 

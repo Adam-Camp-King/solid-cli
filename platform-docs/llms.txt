@@ -156,7 +156,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - `solid health` — Health check commands
 - `solid how-to` — Plain-language answers: how to connect to Claude/ChatGPT, where to start, what the CLI can do
 - `solid import` — Convert HTML/JSX into Solid# CMS page blocks
-- `solid init` — Scaffold a LOCAL app template (boilerplate files only — does NOT create a company; use `solid company create` or `solid demo create` for that)
+- `solid init` — Scaffold a LOCAL starter project bound to one Solid# company (tenant-stamped, operating-rules + connector wired). Does NOT create a company; use `solid company create` or `solid demo create` for that.
 - `solid install` — One-time setup: wire Claude Code to auto-refresh Solid context at every session start
 - `solid inventory-reorder` — Ranked reorder suggestions per location
 - `solid lead-promote` — Promote a lead_submission to a real CRM contact
