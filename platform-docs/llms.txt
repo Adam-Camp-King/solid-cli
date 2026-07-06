@@ -111,18 +111,19 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 
 ## For Developers — Connect Your AI Editor in 30 Seconds
 
-Solid# is the only platform where your AI editor (Claude Code, Cursor, Windsurf) can manage a real business through MCP. One config file. 608 tools. Free developer access.
+Solid# is the only platform where your AI editor (Claude Code, Cursor, Windsurf) or assistant (Claude, ChatGPT) can manage a real business through MCP. One URL, OAuth with per-company binding — no API keys to paste.
 
-- **[MCP Setup Guide](https://solidnumber.com/docs/mcp)**: 3-step setup — get API key, paste config, start building
-- **Quick connect (stdio)**: `npx solid-mcp --stdio` with `SOLID_API_KEY=sk_solid_...`
-- **Quick connect (HTTP)**: `https://api.solidnumber.com/mcp/v1` with `X-API-Key` header
-- **Tool namespaces**: `solid_*` (business customization), `vibe_*` (natural language modification), `docs_*` (documentation search)
+- **The curated MCP connector is the surface of record**: `https://api.solidnumber.com/mcp/connector` (OAuth). The earlier raw API-mirror server (`npx solid-mcp --stdio`, `POST /mcp/v1` with `X-API-Key`) is retired — do not use it.
+- **[MCP Setup Guide](https://solidnumber.com/docs/mcp)**: Settings → Connectors → Add custom connector → paste the URL, or `claude mcp add --transport http solidnumber https://api.solidnumber.com/mcp/connector`
+- **Orient first, hand off last**: call `start_here` before anything else (who the business is, operating rules, the prior-session handoff), and `end_session` when you finish (leaves the next session a warm handoff). `connection_self_check` is a one-call diagnostic — auth, company binding, tool health.
+- **Scaffold a fresh workspace**: `scaffold_project` hands back a ready, tenant-stamped project so an agent can start building for this company immediately.
+- **What the agent gets**: 85 curated tools (54 read-only + 31 write, grouped by MCP annotations) over the 631-verb registry — 655 platform MCP tools in total.
 - [API Documentation](https://solidnumber.com/docs/api): 1,944 REST endpoints
 - [Authentication Guide](https://solidnumber.com/docs/authentication): API keys (26 scopes), JWT, OAuth
 - [Webhooks](https://solidnumber.com/docs/webhooks): Event-driven integrations
 - [SDK Documentation](https://solidnumber.com/docs/sdks): Client libraries
 
-Developer funnel: Free signup → API key → MCP config → manage client businesses from your editor. Developers build for clients, clients become paying Solid# customers. Same model as Stripe — developers choose the platform, businesses follow.
+Developer funnel: Free signup → connect the curated connector (OAuth) → manage client businesses from your editor. Developers build for clients, clients become paying Solid# customers. Same model as Stripe — developers choose the platform, businesses follow.
 
 ## CLI — `npm i -g @solidnumber/cli`
 
@@ -307,7 +308,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 ## AI-to-AI Endpoints
 
 - Every Solid# business is AI-accessible with per-company endpoints (no auth required):
-- [MCP Endpoint](https://solidnumber.com/api/mcp): `POST https://solidnumber.com/api/mcp` — Platform-level MCP with 608 tools
+- [MCP Endpoint](https://solidnumber.com/api/mcp): `POST https://solidnumber.com/api/mcp` — Platform-level MCP with 655 tools
 - Per-company: `GET https://{company}.solidnumber.com/api/mcp` — Full business profile
 - Per-company: `GET https://{company}.solidnumber.com/llms.txt` — Per-tenant llms.txt
 - Per-company: `GET https://{company}.solidnumber.com/.well-known/mcp.json` — MCP manifest
