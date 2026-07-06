@@ -35,7 +35,7 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - 446 database tables with row-level security at 2026-04-20 audit (of 570 total today; ~20 newer tables pending re-audit)
 - 1,944 REST API endpoints
 - 14 named customer-facing agents (Sarah, Marcus, Devon, ADA, etc.) + 102 specialized background Celery workers (116 platform agents = 14 + 102)
-- 655 MCP tools across 14 internal servers; 214 surfaced via @solidnumber/mcp@1.1.0 (169 agent-attraction verbs + 45 platform tools)
+- 655 MCP tools across 14 internal servers; 214 surfaced via @solidnumber/mcp@1.1.1 (169 agent-attraction verbs + 45 platform tools)
 - 169 agent-attraction verbs across 12 shapes, projected to 4 sibling transports (CLI / MCP stdio / WebMCP / UCP)
 - 54 industry-specific templates with custom knowledge bases
 - 247 merchant category code mappings
@@ -72,7 +72,7 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - [Persistent Memory: Cross-Model AI Memory](https://solidnumber.com/research/persistent-memory): Haiku extracts facts, Redis caches (<1ms reads), confidence scoring with decay, zero-cost retrieval
 - [PromptGuard: 5-Layer Prompt Injection Defense](https://solidnumber.com/research/promptguard): 41 patterns across 6 threat types, canary tokens, ML classification, 16ms overhead
 - [Multi-Tenant AI: Isolated Agents at Scale](https://solidnumber.com/research/multi-tenant-ai): 8-layer isolation stack — JWT, session auth, query filtering, database-level RLS on 446 tables, FORCE ROW LEVEL SECURITY, non-superuser DB role, encrypted credentials, per-company KB
-- [MCP at Scale: 655 Tools for AI-to-AI Communication](https://solidnumber.com/research/mcp-at-scale): Two-tier architecture, per-tenant auto-generated endpoints, 33 security scopes, domain-aware discovery; 214 surfaced via @solidnumber/mcp@1.1.0 (169 agent-attraction verbs + 45 platform tools)
+- [MCP at Scale: 655 Tools for AI-to-AI Communication](https://solidnumber.com/research/mcp-at-scale): Two-tier architecture, per-tenant auto-generated endpoints, 33 security scopes, domain-aware discovery; 214 surfaced via @solidnumber/mcp@1.1.1 (169 agent-attraction verbs + 45 platform tools)
 
 ## Industries
 
@@ -268,7 +268,7 @@ Developer funnel: Free signup → API key → MCP config → manage client busin
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.14.0, manifest schema 1.0, generated 2026-07-05. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.14.0, manifest schema 1.0, generated 2026-07-06. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 
