@@ -202,10 +202,210 @@ formsCommand
     } catch (e) { fail(s, 'Failed', e); }
   });
 
+
+// ── the verb seam ──────────────────────────────────────────────────────────
+//
+// ⛔ EVERYTHING BELOW CALLS VERBS, NOT REST. The commands above this line wrap
+// /api/v1/surveys — the authoring endpoints that predate the forms platform —
+// and they are why `solid forms` knew nothing about the lifecycle, the
+// respondent-facing reads, or a form's public address. New work goes through
+// the verb layer so the CLI, the dashboard, MCP and an agent on a live call
+// all get the same validation, consent and tenant scoping.
+//
+// ⛔ NEVER SEND company_id. The backend binds the tenant from the authenticated
+// principal; a CLI that could pass one is a CLI that could pass someone else's.
+async function callVerb(name: string, payload: Record<string, unknown> = {}) {
+  // ⛔ ONLY THE VERB IS HYPHENATED, NEVER THE NAMESPACE. The backend routes
+  // `<ns>/<verb-with-hyphens>` (controllers/agent_verb_index.py::_verb_http_endpoint),
+  // and plenty of namespaces carry underscores — call_flow, comms_workflow,
+  // agent_config. Hyphenating the whole name would 404 every one of them.
+  const [ns, ...rest] = name.split('.');
+  const verb = rest.join('.').replace(/_/g, '-');
+  const endpoint = verb ? `/api/v1/agent/${ns}/${verb}` : `/api/v1/agent/${ns}`;
+  const res = await apiClient.post(endpoint, payload);
+  const body = res.data as Record<string, unknown>;
+  // The envelope is {ok, result} on some surfaces and the bare result on others.
+  return (body && typeof body === 'object' && 'result' in body ? body.result : body) as Record<string, unknown>;
+}
+
+/** A write verb. Consent travels as `confirm: true` — the backend refuses without it. */
+async function callVerbConfirmed(name: string, payload: Record<string, unknown> = {}) {
+  return callVerb(name, { ...payload, confirm: true });
+}
+
+function lifecycleOf(f: Record<string, unknown>): string {
+  if ((f.status ?? 'published') === 'draft') return 'draft';
+  return f.is_active === false ? 'paused' : 'live';
+}
+
+function lifecycleTag(state: string): string {
+  return state === 'live' ? chalk.green('live')
+    : state === 'draft' ? chalk.yellow('draft')
+    : chalk.dim('paused');
+}
+
+formsCommand
+  .command('describe <id>')
+  .description('The questions as a respondent meets them, plus lifecycle + public link')
+  .option('--provider <name>', 'Form provider', 'native')
+  .option('--json', 'Output as JSON')
+  .action(async (id, opts) => {
+    requireAuth();
+    const s = ora(`Reading ${id}...`).start();
+    try {
+      const out = await callVerb('form.describe', { form_id: String(id), provider: opts.provider });
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      s.stop();
+      const questions = (out.questions ?? []) as Array<Record<string, unknown>>;
+      console.log(`  ${chalk.bold(String(out.title ?? id))}  ${lifecycleTag(String(out.lifecycle ?? ''))}`);
+      if (out.public_url) console.log(`  ${chalk.dim('public link')}  ${chalk.cyan(String(out.public_url))}`);
+      else if (out.public_path) console.log(`  ${chalk.dim('public path')}  ${String(out.public_path)}`);
+      console.log(`  ${chalk.dim(`${questions.length} question${questions.length === 1 ? '' : 's'}`)}`);
+      questions.forEach((q, i) => {
+        const req = q.required ? chalk.dim(' (required)') : '';
+        console.log(`    ${String(i + 1).padStart(2, '0')}  ${chalk.dim(String(q.kind).padEnd(8))} ${q.prompt}${req}`);
+      });
+    } catch (e) { fail(s, 'Failed to read the form', e); }
+  });
+
+formsCommand
+  .command('publish <id>')
+  .description('Publish a draft — it starts taking answers')
+  .action(async (id) => {
+    requireAuth();
+    const s = ora(`Publishing ${id}...`).start();
+    try {
+      const out = await callVerbConfirmed('survey.publish', { survey_id: Number(id) });
+      if (out.status === 'error' || out.status === 'not_found') {
+        s.fail(chalk.red(String(out.summary ?? 'Could not publish')));
+        process.exit(1);
+      }
+      s.succeed(chalk.green('Published — live and taking answers'));
+      try {
+        const d = await callVerb('form.describe', { form_id: String(id), provider: 'native' });
+        if (d.public_url) console.log(`  ${chalk.dim('public link')}  ${chalk.cyan(String(d.public_url))}`);
+      } catch { /* the publish still succeeded */ }
+    } catch (e) { fail(s, 'Failed to publish', e); }
+  });
+
+formsCommand
+  .command('pause <id>')
+  .description('Stop taking new answers. Every answer already given is kept')
+  .action(async (id) => {
+    requireAuth();
+    const s = ora(`Pausing ${id}...`).start();
+    try {
+      const out = await callVerbConfirmed('survey.set_live', { survey_id: Number(id), live: false });
+      if (out.status === 'invalid' || out.status === 'error') {
+        s.fail(chalk.red(String(out.summary ?? 'Could not pause it')));
+        process.exit(1);
+      }
+      s.succeed(chalk.green('Paused — every answer kept, no new ones'));
+    } catch (e) { fail(s, 'Failed to pause', e); }
+  });
+
+formsCommand
+  .command('resume <id>')
+  .description('Take answers again on a paused form')
+  .action(async (id) => {
+    requireAuth();
+    const s = ora(`Resuming ${id}...`).start();
+    try {
+      const out = await callVerbConfirmed('survey.set_live', { survey_id: Number(id), live: true });
+      if (out.status === 'invalid' || out.status === 'error') {
+        s.fail(chalk.red(String(out.summary ?? 'Could not resume it')));
+        process.exit(1);
+      }
+      s.succeed(chalk.green('Live — taking answers again'));
+    } catch (e) { fail(s, 'Failed to resume', e); }
+  });
+
+formsCommand
+  .command('link <id>')
+  .description("The form's standing public URL — the one address you can share anywhere")
+  .option('--provider <name>', 'Form provider', 'native')
+  .action(async (id, opts) => {
+    requireAuth();
+    const s = ora('Resolving...').start();
+    // ⛔ THE EXIT LIVES OUTSIDE THE try. An intentional process.exit inside it
+    // is caught by the error handler below and reported as "Failed to resolve
+    // the link" — the command would then exit 0 with a misleading message.
+    let out: Record<string, unknown>;
+    try {
+      out = await callVerb('form.describe', { form_id: String(id), provider: opts.provider });
+    } catch (e) { fail(s, 'Failed to resolve the link', e); return; }
+
+    if (out.public_url || out.public_path) {
+      s.stop();
+      // Bare URL on stdout so it pipes into pbcopy, a QR generator, anything.
+      console.log(String(out.public_url ?? out.public_path));
+      return;
+    }
+    s.fail(chalk.yellow(`No public link — this form is ${String(out.lifecycle ?? 'not live')}.`));
+    console.error(chalk.dim('  Only a live form has a public address. Publish it first:'));
+    console.error(chalk.dim(`    solid forms publish ${id}`));
+    process.exit(1);
+  });
+
+formsCommand
+  .command('responses <id>')
+  .description('What people actually answered')
+  .option('--provider <name>', 'Form provider', 'native')
+  .option('--limit <n>', 'How many to show', '25')
+  .option('--json', 'Output as JSON')
+  .action(async (id, opts) => {
+    requireAuth();
+    const s = ora('Loading responses...').start();
+    try {
+      const out = await callVerb('form.responses', {
+        form_id: String(id), provider: opts.provider, per_page: Number(opts.limit),
+      });
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      s.stop();
+      const rows = (out.responses ?? []) as Array<Record<string, unknown>>;
+      if (!rows.length) { console.log(chalk.dim('  Nothing answered yet.')); return; }
+      for (const r of rows) {
+        const when = String(r.completed_at ?? r.created_at ?? '').split('T')[0];
+        const channels = Array.isArray(r.channels) ? (r.channels as string[]).join('+') : '';
+        console.log(`  ${chalk.bold(String(r.external_id ?? r.id ?? ''))}  ${chalk.dim(when)}  ${chalk.dim(channels)}`);
+        for (const [k, v] of Object.entries((r.answers ?? {}) as Record<string, unknown>)) {
+          console.log(`      ${chalk.dim(k)}: ${String(v)}`);
+        }
+      }
+    } catch (e) { fail(s, 'Failed to load responses', e); }
+  });
+
+formsCommand
+  .command('status')
+  .description('Every form with its lifecycle — the CLI view of the library')
+  .option('--provider <name>', 'Form provider', 'native')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const s = ora('Loading...').start();
+    try {
+      const out = await callVerb('form.list', { provider: opts.provider });
+      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      s.stop();
+      const rows = (out.forms ?? []) as Array<Record<string, unknown>>;
+      if (!rows.length) { console.log(chalk.dim('  No forms yet.')); return; }
+      for (const f of rows) {
+        const state = lifecycleOf(f);
+        const answered = Number(f.response_count ?? 0);
+        console.log(
+          `  ${chalk.bold(String(f.external_id).padEnd(5))} ${lifecycleTag(state).padEnd(16)} ` +
+          `${String(f.title ?? '').padEnd(34)} ${chalk.dim(`${answered} answered`)}`,
+        );
+      }
+    } catch (e) { fail(s, 'Failed to load forms', e); }
+  });
+
 import { appendExamples as __appendExamplesForms } from '../lib/command-kit';
 __appendExamplesForms(formsCommand, [
-  { cmd: 'solid forms list', why: 'All forms + surveys' },
-  { cmd: 'solid forms create --title "Contact" --prompt "email + message"', why: 'AI-generate a form' },
-  { cmd: 'solid forms export <id> --format csv', why: 'Dump responses to CSV' },
-  { cmd: 'solid forms responses <id> --since 7d', why: 'Recent submissions' },
+  { cmd: 'solid forms status', why: 'Every form with its lifecycle (live / draft / paused)' },
+  { cmd: 'solid forms describe <id>', why: 'The questions a respondent meets, + the public link' },
+  { cmd: 'solid forms publish <id>', why: 'A draft starts taking answers' },
+  { cmd: 'solid forms link <id>', why: "The form's shareable URL, bare on stdout" },
+  { cmd: 'solid forms responses <id>', why: 'What people actually answered' },
+  { cmd: 'solid forms pause <id>', why: 'Stop new answers, keep every existing one' },
 ]);

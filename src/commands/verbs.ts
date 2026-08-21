@@ -161,6 +161,7 @@ verbsCommand
   .command('invoke <verbName>')
   .description('Invoke any agent-attraction verb by name (auth required)')
   .option('-p, --payload <json>', 'JSON payload (string or @file.json)')
+  .option('--confirm', 'Consent for a verb that writes. Required by the backend for any side_effects=write verb')
   .action(async (verbName, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -179,11 +180,26 @@ verbsCommand
 
     const payload = parseJsonArg('payload', options.payload) ?? {};
 
+    // ⛔ WRITES NEED CONSENT, AND IT HAS TO TRAVEL. The backend refuses any
+    // side_effects=write verb without `confirm: true` — and its refusal reads
+    // "CLI: use the --confirm flag", a flag that did not exist until now. So
+    // every write verb was uninvokable from the CLI and the error told you to
+    // use something imaginary (found 2026-08-20). The flag is deliberately NOT
+    // implicit: consent is the user's act, not a default we assume for them.
+    const isWrite = verb.side_effects !== 'read';
+    if (isWrite && !options.confirm) {
+      console.error(chalk.red(`${verb.name} writes (side_effects=${verb.side_effects}).`));
+      console.error(chalk.dim(`  Re-run with --confirm to consent:`));
+      console.error(chalk.dim(`    solid verbs invoke ${verb.name} --confirm${options.payload ? ` -p '${typeof options.payload === 'string' ? options.payload : ''}'` : ''}`));
+      process.exit(1);
+    }
+
     try {
       const method = GET_VERBS.has(verb.name) ? 'GET' : 'POST';
+      const body = isWrite ? { ...payload, confirm: true } : payload;
       const res = method === 'GET'
-        ? await apiClient.get(verb.http_endpoint, { params: payload })
-        : await apiClient.post(verb.http_endpoint, payload);
+        ? await apiClient.get(verb.http_endpoint, { params: body })
+        : await apiClient.post(verb.http_endpoint, body);
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) {
       failApi(e);
