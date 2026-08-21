@@ -57,9 +57,17 @@ async function run(which: 'forms' | 'verbs', argv: string[]) {
   const exit = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
     throw new Error(`__exit_${code ?? 0}__`);
   }) as never);
+  // A command may refuse either by calling process.exit or by setting
+  // process.exitCode and returning — the second is the gentler form (stdout
+  // still flushes). Both are a refusal; the harness observes both, and resets
+  // the code so one test's refusal cannot fail the whole jest run.
+  const before = process.exitCode;
+  process.exitCode = undefined;
   try {
     await cmd.parseAsync(['node', 'solid', ...argv]);
+    return { exitCode: process.exitCode ?? 0 };
   } finally {
+    process.exitCode = before;
     exit.mockRestore();
   }
 }
@@ -197,5 +205,117 @@ describe('solid forms — the lifecycle goes through verbs', () => {
     const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
     expect(endpoint).toBe('/api/v1/agent/form/list');
     expect(body.company_id).toBeUndefined();
+  });
+});
+
+
+describe('moments, reviews, build, walk — the rest of the product', () => {
+  it('moments set wires a trigger WITH consent', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok' } });
+    await run('forms', ['moments', 'set', 'appointment_booked', '--form', '2']);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/agent/form/configure-trigger', {
+      event: 'appointment_booked', form_id: '2', provider: 'native',
+      enabled: true, confirm: true,
+    });
+  });
+
+  it('moments off disables without naming a form', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok' } });
+    await run('forms', ['moments', 'off', 'call_ended']);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/agent/form/configure-trigger', {
+      event: 'call_ended', enabled: false, confirm: true,
+    });
+  });
+
+  it('reviews set is consent-gated — it rewrites where every future ask points', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok' } });
+    await run('forms', ['reviews', 'set', 'google', 'https://g.page/x']);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/agent/review/set-destination', {
+      platform: 'google', url: 'https://g.page/x', confirm: true,
+    });
+  });
+
+  it('⛔ build NEVER sends kb_sub_code — the tenant\'s industry is theirs to resolve', async () => {
+    // Sending one from the CLI would be guessing at someone\'s business, and a
+    // wrong code renders another industry\'s words into their form.
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', steps: [], preview: [] } });
+    await run('forms', ['build', '--intent', 'intake']);
+    const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(endpoint).toBe('/api/v1/agent/playbook/suggest');
+    expect(body.kb_sub_code).toBeUndefined();
+    expect(body.company_id).toBeUndefined();
+  });
+
+  it('build saves nothing without --save', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', steps: [{ prompt: 'q' }], preview: [] } });
+    await run('forms', ['build']);
+    const endpoints = mockPost.mock.calls.map((c) => c[0]);
+    expect(endpoints).toEqual(['/api/v1/agent/playbook/suggest']);
+    expect(endpoints).not.toContain('/api/v1/agent/playbook/save');
+  });
+
+  it('build --save persists the draft with consent', async () => {
+    mockPost
+      .mockResolvedValueOnce({ data: { status: 'ok', title: 'Intake', steps: [{ prompt: 'q' }], preview: [] } })
+      .mockResolvedValueOnce({ data: { status: 'ok', playbook_id: '9' } });
+    await run('forms', ['build', '--save', '--title', 'New patient intake']);
+    const save = mockPost.mock.calls[1] as [string, Record<string, unknown>];
+    expect(save[0]).toBe('/api/v1/agent/playbook/save');
+    expect(save[1].title).toBe('New patient intake');
+    expect(save[1].confirm).toBe(true);
+    expect(save[1].kb_sub_code).toBeUndefined();
+  });
+
+  it('walk shows the next question and never writes', async () => {
+    mockPost.mockResolvedValue({
+      data: { status: 'ok', complete: false, next_question: { id: 'q1', prompt: 'Your name?', kind: 'text' } },
+    });
+    await run('forms', ['walk', '2']);
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/agent/form/next-question', {
+      form_id: '2', provider: 'native',
+    });
+    const body = mockPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body.confirm).toBeUndefined();
+  });
+
+  it('walk --answer captures on the cli channel, then reads what is next', async () => {
+    mockPost
+      .mockResolvedValueOnce({ data: { session_ref: 'abc123', answered_count: 1 } })
+      .mockResolvedValueOnce({ data: { complete: true } });
+    await run('forms', ['walk', '2', '--question', 'q1', '--answer', 'Dana']);
+    const cap = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cap[0]).toBe('/api/v1/agent/form/capture');
+    expect(cap[1]).toMatchObject({ question_id: 'q1', value: 'Dana', channel: 'cli', confirm: true });
+    // the session the capture minted carries into the read
+    expect((mockPost.mock.calls[1][1] as Record<string, unknown>).session_ref).toBe('abc123');
+  });
+
+  it('walk --answer without --question refuses instead of guessing', async () => {
+    const { exitCode } = (await run('forms', ['walk', '2', '--answer', 'Dana']))!;
+    expect(exitCode).toBe(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('vocabulary asks for the tenant\'s own words, not a guessed industry', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', kb_sub_code: 7, terms: { customer: 'patient' } } });
+    await run('forms', ['vocabulary']);
+    const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(endpoint).toBe('/api/v1/agent/playbook/vocabulary');
+    expect(body.kb_sub_code).toBeUndefined();
+  });
+
+  it('⛔ NO command in this file ever sends company_id', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', forms: [], triggers: [], destinations: [], terms: {} } });
+    mockGet.mockResolvedValue({ data: { connected: [] } });
+    for (const argv of [
+      ['status'], ['describe', '2'], ['responses', '2'], ['vocabulary'],
+      ['moments', 'list'], ['reviews', 'list'], ['walk', '2'],
+    ]) {
+      mockPost.mockClear();
+      await run('forms', argv);
+      for (const call of mockPost.mock.calls) {
+        expect((call[1] as Record<string, unknown>).company_id).toBeUndefined();
+      }
+    }
   });
 });

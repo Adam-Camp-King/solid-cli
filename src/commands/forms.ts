@@ -23,28 +23,48 @@ export const formsCommand = new Command('forms')
   .description('Forms & surveys — CRUD, AI generate, export CSV/Excel/PDF');
 
 {
-  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = formsCommand.command('list').alias('ls').description('List forms/surveys');
-  withListFlags(listCmd);
-  listCmd.action(async (opts: import('../lib/command-kit').ListFlags) => {
-    const { runListCommand } = await import('../lib/command-kit');
-    await runListCommand(opts, {
-      spinnerText: 'Loading forms...',
-      errorText: 'Failed to load forms',
-      fetch: async (offset, limit) =>
-        (await apiClient.get('/api/v1/surveys', { params: { limit, offset } })).data,
-      extract: (page) => {
-        if (Array.isArray(page)) return page as Array<Record<string, unknown>>;
-        const d = page as Record<string, unknown>;
-        return ((d.surveys || d.items || []) as Array<Record<string, unknown>>);
-      },
-      render: (items) => {
-        if (!items.length) { console.log(chalk.dim('  No forms yet.')); return; }
-        for (const f of items) {
-          console.log(`  ${chalk.bold(String(f.id))}  ${f.title || f.name}  ${chalk.dim(String(f.created_at || '').split('T')[0])}`);
-        }
-      },
-    });
+  // ⛔ `list` GOES THROUGH VERBS. It used to read /api/v1/surveys directly, so it
+  // showed a different set than `solid forms status` (no lifecycle, native only,
+  // and blind to lead forms). Two commands in one CLI disagreeing about what
+  // forms exist is worse than either being wrong. One seam, one answer.
+  const listCmd = formsCommand.command('list').alias('ls')
+    .description('Every form, with its lifecycle — across every connected provider');
+  listCmd.option('--provider <name>', 'Only this provider');
+  listCmd.option('--json', 'Output as JSON');
+  listCmd.action(async (opts: { provider?: string; json?: boolean }) => {
+    requireAuth();
+    const s2 = ora('Loading forms...').start();
+    try {
+      const providers = opts.provider
+        ? [opts.provider]
+        : (((await callVerb('form.sources')).connected ?? []) as Array<Record<string, unknown>>)
+            .map((c) => String(c.provider));
+      const rows: Array<Record<string, unknown>> = [];
+      for (const provider of providers.length ? providers : ['native']) {
+        try {
+          const out = await callVerb('form.list', { provider });
+          for (const f of (out.forms ?? []) as Array<Record<string, unknown>>) {
+            rows.push({ ...f, provider });
+          }
+        } catch { /* one provider down must not blank the list */ }
+      }
+      if (isJsonOutput(opts)) { s2.stop(); console.log(JSON.stringify({ forms: rows }, null, 2)); return; }
+      s2.stop();
+      if (!rows.length) {
+        console.log(chalk.dim('  No forms yet.'));
+        console.log(chalk.dim('  Build one:  solid forms build --intent intake --save'));
+        return;
+      }
+      for (const f of rows) {
+        const state = lifecycleOf(f);
+        const answered = Number(f.response_count ?? 0);
+        console.log(
+          `  ${chalk.bold(String(f.external_id).padEnd(5))} ${lifecycleTag(state).padEnd(16)} ` +
+          `${String(f.title ?? '').slice(0, 34).padEnd(34)} ` +
+          `${chalk.dim(`${answered} answered`)} ${chalk.dim(String(f.provider))}`,
+        );
+      }
+    } catch (e) { fail(s2, 'Failed to load forms', e); }
   });
 }
 
@@ -125,29 +145,39 @@ formsCommand
 
 formsCommand
   .command('optimize <id>')
-  .description('AI-optimize an existing form (shorter, better copy)')
-  .action(async (id) => {
+  .description('ADA reviews the questions — suggestions only, nothing changes')
+  .option('--json', 'Output as JSON')
+  .action(async (id, opts) => {
     requireAuth();
-    const s = ora('Optimizing...').start();
+    const sp = ora('Looking it over...').start();
     try {
-      await apiClient.post(`/api/v1/surveys/${id}/optimize`);
-      s.succeed(chalk.green('Optimized'));
-    } catch (e) { fail(s, 'Failed', e); }
+      const out = await callVerb('survey.optimize', { survey_id: Number(id) });
+      if (isJsonOutput(opts)) { sp.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      sp.stop();
+      const analysis = (out.analysis ?? {}) as Record<string, unknown>;
+      const suggestions = (analysis.suggested_improvements ?? []) as Array<Record<string, unknown>>;
+      if (!suggestions.length) { console.log(chalk.dim('  Nothing to change — it reads well.')); return; }
+      console.log(chalk.dim('  Suggestions only — nothing changes until you change it.'));
+      for (const sg of suggestions) {
+        console.log(`  ${chalk.yellow('*')} ${sg.issue}`);
+        if (sg.fix) console.log(`      ${chalk.dim('fix:')} ${sg.fix}`);
+        if (sg.impact) console.log(`      ${chalk.dim('why:')} ${sg.impact}`);
+      }
+    } catch (e) { fail(sp, 'Failed to look it over', e); }
   });
 
 formsCommand
   .command('analyze <id>')
-  .description('AI analyze submissions for insights')
+  .description('What the answers add up to')
   .option('--json', 'Output as JSON')
-  .action(async (id, opts) => {
+  .action(async (id) => {
     requireAuth();
-    const s = ora('Analyzing...').start();
+    const sp = ora('Analyzing...').start();
     try {
-      const res = await apiClient.post(`/api/v1/surveys/${id}/analyze`);
-      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
-      s.succeed(chalk.green('Analysis'));
-      console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { fail(s, 'Failed', e); }
+      const out = await callVerb('survey.analyze', { survey_id: Number(id) });
+      sp.stop();
+      console.log(JSON.stringify(out, null, 2));
+    } catch (e) { fail(sp, 'Failed to analyze', e); }
   });
 
 formsCommand
@@ -400,12 +430,274 @@ formsCommand
     } catch (e) { fail(s, 'Failed to load forms', e); }
   });
 
+
+// ── moments: WHEN a form goes out ──────────────────────────────────────────
+//
+// The dashboard's most-prompted next step after publishing, and it had no CLI
+// surface at all — so an AI could publish a form and then nothing could ever
+// send it.
+const momentsCmd = formsCommand.command('moments')
+  .description('When a form goes out — the tenant\'s moments');
+
+momentsCmd
+  .command('list', { isDefault: true })
+  .description('Every moment, and which form (if any) it sends')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const sp = ora('Loading moments...').start();
+    try {
+      const out = await callVerb('form.triggers');
+      if (isJsonOutput(opts)) { sp.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      sp.stop();
+      const rows = (out.triggers ?? []) as Array<Record<string, unknown>>;
+      if (!rows.length) { console.log(chalk.dim('  No moments available.')); return; }
+      for (const t of rows) {
+        const on = t.configured ? chalk.green('on ') : chalk.dim('off');
+        const what = t.configured && t.form_id
+          ? `sends form ${t.form_id} ${t.stage === 'before' ? 'beforehand' : 'afterwards'}`
+          : chalk.dim('nothing set');
+        console.log(`  ${on}  ${String(t.event).padEnd(24)} ${what}`);
+      }
+      console.log(chalk.dim('\n  Wire one:  solid forms moments set <event> --form <id>'));
+    } catch (e) { fail(sp, 'Failed to load moments', e); }
+  });
+
+momentsCmd
+  .command('set <event>')
+  .description('Send a form at this moment')
+  .requiredOption('--form <id>', 'The form to send')
+  .option('--provider <name>', 'Form provider', 'native')
+  .option('--stage <when>', 'before | after')
+  .action(async (event, opts) => {
+    requireAuth();
+    const sp = ora(`Wiring ${event}...`).start();
+    try {
+      const out = await callVerbConfirmed('form.configure_trigger', {
+        event, form_id: String(opts.form), provider: opts.provider,
+        enabled: true, ...(opts.stage ? { stage: opts.stage } : {}),
+      });
+      if (out.status === 'invalid' || out.status === 'error') {
+        sp.fail(chalk.red(String(out.summary ?? 'Could not wire it')));
+        process.exitCode = 1;
+        return;
+      }
+      sp.succeed(chalk.green(`${event} now sends form ${opts.form}`));
+    } catch (e) { fail(sp, 'Failed to wire the moment', e); }
+  });
+
+momentsCmd
+  .command('off <event>')
+  .description('Stop sending anything at this moment')
+  .action(async (event) => {
+    requireAuth();
+    const sp = ora(`Switching ${event} off...`).start();
+    try {
+      const out = await callVerbConfirmed('form.configure_trigger', { event, enabled: false });
+      if (out.status === 'invalid' || out.status === 'error') {
+        sp.fail(chalk.red(String(out.summary ?? 'Could not switch it off')));
+        process.exitCode = 1;
+        return;
+      }
+      sp.succeed(chalk.green(`${event} sends nothing now`));
+    } catch (e) { fail(sp, 'Failed to switch it off', e); }
+  });
+
+// ── reviews: where a happy customer is sent ────────────────────────────────
+const reviewsCmd = formsCommand.command('reviews')
+  .description('Where happy customers are asked to leave a review');
+
+reviewsCmd
+  .command('list', { isDefault: true })
+  .description('The review destinations this tenant has set')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const sp = ora('Loading destinations...').start();
+    try {
+      const out = await callVerb('review.destinations');
+      if (isJsonOutput(opts)) { sp.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      sp.stop();
+      const rows = (out.destinations ?? []) as Array<Record<string, unknown>>;
+      if (!rows.length) {
+        console.log(chalk.dim('  No review destinations yet.'));
+        console.log(chalk.dim('  Set one:  solid forms reviews set google <url>'));
+        return;
+      }
+      for (const d of rows) console.log(`  ${String(d.platform).padEnd(12)} ${d.url}`);
+    } catch (e) { fail(sp, 'Failed to load destinations', e); }
+  });
+
+reviewsCmd
+  .command('set <platform> <url>')
+  .description('Point future review requests at this link')
+  .action(async (platform, url) => {
+    requireAuth();
+    const sp = ora('Saving...').start();
+    try {
+      const out = await callVerbConfirmed('review.set_destination', { platform, url });
+      if (out.status === 'invalid' || out.status === 'error') {
+        sp.fail(chalk.red(String(out.summary ?? 'Could not save it')));
+        process.exitCode = 1;
+        return;
+      }
+      sp.succeed(chalk.green(`${platform} review link saved`));
+    } catch (e) { fail(sp, 'Failed to save', e); }
+  });
+
+// ── build: a starter playbook, in THIS tenant's words ──────────────────────
+formsCommand
+  .command('build')
+  .description("Draft a form for this business — in its own industry's words")
+  .option('--intent <kind>', 'intake | feedback | lead_qualify | onboarding', 'intake')
+  .option('--save', 'Save it as a draft (nothing is saved without this)')
+  .option('--title <text>', 'Title to save it under')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const sp = ora('Drafting...').start();
+    try {
+      // ⛔ kb_sub_code IS NOT PASSED. The verb resolves THIS tenant's industry
+      // from their own company row; sending one from the CLI would be guessing
+      // at someone's business. See mcp/tools/form_session_verbs._tenant_kb_sub_code.
+      const draft = await callVerb('playbook.suggest', { intent: opts.intent });
+      if (draft.status === 'invalid' || draft.status === 'error') {
+        sp.fail(chalk.red(String(draft.summary ?? 'Could not draft it')));
+        process.exitCode = 1;
+        return;
+      }
+      if (isJsonOutput(opts) && !opts.save) { sp.stop(); console.log(JSON.stringify(draft, null, 2)); return; }
+      sp.stop();
+      const preview = (draft.preview ?? draft.steps ?? []) as Array<Record<string, unknown>>;
+      console.log(`  ${chalk.bold(String(draft.title ?? opts.intent))}  ${chalk.dim(`(${preview.length} steps)`)}`);
+      preview.forEach((st, i) => {
+        console.log(`    ${String(i + 1).padStart(2, '0')}  ${chalk.dim(String(st.kind ?? 'question').padEnd(8))} ${st.prompt ?? ''}`);
+      });
+      if (!opts.save) {
+        console.log(chalk.dim('\n  Nothing saved. Add --save to keep it as a draft.'));
+        return;
+      }
+      const sp2 = ora('Saving as a draft...').start();
+      const saved = await callVerbConfirmed('playbook.save', {
+        title: opts.title ?? String(draft.title ?? `${opts.intent} form`),
+        steps: draft.steps ?? [],
+        ...(draft.outcomes ? { outcomes: draft.outcomes } : {}),
+      });
+      if (saved.status === 'invalid' || saved.status === 'error') {
+        sp2.fail(chalk.red(String(saved.summary ?? 'Could not save it')));
+        process.exitCode = 1;
+        return;
+      }
+      sp2.succeed(chalk.green(`Saved as a draft (${saved.playbook_id ?? saved.form_id ?? '?'})`));
+      console.log(chalk.dim(`  Publish when it's ready:  solid forms publish ${saved.playbook_id ?? saved.form_id ?? '<id>'}`));
+    } catch (e) { fail(sp, 'Failed to build', e); }
+  });
+
+// ── walk: answer a form from the terminal, exactly as an agent does ─────────
+//
+// The CLI equivalent of the Live Form bench: next_question → capture → submit,
+// the same three verbs a voice agent uses mid-call. Scriptable on purpose, so
+// an AI can drive it non-interactively.
+formsCommand
+  .command('walk <id>')
+  .description('Answer a form the way an agent does — next question, capture, submit')
+  .option('--provider <name>', 'Form provider', 'native')
+  .option('--session <ref>', 'Continue an existing session')
+  .option('--question <id>', 'The question being answered (with --answer)')
+  .option('--answer <value>', 'Record an answer, then show what is next')
+  .option('--submit', 'Finish and persist the response')
+  .option('--json', 'Output as JSON')
+  .action(async (id, opts) => {
+    requireAuth();
+    const base = { form_id: String(id), provider: opts.provider };
+    const sp = ora('Working...').start();
+    try {
+      if (opts.submit) {
+        const out = await callVerbConfirmed('form.submit', {
+          ...base, ...(opts.session ? { session_ref: opts.session } : {}),
+        });
+        sp.stop();
+        if (out.status === 'invalid') {
+          console.error(chalk.yellow(String(out.summary)));
+          process.exitCode = 1;
+          return;
+        }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify(out, null, 2)); return; }
+        console.log(chalk.green(`  Submitted — response ${out.response_id ?? ''}`));
+        if (out.contact_id) {
+          console.log(`  ${chalk.dim('landed on contact')} ${out.contact_id}` +
+            (out.contact_created ? chalk.dim(' (new lead)') : ''));
+        }
+        return;
+      }
+
+      let session = opts.session as string | undefined;
+      if (opts.answer !== undefined) {
+        if (!opts.question) {
+          sp.fail(chalk.red('--answer needs --question <id>'));
+          process.exitCode = 1;
+          return;
+        }
+        const cap = await callVerbConfirmed('form.capture', {
+          ...base, question_id: String(opts.question), value: opts.answer,
+          channel: 'cli', ...(session ? { session_ref: session } : {}),
+        });
+        session = String(cap.session_ref ?? session ?? '');
+      }
+
+      const next = await callVerb('form.next_question', {
+        ...base, ...(session ? { session_ref: session } : {}),
+      });
+      sp.stop();
+      if (isJsonOutput(opts)) { console.log(JSON.stringify({ ...next, session_ref: session }, null, 2)); return; }
+      if (session) console.log(`  ${chalk.dim('session')} ${session}`);
+      if (next.complete) {
+        console.log(chalk.green('  Every question answered.'));
+        console.log(chalk.dim(`  Finish it:  solid forms walk ${id} --session ${session ?? ''} --submit`));
+        return;
+      }
+      const q = (next.next_question ?? {}) as Record<string, unknown>;
+      console.log(`  ${chalk.bold(String(q.prompt ?? ''))}`);
+      console.log(`  ${chalk.dim(`${q.kind}${q.required ? ', required' : ''}`)}`);
+      if (Array.isArray(q.choices) && q.choices.length) {
+        console.log(`  ${chalk.dim('choices:')} ${(q.choices as string[]).join(' / ')}`);
+      }
+      console.log(chalk.dim(
+        `\n  Answer it:  solid forms walk ${id} --question ${q.id}` +
+        ` --answer "..."${session ? ` --session ${session}` : ''}`));
+    } catch (e) { fail(sp, 'Failed', e); }
+  });
+
+// ── vocabulary: the nouns this tenant's customers actually use ──────────────
+formsCommand
+  .command('vocabulary')
+  .alias('words')
+  .description("This business's own words — what its customers are called, and its appointments")
+  .option('--lang <code>', 'Language', 'en')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const sp = ora('Loading...').start();
+    try {
+      // kb_sub_code omitted deliberately — the verb resolves this tenant's own.
+      const out = await callVerb('playbook.vocabulary', { lang: opts.lang });
+      if (isJsonOutput(opts)) { sp.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+      sp.stop();
+      const terms = (out.terms ?? {}) as Record<string, string>;
+      console.log(`  ${chalk.dim('industry code')} ${out.kb_sub_code ?? chalk.dim('none set')}`);
+      for (const [k, v] of Object.entries(terms)) {
+        console.log(`  ${chalk.dim(k.padEnd(16))} ${v}`);
+      }
+    } catch (e) { fail(sp, 'Failed to load the vocabulary', e); }
+  });
+
 import { appendExamples as __appendExamplesForms } from '../lib/command-kit';
 __appendExamplesForms(formsCommand, [
-  { cmd: 'solid forms status', why: 'Every form with its lifecycle (live / draft / paused)' },
-  { cmd: 'solid forms describe <id>', why: 'The questions a respondent meets, + the public link' },
+  { cmd: 'solid forms list', why: 'Every form with its lifecycle, across every provider' },
+  { cmd: 'solid forms build --intent intake --save', why: "A starter in this industry's own words" },
   { cmd: 'solid forms publish <id>', why: 'A draft starts taking answers' },
   { cmd: 'solid forms link <id>', why: "The form's shareable URL, bare on stdout" },
+  { cmd: 'solid forms moments set appointment_booked --form <id>', why: 'Make something actually send it' },
+  { cmd: 'solid forms walk <id>', why: 'Answer it the way an agent does, from the terminal' },
   { cmd: 'solid forms responses <id>', why: 'What people actually answered' },
-  { cmd: 'solid forms pause <id>', why: 'Stop new answers, keep every existing one' },
 ]);
