@@ -195,15 +195,47 @@ formsCommand
 
 formsCommand
   .command('embed <id>')
-  .description('Get embed code / public link for a form')
-  .action(async (id) => {
+  .description('Paste-ready embed for a live form — iframe, link, or button')
+  .option('--provider <name>', 'Form provider', 'native')
+  .option('--as <kind>', 'iframe | link | button', 'iframe')
+  .action(async (id, opts) => {
     requireAuth();
-    const s = ora('Loading embed...').start();
+    // ⛔ THE DOOR, NOT THE LEGACY LINK. This read /api/v1/surveys/<id>/embed —
+    // the pre-lifecycle system's public URL — so after the standing door shipped
+    // (2026-08-20) `solid forms embed` was handing out the OLD address while
+    // `solid forms link` handed out the new one. Two commands, two answers, one
+    // of them wrong.
+    const sp = ora('Building the embed...').start();
+    let out: Record<string, unknown>;
     try {
-      const res = await apiClient.get(`/api/v1/surveys/${id}/embed`);
-      s.succeed(chalk.green('Embed'));
-      console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { fail(s, 'Failed', e); }
+      out = await callVerb('form.describe', { form_id: String(id), provider: opts.provider });
+    } catch (e) { fail(sp, 'Failed to build the embed', e); return; }
+
+    const url = out.public_url ?? out.public_path;
+    if (!url) {
+      sp.fail(chalk.yellow(`No public address — this form is ${String(out.lifecycle ?? 'not live')}.`));
+      console.error(chalk.dim('  Only a live form can be embedded. Publish it first:'));
+      console.error(chalk.dim(`    solid forms publish ${id}`));
+      process.exitCode = 1;
+      return;
+    }
+    sp.stop();
+    const title = String(out.title ?? 'Form');
+    const kind = String(opts.as).toLowerCase();
+    if (kind === 'link') {
+      console.log(`<a href="${url}">${title}</a>`);
+    } else if (kind === 'button') {
+      console.log(
+        `<a href="${url}" style="display:inline-block;padding:12px 20px;border-radius:8px;` +
+        `background:#0f5346;color:#fff;text-decoration:none;font-weight:600">${title}</a>`,
+      );
+    } else {
+      console.log(
+        `<!-- ${title} — answers land in your CRM -->\n` +
+        `<iframe src="${url}" title="${title}" width="100%" height="640" ` +
+        `style="border:0;border-radius:12px" loading="lazy"></iframe>`,
+      );
+    }
   });
 
 formsCommand

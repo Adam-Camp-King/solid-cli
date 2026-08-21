@@ -319,3 +319,41 @@ describe('moments, reviews, build, walk — the rest of the product', () => {
     }
   });
 });
+
+describe('embed — the door, not the legacy link', () => {
+  const URL = 'https://angl.net/f/d/MS5uYXRpdmUuMg.9afdee109f0e3d9c';
+
+  it('builds an iframe around the standing door', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', lifecycle: 'live', public_url: URL } });
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    await run('forms', ['embed', '2']);
+    expect(mockPost.mock.calls[0][0]).toBe('/api/v1/agent/form/describe');
+    const html = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(html).toContain('<iframe');
+    expect(html).toContain(URL);
+  });
+
+  it('⛔ never reaches the legacy /api/v1/surveys embed endpoint', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', lifecycle: 'live', public_url: URL } });
+    await run('forms', ['embed', '2']);
+    for (const call of [...mockGet.mock.calls, ...mockPost.mock.calls]) {
+      expect(String(call[0])).not.toContain('/api/v1/surveys');
+    }
+  });
+
+  it('--as link and --as button both point at the door', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', lifecycle: 'live', public_url: URL } });
+    for (const kind of ['link', 'button']) {
+      const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+      await run('forms', ['embed', '2', '--as', kind]);
+      expect(log.mock.calls.map((c) => String(c[0])).join('')).toContain(URL);
+      log.mockRestore();
+    }
+  });
+
+  it('refuses to embed a form that cannot answer', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', lifecycle: 'draft' } });
+    const { exitCode } = (await run('forms', ['embed', '2']))!;
+    expect(exitCode).toBe(1);
+  });
+});
