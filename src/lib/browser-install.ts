@@ -33,7 +33,6 @@ import {
   detectBrowserPlatform,
   getInstalledBrowsers,
   install,
-  makeProgressCallback,
   resolveBuildId,
 } from '@puppeteer/browsers';
 
@@ -143,9 +142,15 @@ export async function ensureChromium(
     browser: Browser.CHROME,
     buildId,
     cacheDir,
-    downloadProgressCallback: onProgress
-      ? (downloaded: number, total: number) => onProgress(downloaded, total)
-      : makeProgressCallback(Browser.CHROME, buildId),
+    // @puppeteer/browsers 3.x removed makeProgressCallback. When the caller
+    // supplies no reporter we simply omit the option — the download still
+    // runs, just silently, which is what a non-interactive agent wants.
+    ...(onProgress
+      ? {
+          downloadProgressCallback: (downloaded: number, total: number) =>
+            onProgress(downloaded, total),
+        }
+      : {}),
   });
 
   const executablePath = computeExecutablePath({
