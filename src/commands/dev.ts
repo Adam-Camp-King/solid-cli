@@ -132,6 +132,32 @@ moduleCmd
 
 // ─── pull ────────────────────────────────────────────────────────────
 
+/**
+ * Resolve a server-supplied relative path, guaranteeing the result stays inside
+ * `root`.
+ *
+ * `module pull` writes files whose paths come from the API response, and
+ * SOLID_API_URL can point the client at any host. The invariant is therefore
+ * that a response never chooses where a file lands: every write target must
+ * resolve under the module directory we created, or be refused. The backend
+ * enforces the same rule on its side; this is the client half, because the CLI
+ * does not delegate filesystem decisions to a remote.
+ */
+export function safeJoin(root: string, relPath: string): string {
+  if (!relPath || path.isAbsolute(relPath) || /^[a-zA-Z]:/.test(relPath)) {
+    throw new Error(`Refusing unsafe path from server: ${relPath}`);
+  }
+  if (relPath.split(/[\\/]/).some((seg) => seg === '..')) {
+    throw new Error(`Refusing path traversal from server: ${relPath}`);
+  }
+  const resolvedRoot = path.resolve(root);
+  const target = path.resolve(resolvedRoot, relPath);
+  if (target !== resolvedRoot && !target.startsWith(resolvedRoot + path.sep)) {
+    throw new Error(`Refusing path outside ${resolvedRoot}: ${relPath}`);
+  }
+  return target;
+}
+
 async function pullModuleToDisk(folderName: string, outDir: string): Promise<void> {
   const spinner = ora(`Pulling ${folderName}...`).start();
   try {
@@ -141,9 +167,11 @@ async function pullModuleToDisk(folderName: string, outDir: string): Promise<voi
     const target = path.resolve(outDir, folderName);
     fs.mkdirSync(target, { recursive: true });
     for (const f of files) {
+      // Validate BEFORE any network call or mkdir — a rejected path must not
+      // create directories on the way to being refused.
+      const localPath = safeJoin(target, f.path);
       const fileRes = await apiClient.get(`/api/v1/modules/${folderName}/source/${f.path}`);
       const fr = fileRes.data as Record<string, any>;
-      const localPath = path.join(target, f.path);
       fs.mkdirSync(path.dirname(localPath), { recursive: true });
       fs.writeFileSync(localPath, fr.content ?? '');
     }
