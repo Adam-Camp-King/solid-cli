@@ -62,7 +62,12 @@ transactionCommand
     requireLogin();
     const spinner = options.json ? null : ora('Opening transaction...').start();
     try {
-      const body: Record<string, any> = {};
+      // transaction.start/append are declared side_effects=write, and the
+      // backend now applies that declaration on these explicit routes too
+      // (they previously bypassed the gate). Opening a handle is the user's
+      // own action, so the CLI confirms on their behalf rather than making
+      // them pass a flag to start a transaction.
+      const body: Record<string, any> = { confirm: true };
       if (options.tag) body.tag = options.tag;
       if (options.ttl) body.ttl_seconds = parseInt(options.ttl, 10);
       const res = await apiClient.post('/api/v1/agent/transaction/start', body);
@@ -91,6 +96,7 @@ transactionCommand
     const spinner = options.json ? null : ora('Appending op...').start();
     try {
       const body: Record<string, any> = {
+        confirm: true,  // declared side_effects=write — see `start` above
         transaction_id: transactionId,
         verb,
       };
