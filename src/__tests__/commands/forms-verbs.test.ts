@@ -357,3 +357,91 @@ describe('embed — the door, not the legacy link', () => {
     expect(exitCode).toBe(1);
   });
 });
+
+describe('quiz — score a run without needing a respondent', () => {
+  it('scores through quiz.result and never sends kb_sub_code', async () => {
+    mockPost.mockResolvedValue({
+      data: { status: 'ok', title: 'Readiness', is_quiz: true, score: 8, max: 10, percent: 80,
+              outcome: { title: 'Ready to go', message: 'You are set.', verb: 'review.ask', verb_args: {} } },
+    });
+    await run('forms', ['quiz', '9', '--answers', '{"q1":"yes"}']);
+    const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(endpoint).toBe('/api/v1/agent/quiz/result');
+    expect(body.playbook_id).toBe('9');
+    expect(body.answered).toEqual({ q1: 'yes' });
+    // The SAVED playbook carries its own industry — the CLI must not guess one.
+    expect(body.kb_sub_code).toBeUndefined();
+    expect(body.company_id).toBeUndefined();
+  });
+
+  it('⛔ flags a score that lands in NO band and exits non-zero', async () => {
+    // A respondent who finishes and is told nothing is the defect worth seeing.
+    mockPost.mockResolvedValue({
+      data: { status: 'ok', title: 'Readiness', is_quiz: true, score: 3, max: 10, outcome: null },
+    });
+    const { exitCode } = (await run('forms', ['quiz', '9', '--answers', '{"q1":"no"}']))!;
+    expect(exitCode).toBe(1);
+  });
+
+  it('says so when the playbook does not score at all', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', is_quiz: false, score: 0 } });
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    await run('forms', ['quiz', '9', '--answers', '{}']);
+    expect(log.mock.calls.map((c) => String(c[0])).join(' ')).toMatch(/does not score/);
+  });
+
+  it('refuses a non-object --answers instead of posting junk', async () => {
+    const { exitCode } = (await run('forms', ['quiz', '9', '--answers', '["a"]']))!;
+    expect(exitCode).toBe(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('walk --branching — the REAL walk, where skips are honoured', () => {
+  it('drives playbook.next_step, not form.next_question', async () => {
+    // form.next_question walks by POSITION; a branched playbook served that way
+    // asks every question in order, which defeats the branch.
+    mockPost.mockResolvedValue({
+      data: { status: 'ok', title: 'Intake', complete: false, answered_count: 1,
+              step: { id: 's2', kind: 'question', prompt: 'How many staff?' } },
+    });
+    await run('forms', ['walk', '9', '--branching', '--answers', '{"s1":"yes"}']);
+    const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(endpoint).toBe('/api/v1/agent/playbook/next-step');
+    expect(body.playbook_id).toBe('9');
+    expect(body.answered).toEqual({ s1: 'yes' });
+  });
+
+  it('folds --answer into the answers map it sends', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', complete: true, answered_count: 2 } });
+    await run('forms', ['walk', '9', '--branching', '--answers', '{"s1":"yes"}',
+                        '--question', 's2', '--answer', '12']);
+    const body = mockPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body.answered).toEqual({ s1: 'yes', s2: '12' });
+  });
+
+  it('reports an action step as the verb the AGENT would call, not one the CLI ran', async () => {
+    mockPost.mockResolvedValue({
+      data: { status: 'ok', title: 'Intake', complete: false,
+              step: { id: 's3', kind: 'action', prompt: 'Book it', verb: 'appointment.book', verb_args: { service: 'x' } } },
+    });
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    await run('forms', ['walk', '9', '--branching']);
+    const out = log.mock.calls.map((c) => String(c[0])).join(' ');
+    expect(out).toMatch(/would call/);
+    expect(out).toContain('appointment.book');
+  });
+
+  it('⛔ branching mode is a READ — it never sends confirm', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', complete: false, step: { id: 's1', prompt: 'q' } } });
+    await run('forms', ['walk', '9', '--branching']);
+    const body = mockPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body.confirm).toBeUndefined();
+  });
+
+  it('--answer without --question still refuses in branching mode', async () => {
+    const { exitCode } = (await run('forms', ['walk', '9', '--branching', '--answer', 'x']))!;
+    expect(exitCode).toBe(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+});

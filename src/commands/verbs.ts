@@ -25,6 +25,7 @@ import * as fs from 'fs';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { parseJsonArg } from '../lib/json-arg';
 
 interface VerbRecord {
   name: string;
@@ -44,25 +45,6 @@ interface VerbManifest {
   total_registered: number;
   filtered_by: { surface: string | null; shape: string | null };
   verbs: VerbRecord[];
-}
-
-function parseJsonArg(name: string, raw: string | undefined): any {
-  if (!raw) return undefined;
-  if (raw.startsWith('@')) {
-    const path = raw.slice(1);
-    try {
-      return JSON.parse(fs.readFileSync(path, 'utf-8'));
-    } catch (e) {
-      console.error(chalk.red(`failed to read --${name} from ${path}: ${(e as Error).message}`));
-      process.exit(1);
-    }
-  }
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    console.error(chalk.red(`--${name} must be valid JSON`));
-    process.exit(1);
-  }
 }
 
 // Verbs that go through GET instead of POST. The Phase 5 verb-index

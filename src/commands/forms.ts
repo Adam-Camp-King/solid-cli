@@ -9,6 +9,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { parseJsonArg } from '../lib/json-arg';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -638,11 +639,74 @@ formsCommand
   .option('--question <id>', 'The question being answered (with --answer)')
   .option('--answer <value>', 'Record an answer, then show what is next')
   .option('--submit', 'Finish and persist the response')
+  .option('--branching', 'Walk the PLAYBOOK — branches, message and action steps, skips honoured')
+  .option('--answers <json>', 'With --branching: answers so far, as {"q1":"yes"} or @file.json')
   .option('--json', 'Output as JSON')
   .action(async (id, opts) => {
     requireAuth();
     const base = { form_id: String(id), provider: opts.provider };
     const sp = ora('Working...').start();
+
+    // ⛔ BRANCHES DO NOT TRAVEL THROUGH form.next_question. That verb walks by
+    // POSITION — a branched playbook served through it asks every question in
+    // order (the superset), which is safe for a form but wrong for a quiz whose
+    // skips are the point. playbook.next_step is the real walk, and it takes the
+    // answers as a MAP rather than a session ref, so this mode is stateless and
+    // scriptable: pass back what you have, get the next step.
+    if (opts.branching) {
+      let answered: Record<string, unknown> = {};
+      if (opts.answers) {
+        const parsed = parseJsonArg('answers', opts.answers);
+        if (parsed && typeof parsed === 'object') answered = parsed as Record<string, unknown>;
+      }
+      if (opts.answer !== undefined) {
+        if (!opts.question) {
+          sp.fail(chalk.red('--answer needs --question <id>'));
+          process.exitCode = 1;
+          return;
+        }
+        answered[String(opts.question)] = opts.answer;
+      }
+      try {
+        const out = await callVerb('playbook.next_step', {
+          playbook_id: String(id), answered,
+        });
+        sp.stop();
+        if (out.status === 'error' || out.status === 'invalid') {
+          console.error(chalk.red(String(out.summary ?? 'Could not walk it')));
+          process.exitCode = 1;
+          return;
+        }
+        if (isJsonOutput(opts)) { console.log(JSON.stringify({ ...out, answered }, null, 2)); return; }
+        console.log(`  ${chalk.bold(String(out.title ?? id))}  ${chalk.dim(`${out.answered_count ?? 0} answered`)}`);
+        if (out.complete) {
+          console.log(chalk.green('  The playbook is finished.'));
+          console.log(chalk.dim(`  Score it:  solid forms quiz ${id} --answers '${JSON.stringify(answered)}'`));
+          return;
+        }
+        const step = (out.step ?? {}) as Record<string, unknown>;
+        const kind = String(step.kind ?? 'question');
+        console.log(`  ${chalk.dim(kind.padEnd(8))} ${chalk.bold(String(step.prompt ?? ''))}`);
+        if (kind === 'action') {
+          // The verb NAME comes back; the AGENT calls it. Say so rather than
+          // implying the CLI just did something.
+          console.log(`  ${chalk.dim('the agent would call')} ${chalk.cyan(String(step.verb ?? '—'))}`);
+          if (step.verb_args && Object.keys(step.verb_args as object).length) {
+            console.log(`  ${chalk.dim('with')} ${JSON.stringify(step.verb_args)}`);
+          }
+        }
+        if (Array.isArray(step.choices) && step.choices.length) {
+          console.log(`  ${chalk.dim('choices:')} ${(step.choices as string[]).join(' / ')}`);
+        }
+        const next = { ...answered, [String(step.id ?? 'q')]: '...' };
+        console.log(chalk.dim(
+          `\n  Answer it:  solid forms walk ${id} --branching --question ${step.id}` +
+          ` --answer "..." --answers '${JSON.stringify(answered)}'`));
+        void next;
+        return;
+      } catch (e) { fail(sp, 'Failed to walk the playbook', e); return; }
+    }
+
     try {
       if (opts.submit) {
         const out = await callVerbConfirmed('form.submit', {
@@ -698,6 +762,67 @@ formsCommand
         `\n  Answer it:  solid forms walk ${id} --question ${q.id}` +
         ` --answer "..."${session ? ` --session ${session}` : ''}`));
     } catch (e) { fail(sp, 'Failed', e); }
+  });
+
+// ── quiz: score a run and see which band it lands in ───────────────────────
+//
+// A quiz's scoring is server-side ONLY — the answer key never travels with the
+// questions, which is right, and it meant a tenant could not check their own
+// bands without finding a real respondent. This scores a hypothetical run.
+formsCommand
+  .command('quiz <id>')
+  .description('Score a set of answers against a quiz and show the outcome band')
+  .requiredOption('--answers <json>', 'The answers to score: \'{"q1":"yes"}\' or @file.json')
+  .option('--json', 'Output as JSON')
+  .action(async (id, opts) => {
+    requireAuth();
+    const answered = parseJsonArg('answers', opts.answers);
+    if (!answered || typeof answered !== 'object' || Array.isArray(answered)) {
+      console.error(chalk.red('--answers must be a JSON object of question_id -> value'));
+      console.error(chalk.dim('  e.g.  --answers \'{"experience":"none","budget":"high"}\''));
+      process.exitCode = 1;
+      return;
+    }
+    const sp = ora('Scoring...').start();
+    let out: Record<string, unknown>;
+    try {
+      // kb_sub_code omitted — the saved playbook carries its own industry.
+      out = await callVerb('quiz.result', { playbook_id: String(id), answered });
+    } catch (e) { fail(sp, 'Failed to score it', e); return; }
+
+    if (out.status === 'error' || out.status === 'invalid') {
+      sp.fail(chalk.red(String(out.summary ?? 'Could not score it')));
+      process.exitCode = 1;
+      return;
+    }
+    if (isJsonOutput(opts)) { sp.stop(); console.log(JSON.stringify(out, null, 2)); return; }
+    sp.stop();
+
+    console.log(`  ${chalk.bold(String(out.title ?? id))}`);
+    if (out.is_quiz === false) {
+      console.log(chalk.yellow('  This playbook does not score — no points on its steps and no outcome bands.'));
+      console.log(chalk.dim('  Add scoring to its steps, or walk it as a form:  solid forms walk ' + id));
+      return;
+    }
+    const pct = out.percent !== undefined && out.percent !== null ? ` (${Math.round(Number(out.percent))}%)` : '';
+    console.log(`  ${chalk.dim('score')} ${out.score ?? 0}${out.max !== undefined ? `/${out.max}` : ''}${pct}`);
+
+    const band = (out.outcome ?? null) as Record<string, unknown> | null;
+    if (!band || (!band.title && !band.message)) {
+      // ⛔ A SCORE THAT LANDS NOWHERE IS THE DEFECT WORTH SEEING. The dashboard
+      // flags it too: a respondent who finishes and is told nothing.
+      console.log(chalk.yellow('  ⚠ This score lands in NO outcome band — a respondent would be told nothing.'));
+      console.log(chalk.dim('  Check the band bounds cover every possible score.'));
+      process.exitCode = 1;
+      return;
+    }
+    if (band.title) console.log(`  ${chalk.green(String(band.title))}`);
+    if (band.message) console.log(`  ${String(band.message)}`);
+    if (band.verb) {
+      console.log(`  ${chalk.dim('the agent would then call')} ${chalk.cyan(String(band.verb))}` +
+        (band.verb_args && Object.keys(band.verb_args as object).length
+          ? ` ${chalk.dim(JSON.stringify(band.verb_args))}` : ''));
+    }
   });
 
 // ── vocabulary: the nouns this tenant's customers actually use ──────────────
