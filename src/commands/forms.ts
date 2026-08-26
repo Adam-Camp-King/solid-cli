@@ -77,11 +77,13 @@ formsCommand
     requireAuth();
     const s = ora(`Loading ${id}...`).start();
     try {
-      const res = await apiClient.get(`/api/v1/surveys/${id}`);
-      if (isJsonOutput(opts)) { s.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
-      s.succeed(chalk.green(`Form ${id}`));
-      console.log(JSON.stringify(res.data, null, 2));
-    } catch (e) { fail(s, 'Failed', e); }
+      // Through the verb, so `get` and `describe` can never disagree about a
+      // form. The verb also carries the lifecycle and the public link, which
+      // /api/v1/surveys/<id> knows nothing about.
+      const out = await callVerb('form.describe', { form_id: String(id), provider: 'native' });
+      s.stop();
+      console.log(JSON.stringify(out, null, 2));
+    } catch (e) { fail(s, 'Failed to load the form', e); }
   });
 
 formsCommand
@@ -97,11 +99,36 @@ formsCommand
     if (!body) { console.error(chalk.red('Provide --file or --title')); process.exit(1); }
     const s = ora('Creating form...').start();
     try {
-      const res = await apiClient.post('/api/v1/surveys/create', body);
-      s.succeed(chalk.green(`Form created: ${(res.data as Record<string, any>).id}`));
-    } catch (e) { fail(s, 'Failed', e); }
+      const out = await callVerbConfirmed('survey.create', {
+        title: body.title,
+        questions: body.questions ?? body.fields ?? [],
+        ...(body.description ? { description: body.description } : {}),
+      });
+      if (out.status === 'error' || out.status === 'invalid') {
+        s.fail(chalk.red(String(out.summary ?? 'Could not create it')));
+        process.exitCode = 1;
+        return;
+      }
+      s.succeed(chalk.green(`Form created: ${out.survey_id ?? out.id ?? ''}`));
+      console.log(chalk.dim('  It starts as a draft. Publish when ready:'));
+      console.log(chalk.dim(`    solid forms publish ${out.survey_id ?? out.id ?? '<id>'}`));
+    } catch (e) { fail(s, 'Failed to create the form', e); }
   });
 
+
+// ⛔ WHAT IS STILL ON REST, AND WHY — checked 2026-08-26, not assumed.
+//
+//   update / delete   no survey.update or survey.delete verb exists. Inventing
+//                     a CLI-only path to a destructive operation is worse than
+//                     an honest REST call; these move when the verbs do.
+//   export            no verb — it streams a file (csv/excel/pdf), which the
+//                     JSON verb envelope has no shape for.
+//   followup          /surveys/<id>/followup drafts follow-ups to RESPONSES.
+//                     review.followup is a different thing entirely (it takes a
+//                     rating and drafts a REVIEW reply), so routing one to the
+//                     other would silently change what the command does.
+//
+// Everything else in this file goes through the verb layer.
 formsCommand
   .command('update <id>')
   .description('Update a form')
@@ -139,9 +166,16 @@ formsCommand
     requireAuth();
     const s = ora('Generating form...').start();
     try {
-      const res = await apiClient.post('/api/v1/surveys/generate', { prompt });
-      s.succeed(chalk.green(`Form generated: ${(res.data as Record<string, any>).id}`));
-    } catch (e) { fail(s, 'Failed', e); }
+      const out = await callVerbConfirmed('survey.generate', { prompt });
+      if (out.status === 'error' || out.status === 'invalid') {
+        s.fail(chalk.red(String(out.summary ?? 'Could not generate it')));
+        process.exitCode = 1;
+        return;
+      }
+      s.succeed(chalk.green(`Form generated: ${out.survey_id ?? out.id ?? ''}`));
+      console.log(chalk.dim('  Read it before publishing:  solid forms describe '
+        + String(out.survey_id ?? out.id ?? '<id>')));
+    } catch (e) { fail(s, 'Failed to generate the form', e); }
   });
 
 formsCommand

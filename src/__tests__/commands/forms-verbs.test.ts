@@ -445,3 +445,46 @@ describe('walk --branching — the REAL walk, where skips are honoured', () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 });
+
+describe('the legacy REST seam is closed where a verb exists', () => {
+  it('get reads through form.describe, not /api/v1/surveys', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', title: 'Intake', lifecycle: 'live' } });
+    await run('forms', ['get', '2']);
+    expect(mockPost.mock.calls[0][0]).toBe('/api/v1/agent/form/describe');
+    for (const c of [...mockGet.mock.calls, ...mockPost.mock.calls]) {
+      expect(String(c[0])).not.toContain('/api/v1/surveys');
+    }
+  });
+
+  it('create goes through survey.create WITH consent', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', survey_id: 12 } });
+    await run('forms', ['create', '--title', 'Contact us']);
+    const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(endpoint).toBe('/api/v1/agent/survey/create');
+    expect(body.title).toBe('Contact us');
+    expect(body.confirm).toBe(true);
+    expect(body.company_id).toBeUndefined();
+  });
+
+  it('generate goes through survey.generate WITH consent', async () => {
+    mockPost.mockResolvedValue({ data: { status: 'ok', survey_id: 13 } });
+    await run('forms', ['generate', 'a two-question intake']);
+    const [endpoint, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(endpoint).toBe('/api/v1/agent/survey/generate');
+    expect(body.prompt).toBe('a two-question intake');
+    expect(body.confirm).toBe(true);
+  });
+
+  it('⛔ only the four documented commands still touch REST', () => {
+    // update/delete (no verb exists), export (streams a file), followup
+    // (review.followup is a DIFFERENT operation). Anything else appearing here
+    // means a command grew its own endpoint instead of using the verb layer.
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const src = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'commands', 'forms.ts'), 'utf-8');
+    const hits = src.split('\n').filter(
+      (l) => l.includes('/api/v1/surveys') && !l.trimStart().startsWith('//'));
+    expect(hits).toHaveLength(4);
+  });
+});
