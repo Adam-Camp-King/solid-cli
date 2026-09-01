@@ -108,7 +108,7 @@ const EXCLUDED = [
  * ⛔ ONLY COUNTS THAT ARE UNAMBIGUOUSLY THE CLI'S.
  *
  * The first cut of this matched a bare `\d+ verbs` and promptly rewrote
- * WebMCP's "508 verbs across 5 surfaces" and a dated "82 verbs registered …
+ * WebMCP's "523 verbs across 5 surfaces" and a dated "82 verbs registered …
  * as of 2026-05-15" into the CLI's verb count — three different measurements
  * flattened into one wrong number, automatically and confidently. That is a
  * WORSE failure than the hand-copying this replaces, because it is fast and
@@ -137,7 +137,7 @@ function rewrite(text: string, c: Counts): string {
  *
  * Two traps, both found by reading the diff before committing (2026-08-21):
  *
- *   "508 verbs across 5 surfaces"        — WebMCP's count, not the CLI's.
+ *   "523 verbs across 5 surfaces"        — WebMCP's count, not the CLI's.
  *   "from @solidnumber/cli@2.10+"        — a MINIMUM version. Stamping the
  *                                          current one claims a feature needs
  *                                          2.16 when it has worked since 2.10.
