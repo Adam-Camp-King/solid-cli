@@ -63,7 +63,12 @@ const GET_VERBS = new Set([
 ]);
 
 export const verbsCommand = new Command('verbs')
-  .description('Discover + invoke any of the 169 agent-attraction verbs (12 shapes, 4 sibling transports)');
+  // ⛔ NO COUNT IN THIS STRING. It said "169 agent-attraction verbs" against a
+// real 545 — and `src/commands/verbs.ts` is not in scripts/sync-counts.ts's
+// SURFACES list, so nothing caught the drift. `solid verbs list` already
+// prints the LIVE total from the backend; a second, frozen copy of the number
+// in help text can only ever go stale.
+  .description('Discover + invoke any agent-attraction verb (12 shapes, 4 sibling transports)');
 
 verbsCommand
   .command('list')

@@ -20,7 +20,7 @@ function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.r
 
 export const paymentLinksCommand = new Command('payment-links')
   .alias('paylinks')
-  .description('Pay-by-link — create, text-to-pay, mark paid');
+  .description('Pay-by-link — create, text-to-pay, mark paid, and what this merchant can capture with');
 
 {
   const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
@@ -168,3 +168,38 @@ __ae_pl(paymentLinksCommand, [
   { cmd: 'solid paylinks text2pay --phone +15125550199 --amount 99',  why: 'Text-to-pay an invoice' },
   { cmd: 'solid paylinks mark-paid <id>',                             why: 'Manual payment reconciliation' },
 ]);
+
+// ⛔ Ask what a merchant can actually take money with, rather than assuming.
+// Offering tap-to-pay to a merchant with no reader, or asking for a card by
+// phone where no Pay Connector exists, wastes the customer's time at the worst
+// possible moment.
+paymentLinksCommand
+  .command('capture-methods')
+  .alias('capture')
+  .description('What this merchant can take money with right now (tap, terminal, link, phone, cash...)')
+  .option('--device <id>', 'Check a specific device (tap-to-pay readers are per-device)')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    const s2 = ora('Checking capture methods...').start();
+    try {
+      const res = await apiClient.post('/api/v1/agent/capture/methods',
+        opts.device ? { device_id: opts.device } : {});
+      const data = res.data as Record<string, any>;
+      const r = data.result ?? data;
+
+      if (isJsonOutput(opts)) { s2.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      s2.stop();
+      const methods = r.methods ?? {};
+      for (const [name, available] of Object.entries(methods)) {
+        console.log(`  ${available ? chalk.green('✓') : chalk.dim('·')} ${available ? name : chalk.dim(name)}`);
+      }
+      if (r.processor) console.log(chalk.dim(`\n  connected processor: ${r.processor}`));
+      // ⛔ Phone capture off is the SAFE state, not a gap to be closed
+      // casually. Without a Pay Connector, <Pay> would prompt the caller for
+      // their card and then fail after they had read it aloud.
+      if (methods.phone_dtmf === false) {
+        console.log(chalk.dim('\n  phone_dtmf is off — the agent offers a payment link instead.'));
+      }
+    } catch (e) { fail(s2, 'Failed to read capture methods', e); }
+  });

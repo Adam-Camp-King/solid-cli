@@ -25,7 +25,7 @@ function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
 }
 
 export const ordersCommand = new Command('orders')
-  .description('Order lifecycle (list, create, confirm, fulfill, cancel, refund, import, watch)');
+  .description('Order lifecycle + progress (list, create, confirm, progress, milestone, fulfill, cancel, refund, import, watch)');
 
 // ── Shared CSV helpers ───────────────────────────────────────────────
 // Exported so `orders watch` can reuse the exact same parser + mapper.
@@ -534,3 +534,118 @@ CSV columns (flexible; map with --map=src:dest): customer_email, amount,
 status, external_id. Unknown columns are forwarded as metadata. Empty files
 and malformed rows are reported, not retried silently.
 `);
+
+// ── Progress ─────────────────────────────────────────────────────────
+//
+// ⛔ WHY THESE EXIST. `orders fulfill` jumps the lifecycle state and nothing
+// else could say anything. An order read "processing" from the moment it was
+// paid until the moment it shipped — a customer asking where their order was
+// got that one word for three days, and so did an agent asking on their
+// behalf. Milestones are the detail underneath the state.
+
+ordersCommand
+  .command('progress <id>')
+  .description('Where an order actually is — the state AND the milestones under it')
+  .option('--json', 'Output as JSON')
+  .action(async (id, opts) => {
+    requireAuth();
+    requireCompanyContext();
+    const wantsJson = isJsonOutput(opts);
+    const spinner = ora(`Reading order ${id}...`).start();
+    try {
+      const res = await apiClient.post('/api/v1/agent/order/progress', { order_id: parseInt(id, 10) });
+      const data = res.data as Record<string, any>;
+      const p = data.result ?? data;
+
+      if (wantsJson) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (p.found === false) { spinner.fail(chalk.red(`Order ${id} not found`)); return; }
+      spinner.stop();
+
+      console.log(chalk.cyan(`Order ${id}`) + chalk.dim(`  ${p.workflow_type}`));
+      console.log(`  state    ${chalk.bold(p.state_label ?? p.state)}${p.is_terminal ? chalk.dim(' (terminal)') : ''}`);
+      if (p.payment_status) console.log(chalk.dim(`  payment  ${p.payment_status}`));
+      if (p.next_states?.length) console.log(chalk.dim(`  next     ${p.next_states.join(', ')}`));
+      console.log('');
+      for (const m of p.milestones_reached ?? []) {
+        // Internal warehouse progress is dimmed, not hidden — the operator
+        // running this IS the warehouse.
+        const line = `  ${m.occurred_at ?? ''}  ${m.label ?? m.milestone}`;
+        console.log(m.customer_visible ? line : chalk.dim(line + '  (internal)'));
+      }
+      if (!(p.milestones_reached ?? []).length) console.log(chalk.dim('  no milestones recorded yet'));
+      if (p.latest_customer_visible) {
+        console.log('');
+        // ⛔ The most recent thing that can TRUTHFULLY be told to the customer.
+        // Not the same as the newest milestone: a picking ticket is internal.
+        console.log(chalk.green(`  tell the customer: ${p.latest_customer_visible.label}`));
+      }
+      if (p.milestones_outstanding?.length) {
+        console.log(chalk.dim(`  outstanding: ${p.milestones_outstanding.join(', ')}`));
+      }
+    } catch (e) { fail(spinner, 'Failed to read progress', e); }
+  });
+
+ordersCommand
+  .command('milestone <id> <milestone>')
+  .description('Report progress — pick ticket cut, packed, label printed, handed to carrier')
+  .option('--detail <json>', 'Facts belonging to the event (tracking number, carrier, ticket id)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, milestone, opts) => {
+    requireAuth();
+    requireCompanyContext();
+
+    let detail: unknown;
+    if (opts.detail) {
+      try { detail = JSON.parse(opts.detail); }
+      catch { console.error(chalk.red('--detail must be valid JSON')); process.exit(1); }
+    }
+
+    const spinner = ora(`Recording ${milestone}...`).start();
+    try {
+      // A milestone writes and can move the lifecycle state, so the dispatch
+      // brain requires consent. The CLI invoking it IS the consent.
+      const res = await apiClient.post('/api/v1/agent/order/milestone', {
+        order_id: parseInt(id, 10), milestone, detail, confirm: true,
+      });
+      const data = res.data as Record<string, any>;
+      const r = data.result ?? data;
+
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      if (r.ok === false) { spinner.fail(chalk.red(r.error ?? 'Refused')); return; }
+
+      spinner.succeed(chalk.green(`${r.label ?? milestone} — order ${id}`));
+      // ⛔ Say whether the state moved rather than letting the operator assume.
+      // `shipping_label_created` deliberately does NOT mean shipped: a label
+      // can sit on a bench overnight, and telling a customer their order
+      // shipped when the carrier does not have it is how trust goes.
+      if (r.state_changed) console.log(chalk.cyan(`  state → ${r.state}`));
+      else console.log(chalk.dim(`  state unchanged (${r.state})`));
+      if (r.state_note) console.log(chalk.dim(`  ${r.state_note}`));
+      if (r.customer_visible === false) console.log(chalk.dim('  internal — not something to tell the customer'));
+    } catch (e) { fail(spinner, 'Failed to record the milestone', e); }
+  });
+
+ordersCommand
+  .command('milestones')
+  .description('What progress can be reported, and what each milestone means')
+  .option('--workflow <type>', 'Filter (goods_shipping|service_job|walk_in_pos|subscription)')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    requireAuth();
+    requireCompanyContext();
+    const spinner = ora('Loading...').start();
+    try {
+      const res = await apiClient.post('/api/v1/agent/order/milestones',
+        opts.workflow ? { workflow_type: opts.workflow } : {});
+      const data = res.data as Record<string, any>;
+      const r = data.result ?? data;
+
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      spinner.stop();
+      for (const m of r.milestones ?? []) {
+        const moves = m.implies_state ? chalk.cyan(` → ${m.implies_state}`) : chalk.dim(' → (no state change)');
+        console.log(`  ${chalk.bold(m.key)}${moves}`);
+        console.log(chalk.dim(`      ${m.description}`));
+      }
+    } catch (e) { fail(spinner, 'Failed to list milestones', e); }
+  });

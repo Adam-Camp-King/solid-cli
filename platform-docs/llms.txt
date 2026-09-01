@@ -133,7 +133,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
-- 127 top-level command groups, 737 subcommands.
+- 128 top-level command groups, 742 subcommands.
 - Core workflow: `solid auth login` → `solid company create` → `solid clone <industry>` → `solid pull` → edit → `solid push` → `solid pages publish` → `solid billing checkout-link`.
 
 **Top-level commands (no subcommands):**
@@ -234,11 +234,12 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - **nest** (5 subcommands) — Nest — drop anything, we make it real. (paste/url/file → live page): `from-file, from-url, list, outcomes, promote`
 - **notes** (5 subcommands) — Work notes — cross-session, cross-model AI memory: `add, archive, context, list, search`
 - **notifications** (2 subcommands) — View and manage notifications: `list, read-all`
+- **offer** (1 subcommands) — Read a deal — line items, tax, fees, disclosure, total (cart, order or link): `get`
 - **onboarding** (12 subcommands) — Programmatic CLIENT onboarding (email, domain, phone-buy, payment, website): `complete, discover, email, health, help-request, payment, phone, provision, session, set-business, status, website`
-- **orders** (11 subcommands) — Order lifecycle (list, create, confirm, fulfill, cancel, refund, import, watch): `allocate, cancel, confirm, create, fulfill, get, import, list, quick-sale, refund, watch`
+- **orders** (14 subcommands) — Order lifecycle + progress (list, create, confirm, progress, milestone, fulfill, cancel, refund, import, watch): `allocate, cancel, confirm, create, fulfill, get, import, list, milestone, milestones, progress, quick-sale, refund, watch`
 - **pages** (12 subcommands) — Website page management: `coming-soon, create, delete, generate, get, list, publish, regenerate, site-generate, slug, unpublish, update`
 - **payment** (7 subcommands) — Payment processing & Level 3 interchange optimization: `analytics, connect, l3, mcc, products, status, terminal`
-- **payment-links** (6 subcommands) — Pay-by-link — create, text-to-pay, mark paid: `create, delete, get, list, mark-paid, text2pay`
+- **payment-links** (7 subcommands) — Pay-by-link — create, text-to-pay, mark paid, and what this merchant can capture with: `capture-methods, create, delete, get, list, mark-paid, text2pay`
 - **predict** (7 subcommands) — AI predictions — deal close, no-show, payment-late, Devon-discovered targets: `approve, deal-close, discover, no-show, payment-late, reject, targets`
 - **products** (8 subcommands) — Product catalog (CRUD, pricing, components): `catalog, components, create, delete, get, list, pricing, update`
 - **qchain** (4 subcommands) — Q-Chain substrate verification — for external auditors (insurance, SOC 2, compliance): `audit-key, export, pubkey, verify`
@@ -262,14 +263,14 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - **transaction** (6 subcommands) — Open / append / commit / abort CLI transactions for atomic batches: `abort, append, commit, get, rollback, start`
 - **ucp** (3 subcommands) — Universal Commerce Protocol — manifest, capabilities, and consent for buyer-agents: `capabilities, consent, manifest`
 - **users** (23 subcommands) — Team — invite, list, set roles, manage AI permissions: `ai-perms, ai-perms-set, block, create, delete, feature-clear, feature-set, features, features-catalog, get, invitations, invite, invite-accept, invite-defaults, invite-resend, invite-revoke, list, notifications, notifications-set, role, stats, unblock, update`
-- **verbs** (3 subcommands) — Discover + invoke any of the 169 agent-attraction verbs (12 shapes, 4 sibling transports): `describe, invoke, list`
+- **verbs** (3 subcommands) — Discover + invoke any agent-attraction verb (12 shapes, 4 sibling transports): `describe, invoke, list`
 - **vibe** (1 subcommands) — Natural language integration commands: `interactive`
 - **voice** (18 subcommands) — Voice calls, phone numbers, voicemail & personality: `audit, call, calls, cost, diagnose, health, lines, numbers, personality, pricing, release-orphan, spend, stats, text, transcript, translate, voicemail, voices`
 - **webhooks** (7 subcommands) — Custom webhook management: `create, delete, events, list, listen, simulate, test`
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.16.0, manifest schema 1.0, generated 2026-08-26. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.16.0, manifest schema 1.0, generated 2026-09-01. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 
@@ -298,7 +299,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 127 top-level command groups, 737 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 128 top-level command groups, 742 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
 <!-- CLI:Q&A:END -->
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.

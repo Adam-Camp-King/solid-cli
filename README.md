@@ -160,6 +160,23 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid pages list` | List CMS pages |
 | `solid services list` | List services |
 
+### Money & Orders
+| Command | Description |
+|---------|-------------|
+| `solid offer get --cart <id>` | Read the deal — line items, SKUs, tax, fees, disclosure, total |
+| `solid offer get --link <id>` | Same offer, from a payment link (or `--order <id>`) |
+| `solid payment-links create --amount <n>` | Create a payment link |
+| `solid payment-links text2pay` | Text a payment link |
+| `solid payment-links capture-methods` | What this merchant can take money with right now |
+| `solid orders progress <id>` | Where an order is — the state AND the milestones under it |
+| `solid orders milestone <id> <name>` | Report progress (pick ticket, packed, label, handed to carrier) |
+| `solid orders milestones` | What progress can be reported, and what each milestone means |
+
+> The offer is one shape whether it comes from a cart, an order or a link, and
+> its total is **quoted by the pricing engine** — the same call the charge path
+> makes — so what you read is what gets charged. `--json` on any of these for
+> agent consumption.
+
 ### AI Context
 | Command | Description |
 |---------|-------------|
