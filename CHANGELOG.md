@@ -2,6 +2,33 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.17.0] — 2026-09-02
+
+**Deals report their own progress, quizzes actually branch, and the advertised
+numbers are generated rather than typed.**
+
+`solid deals` reads the deal and reports where it stands — offer and order
+milestones, so an agent can answer "what is left on this?" without stitching
+three calls together.
+
+Quiz scoring walks the real branching path instead of a flattened list, so a
+quiz that forks on an answer is scored the way a respondent actually experienced
+it.
+
+The legacy REST seam now closes wherever a verb exists: one vocabulary, one code
+path, and no second way to do the same thing that drifts from the first.
+
+`sync-counts` generates every advertised count instead of trusting a human to
+walk twelve surfaces. It stamps the CLI's own paired phrasing and **refuses**
+what it should not touch — a minimum version like `@2.10+`, a dated changelog
+line, and WebMCP's separate measurement — printing each refusal so a clean run
+can never hide one. `prepublishOnly` runs it in check mode, so a stale surface
+stops a publish instead of shipping a wrong number.
+
+Verb and command discovery is unchanged and still LIVE: the CLI reads
+`/api/v1/agent/verbs` at call time, so a platform-side change reaches you without
+a release.
+
 ## [2.13.1] — 2026-06-15
 
 **`solid whoami` now shows which company + permission level you're bound to.**
