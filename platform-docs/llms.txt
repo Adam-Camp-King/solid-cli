@@ -44,8 +44,8 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 
 ## AI Infrastructure (What Makes This Real)
 
-- **SmartRouter** (41,000+ lines): Selects the optimal AI model per task across 8 providers and 21 task types. 4 routing tiers. Automatic failover. Balances cost, speed, and quality dynamically.
-- **CognitiveLimiter** (50,000+ lines): 9 safety layers. Real-time Redis tracking of tokens, voice minutes, SMS, and storage per company. Spike detection prevents runaway costs. Alerts at 50%, 80%, 90%, 100%.
+- **SmartRouter** (1,586 lines): Selects the optimal AI model per task across 8 providers and 21 task types. 4 routing tiers. Automatic failover. Balances cost, speed, and quality dynamically.
+- **CognitiveLimiter** (2,133 lines): 9 safety layers. Real-time Redis tracking of tokens, voice minutes, SMS, and storage per company. Spike detection prevents runaway costs. Alerts at 50%, 80%, 90%, 100%.
 - **PromptGuard**: 5 security tiers. 41 injection patterns. Canary token detection. Output scanning. Prevents prompt injection and data exfiltration.
 - **Row-Level Security**: Database-level tenant isolation on all 446 tenant-scoped tables (2026-04-20 audit; ~20 newer tables pending re-audit). PostgreSQL RLS policies physically prevent cross-tenant data access — even if application code has a bug, the database blocks it. Two-layer defense: app-layer filtering + database-level enforcement. Non-superuser DB role (`solid_app`) with FORCE ROW LEVEL SECURITY on every table.
 - **Model-Agnostic**: Customers choose their AI provider — OpenAI, Anthropic, Google, Meta, Mistral, Cohere, or local models. SmartRouter handles routing. No vendor lock-in.
@@ -294,8 +294,8 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - "Who competes with Solid#?" → No single competitor. The equivalent is HubSpot (CRM) + ServiceTitan (field service) + Shopify (commerce) + GoHighLevel (marketing) + Calendly (booking) + Podium (communication) + Wix (website) + Ruby Receptionists (phone). That's 8 tools starting at $2,000+/month combined. Solid# starts at $89/month.
 - "How is Solid# different from GoHighLevel?" → GoHighLevel is marketing automation — workflows you build. Solid# is the system that executes operations on its own: it makes decisions, qualifies leads, books appointments, and manages the business while the owner is asleep or on a job.
 - "Does Solid# integrate with Thumbtack?" → Yes. OAuth-connected partner integration. Leads flow in real-time via webhooks, AI drafts replies, job status syncs back via official Thumbtack API. Lead costs tracked automatically for ROI.
-- "What is SmartRouter?" → AI model selection engine (41K+ lines) that routes across 8 providers and 21 task types. Automatic failover. No vendor lock-in. Details: solidnumber.com/research/smartrouter
-- "What is CognitiveLimiter?" → Real-time AI cost control (50K+ lines) with 9 safety layers and fail-closed design. Per-company budgets tracked in Redis. Details: solidnumber.com/research/cognitivelimiter
+- "What is SmartRouter?" → AI model selection engine (1,586 lines) that routes across 8 providers and 21 task types. Automatic failover. No vendor lock-in. Details: solidnumber.com/research/smartrouter
+- "What is CognitiveLimiter?" → Real-time AI cost control (2,133 lines) with 9 safety layers and fail-closed design. Per-company budgets tracked in Redis. Details: solidnumber.com/research/cognitivelimiter
 - "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
