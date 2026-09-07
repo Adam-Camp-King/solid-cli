@@ -284,3 +284,98 @@ describe('site-publish kinds (page / site / domain / survey)', () => {
     expect(r.map((x) => x.kind)).toEqual(['site', 'page', 'page', 'domain', 'survey', 'product']);
   });
 });
+
+describe('agent and voice_line kinds — configure, never create or delete', () => {
+  const agent = RECONCILERS.agent;
+  const line = RECONCILERS.voice_line;
+
+  function recordingClient(calls: Array<{ method: string; url: string; body?: unknown }>): ApplyClient {
+    const rec = (method: string) => ((url: string, body?: unknown) => {
+      calls.push(method === 'delete' ? { method, url } : { method, url, body });
+      return Promise.resolve({});
+    });
+    return {
+      get: (() => Promise.resolve({ data: {} })) as ApplyClient['get'],
+      post: rec('post') as ApplyClient['post'],
+      put: rec('put') as ApplyClient['put'],
+      patch: rec('patch') as ApplyClient['patch'],
+      delete: rec('delete') as ApplyClient['delete'],
+    };
+  }
+
+  it('keys agents by agent_type, lines by phone_number, and lists paused agents too', () => {
+    const r = parseManifest(JSON.stringify([
+      { kind: 'agent', agent_type: 'sales', autonomy_level: 3 },
+      { kind: 'voice_line', phone_number: '+15551234567', routing_mode: 'ai' },
+    ]));
+    expect(r.map((x) => x.identity)).toEqual(['sales', '+15551234567']);
+    expect(agent.list).toContain('include_disabled=true');
+  });
+
+  it('refuses a field the list endpoint cannot read back (no perpetual drift)', () => {
+    expect(() => parseManifest(JSON.stringify([{ kind: 'agent', agent_type: 'sales', name: 'Bob' }])))
+      .toThrow(/manages only/);
+    expect(() => parseManifest(JSON.stringify([{ kind: 'voice_line', phone_number: '+15551234567', status: 'active' }])))
+      .toThrow(/manages only/);
+  });
+
+  it('never plans a create for an agent or a line — reports why instead', () => {
+    const a = planKind(agent, parseManifest(JSON.stringify([{ kind: 'agent', agent_type: 'sales', autonomy_level: 3 }])), []);
+    expect(a[0].action).toBe('unsupported');
+    expect(a[0].reason).toMatch(/registry/);
+    const l = planKind(line, parseManifest(JSON.stringify([{ kind: 'voice_line', phone_number: '+15551234567', routing_mode: 'ai' }])), []);
+    expect(l[0].action).toBe('unsupported');
+    expect(l[0].reason).toMatch(/never provisions/);
+  });
+
+  it('ignores --prune for agents and lines', () => {
+    expect(planKind(agent, [], [{ id: 1, agent_type: 'sales' }], { prune: true })).toEqual([]);
+    expect(planKind(line, [], [{ id: 1, phone_number: '+15551234567' }], { prune: true })).toEqual([]);
+  });
+
+  it('records which declared fields changed on an update', () => {
+    const desired = parseManifest(JSON.stringify([{ kind: 'agent', agent_type: 'sales', autonomy_level: 3, is_enabled: true }]));
+    const [a] = planKind(agent, desired, [{ id: 7, agent_type: 'sales', autonomy_level: 2, is_enabled: true }]);
+    expect(a.action).toBe('update');
+    expect(a.id).toBe(7);
+    expect(a.changed).toEqual(['autonomy_level']);
+  });
+
+  it('routes each changed agent field to the endpoint that owns it, and skips the rest', async () => {
+    const calls: Array<{ method: string; url: string; body?: unknown }> = [];
+    const actions: PlannedAction[] = [{
+      kind: 'agent', identity: 'sales', action: 'update', id: 7,
+      spec: { agent_type: 'sales', autonomy_level: 4, is_enabled: true, llm_model_override: 'claude-sonnet-5' },
+      changed: ['autonomy_level', 'llm_model_override'],
+    }];
+    await executePlan(recordingClient(calls), agent, actions, false);
+    expect(calls).toEqual([
+      { method: 'patch', url: '/api/v1/agents/7/autonomy', body: { autonomy_level: 4 } },
+      { method: 'put', url: '/api/v1/agents/7', body: { llm_model_override: 'claude-sonnet-5' } },
+    ]);
+  });
+
+  it("writes a line's is_active as status, and routing_mode through the line settings route", async () => {
+    const calls: Array<{ method: string; url: string; body?: unknown }> = [];
+    const actions: PlannedAction[] = [{
+      kind: 'voice_line', identity: '+15551234567', action: 'update', id: 12,
+      spec: { phone_number: '+15551234567', is_active: false, routing_mode: 'off', greeting_message: 'Hi' },
+      changed: ['is_active', 'routing_mode', 'greeting_message'],
+    }];
+    await executePlan(recordingClient(calls), line, actions, false);
+    expect(calls).toEqual([
+      { method: 'patch', url: '/api/v1/phone/settings/12', body: { routing_mode: 'off' } },
+      { method: 'patch', url: '/api/v1/voice/phone-numbers/12', body: { greeting_message: 'Hi', status: 'inactive' } },
+    ]);
+  });
+
+  it('a dry run of an agent/line plan writes nothing', async () => {
+    const calls: Array<{ method: string; url: string; body?: unknown }> = [];
+    const actions: PlannedAction[] = [
+      { kind: 'agent', identity: 'sales', action: 'update', id: 7, spec: { autonomy_level: 1 }, changed: ['autonomy_level'] },
+    ];
+    const res = await executePlan(recordingClient(calls), agent, actions, true);
+    expect(calls).toEqual([]);
+    expect(res[0].status).toBe('skipped');
+  });
+});

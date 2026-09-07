@@ -2,6 +2,27 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [Unreleased]
+
+**`solid apply` now reconciles agents and voice lines — configure, never create
+or delete.**
+
+Two new kinds. `agent` (keyed by `agent_type`) manages `autonomy_level`,
+`is_enabled`, `llm_model_override`, `llm_provider_id` and `voice_enabled`;
+`voice_line` (keyed by `phone_number`) manages routing mode, assigned agent,
+greeting, voice config, business hours, voicemail, translation and active
+state. Neither kind can be created by a manifest and `--prune` skips both: an
+agent comes from the registry and a phone number is bought and released only
+by the explicit commands that cost money.
+
+The engine learned three things for this: an update can be split across the
+endpoints that own each field (only a route with a changed field is called),
+a kind can declare the only fields it manages (a write-only field that could
+never compare equal is rejected instead of planning as drift forever), and a
+read-side field can be renamed on write (`is_active` → `status`). The plan
+summary now says `unsupported` rather than `immutable`, since "cannot be
+created" is now one of the reasons.
+
 ## [2.17.0] — 2026-09-02
 
 **Deals report their own progress, quizzes actually branch, and the advertised

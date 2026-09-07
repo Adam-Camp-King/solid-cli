@@ -69,7 +69,7 @@ export const HOWTO_TOPICS: HowToTopic[] = [
     title: 'Get a site live',
     keywords: ['publish', 'website', 'site', 'live', 'deploy', 'launch', 'domain', 'page'],
     body: [
-      'solid apply site.yaml      # reconcile pages/products/site from one manifest',
+      'solid apply site.yaml      # reconcile pages/products/site/agents/lines from one manifest',
       'solid publish --all        # flip drafts live',
       'solid embed chat           # wire live chat into any page',
       'solid domains              # attach a custom domain (SSL handled)',

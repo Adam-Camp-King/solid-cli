@@ -30,6 +30,8 @@ export interface PlannedAction {
   reason?: string;
   id?: string | number;
   spec?: Record<string, unknown>;
+  /** On an update: the declared fields whose value differs from the server. */
+  changed?: string[];
 }
 
 /** Minimal client surface the executor needs — lets tests inject a fake. */
@@ -101,6 +103,16 @@ function normalizeResource(r: unknown, index: number): DesiredResource {
       `${kind} entry #${index + 1} has no identity — set spec.${identityField} (or metadata.name)`,
     );
   }
+  if (recon.managedFields) {
+    const allowed = new Set([...recon.managedFields, identityField]);
+    const stray = Object.keys(spec).filter((k) => !allowed.has(k));
+    if (stray.length) {
+      throw new Error(
+        `${kind} entry #${index + 1} declares ${stray.map((f) => `"${f}"`).join(', ')} — ` +
+        `apply manages only: ${recon.managedFields.join(', ')}`,
+      );
+    }
+  }
   return { kind, identity: String(identityValue), spec };
 }
 
@@ -125,6 +137,11 @@ export function specMatches(desired: Record<string, unknown>, current: Record<st
     if (!deepEqual(v, current[k])) return false;
   }
   return true;
+}
+
+/** Declared fields whose value differs from the current server item. */
+export function changedFields(desired: Record<string, unknown>, current: Record<string, unknown>): string[] {
+  return Object.keys(desired).filter((k) => !deepEqual(desired[k], current[k]));
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -165,7 +182,14 @@ export function planKind(
     seen.add(d.identity);
     const existing = currentByIdentity.get(d.identity);
     if (!existing) {
-      actions.push({ kind: d.kind, identity: d.identity, action: 'create', spec: d.spec });
+      if (recon.create === null) {
+        actions.push({
+          kind: d.kind, identity: d.identity, action: 'unsupported',
+          reason: recon.createReason ?? `${d.kind} cannot be created by apply`,
+        });
+      } else {
+        actions.push({ kind: d.kind, identity: d.identity, action: 'create', spec: d.spec });
+      }
       continue;
     }
     if (specMatches(d.spec, existing)) {
@@ -177,11 +201,15 @@ export function planKind(
         id: existing[recon.idField] as string | number,
       });
     } else {
-      actions.push({ kind: d.kind, identity: d.identity, action: 'update', id: existing[recon.idField] as string | number, spec: d.spec });
+      actions.push({
+        kind: d.kind, identity: d.identity, action: 'update',
+        id: existing[recon.idField] as string | number, spec: d.spec,
+        changed: changedFields(d.spec, existing),
+      });
     }
   }
 
-  if (opts.prune) {
+  if (opts.prune && recon.prunable !== false) {
     for (const [idv, item] of currentByIdentity) {
       if (!seen.has(idv)) {
         actions.push({ kind: recon.kind, identity: idv, action: 'prune', id: item[recon.idField] as string | number });
@@ -267,10 +295,10 @@ export async function executePlan(
     const item = recon.itemPath.replace('{id}', String(a.id));
     try {
       if (a.action === 'create') {
+        if (recon.create === null) throw new Error(`${recon.kind} cannot be created by apply`);
         await client.post(recon.create, a.spec, { idempotencyKey: key });
       } else if (a.action === 'update') {
-        if (recon.updateMethod === 'put') await client.put(item, a.spec, { idempotencyKey: key });
-        else await client.patch(item, a.spec, { idempotencyKey: key });
+        await executeUpdate(client, recon, a, item, key);
       } else if (a.action === 'prune') {
         await client.delete(item, { idempotencyKey: key });
       }
@@ -280,4 +308,49 @@ export async function executePlan(
     }
   }
   return results;
+}
+
+/**
+ * Write one update. A kind with `updateRoutes` splits the CHANGED fields across
+ * routes (an agent's autonomy, pause state and model each live behind a
+ * different endpoint); a route that owns no changed field is never called, so
+ * reconciling one setting cannot touch another. `writeMap` turns a read-side
+ * field into its write-side body (a line's `is_active` is written as `status`).
+ */
+async function executeUpdate(
+  client: ApplyClient,
+  recon: Reconciler,
+  a: PlannedAction,
+  item: string,
+  key: string,
+): Promise<void> {
+  const spec = a.spec ?? {};
+  if (!recon.updateRoutes) {
+    const body = toWriteBody(recon, spec);
+    if (recon.updateMethod === 'put') await client.put(item, body, { idempotencyKey: key });
+    else await client.patch(item, body, { idempotencyKey: key });
+    return;
+  }
+  const changed = new Set(a.changed ?? Object.keys(spec));
+  for (let i = 0; i < recon.updateRoutes.length; i++) {
+    const route = recon.updateRoutes[i];
+    const subset: Record<string, unknown> = {};
+    for (const f of route.fields) if (changed.has(f) && f in spec) subset[f] = spec[f];
+    if (Object.keys(subset).length === 0) continue;
+    const body = toWriteBody(recon, subset);
+    const path = route.path.replace('{id}', String(a.id));
+    const routeKey = `${key}-${i}`;
+    if (route.method === 'put') await client.put(path, body, { idempotencyKey: routeKey });
+    else await client.patch(path, body, { idempotencyKey: routeKey });
+  }
+}
+
+function toWriteBody(recon: Reconciler, spec: Record<string, unknown>): Record<string, unknown> {
+  if (!recon.writeMap) return spec;
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(spec)) {
+    const map = recon.writeMap[k];
+    Object.assign(body, map ? map(v) : { [k]: v });
+  }
+  return body;
 }

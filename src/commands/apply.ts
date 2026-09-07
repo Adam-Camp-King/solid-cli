@@ -33,7 +33,7 @@ const ICON: Record<string, string> = {
   update: chalk.yellow('~ update'),
   noop: chalk.dim('= unchanged'),
   prune: chalk.red('- prune'),
-  unsupported: chalk.magenta('! immutable'),
+  unsupported: chalk.magenta('! unsupported'),
 };
 
 export const applyCommand = new Command('apply')
@@ -143,7 +143,7 @@ export const applyCommand = new Command('apply')
       `\n${chalk.bold(verb)}: ${counts.create} to create, ${counts.update} to update, ` +
       `${counts.noop} unchanged, ${counts.prune} to prune` +
       (counts.failed ? chalk.red(`, ${counts.failed} failed`) : '') +
-      (counts.unsupported ? chalk.magenta(`, ${counts.unsupported} immutable`) : ''),
+      (counts.unsupported ? chalk.magenta(`, ${counts.unsupported} unsupported`) : ''),
     );
     if (dryRun && changes.length > 0) console.log(chalk.dim('Run without --dry-run to apply.'));
     if (counts.failed > 0) process.exit(1);
