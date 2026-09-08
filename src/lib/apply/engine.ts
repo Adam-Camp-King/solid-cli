@@ -221,7 +221,7 @@ export function planKind(
     } else if (recon.updateMethod === null) {
       actions.push({
         kind: d.kind, identity: d.identity, action: 'unsupported',
-        reason: `${d.kind} is immutable — delete and recreate to change`,
+        reason: recon.updateReason ?? `${d.kind} is immutable — delete and recreate to change`,
         id: existing[recon.idField] as string | number,
       });
     } else {
@@ -321,15 +321,30 @@ export async function executePlan(
       continue;
     }
     const key = actionIdempotencyKey(a);
-    const item = recon.itemPath.replace('{id}', String(a.id));
+    // ⛔ A kind with no in-place update route has no item path to build. Only
+    // `create` is reachable for it, so an update or delete arriving here is a
+    // planning bug and must fail loudly rather than throw a TypeError deep in a
+    // request. Surfaced by tightening itemPath to `string | null`: this line
+    // had dereferenced it unguarded since the file was written.
+    const item = recon.itemPath === null
+      ? null
+      : recon.itemPath.replace('{id}', String(a.id));
+    if (item === null && a.action !== 'create') {
+      results.push({
+        ...a,
+        status: 'failed',
+        error: `${recon.kind} has no item route — ${recon.updateReason ?? 'it cannot be changed in place'}`,
+      });
+      continue;
+    }
     try {
       if (a.action === 'create') {
         if (recon.create === null) throw new Error(`${recon.kind} cannot be created by apply`);
         await client.post(recon.create, a.spec, { idempotencyKey: key });
       } else if (a.action === 'update') {
-        await executeUpdate(client, recon, a, item, key);
+        await executeUpdate(client, recon, a, item as string, key);
       } else if (a.action === 'prune') {
-        await client.delete(item, { idempotencyKey: key });
+        await client.delete(item as string, { idempotencyKey: key });
       }
       results.push({ ...a, status: 'done' });
     } catch (e) {
