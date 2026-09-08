@@ -154,6 +154,13 @@ function needsAHuman(text: string, c: Counts): string[] {
   const patterns = [
     /[^\n]{0,50}\b\d{2,4} verbs\b[^\n]{0,30}/g,                    // any other verb count
     /[^\n]{0,40}@solidnumber\/cli@\d+\.\d+(?:\.\d+)?\+?[^\n]{0,40}/g, // prose version mentions
+    // ⛔ A BARE vX.Y.Z BADGE. /docs/cli carried "Current release … v2.17.0" in
+    // its hero through a 2.18.0 release and this file exited 0, because every
+    // pattern above wants the @scope@version form. Anchored on the words
+    // "Current release" on purpose: prose like "v2.14's telephony command
+    // center" is HISTORY and must never be stamped forward — the whole point of
+    // this function is refusing to rewrite a sentence that is already true.
+    /Current release[\s\S]{0,160}?\bv\d+\.\d+\.\d+/g,
   ];
   for (const re of patterns) {
     let m: RegExpExecArray | null;
@@ -161,6 +168,7 @@ function needsAHuman(text: string, c: Counts): string[] {
       const hit = m[0].trim();
       if (/commands, \d{2,4} verbs/.test(hit)) continue;            // stamped above
       if (hit.includes(`@solidnumber/cli@${c.version}`)) continue;  // already current
+      if (hit.includes(`v${c.version}`)) continue;                   // bare badge, already current
       out.push(hit);
     }
   }
@@ -191,6 +199,22 @@ function main() {
       console.error(`✗ ${head} — ${stale.length} surface(s) STALE:`);
       for (const s of stale) console.error(`    ${s}`);
       console.error("  Fix:  npm run sync:counts");
+      process.exit(1);
+    }
+    // ⛔ A "Current release" badge naming a version that is NOT the current
+    // release is not a judgement call a human needs to make — it is simply
+    // false, and it shipped to /docs/cli through an entire release while this
+    // command exited 0. Everything else in `unowned` is genuinely ambiguous (a
+    // minimum version, a different measurement) and stays a report; this one
+    // fails, because there is no reading of it that is true.
+    const wrongCurrentRelease = unowned.filter(
+      (u) => /Current release/.test(u) && !u.includes(`v${c.version}`),
+    );
+    if (wrongCurrentRelease.length) {
+      console.error(`✗ ${head} — a "Current release" badge names a different version:`);
+      for (const w of wrongCurrentRelease) console.error(`    ${w}`);
+      console.error(`  Fix:  set it to v${c.version} by hand — this tool will not rewrite prose.`);
+      reportHumanOwned(unowned);
       process.exit(1);
     }
     console.log(`✓ ${head} — every surface current`);
