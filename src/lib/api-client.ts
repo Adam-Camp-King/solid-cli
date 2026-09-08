@@ -1151,6 +1151,18 @@ class ApiClient {
     return { data: response.data, status: response.status, success: true };
   }
 
+  async companyLockPreset(companyId: number, profile: string): Promise<ApiResponse<{
+    company_id: number;
+    agency_managed: boolean;
+    agency_owner_user_id: number;
+    locks: Record<string, boolean>;
+    areas: Record<string, 'locked' | 'partial' | 'unlocked'>;
+    applied_preset: string;
+  }>> {
+    const response = await this.client.post(`/api/v1/cli/companies/${companyId}/lock-preset`, { profile });
+    return { data: response.data, status: response.status, success: true };
+  }
+
   async companyRequestUnlock(companyId: number, areas: string[], reason: string): Promise<ApiResponse<{
     status: string;
     company_id: number;

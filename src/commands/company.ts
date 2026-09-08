@@ -390,15 +390,32 @@ companyCommand
   });
 
 // ════════════════════════════════════════════════════════════════════
-// T10 — Agency-managed companies + design-lock
+// T10 — Agency-managed companies + verb-scoped locks (SPRINT-AGENT-FIREWALL Phase 0)
 //   solid company create-for-client  — provision + lock all + invite
-//   solid company lock-status        — read current lock map
-//   solid company lock               — lock areas
-//   solid company unlock             — unlock areas (or --all)
+//   solid company lock-status        — read current lock map (grouped by area)
+//   solid company lock               — lock keys (or legacy areas — the server expands them)
+//   solid company unlock             — unlock keys (or --all)
+//   solid company lock-preset        — apply a whole posture: design-lock | content-freeze | read-only
 //   solid company request-unlock     — client asks agency to unlock
 // ════════════════════════════════════════════════════════════════════
 
-const LOCK_AREAS = ['pages', 'brand', 'domains', 'modules', 'design', 'billing_lock'] as const;
+// Lock keys are `area:verb`. `{"design:write": true, "pages:delete": true}` (the
+// `design-lock` preset) still lets the client add a landing page, edit copy and
+// change business hours — that is what "lock my design" means. Single source of
+// truth: solid-backend/services/policy/lock.py::VALID_LOCK_KEYS. A bare legacy
+// area (`pages`) is still accepted and expands to every key under it.
+const LOCK_KEYS = [
+  'design:write',
+  'pages:create', 'pages:update', 'pages:delete',
+  'content:metadata',
+  'brand:logo', 'brand:colors',
+  'domains:add', 'domains:remove',
+  'modules:deploy', 'modules:remove',
+  'billing_lock',
+] as const;
+const LEGACY_LOCK_AREAS = ['pages', 'brand', 'domains', 'modules', 'design', 'billing_lock'] as const;
+const LOCK_PRESETS = ['design-lock', 'content-freeze', 'read-only'] as const;
+const LOCK_AREAS = LOCK_KEYS; // kept for callers that read the list
 
 function parseAreas(raw: string): string[] {
   return raw
@@ -408,19 +425,35 @@ function parseAreas(raw: string): string[] {
 }
 
 function validateAreas(areas: string[]): string | null {
-  const invalid = areas.filter((a) => !(LOCK_AREAS as readonly string[]).includes(a));
+  const known = [...LOCK_KEYS, ...LEGACY_LOCK_AREAS] as readonly string[];
+  const invalid = areas.filter((a) => !known.includes(a));
   if (invalid.length > 0) {
-    return `Unknown lock area(s): ${invalid.join(', ')}. Valid: ${LOCK_AREAS.join(', ')}`;
+    return `Unknown lock key(s): ${invalid.join(', ')}. Valid keys: ${LOCK_KEYS.join(', ')} (legacy areas ${LEGACY_LOCK_AREAS.join(', ')} expand to every key under them)`;
   }
   return null;
 }
 
 function printLocks(locks: Record<string, boolean>): void {
   console.log('');
-  LOCK_AREAS.forEach((area) => {
-    const locked = locks[area] === true;
-    const badge = locked ? chalk.red('🔒 locked  ') : chalk.green('✔ unlocked');
-    console.log(`  ${badge}  ${chalk.dim(area)}`);
+  // Group by area so the map reads as a posture, not a wall of booleans.
+  const keys = Object.keys(locks).length ? Object.keys(locks) : [...LOCK_KEYS];
+  const byArea = new Map<string, string[]>();
+  keys.forEach((key) => {
+    const area = key.includes(':') ? key.split(':')[0] : key;
+    byArea.set(area, [...(byArea.get(area) ?? []), key]);
+  });
+  byArea.forEach((areaKeys, area) => {
+    const lockedCount = areaKeys.filter((k) => locks[k] === true).length;
+    const rollup =
+      lockedCount === areaKeys.length ? chalk.red('locked') :
+      lockedCount > 0 ? chalk.yellow('partial') : chalk.green('unlocked');
+    console.log(`  ${chalk.bold(area.padEnd(13))} ${rollup}`);
+    areaKeys.forEach((key) => {
+      const locked = locks[key] === true;
+      const badge = locked ? chalk.red('🔒 locked  ') : chalk.green('✔ unlocked');
+      const verb = key.includes(':') ? key.split(':')[1] : '';
+      console.log(`      ${badge}  ${chalk.dim(verb ? `${area}:` : '')}${verb || chalk.dim(key)}`);
+    });
   });
 }
 
@@ -433,7 +466,7 @@ companyCommand
   .option('--client-name <name>', 'Client contact name')
   .option('--industry <industry>', 'Industry slug (e.g. "plumber", "hvac")')
   .option('--template <template>', 'KB template name (usually same as industry)')
-  .option('--unlock <areas>', `Comma-separated areas to leave UNLOCKED at creation (valid: ${LOCK_AREAS.join(', ')})`)
+  .option('--unlock <keys>', `Comma-separated lock keys to leave UNLOCKED at creation (valid: ${LOCK_KEYS.join(', ')}; a legacy area like "pages" expands to every key under it)`)
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -490,7 +523,7 @@ companyCommand
 
 companyCommand
   .command('lock-status [company_id]')
-  .description('Show which areas are locked on a company')
+  .description('Show which lock keys are locked on a company, grouped by area')
   .option('--json', 'Output as JSON')
   .action(async (companyIdArg, options) => {
     if (!config.isLoggedIn()) {
@@ -525,8 +558,8 @@ companyCommand
 
 companyCommand
   .command('lock <company_id>')
-  .description('Lock one or more areas — agency owner only')
-  .requiredOption('--area <areas>', `Comma-separated areas to lock (valid: ${LOCK_AREAS.join(', ')})`)
+  .description('Lock one or more keys (area:verb) — agency owner only')
+  .requiredOption('--area <keys>', `Comma-separated lock keys (valid: ${LOCK_KEYS.join(', ')}; a legacy area like "pages" expands to every key under it)`)
   .action(async (companyIdArg, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -554,9 +587,9 @@ companyCommand
 
 companyCommand
   .command('unlock <company_id>')
-  .description('Unlock one or more areas — agency owner only')
-  .option('--area <areas>', 'Comma-separated areas to unlock')
-  .option('--all', 'Unlock every area (full handoff)', false)
+  .description('Unlock one or more keys (area:verb) — agency owner only')
+  .option('--area <keys>', 'Comma-separated lock keys to unlock (a legacy area expands to every key under it)')
+  .option('--all', 'Unlock every key (full handoff)', false)
   .action(async (companyIdArg, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -576,7 +609,7 @@ companyCommand
         process.exit(1);
       }
     }
-    const label = all ? 'ALL areas' : areas.join(', ');
+    const label = all ? 'ALL keys' : areas.join(', ');
     const spinner = ora(`Unlocking ${label} on company #${companyId}...`).start();
     try {
       const res = await apiClient.companyUnlock(companyId, areas, all);
@@ -592,8 +625,8 @@ companyCommand
 
 companyCommand
   .command('request-unlock <company_id>')
-  .description('Ask your agency to unlock one or more areas (client-side)')
-  .requiredOption('--area <areas>', 'Comma-separated areas to request (e.g. "pages")')
+  .description('Ask your agency to unlock one or more keys (client-side)')
+  .requiredOption('--area <keys>', 'Comma-separated lock keys to request (e.g. "pages:update")')
   .requiredOption('--reason <reason>', 'Why you need this unlocked')
   .action(async (companyIdArg, options) => {
     if (!config.isLoggedIn()) {
@@ -612,9 +645,37 @@ companyCommand
       const res = await apiClient.companyRequestUnlock(companyId, areas, options.reason);
       spinner.succeed(chalk.green('Request sent'));
       console.log(chalk.dim(`  Agency owner: user_id=${res.data.agency_owner_user_id}`));
-      console.log(chalk.dim(`  Areas: ${res.data.areas.join(', ')}`));
+      console.log(chalk.dim(`  Keys: ${res.data.areas.join(', ')}`));
     } catch (error) {
       spinner.fail(chalk.red('Request failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+companyCommand
+  .command('lock-preset <company_id>')
+  .description('Apply a lock posture — REPLACES the whole map. Agency owner only')
+  .requiredOption('--profile <name>', `One of: ${LOCK_PRESETS.join(', ')}`)
+  .action(async (companyIdArg, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const companyId = parseInt(companyIdArg, 10);
+    const profile = String(options.profile);
+    if (!(LOCK_PRESETS as readonly string[]).includes(profile)) {
+      console.error(chalk.red(`Unknown preset '${profile}'. Valid: ${LOCK_PRESETS.join(', ')}`));
+      process.exit(1);
+    }
+    const spinner = ora(`Applying '${profile}' on company #${companyId}...`).start();
+    try {
+      const res = await apiClient.companyLockPreset(companyId, profile);
+      spinner.succeed(chalk.green(`Applied: ${profile}`));
+      printLocks(res.data.locks);
+    } catch (error) {
+      spinner.fail(chalk.red('Preset failed'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
       process.exit(1);
@@ -627,4 +688,6 @@ __ae_company(companyCommand, [
   { cmd: 'solid company current',                         why: 'Active company (same as whoami)' },
   { cmd: 'solid company info <id>',                       why: 'Settings, tier, domain' },
   { cmd: 'solid company create-for-client --name "..."',  why: 'Agency: spin up a new tenant' },
+  { cmd: 'solid company lock-preset 47 --profile design-lock', why: 'Lock design + deletes; new pages and copy edits stay open' },
+  { cmd: 'solid company lock 47 --area design:write,pages:delete', why: 'Lock individual keys (area:verb)' },
 ]);
