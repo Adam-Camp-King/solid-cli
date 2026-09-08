@@ -32,6 +32,12 @@ export interface PlannedAction {
   spec?: Record<string, unknown>;
   /** On an update: the declared fields whose value differs from the server. */
   changed?: string[];
+  /**
+   * Pre-image, captured at plan time from the live item: for an update, the
+   * server's current values of the declared fields; for a prune, the whole
+   * item. What `solid apply rollback` restores. Absent on create.
+   */
+  before?: Record<string, unknown>;
 }
 
 /** Minimal client surface the executor needs — lets tests inject a fake. */
@@ -97,14 +103,15 @@ function normalizeResource(r: unknown, index: number): DesiredResource {
   }
 
   const identityField = String(obj.identity || metadata.identity || recon.identity);
-  const identityValue = spec[identityField] ?? metadata.name;
+  // A singleton has exactly one instance per company: its identity is the kind name.
+  const identityValue = recon.singleton ? recon.kind : (spec[identityField] ?? metadata.name);
   if (identityValue === undefined || identityValue === null || identityValue === '') {
     throw new Error(
       `${kind} entry #${index + 1} has no identity — set spec.${identityField} (or metadata.name)`,
     );
   }
   if (recon.managedFields) {
-    const allowed = new Set([...recon.managedFields, identityField]);
+    const allowed = new Set([...recon.managedFields, identityField, ...(recon.singleton ? [] : [])]);
     const stray = Object.keys(spec).filter((k) => !allowed.has(k));
     if (stray.length) {
       throw new Error(
@@ -118,10 +125,17 @@ function normalizeResource(r: unknown, index: number): DesiredResource {
 
 /** Pull the resource array out of a list response, tolerating common shapes. */
 export function extractList(resp: unknown, recon: Reconciler): Array<Record<string, unknown>> {
+  if (recon.singleton) {
+    // `{ brand: {...} }` or `{ brand: null }` → zero or one item, identity = kind.
+    const o = (resp && typeof resp === 'object') ? (resp as Record<string, unknown>) : {};
+    const one = recon.listKey ? o[recon.listKey] : resp;
+    if (!one || typeof one !== 'object' || Array.isArray(one)) return [];
+    return [{ ...(one as Record<string, unknown>), [recon.identity]: recon.kind }];
+  }
   if (Array.isArray(resp)) return resp as Array<Record<string, unknown>>;
   if (!resp || typeof resp !== 'object') return [];
   const o = resp as Record<string, unknown>;
-  const candidates = [recon.listKey, 'items', 'results', 'data', `${recon.kind}s`].filter(Boolean) as string[];
+  const candidates = [recon.listKey, 'items', 'results', 'entries', 'data', `${recon.kind}s`].filter(Boolean) as string[];
   for (const key of candidates) {
     if (Array.isArray(o[key])) return o[key] as Array<Record<string, unknown>>;
   }
@@ -143,6 +157,15 @@ export function specMatches(desired: Record<string, unknown>, current: Record<st
 export function changedFields(desired: Record<string, unknown>, current: Record<string, unknown>): string[] {
   return Object.keys(desired).filter((k) => !deepEqual(desired[k], current[k]));
 }
+
+/** The server's current values of exactly the declared fields (an update's pre-image). */
+export function preImage(desired: Record<string, unknown>, current: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(desired)) out[k] = current[k] === undefined ? null : current[k];
+  return out;
+}
+
+export function valuesEqual(a: unknown, b: unknown): boolean { return deepEqual(a, b); }
 
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -193,7 +216,8 @@ export function planKind(
       continue;
     }
     if (specMatches(d.spec, existing)) {
-      actions.push({ kind: d.kind, identity: d.identity, action: 'noop', id: existing[recon.idField] as string | number });
+      // Carry the spec: an unchanged resource still becomes a lock baseline.
+      actions.push({ kind: d.kind, identity: d.identity, action: 'noop', id: existing[recon.idField] as string | number, spec: d.spec });
     } else if (recon.updateMethod === null) {
       actions.push({
         kind: d.kind, identity: d.identity, action: 'unsupported',
@@ -205,14 +229,19 @@ export function planKind(
         kind: d.kind, identity: d.identity, action: 'update',
         id: existing[recon.idField] as string | number, spec: d.spec,
         changed: changedFields(d.spec, existing),
+        before: preImage(d.spec, existing),
       });
     }
   }
 
-  if (opts.prune && recon.prunable !== false) {
+  if (opts.prune && recon.prunable !== false && !recon.singleton) {
     for (const [idv, item] of currentByIdentity) {
       if (!seen.has(idv)) {
-        actions.push({ kind: recon.kind, identity: idv, action: 'prune', id: item[recon.idField] as string | number });
+        actions.push({
+          kind: recon.kind, identity: idv, action: 'prune',
+          id: item[recon.idField] as string | number,
+          before: { ...item },
+        });
       }
     }
   }

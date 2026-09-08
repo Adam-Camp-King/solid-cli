@@ -4,8 +4,24 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
-**`solid apply` now reconciles agents and voice lines — configure, never create
-or delete.**
+**`solid apply` grows a memory: a lockfile, three-way drift, recorded pre-images
+with rollback, and export — plus five more kinds.**
+
+Every apply that writes now records `<manifest>.lock.json` beside the manifest:
+server ids, the managed fields as applied, and a pre-image for every write.
+Commit it with the manifest. `solid apply drift <file>` compares manifest, lock
+and production and names what moved where — `live_changed` is the one that
+matters (someone edited production outside git) and exits 1 for CI.
+`solid apply <file> --strict` refuses to write over it. `solid apply rollback
+<file>` inverts a recorded run most-recent-first and verifies the result
+(ordered, not atomic — it says so). `solid apply export` writes the live tenant
+as a manifest. `solid apply history` lists the runs.
+
+New kinds: `kb` (by title), `service` (by title), `brand` (a singleton: one per
+company, never pruned), and the two configure-only kinds below.
+
+**`solid apply` reconciles agents and voice lines — configure, never create or
+delete.**
 
 Two new kinds. `agent` (keyed by `agent_type`) manages `autonomy_level`,
 `is_enabled`, `llm_model_override`, `llm_provider_id` and `voice_enabled`;

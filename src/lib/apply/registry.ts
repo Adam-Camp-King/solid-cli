@@ -58,7 +58,25 @@ export interface Reconciler {
   managedFields?: string[];
   /** Read-side field → write-side body, for fields the API names differently on write. */
   writeMap?: Record<string, (value: unknown) => Record<string, unknown>>;
+  /**
+   * One-per-company resource (brand). `list` returns the single object (under
+   * `listKey`) or null; identity is the constant `kind` name; `itemPath` has no
+   * `{id}`; `--prune` never applies.
+   */
+  singleton?: boolean;
+  /**
+   * Fields `solid apply export` writes for this kind. Defaults to
+   * `managedFields`, else every server field minus the read-only set
+   * (id, company_id, timestamps, stats).
+   */
+  exportFields?: string[];
 }
+
+/** Server-side fields that never belong in a manifest. */
+export const READ_ONLY_FIELDS = new Set([
+  'id', 'company_id', 'tenant_company_id', 'created_at', 'updated_at', 'deleted_at',
+  'last_active_at', 'stats', 'slug_history', 'version', 'current_version',
+]);
 
 export const RECONCILERS: Record<string, Reconciler> = {
   product: {
@@ -139,6 +157,45 @@ export const RECONCILERS: Record<string, Reconciler> = {
     updateMethod: 'put',
     idField: 'id',
     listKey: 'surveys',
+  },
+  kb: {
+    kind: 'kb',
+    identity: 'title',
+    list: '/api/v1/kb/company?limit=500',
+    create: '/api/v1/kb/company',
+    itemPath: '/api/v1/kb/company/{id}',
+    updateMethod: 'put',
+    idField: 'id',
+    listKey: 'results',
+    exportFields: ['title', 'category', 'subcategory', 'content', 'tags', 'keywords', 'priority'],
+  },
+  service: {
+    kind: 'service',
+    identity: 'title',
+    list: '/api/v1/services/catalog?limit=200',
+    create: '/api/v1/services/catalog',
+    itemPath: '/api/v1/services/catalog/{id}',
+    updateMethod: 'put',
+    idField: 'id',
+    listKey: 'items',
+    exportFields: [
+      'title', 'description', 'category', 'subcategory', 'price', 'currency', 'taxable',
+      'default_duration_min', 'buffer_before_min', 'buffer_after_min', 'capacity_per_slot',
+      'requires_on_site', 'service_area_miles', 'visible_online', 'active', 'tags_csv',
+    ],
+  },
+  brand: {
+    kind: 'brand',
+    identity: 'brand',
+    list: '/api/v1/cli/brand',
+    create: '/api/v1/cli/brand',
+    itemPath: '/api/v1/cli/brand',
+    updateMethod: 'put',
+    idField: 'id',
+    listKey: 'brand',
+    singleton: true,
+    prunable: false,
+    managedFields: ['name', 'design', 'voice', 'rules'],
   },
   agent: {
     kind: 'agent',
