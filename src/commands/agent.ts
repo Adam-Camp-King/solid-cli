@@ -970,6 +970,208 @@ agentCommand
   });
 
 
+
+// ── SPRINT-AGENT-FIREWALL — identity, quarantine, reputation ─────────
+//
+//   solid agent identity list|create|revoke|use|clear
+//   solid agent quarantine <id> [--reason]
+//   solid agent release <id>
+//   solid agent reputation <id>
+//   solid agent risk [--days 7]
+
+function printIdentity(i: Record<string, unknown>): void {
+  const status = String(i.status);
+  const badge = status === 'active' ? chalk.green('active') : status === 'quarantined' ? chalk.red('quarantined') : chalk.dim('revoked');
+  console.log(`  #${String(i.id).padEnd(5)} ${badge.padEnd(20)} ${chalk.bold(String(i.agent_type)).padEnd(24)} tier=${String(i.trust_tier).padEnd(9)} rep=${Number(i.reputation ?? 1).toFixed(2)}  ${chalk.dim(String(i.key_prefix))}…  ${chalk.dim(String(i.label ?? ''))}`);
+}
+
+const identityCommand = new Command('identity')
+  .description('Agent identities — a revocable key that says WHICH agent acted (sent as X-Agent-Id)');
+
+identityCommand
+  .command('list').alias('ls')
+  .description('List agent identities on the current company')
+  .option('--all', 'Include revoked identities', false)
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireLogin();
+    try {
+      const res = await apiClient.agentIdentityList(Boolean(options.all));
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      console.log('');
+      if (!res.data.identities.length) {
+        console.log(chalk.dim('  No agent identities. Create one: solid agent identity create --type custom-bot --tier custom'));
+        return;
+      }
+      res.data.identities.forEach(printIdentity);
+      const active = config.agentKey;
+      console.log(active ? chalk.dim(`\n  This CLI is sending X-Agent-Id (${active.slice(0, 12)}…)`) : chalk.dim('\n  This CLI is not sending an agent identity. `solid agent identity use <key>` to attach one.'));
+    } catch (error) {
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+identityCommand
+  .command('create')
+  .description('Create an agent identity — the key is shown ONCE')
+  .requiredOption('--type <agent_type>', 'sarah | marcus | ada | cli | mcp | custom-<slug>')
+  .option('--tier <trust_tier>', 'platform | agency | custom (rate-limit tier)', 'custom')
+  .option('--label <label>', 'Human label')
+  .option('--use', 'Attach the new key to this CLI immediately', false)
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireLogin();
+    const spinner = ora(`Creating identity ${options.type} (${options.tier})...`).start();
+    try {
+      const res = await apiClient.agentIdentityCreate({ agent_type: options.type, trust_tier: options.tier, label: options.label });
+      spinner.succeed(chalk.green(`Created #${res.data.id}`));
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      console.log('');
+      console.log(`  ${chalk.bold('Agent key (shown once):')} ${chalk.cyan(res.data.agent_key)}`);
+      console.log(chalk.dim('  Attach it:  solid agent identity use <key>     or   export SOLID_AGENT_KEY=<key>'));
+      if (options.use) {
+        config.agentKey = res.data.agent_key;
+        console.log(chalk.green('  ✔ attached to this CLI'));
+      }
+    } catch (error) {
+      spinner.fail(chalk.red('Create failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+identityCommand
+  .command('revoke <id>')
+  .description('Revoke an agent identity — its key stops resolving immediately (403 on every call)')
+  .action(async (idArg) => {
+    requireLogin();
+    const spinner = ora(`Revoking #${idArg}...`).start();
+    try {
+      const res = await apiClient.agentIdentityRevoke(parseInt(idArg, 10));
+      spinner.succeed(chalk.green(`Revoked #${idArg}`));
+      printIdentity(res.data);
+    } catch (error) {
+      spinner.fail(chalk.red('Revoke failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+identityCommand
+  .command('use <key>')
+  .description('Attach an agent key to this CLI (sent as X-Agent-Id on every request)')
+  .action((key) => {
+    if (!String(key).startsWith('sak_')) {
+      console.error(chalk.red('That is not an agent key (expected sak_…). Create one: solid agent identity create'));
+      process.exit(1);
+    }
+    config.agentKey = String(key);
+    console.log(chalk.green(`✔ This CLI now identifies as ${String(key).slice(0, 12)}…`));
+  });
+
+identityCommand
+  .command('clear')
+  .description('Stop sending an agent identity from this CLI')
+  .action(() => {
+    config.agentKey = undefined;
+    console.log(chalk.green('✔ Agent identity detached'));
+  });
+
+agentCommand.addCommand(identityCommand);
+
+agentCommand
+  .command('quarantine <id>')
+  .description('Quarantine an agent identity — every write is denied until released')
+  .option('--reason <reason>', 'Why', 'manual')
+  .action(async (idArg, options) => {
+    requireLogin();
+    const spinner = ora(`Quarantining #${idArg}...`).start();
+    try {
+      const res = await apiClient.agentIdentityQuarantine(parseInt(idArg, 10), String(options.reason));
+      spinner.succeed(chalk.red(`Quarantined #${idArg}`));
+      printIdentity(res.data);
+    } catch (error) {
+      spinner.fail(chalk.red('Quarantine failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+agentCommand
+  .command('release <id>')
+  .description('Release a quarantined agent identity')
+  .action(async (idArg) => {
+    requireLogin();
+    const spinner = ora(`Releasing #${idArg}...`).start();
+    try {
+      const res = await apiClient.agentIdentityRelease(parseInt(idArg, 10));
+      spinner.succeed(chalk.green(`Released #${idArg}`));
+      printIdentity(res.data);
+    } catch (error) {
+      spinner.fail(chalk.red('Release failed'));
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+agentCommand
+  .command('reputation <id>')
+  .description('Reputation score, effective rate limit and recent deductions for an agent identity')
+  .option('--json', 'Output as JSON')
+  .action(async (idArg, options) => {
+    requireLogin();
+    try {
+      const res = await apiClient.agentIdentityReputation(parseInt(idArg, 10));
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      const d = res.data;
+      console.log('');
+      printIdentity(d.identity);
+      console.log(`  ${chalk.bold('Reputation:')}      ${d.reputation.toFixed(3)}`);
+      console.log(`  ${chalk.bold('Rate limit:')}      ${d.effective_limit_per_min}/min effective (tier ${d.trust_tier} base ${d.base_limit_per_min}/min)`);
+      if (!d.deductions.length) { console.log(chalk.dim('  No deductions in the window.')); return; }
+      console.log(chalk.bold('\n  Recent deductions:'));
+      d.deductions.forEach((x) => {
+        console.log(`    ${chalk.dim(String(x.at ?? '').slice(0, 19))}  -${Number(x.amount ?? 0).toFixed(3)}  ${x.reason.padEnd(20)} ${chalk.dim(`${Number(x.before ?? 0).toFixed(2)} → ${Number(x.after ?? 0).toFixed(2)}`)}`);
+      });
+    } catch (error) {
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
+agentCommand
+  .command('risk')
+  .description('Trust Surface: agents with elevated risk this week, and who is quarantined')
+  .option('--days <n>', 'Window in days', '7')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    requireLogin();
+    try {
+      const res = await apiClient.agentRisk(parseInt(String(options.days), 10) || 7);
+      if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
+      console.log('');
+      if (!res.data.elevated.length && !res.data.quarantined.length) {
+        console.log(chalk.green(`  No elevated-risk agents in the last ${res.data.window_days} days.`));
+        return;
+      }
+      res.data.elevated.forEach((a) => {
+        console.log(`  ${chalk.bold(String(a.agent_key)).padEnd(16)} max risk ${chalk.yellow(Number(a.max_risk).toFixed(2))}  flagged=${a.flagged_actions} blocked=${a.blocked} approvals=${a.approvals_required}  ${chalk.dim((a.reasons as string[]).join(', '))}`);
+      });
+      res.data.quarantined.forEach((i) => printIdentity(i));
+    } catch (error) {
+      const apiError = handleApiError(error);
+      console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
+    }
+  });
+
 import { appendExamples as __appendExamplesAgent } from '../lib/command-kit';
 __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent dashboard', why: 'All agents + telemetry' },
@@ -982,6 +1184,10 @@ __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent grant <id> --scope kb:read', why: 'Grant scopes after install' },
   { cmd: 'solid agent call <id> "summarize pricing"', why: 'Invoke an installed agent' },
   { cmd: 'solid agent dispatch kb_entry_create --args \'{"title":"FAQ","content":"...","category_id":1}\' --confirm', why: 'Run any ADA verb directly' },
+  { cmd: 'solid agent identity create --type custom-bot --tier custom --use', why: 'Issue a revocable agent key and attach it (X-Agent-Id)' },
+  { cmd: 'solid agent reputation 5', why: 'Score, effective rate limit, deductions' },
+  { cmd: 'solid agent quarantine 5 --reason "bulk delete"', why: 'Hard-block an agent until released' },
+  { cmd: 'solid agent risk', why: 'Agents with elevated risk this week' },
 ]);
 
 

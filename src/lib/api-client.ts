@@ -363,6 +363,11 @@ class ApiClient {
       //   X-Solid-Human-Initiator the email of the human who ran `solid ai`
       //
       // Set by `solid ai` via env vars so subprocesses inherit them.
+      // SPRINT-AGENT-FIREWALL Phase 1 — attestation: which agent identity is
+      // acting (revocable key from `solid agent identity create`). The user
+      // token still authorises; this only says WHO. A revoked key is a 403.
+      const agentKey = config.agentKey;
+      if (agentKey) requestConfig.headers['X-Agent-Id'] = agentKey;
       if (process.env.SOLID_AGENT) requestConfig.headers['X-Solid-Agent'] = process.env.SOLID_AGENT;
       if (process.env.SOLID_AGENT_MODE) requestConfig.headers['X-Solid-Agent-Mode'] = process.env.SOLID_AGENT_MODE;
       if (process.env.SOLID_HUMAN_INITIATOR) requestConfig.headers['X-Solid-Human-Initiator'] = process.env.SOLID_HUMAN_INITIATOR;
@@ -1148,6 +1153,50 @@ class ApiClient {
     const body: Record<string, unknown> = { all };
     if (!all) body.areas = areas;
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/unlock`, body);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  // ── SPRINT-AGENT-FIREWALL — agent identities, quarantine, reputation ──
+  async agentIdentityList(includeRevoked = false): Promise<ApiResponse<{
+    company_id: number; count: number; identities: Array<Record<string, unknown>>;
+  }>> {
+    const response = await this.client.get('/api/v1/agent/identities', { params: includeRevoked ? { include_revoked: true } : {} });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentIdentityCreate(body: { agent_type: string; trust_tier?: string; label?: string }): Promise<ApiResponse<Record<string, unknown> & { id: number; agent_key: string }>> {
+    const response = await this.client.post('/api/v1/agent/identities', body);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentIdentityRevoke(id: number): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.delete(`/api/v1/agent/identities/${id}`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentIdentityQuarantine(id: number, reason: string): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.post(`/api/v1/agent/identities/${id}/quarantine`, { reason });
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentIdentityRelease(id: number): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await this.client.post(`/api/v1/agent/identities/${id}/release`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentIdentityReputation(id: number): Promise<ApiResponse<{
+    reputation: number; trust_tier: string; base_limit_per_min: number; effective_limit_per_min: number;
+    deductions: Array<{ at: string | null; reason: string; amount: number | null; before: number | null; after: number | null }>;
+    identity: Record<string, unknown>;
+  }>> {
+    const response = await this.client.get(`/api/v1/agent/identities/${id}/reputation`);
+    return { data: response.data, status: response.status, success: true };
+  }
+
+  async agentRisk(days = 7): Promise<ApiResponse<{
+    window_days: number; elevated: Array<Record<string, unknown>>; quarantined: Array<Record<string, unknown>>;
+  }>> {
+    const response = await this.client.get('/api/v1/agent/identities/risk', { params: { days } });
     return { data: response.data, status: response.status, success: true };
   }
 

@@ -19,6 +19,7 @@ interface SolidConfig {
   environment: 'production' | 'sandbox' | 'development';
   access_token?: string;
   refresh_token?: string;
+  agent_key?: string;
   token_expires_at?: string;
   user_id?: number;
   user_email?: string;
@@ -116,6 +117,22 @@ class ConfigManager {
 
   get refreshToken(): string | undefined {
     return this.data.refresh_token;
+  }
+
+  // SPRINT-AGENT-FIREWALL Phase 1 — the agent's own revocable key. Sent as
+  // X-Agent-Id on every request so the backend records WHICH agent acted.
+  // `SOLID_AGENT_KEY` in the environment wins over the stored value.
+  get agentKey(): string | undefined {
+    return process.env.SOLID_AGENT_KEY || this.data.agent_key;
+  }
+
+  set agentKey(key: string | undefined) {
+    if (key) {
+      this.data.agent_key = key;
+    } else {
+      delete this.data.agent_key;
+    }
+    this.save();
   }
 
   set refreshToken(token: string | undefined) {
