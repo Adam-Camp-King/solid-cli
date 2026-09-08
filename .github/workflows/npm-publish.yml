@@ -1,0 +1,102 @@
+name: Publish to npm
+
+# ⛔ WHY THIS EXISTS: `npm publish` FROM A LAPTOP CANNOT COMPLETE HERE.
+#
+# The account's second factor is WebAuthn (biometric). npm 10's publish accepts
+# only `--otp=<code>` — it has no WebAuthn path — so a local publish fails with
+# EOTP no matter what flag you pass, and there is no code to type because there
+# is no authenticator app. The npm CLI even prints the way out on login:
+# "npm tokens that bypass 2FA are being restricted for direct publishing".
+#
+# Trusted Publishing is that way out. GitHub mints a short-lived OIDC token,
+# npm verifies it came from THIS repo and THIS workflow, and publishes. No
+# secret is stored anywhere, nothing to rotate, no biometric prompt, and the
+# provenance attestation is generated as a side effect.
+#
+# ── ONE-TIME SETUP, on npmjs.com (cannot be done from here) ────────────────
+#   npmjs.com → @solidnumber/cli → Settings → Trusted Publisher → GitHub Actions
+#     Organization or user : Adam-Camp-King
+#     Repository           : solid-cli
+#     Workflow filename    : npm-publish.yml
+#     Environment          : (leave blank)
+#   Then 2FA can stay on "auth and writes" — trusted publishing is exempt.
+#
+# ── RELEASING ──────────────────────────────────────────────────────────────
+#   Bump package.json, run `npm run sync:counts`, commit, then either
+#   push a v* tag or run this workflow from the Actions tab. The job REFUSES
+#   to publish a version that is already on npm, so a re-run is safe.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Pack and verify without publishing"
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # ⛔ Both are required. id-token mints the OIDC credential npm verifies;
+      # contents:read is the checkout. Nothing else — this job needs no write
+      # access to the repository at all.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      # ⛔ Trusted publishing needs npm >= 11.5.1. Node 22 ships npm 10, which
+      # would fail back to asking for an OTP — the exact wall this works around.
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install -g npm@latest
+          echo "npm $(npm -v)"
+
+      - run: npm ci
+
+      # The same gate that guards a local publish: every advertised count must
+      # already be true. prepublishOnly runs it too; running it here fails the
+      # job early with a readable message instead of mid-publish.
+      - name: Counts must be current
+        run: npm run check:counts
+
+      - run: npm test
+
+      - run: npm run build
+
+      - name: Refuse to republish an existing version
+        id: guard
+        run: |
+          LOCAL=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          echo "local=$LOCAL"
+          if npm view "$NAME@$LOCAL" version >/dev/null 2>&1; then
+            echo "::error::$NAME@$LOCAL is already published — bump package.json first"
+            exit 1
+          fi
+          echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        if: ${{ inputs.dry_run != true }}
+        run: npm publish --provenance --access public
+
+      - name: Dry run
+        if: ${{ inputs.dry_run == true }}
+        run: npm publish --dry-run --access public
+
+      - name: Confirm it is live
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          sleep 10
+          PUBLISHED=$(npm view @solidnumber/cli version)
+          echo "npm now reports $PUBLISHED"
+          test "$PUBLISHED" = "${{ steps.guard.outputs.version }}"
