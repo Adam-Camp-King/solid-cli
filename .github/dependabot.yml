@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependency updates. Added 2026-09-08 after solid-staging was compromised.
+#
+# The root cause of that incident was NOT a clever attacker. It was that
+# nothing told anyone a public app had drifted months behind on security
+# patches — it pinned next 15.3.3 while every sibling ran 15.5.x, a scanning
+# worm found it, and it got shell execution through the server-actions
+# endpoint. Patching by hand only happens after something goes wrong.
+#
+# Security patches arrive on their own (Dependabot security updates are enabled
+# on this repo). This file handles the other half: routine version drift, so
+# the gap never opens far enough to matter.
+#
+# Grouped on purpose — ungrouped updates produce a PR per package, which is how
+# dependency PRs get ignored, which is how you end up back here.
+# ─────────────────────────────────────────────────────────────────────────────
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 5
+    groups:
+      patch-and-minor:
+        update-types: ["patch", "minor"]
+    labels: ["dependencies", "security"]
+    commit-message:
+      prefix: "deps"
+
+  # Actions go stale too, and a compromised action runs with repo credentials.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "ci"

@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Weekly dependency audit. Added 2026-09-08.
+#
+# WHY: solid-staging was compromised because it sat months behind on security
+# patches and nothing said so. Dependabot opens PRs; this asks the blunter
+# question — "is there a CRITICAL in here right now?" — and fails if so.
+#
+# Threshold is CRITICAL on purpose. High and moderate are reported but do not
+# fail: a job that cries wolf weekly is a job people mute, and a muted job is
+# how you end up back at the incident this was written for.
+# ─────────────────────────────────────────────────────────────────────────────
+name: security-audit
+on:
+  schedule:
+    - cron: "0 14 * * 1"   # Mondays 14:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths: ["package.json", "package-lock.json"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: npm audit
+        run: |
+          set -o pipefail
+          npm audit --json > audit.json || true
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("audit.json"))
+          m = (d.get("metadata") or {}).get("vulnerabilities") or {}
+          crit, high, mod = m.get("critical",0), m.get("high",0), m.get("moderate",0)
+          print(f"critical={crit} high={high} moderate={mod}")
+          for name, v in (d.get("vulnerabilities") or {}).items():
+              if v.get("severity") in ("critical","high"):
+                  t = next((x.get("title") for x in (v.get("via") or []) if isinstance(x, dict)), "")
+                  print(f"  [{v['severity']}] {name}: {str(t)[:100]}")
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"## Dependency audit\n\n- critical: **{crit}**\n- high: {high}\n- moderate: {mod}\n")
+          if crit:
+              print(f"\nFAIL: {crit} critical advisory/advisories. Patch before shipping.")
+              sys.exit(1)
+          PY
