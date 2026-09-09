@@ -43,7 +43,7 @@ jobs:
 
       - name: Checkout solid-cli (for package.json)
         if: steps.token.outputs.have == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Read version
         if: steps.token.outputs.have == 'true'
@@ -85,7 +85,7 @@ jobs:
 
       - name: Checkout homebrew-tap
         if: steps.token.outputs.have == 'true' && steps.sha.outputs.ready == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: Solidnumber/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
