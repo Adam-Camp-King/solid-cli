@@ -108,6 +108,17 @@ callCommand
         const tone = route ? chalk.bold : chalk.yellow;
         console.log(`  ${chalk.dim(step.node)} · pressed ${chalk.cyan(step.input)} → ${tone(dest)}`);
       }
+
+      // Routes that reach nothing. NOT an error and NOT a non-zero exit — a
+      // department named before it is wired up is ordinary work in progress, and
+      // failing CI on it would make the builder unusable. But the path above
+      // prints "→ department (Sales)" as though it works, and on a real call
+      // that caller is offered a message instead. Say so.
+      const unreachable = result.unreachable_routes || [];
+      if (unreachable.length > 0) console.log('');
+      for (const u of unreachable) {
+        console.log(chalk.yellow(`  ⚠ ${u.node} · ${u.key} — ${u.reason}`));
+      }
     } catch (error) {
       spinner.fail(chalk.red(`Simulate failed: ${(error as Error).message || error}`));
       process.exit(1);
