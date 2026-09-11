@@ -205,6 +205,11 @@ async function _invokeAgentVerb(verbName: string, payload: Record<string, unknow
 }
 
 
+// Shared with the other shortcut groups (commands/books.ts) — one dispatcher,
+// one verb invoker, never a copy that drifts.
+export { _dispatch as dispatchVerbShortcut, _invokeAgentVerb as invokeAgentVerbShortcut };
+
+
 // solid customer-context <customer_id> — customer.full_context
 export const customerContextCommand = new Command('customer-context')
   .description('Aggregate customer view: orders + interactions + lifecycle + payment methods')

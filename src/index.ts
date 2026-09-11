@@ -111,6 +111,7 @@ import { seoCommand } from './commands/seo';
 import { insightsCommand } from './commands/insights';
 import { llmsCommand } from './commands/llms';
 import { accountingCommand } from './commands/accounting';
+import { booksCommand, invoicesCommand, expensesCommand } from './commands/books';
 import { webhooksCommand } from './commands/webhooks';
 import { applyCommand } from './commands/apply';
 import { supportCommand } from './commands/support';
@@ -558,6 +559,10 @@ program.addCommand(seoCommand);
 program.addCommand(insightsCommand);
 
 // Integrations & Operations
+// The books — AR/AP from Solid#'s own records (commands/books.ts); `accounting` is the optional mirror.
+program.addCommand(booksCommand);
+program.addCommand(invoicesCommand);
+program.addCommand(expensesCommand);
 program.addCommand(accountingCommand);
 program.addCommand(webhooksCommand);
 program.addCommand(applyCommand);
