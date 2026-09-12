@@ -243,14 +243,19 @@ export function loginSuccessScreen(args: {
   lines.push(box(workspace.join('\n'), { title: 'Active workspace', padding: 1 }));
   lines.push('');
 
-  // 4. "Try these next" — the first three commands are the highest-signal
-  // ones for a new session (status + revenue + the AI-agent hook).
+  // 4. "Try these next" — the highest-signal commands for a new session
+  // (the AI-agent hook, workspace switching, the at-a-glance view), then
+  // `update` and the catch-all.
+  //
+  // This list is hand-written: nothing adds a command to it automatically,
+  // so a new command stays invisible here until someone types it in.
   lines.push(`  ${chalk.bold('Try these next')}`);
   lines.push('');
   lines.push(commandHelp([
     { cmd: 'solid ai', desc: 'launch Claude / Cursor with this company loaded' },
     { cmd: 'solid switch', desc: 'change to a different company (picker)' },
     { cmd: 'solid status', desc: 'your business, at a glance' },
+    { cmd: 'solid update', desc: 'get the latest CLI (npm, Homebrew or scoop)' },
     { cmd: 'solid --help', desc: 'all commands' },
   ]));
   lines.push('');

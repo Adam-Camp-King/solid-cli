@@ -180,7 +180,15 @@ void (async () => {
     const { default: updateNotifier } =
       await importESM<typeof import('update-notifier')>('update-notifier');
     updateNotifier({ pkg, updateCheckInterval: 1000 * 60 * 60 * 4 }).notify({
-      message: `Update available: {currentVersion} → {latestVersion}\nRun {updateCommand} to update`,
+      // NOT {updateCommand}. That token is update-notifier's own, and it
+      // resolves to a hardcoded `npm i -g @solidnumber/cli` (see
+      // update-notifier.js:139) — it has no idea Homebrew or scoop exist.
+      // For anyone who installed from solidnumber/tap that instruction is
+      // wrong in the worst way: it installs a SECOND copy under npm instead
+      // of upgrading the one they have, leaving two `solid` binaries on PATH
+      // at different versions. `solid update` detects the install method and
+      // upgrades in place, which is the whole reason it exists.
+      message: `Update available: {currentVersion} → {latestVersion}\nRun ${chalk.cyan('solid update')} to update`,
     });
   } catch {
     // Update check is non-essential — never let it break the CLI.
