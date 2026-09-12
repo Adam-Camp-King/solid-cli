@@ -88,6 +88,10 @@ const SURFACES = [
   "solid-public/src/app/ai-index/page.tsx",
   "solid-public/src/components/SolidNumberHead.tsx",
   "solid-public/src/components/footer.tsx",
+  "solid-public/public/solidnumber-ai.txt",
+  "solid-public/src/app/cli/page.tsx",
+  "solid-public/src/app/cli/llms.txt/route.ts",
+  "solid-public/src/app/robots.txt/marketing-robots.ts",
   "solid-cli/README.md",
   "CLAUDE.md",
 ];
@@ -143,7 +147,42 @@ function rewrite(text: string, c: Counts): string {
     // 2. STRUCTURED version fields only — a JSON/TS key whose whole job is to
     //    name the current version.
     .replace(/("(?:latest|softwareVersion|cli:version)"\s*:\s*")\d+\.\d+\.\d+(?=")/g, `$1${c.version}`)
-    .replace(/((?:^|\s)version:\s*')\d+\.\d+\.\d+(?=')/gm, `$1${c.version}`);
+    .replace(/((?:^|\s)version:\s*')\d+\.\d+\.\d+(?=')/gm, `$1${c.version}`)
+    // 3. MACHINE-READABLE claims about the published version — the ones agents
+    //    and crawlers actually read: .well-known JSON, ai.txt, llms.txt,
+    //    humans.txt, robots.txt, JSON-LD softwareVersion. Every shape here is a
+    //    KEY or a SCOPED-PACKAGE reference whose entire job is to name the
+    //    current release, so none of them can be a claim about a past one.
+    //
+    //    ⛔ Added 2026-09-12 after a sweep found ~20 of these stale across the
+    //    public surfaces — 2.11.20, 2.14.0, 2.16.0 and 2.18.0 all being served
+    //    at once while npm had 2.20.0, some of them for four releases. Every
+    //    file was ALREADY in SURFACES; the patterns simply did not recognise
+    //    the shapes, and the tool then reported "every surface current", which
+    //    means "current in every shape I know" and reads as something stronger.
+    //
+    //    ⛔ `@solidnumber/cli@2.10+` is a MINIMUM version, not a current one —
+    //    the trailing `+` is excluded, because stamping it would claim a
+    //    feature needs 2.20 when it has worked since 2.10.
+    //    ⛔ Deliberately NOT a bare `"version":` key: in agent.json and the
+    //    plugin manifests that key belongs to whatever object encloses it, and
+    //    only some of those are the CLI. Those stay reported, not rewritten.
+    .replace(/(@solidnumber\/cli@)\d+\.\d+\.\d+(?!\+)/g, `$1${c.version}`)
+    .replace(/(@solidnumber\/cli )\d+\.\d+\.\d+/g, `$1${c.version}`)
+    .replace(/((?:CLI-Version|Current version):\s*)\d+\.\d+\.\d+/g, `$1${c.version}`)
+    .replace(/(["']?cli:version["']?\s*:\s*["'])\d+\.\d+\.\d+(?=["'])/g, `$1${c.version}`);
+    // ⛔ `softwareVersion` is DELIBERATELY NOT STAMPED, and this comment exists
+    // because I stamped it and broke something. On 2026-09-12 the pattern
+    // `(softwareVersion\s*:\s*['"])\d+\.\d+\.\d+` rewrote THREE objects in
+    // ai-index/page.tsx: '@id':'#cli' (correct), '@id':'#mcp' — @solidnumber/mcp,
+    // whose 1.0.1 became the CLI's 2.20.0 — and it would have taken '#ucp' too
+    // had that field not been the non-semver string 'Phase 0 (2026-04-26)'.
+    // A key-only regex cannot see which object encloses it, and several
+    // SoftwareApplication blocks on these pages describe OTHER packages. This is
+    // the same over-match the header above records (WebMCP's 523 verbs), which
+    // means the warning was right there and I wrote the pattern anyway.
+    // `cli:version` is safe: the key names the CLI in the key itself.
+    // softwareVersion stays REPORTED by needsAHuman, never rewritten.
 }
 
 /**
