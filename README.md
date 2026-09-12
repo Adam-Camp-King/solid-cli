@@ -1,8 +1,8 @@
 # @solidnumber/cli
 
 Run an AI-powered business from your terminal.
-<!-- AUTO-NUMBERS: do not edit by hand; updated by scripts/sync-marketing-numbers.ts -->
-126 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+<!-- AUTO-NUMBERS: do not edit by hand; run `npm run sync:counts` (scripts/sync-counts.ts). Verified by `npm run check:counts`, which prepublishOnly runs. -->
+168 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
 
 **v2.15** — the Starter Kit: `solid init <name> --company <id>` scaffolds a
 tenant-stamped starter project bound to one Solid# company — a `CLAUDE.md`

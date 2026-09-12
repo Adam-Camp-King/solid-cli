@@ -126,6 +126,20 @@ function rewrite(text: string, c: Counts): string {
     //    makes a claim about a PAST version, so both are safe to stamp.
     .replace(/\b\d{2,4}(?= (?:top-level )?commands, \d{2,4} verbs\b)/g, String(c.commands))
     .replace(/(\b\d{2,4} (?:top-level )?commands, )\d{2,4}(?= verbs\b)/g, `$1${c.verbs}`)
+    // 1b. The same count WITHOUT a verb count after it — the README banner:
+    //     "126 top-level commands, 700+ subcommands, 54 industries, …".
+    //     Pattern 1 requires ", N verbs" to follow, so it never saw this line.
+    //     README.md sat 42 commands stale (126 vs 168) across five releases
+    //     while this tool reported "every surface already current" — it was
+    //     current in every file the regex could see, which is not the same
+    //     claim and is the more dangerous one to print.
+    //     ⛔ Anchored on the literal "top-level commands" rather than a bare
+    //     "\d+ commands". Verified 2026-09-12 across all 13 surfaces: every
+    //     occurrence is a present-tense claim about the CLI, none is history,
+    //     and nothing else on the platform counts "top-level commands" —
+    //     WebMCP counts verbs, MCP counts tools. A bare "\d+ commands" would
+    //     be exactly the over-match that rewrote WebMCP's 523 verbs.
+    .replace(/\b\d{2,4}(?= top-level commands\b)/g, String(c.commands))
     // 2. STRUCTURED version fields only — a JSON/TS key whose whole job is to
     //    name the current version.
     .replace(/("(?:latest|softwareVersion|cli:version)"\s*:\s*")\d+\.\d+\.\d+(?=")/g, `$1${c.version}`)
