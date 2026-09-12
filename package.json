@@ -113,7 +113,7 @@
     "update-notifier": "^7.3.1"
   },
   "optionalDependencies": {
-    "@anthropic-ai/sdk": "^0.100.1"
+    "@anthropic-ai/sdk": "^0.124.0"
   },
   "overrides": {
     "minimatch": "^9.0.7",
