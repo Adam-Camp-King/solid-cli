@@ -137,6 +137,7 @@ export function addWebhookListenCommand(webhooksCommand: Command): void {
         console.log('');
         console.log(chalk.dim('  The webhook listener endpoint may not be available yet.'));
         console.log(chalk.dim('  You can still create webhooks manually: solid webhooks create'));
+        process.exit(1);
       }
     });
 

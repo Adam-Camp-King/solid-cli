@@ -429,6 +429,7 @@ ${truncated}`,
     console.error(chalk.yellow(`  AI parsing failed: ${(error as Error).message || 'Unknown error'}`));
     console.error(chalk.dim('  Falling back to regex parser...'));
     return [];
+    process.exit(1);
   }
 }
 

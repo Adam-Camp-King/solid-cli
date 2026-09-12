@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -17,10 +17,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const productsCommand = new Command('products')
   .description('Product catalog (CRUD, pricing, components)');
@@ -197,7 +193,7 @@ productsCommand
     } catch (e) { fail(spinner, 'Failed to delete product', e); }
   });
 
-import { appendExamples as __appendExamplesProducts } from '../lib/command-kit';
+import { appendExamples as __appendExamplesProducts, fail } from '../lib/command-kit';
 __appendExamplesProducts(productsCommand, [
   { cmd: 'solid products list --all --format csv > catalog.csv', why: 'Export full catalog' },
   { cmd: 'solid products create -t "Widget" -p 19.99 --sku WID-001', why: 'Add a product' },

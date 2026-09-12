@@ -11,7 +11,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -79,12 +79,13 @@ interface MissionResult {
   response?: string;
 }
 
+// Returns a rejection handler that FAILS the command: exit 1, and under
+// --json a structured error envelope on stdout. The previous version wrote
+// the error box to stdout via console.log and then returned normally, so an
+// agent piping this command got exit 0 with an error box mixed into the
+// payload it was trying to parse.
 function catchError(spinner: ReturnType<typeof ora>, label: string) {
-  return (error: unknown) => {
-    spinner.fail(chalk.red(label));
-    console.log(ui.errorBox('Error', [handleApiError(error).message]));
-    console.log('');
-  };
+  return (error: unknown): never => fail(spinner, label, error);
 }
 
 // ── Command Tree ─────────────────────────────────────────────────────
@@ -137,8 +138,17 @@ agentCommand
       spinner.stop();
       const detail = detailRes.status === 'fulfilled' ? (detailRes.value.data as Record<string, any>) : null;
       const data = dataRes.status === 'fulfilled' ? (dataRes.value.data as Record<string, any>) : null;
-      if (!detail) { console.log(ui.errorBox('Not Found', [`Agent "${name}" (${agentType}) not found.`])); return; }
-      if (isJsonOutput(opts)) { console.log(JSON.stringify({ detail, data }, null, 2)); return; }
+      if (!detail) {
+        // Was: print an error box to STDOUT and return — exit 0, with the box
+        // landing in the payload an agent was parsing. Synthesize the 404 so
+        // it takes the identical path (and envelope) as a real one.
+        const msg = `Agent "${name}" (${agentType}) not found.`;
+        emitErrorAndExit(Object.assign(new Error(msg), {
+          isAxiosError: true,
+          response: { status: 404, data: { detail: msg } },
+        }));
+      }
+      if (isJsonOutput(opts)) { printJson({ detail, data }); return; }
 
       console.log(ui.header(detail.name || agentType));
       console.log(ui.label('Type', detail.agent_type));
@@ -332,7 +342,7 @@ agentCommand
       spinner.stop();
       const dash = dashRes.status === 'fulfilled' ? (dashRes.value.data as Record<string, any>) : null;
       const tel = telRes.status === 'fulfilled' ? (telRes.value.data as Record<string, any>) : null;
-      if (isJsonOutput(opts)) { console.log(JSON.stringify({ dashboard: dash, telemetry: tel }, null, 2)); return; }
+      if (isJsonOutput(opts)) { printJson({ dashboard: dash, telemetry: tel }); return; }
 
       console.log(ui.header('Agent Dashboard'));
       console.log(ui.label('Total Agents', String(dash?.total_agents || 0)));
@@ -416,7 +426,7 @@ agentCommand
         spinner.text = 'Executing mission...';
         const { data: result } = await apiClient.missionExecute(mission.mission_id) as Record<string, any>;
         spinner.stop();
-        if (isJsonOutput(opts)) { console.log(JSON.stringify({ mission, execution: result }, null, 2)); return; }
+        if (isJsonOutput(opts)) { printJson({ mission, execution: result }); return; }
         console.log(ui.successBox('Mission Executed', [
           `${chalk.bold('ID:')}     ${mission.mission_id}`,
           `${chalk.bold('Steps:')}  ${result.steps_dispatched || 0} dispatched`,
@@ -1036,10 +1046,7 @@ identityCommand
         console.log(chalk.green('  ✔ attached to this CLI'));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Create failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Create failed', error);
     }
   });
 
@@ -1054,10 +1061,7 @@ identityCommand
       spinner.succeed(chalk.green(`Revoked #${idArg}`));
       printIdentity(res.data);
     } catch (error) {
-      spinner.fail(chalk.red('Revoke failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Revoke failed', error);
     }
   });
 
@@ -1095,10 +1099,7 @@ agentCommand
       spinner.succeed(chalk.red(`Quarantined #${idArg}`));
       printIdentity(res.data);
     } catch (error) {
-      spinner.fail(chalk.red('Quarantine failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Quarantine failed', error);
     }
   });
 
@@ -1113,10 +1114,7 @@ agentCommand
       spinner.succeed(chalk.green(`Released #${idArg}`));
       printIdentity(res.data);
     } catch (error) {
-      spinner.fail(chalk.red('Release failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Release failed', error);
     }
   });
 
@@ -1172,7 +1170,7 @@ agentCommand
     }
   });
 
-import { appendExamples as __appendExamplesAgent } from '../lib/command-kit';
+import { appendExamples as __appendExamplesAgent, emitErrorAndExit, fail } from '../lib/command-kit';
 __appendExamplesAgent(agentCommand, [
   { cmd: 'solid agent dashboard', why: 'All agents + telemetry' },
   { cmd: 'solid agent soul sarah', why: 'Identity, config, performance' },

@@ -230,13 +230,25 @@ export const completionCommand = new Command('completion')
   .option('--bash', 'Generate bash completion to stdout')
   .option('--fish', 'Generate fish completion to stdout')
   .option('--zsh', 'Generate zsh completion to stdout (default)')
-  .action(function (this: Command, options) {
+  // Accept the shell positionally as well as by flag. `solid completion bash`
+  // is the form everyone reaches for first, and it used to parse as a stray
+  // argument that Commander discarded — so it printed ZSH completion and
+  // exited 0. Naming the argument makes the positional real and lets the
+  // excess-argument check reject an actual typo.
+  .argument('[shell]', 'Shell to generate for: zsh (default), bash, or fish')
+  .action(function (this: Command, shell: string | undefined, options) {
     const root = (this.parent as Command) ?? this;
     const tree = walk(root);
 
-    if (options.bash) {
+    const want = (shell || '').toLowerCase();
+    if (want && !['zsh', 'bash', 'fish'].includes(want)) {
+      console.error(`Unknown shell '${shell}'. Expected one of: zsh, bash, fish.`);
+      process.exit(1);
+    }
+
+    if (options.bash || want === 'bash') {
       console.log(generateBash(tree));
-    } else if (options.fish) {
+    } else if (options.fish || want === 'fish') {
       console.log(generateFish(tree));
     } else {
       console.log(generateZsh(tree));

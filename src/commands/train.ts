@@ -119,6 +119,9 @@ trainCommand
       spinner.succeed(chalk.green(`${created} KB entries imported`));
     } else {
       spinner.warn(chalk.yellow(`${created} imported, ${errors} failed`));
+      // Partial import is not success — surface it in the exit code so a
+      // caller doesn't record "KB imported" when entries were dropped.
+      process.exitCode = 1;
     }
 
     console.log(chalk.dim('  Your AI agents now have this knowledge.\n'));
@@ -194,6 +197,7 @@ trainCommand
         const apiError = handleApiError(error);
         console.error(chalk.red(`  Error: ${apiError.message}`));
         console.log('');
+        process.exit(1);
       }
 
       rl.prompt();
@@ -261,9 +265,7 @@ trainCommand
       }
       console.log(chalk.dim('  Your AI agents now have this knowledge.\n'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to add KB entry'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to add KB entry', error);
     }
   });
 
@@ -334,13 +336,11 @@ trainCommand
       ]));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load training status'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load training status', error);
     }
   });
 
-import { appendExamples as __ae_train } from '../lib/command-kit';
+import { appendExamples as __ae_train, fail } from '../lib/command-kit';
 __ae_train(trainCommand, [
   { cmd: 'solid train add --file ./notes.md',       why: 'Ingest a markdown file into agent training' },
   { cmd: 'solid train status',                      why: 'What is in training + recency' },

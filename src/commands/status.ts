@@ -155,10 +155,7 @@ export const statusCommand = new Command('status')
         console.log('');
         return;
       } catch (error) {
-        spinner.fail(chalk.red('Failed to gather full state'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
-        process.exit(1);
+        fail(spinner, 'Failed to gather full state', error);
       }
     }
 
@@ -232,13 +229,11 @@ export const statusCommand = new Command('status')
       console.log('');
 
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load status'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load status', error);
     }
   });
 
-import { appendExamples as __ae_status } from '../lib/command-kit';
+import { appendExamples as __ae_status, fail } from '../lib/command-kit';
 __ae_status(statusCommand, [
   { cmd: 'solid status',          why: 'Overall setup + progress' },
   { cmd: 'solid status --json',   why: 'Scriptable snapshot' },

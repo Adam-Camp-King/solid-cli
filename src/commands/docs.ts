@@ -789,7 +789,7 @@ solid vibe analyze "instruction"  # Preview without applying
 solid integrations list           # List active integrations
 solid integrations catalog        # Browse available integrations
 solid integrations health         # Check integration health
-solid integrations generate       # Generate new integration
+solid integrations create         # Scaffold a new integration
 solid integrations test <id>      # Test an integration
 solid integrations deploy <id>    # Deploy integration
 solid integrations logs <id>      # View integration logs

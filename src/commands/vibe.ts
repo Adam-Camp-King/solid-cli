@@ -103,14 +103,10 @@ export const vibeCommand = new Command('vibe')
           applySpinner.fail(chalk.red('Failed to apply changes'));
         }
       } catch (error) {
-        applySpinner.fail(chalk.red('Failed to apply changes'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(applySpinner, 'Failed to apply changes', error);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Analysis failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Analysis failed', error);
     }
   });
 
@@ -184,14 +180,16 @@ vibeCommand
 
         console.log('');
       } catch (error) {
+        // Interactive REPL: a failed turn must not end the session, so this
+        // one deliberately does not exit. Errors still go to stderr.
         spinner.fail(chalk.red('Error'));
         const apiError = handleApiError(error);
-        console.log(chalk.dim(`  ${apiError.message}\n`));
+        console.error(chalk.dim(`  ${apiError.message}\n`));
       }
     }
   });
 
-import { appendExamples as __ae_vibe } from '../lib/command-kit';
+import { appendExamples as __ae_vibe, fail } from '../lib/command-kit';
 __ae_vibe(vibeCommand, [
   { cmd: 'solid vibe interactive',            why: 'Natural-language integration assistant' },
   { cmd: 'solid vibe "connect my stripe"',    why: 'One-shot natural language command' },

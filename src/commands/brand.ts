@@ -86,9 +86,12 @@ brandCommand
       spinner.fail(chalk.red('Failed to load brand'));
       const apiError = handleApiError(error);
       if (apiError.status === 404) {
+        // Not an error: the company simply has no brand yet. Stays exit 0 so
+        // a caller can distinguish "no brand" from "the call failed".
         console.log(chalk.dim('  No brand configured. Run `solid brand create` to get started.'));
       } else {
         console.error(chalk.red(`  ${apiError.message}`));
+        process.exit(1);
       }
     }
   });
@@ -160,9 +163,7 @@ brandCommand
         `${chalk.bold('Tone:')}  ${answers.tone}`,
       ]));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create brand'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create brand', error);
     }
   });
 
@@ -204,9 +205,7 @@ brandCommand
       await apiClient.patch('/api/v1/cli/brand', body);
       spinner.succeed(chalk.green('Brand updated'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to update brand'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to update brand', error);
     }
   });
 
@@ -251,6 +250,7 @@ brandCommand
         updates.push('domain');
       } catch (error) {
         spinner.fail(chalk.red(`Domain failed: ${handleApiError(error).message}`));
+        process.exit(1);
       }
     }
 
@@ -275,6 +275,7 @@ brandCommand
         if (options.emailFrom) updates.push('email');
       } catch (error) {
         spinner.fail(chalk.red(`Brand update failed: ${handleApiError(error).message}`));
+        process.exit(1);
       }
     }
 
@@ -301,6 +302,7 @@ brandCommand
         }
       } catch (error) {
         spinner.fail(chalk.red(`Logo failed: ${handleApiError(error).message}`));
+        process.exit(1);
       }
     }
 
@@ -325,6 +327,7 @@ brandCommand
         }
       } catch (error) {
         spinner.fail(chalk.red(`Favicon failed: ${handleApiError(error).message}`));
+        process.exit(1);
       }
     }
 
@@ -362,9 +365,7 @@ brandCommand
         console.log(JSON.stringify(data, null, 2));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to export brand'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to export brand', error);
     }
   });
 
@@ -420,13 +421,11 @@ brandCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Audit failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Audit failed', error);
     }
   });
 
-import { appendExamples as __ae_brand } from '../lib/command-kit';
+import { appendExamples as __ae_brand, fail } from '../lib/command-kit';
 __ae_brand(brandCommand, [
   { cmd: 'solid brand get',                      why: 'Current logo, palette, fonts' },
   { cmd: 'solid brand set --primary "#E30613"',  why: 'Override primary color' },

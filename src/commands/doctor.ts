@@ -20,7 +20,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { config } from '../lib/config';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { appendExamples } from '../lib/command-kit';
 
 interface ProbeResult {
@@ -145,7 +145,7 @@ export const doctorCommand = new Command('doctor')
   .action(async (opts: { json?: boolean; endpoints?: boolean; coreOnly?: boolean }) => {
     if (!config.isLoggedIn()) {
       if (isJsonOutput(opts)) {
-        console.log(JSON.stringify({ ok: false, error: 'not_authenticated' }, null, 2));
+        printJson({ ok: false, error: 'not_authenticated' });
       } else {
         console.error(chalk.red('Not authenticated. Run: solid auth login'));
       }

@@ -20,7 +20,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { requireTenantManifest, PullManifest } from '../lib/tenant-guard';
-import { requireCompanyContext } from '../lib/command-kit';
+import { fail, requireCompanyContext } from '../lib/command-kit';
 import { parseKbMarkdown, detectChanges, ChangeSet } from '../lib/push-utils';
 
 export { parseKbMarkdown, detectChanges, ChangeSet };
@@ -195,9 +195,7 @@ export const pushCommand = new Command('push')
         }
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load companies'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to load companies', error);
       }
       return;
     }
@@ -443,6 +441,7 @@ export const pushCommand = new Command('push')
         const apiError = handleApiError(error);
         console.error(chalk.red(`  ${apiError.message}`));
         errors++;
+        process.exit(1);
       }
     }
 
@@ -464,6 +463,11 @@ export const pushCommand = new Command('push')
         `${chalk.dim('Company:')} ${manifest.company_name}`,
         chalk.dim('Check error messages above and retry.'),
       ]));
+      // A partly-failed push is a failed push. Without this the command
+      // printed "N failed" and still exited 0, so an agent (or CI) read the
+      // whole push as successful. exitCode rather than exit() so the closing
+      // output below still runs.
+      process.exitCode = 1;
     }
     console.log('');
   });

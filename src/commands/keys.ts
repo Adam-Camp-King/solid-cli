@@ -9,7 +9,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -19,10 +19,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const keysCommand = new Command('keys')
   .alias('api-keys')
@@ -126,7 +122,7 @@ keysCommand
     } catch (e) { fail(spinner, 'Failed to rotate key', e); }
   });
 
-import { appendExamples as __appendExamplesKeys } from '../lib/command-kit';
+import { appendExamples as __appendExamplesKeys, fail } from '../lib/command-kit';
 __appendExamplesKeys(keysCommand, [
   { cmd: 'solid keys list', why: 'All issued API keys' },
   { cmd: 'solid keys issue --name "prod worker" --scope read:orders', why: 'Issue a scoped key' },

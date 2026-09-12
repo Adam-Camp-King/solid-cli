@@ -106,9 +106,7 @@ integrationsCommand
         console.log(`  ${statusIcon} ${name}: ${data.capabilities?.join(', ') || 'N/A'}`);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to fetch catalog'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to fetch catalog', error);
     }
   });
 
@@ -148,9 +146,7 @@ integrationsCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Health check failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Health check failed', error);
     }
   });
 
@@ -220,9 +216,7 @@ integrationsCommand
       console.log('');
       console.log(chalk.dim(`Next: Run \`solid integrations validate ${response.data.integration.id.slice(0, 8)}\``));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create integration'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create integration', error);
     }
   });
 
@@ -253,9 +247,7 @@ integrationsCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Validation failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Validation failed', error);
     }
   });
 
@@ -280,9 +272,7 @@ integrationsCommand
         console.log(chalk.red(`  ${response.data.message}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Test failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Test failed', error);
     }
   });
 
@@ -315,9 +305,7 @@ integrationsCommand
       spinner.succeed(chalk.green('Deployed successfully'));
       console.log(chalk.dim(`  Deployed at: ${response.data.deployed_at}`));
     } catch (error) {
-      spinner.fail(chalk.red('Deployment failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Deployment failed', error);
     }
   });
 
@@ -336,9 +324,7 @@ integrationsCommand
 
       spinner.succeed(chalk.green('Integration disabled'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to disable'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to disable', error);
     }
   });
 
@@ -371,9 +357,7 @@ integrationsCommand
 
       spinner.succeed(chalk.green('Rollback complete'));
     } catch (error) {
-      spinner.fail(chalk.red('Rollback failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Rollback failed', error);
     }
   });
 
@@ -404,13 +388,11 @@ integrationsCommand
         console.log(`  ${icon} [${time}] ${log.action}`);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to fetch logs'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to fetch logs', error);
     }
   });
 
-import { appendExamples as __ae_integrations } from '../lib/command-kit';
+import { appendExamples as __ae_integrations, fail } from '../lib/command-kit';
 __ae_integrations(integrationsCommand, [
   { cmd: 'solid integrations list',           why: 'Your connected integrations' },
   { cmd: 'solid integrations catalog',        why: 'All available integrations' },

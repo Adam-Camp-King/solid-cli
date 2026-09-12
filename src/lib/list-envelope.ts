@@ -59,6 +59,20 @@ export const KNOWN_LIST_KEYS: readonly string[] = [
   'domains',
 ];
 
+/**
+ * Array-valued keys that are diagnostics channels, never the payload. Without
+ * this, a response like {status:'ok', errors:[]} would alias `errors` to
+ * `items` and an agent would read the error channel as the result set.
+ */
+const NON_LIST_ARRAY_KEYS = new Set<string>([
+  'errors',
+  'warnings',
+  'messages',
+  'hints',
+  'notices',
+  'validation_errors',
+]);
+
 export interface NormalizedEnvelope {
   items: unknown[];
   total: number | null;
@@ -87,6 +101,19 @@ export function detectListKey(
   const record = body as Record<string, unknown>;
   for (const k of knownKeys) {
     if (Array.isArray(record[k])) return k;
+  }
+
+  // Fallback: exactly one array-valued property IS the list, whatever it's
+  // called. A hardcoded roster will always trail the API — `forms`,
+  // `submissions` and `deals` were all missing, so those commands silently
+  // stayed un-normalized and agents had to special-case them. Only applied
+  // for the default roster, so an explicit `knownKeys` argument still means
+  // "only these" (see the custom-key-list test).
+  if (knownKeys === KNOWN_LIST_KEYS) {
+    const arrayKeys = Object.keys(record).filter(
+      (k) => Array.isArray(record[k]) && !NON_LIST_ARRAY_KEYS.has(k),
+    );
+    if (arrayKeys.length === 1) return arrayKeys[0];
   }
   return null;
 }

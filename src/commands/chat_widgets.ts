@@ -10,7 +10,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -19,7 +19,6 @@ function requireAuth() {
     process.exit(1);
   }
 }
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.red(m)); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
 
 export const chatWidgetsCommand = new Command('chat-widgets')
   .description('Chat widgets for external sites (CRUD + embed code)');
@@ -139,7 +138,7 @@ chatWidgetsCommand
     } catch (e) { fail(s, 'Failed', e); }
   });
 
-import { appendExamples as __ae_cw } from '../lib/command-kit';
+import { appendExamples as __ae_cw, fail } from '../lib/command-kit';
 __ae_cw(chatWidgetsCommand, [
   { cmd: 'solid chat-widgets list',               why: 'Chat widgets you have provisioned' },
   { cmd: 'solid chat-widgets create --site main', why: 'Add a new chat widget + get embed snippet' },

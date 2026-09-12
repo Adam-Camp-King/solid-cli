@@ -26,6 +26,7 @@ import ora from 'ora';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { fail } from '../lib/command-kit';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -163,9 +164,7 @@ bidsCommand
         console.log(chalk.red(`  Error: ${intake.error_message}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to load bid #${id}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to load bid #${id}`, error);
     }
   });
 
@@ -223,9 +222,7 @@ bidsCommand
       console.log('');
       console.log(chalk.dim(`  Run \`solid bids show ${intake.id}\` in ~10s to see the draft.`));
     } catch (error) {
-      spinner.fail(chalk.red('Upload failed'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Upload failed', error);
     }
   });
 
@@ -270,9 +267,7 @@ function makeStateChange(verb: 'approve' | 'reject' | 'reanalyze') {
         console.log(chalk.dim('  Open Proposals to send: /dashboard/crm/proposals/' + (intake.proposal_id ?? '?')));
       }
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to ${verb} bid #${id}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to ${verb} bid #${id}`, error);
     }
   });
 }

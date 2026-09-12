@@ -9,7 +9,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 const TIER_DETAILS: Record<string, { name: string; price: string; features: string[] }> = {
   starter: {
@@ -126,14 +126,14 @@ the prospect can interact with the AI, use \`solid demo create\` instead.`)
       : 'Your Agency';
 
     if (isJsonOutput(options)) {
-      console.log(JSON.stringify({
+      printJson({
         business_name: businessName,
         industry,
         tier: tierInfo,
         benefits,
         agency: agencyName,
         generated_at: new Date().toISOString(),
-      }, null, 2));
+      });
       return;
     }
 

@@ -60,7 +60,7 @@ notesCommand
       const data = res.data as Record<string, any>;
       if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`Note #${data.note_id} added (${data.note_type})`));
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Search ──────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ notesCommand
           console.log(chalk.dim(`    ${n.content.substring(0, 120)}...`));
         }
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── List ────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ notesCommand
         const date = n.created_at ? chalk.dim(new Date(n.created_at).toLocaleDateString()) : '';
         console.log(`  ${pin}#${n.id} ${type} ${imp} ${chalk.bold(n.title || n.content?.substring(0, 50))}  ${date}`);
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Context (session bootstrapping) ─────────────────────────────────
@@ -171,7 +171,7 @@ notesCommand
       if (pinned.length === 0 && high.length === 0 && recent.length === 0) {
         console.log(chalk.dim('  No work context yet. Notes will appear here as you work.'));
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Archive ─────────────────────────────────────────────────────────
@@ -188,10 +188,10 @@ notesCommand
       const data = res.data as Record<string, any>;
       if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
       spinner.succeed(chalk.green(`Note #${id} archived`));
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
-import { appendExamples as __ae_notes } from '../lib/command-kit';
+import { appendExamples as __ae_notes, fail } from '../lib/command-kit';
 __ae_notes(notesCommand, [
   { cmd: 'solid notes add "Hero section done, client prefers blue"',     why: 'Add a work note' },
   { cmd: 'solid notes add --type todo "Build services page next"',       why: 'Add a todo' },

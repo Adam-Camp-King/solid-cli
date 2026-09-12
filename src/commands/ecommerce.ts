@@ -12,7 +12,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -21,10 +21,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const ecommerceCommand = new Command('ecommerce')
   .alias('ec')
@@ -203,7 +199,7 @@ ordersCmd
           { limit: 100 },
         );
         spinner.stop();
-        if (isJsonOutput(opts)) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+        if (isJsonOutput(opts)) { printJson({ items, count: items.length }); return; }
       } else {
         const res = await apiClient.get('/api/v1/crm/ecommerce/orders', {
           params: { limit: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
@@ -323,7 +319,7 @@ ordersCmd
         results.push({ row: i + 1, status: 'failed', error: msg });
         if (opts.stopOnError) {
           spinner.fail(chalk.red(`Aborted on row ${i + 1}: ${msg}`));
-          if (isJsonOutput(opts)) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
+          if (isJsonOutput(opts)) printJson({ summary: { total, created, failed, skipped }, results });
           process.exit(1);
         }
       }
@@ -334,7 +330,7 @@ ordersCmd
     else spinner.warn(chalk.yellow(`Imported ${created}/${total} (failed: ${failed}, skipped: ${skipped})`));
 
     if (isJsonOutput(opts)) {
-      console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!opts.dryRun }, results }, null, 2));
+      printJson({ summary: { total, created, failed, skipped, dry_run: !!opts.dryRun }, results });
       return;
     }
     if (failed > 0) process.exit(1);
@@ -745,7 +741,7 @@ abandonedCmd
 
 ecommerceCommand.addCommand(abandonedCmd);
 
-import { appendExamples as __ae_ec } from '../lib/command-kit';
+import { appendExamples as __ae_ec, fail } from '../lib/command-kit';
 __ae_ec(ecommerceCommand, [
   { cmd: 'solid ec active',               why: 'Active carts (not yet checked out)' },
   { cmd: 'solid ec list',                 why: 'All ecommerce orders' },

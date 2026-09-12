@@ -96,6 +96,7 @@ dropletCommand
     } catch (error) {
       spinner.fail('Failed to get status');
       console.error(chalk.red((error as Error).message));
+      process.exit(1);
     }
   });
 
@@ -136,6 +137,7 @@ dropletCommand
       spinner.fail('Deployment failed');
       console.error(chalk.red((error as Error).message));
       console.log(chalk.yellow('\nRun `solid droplet rollback ' + customer + '` to restore previous version'));
+      process.exit(1);
     }
   });
 
@@ -159,6 +161,7 @@ dropletCommand
     } catch (error) {
       spinner.fail('Rollback failed');
       console.error(chalk.red((error as Error).message));
+      process.exit(1);
     }
   });
 
@@ -184,6 +187,7 @@ dropletCommand
     } catch (error) {
       spinner.fail('Backup failed');
       console.error(chalk.red((error as Error).message));
+      process.exit(1);
     }
   });
 
@@ -219,6 +223,7 @@ dropletCommand
     } catch (error) {
       const apiError = handleApiError(error);
       console.error(chalk.red(apiError.message));
+      process.exit(1);
     }
   });
 
@@ -240,6 +245,7 @@ dropletCommand
     } catch (error) {
       const apiError = handleApiError(error);
       console.error(chalk.red(apiError.message));
+      process.exit(1);
     }
   });
 
@@ -268,6 +274,7 @@ dropletCommand
     } catch (error) {
       spinner.fail('Command failed');
       console.error(chalk.red((error as Error).message));
+      process.exit(1);
     }
   });
 
@@ -321,6 +328,7 @@ dropletCommand
     } catch (error) {
       spinner.fail('Provisioning failed');
       console.error(chalk.red((error as Error).message));
+      process.exit(1);
     }
   });
 

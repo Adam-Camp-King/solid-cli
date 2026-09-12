@@ -106,9 +106,7 @@ widgetsCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load widget'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load widget', error);
     }
   });
 
@@ -150,9 +148,7 @@ widgetsCommand
       console.log('');
       console.log(chalk.dim(`  Next: Run \`solid widget embed ${data.id}\` to get embed code`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create widget'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create widget', error);
     }
   });
 
@@ -182,9 +178,7 @@ widgetsCommand
       spinner.succeed(chalk.green('Widget updated'));
       if (isJsonOutput(options)) { console.log(JSON.stringify(response.data, null, 2)); return; }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to update widget'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to update widget', error);
     }
   });
 
@@ -203,9 +197,7 @@ widgetsCommand
       await apiClient.delete(`/api/v1/cli/widgets/${widgetId}`);
       spinner.succeed(chalk.green('Widget deleted'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to delete widget'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to delete widget', error);
     }
   });
 
@@ -237,9 +229,7 @@ widgetsCommand
         console.log(JSON.stringify(data, null, 2));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to generate embed code'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to generate embed code', error);
     }
   });
 
@@ -256,13 +246,11 @@ widgetsCommand
       await apiClient.post(`/api/v1/cli/widgets/${widgetId}/activate`);
       spinner.succeed(chalk.green(`Widget ${widgetId} activated`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to activate widget'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to activate widget', error);
     }
   });
 
-import { appendExamples as __ae_widgets } from '../lib/command-kit';
+import { appendExamples as __ae_widgets, fail } from '../lib/command-kit';
 __ae_widgets(widgetsCommand, [
   { cmd: 'solid widget list',             why: 'Embeddable widgets you can put on sites' },
   { cmd: 'solid widget install <id>',     why: 'Add to current site' },

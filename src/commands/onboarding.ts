@@ -12,7 +12,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -22,10 +22,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 // NOTE: previously aliased as `setup`, but `solid setup` is now the local-CLI
 // onboarding wizard (Phase 2 of SPRINT-CLI-ONE-COMMAND-ONBOARDING). The two
@@ -592,7 +588,7 @@ onboardingCommand
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
-import { appendExamples as __ae_onb } from '../lib/command-kit';
+import { appendExamples as __ae_onb, fail } from '../lib/command-kit';
 __ae_onb(onboardingCommand, [
   { cmd: 'solid onboarding status',                                   why: 'Onboarding progress per company' },
   { cmd: 'solid onboarding health',                                   why: 'Onboarding service health' },

@@ -11,8 +11,8 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
-import { requireCompanyContext } from '../lib/command-kit';
+import { apiClient } from '../lib/api-client';
+import { fail, requireCompanyContext } from '../lib/command-kit';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -21,10 +21,6 @@ function requireAuth(): void {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): void {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(error).message}`));
-}
 
 export const publishCommand = new Command('publish')
   .description('Promote pending CMS page drafts to live (T12)')

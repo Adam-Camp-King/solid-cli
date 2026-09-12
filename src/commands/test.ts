@@ -84,9 +84,7 @@ export const testCommand = new Command('test')
         }
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load results'));
-        console.error(chalk.red(`  ${handleApiError(error).message}`));
-        process.exit(1);
+        fail(spinner, 'Failed to load results', error);
       }
       return;
     }
@@ -232,13 +230,11 @@ export const testCommand = new Command('test')
 
       if (!result.passed) process.exit(1);
     } catch (error) {
-      spinner.fail(chalk.red('Test failed'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Test failed', error);
     }
   });
 
-import { appendExamples as __ae_test } from '../lib/command-kit';
+import { appendExamples as __ae_test, fail } from '../lib/command-kit';
 __ae_test(testCommand, [
   { cmd: 'solid test sarah "When are you open?"',             why: 'Test an agent response' },
   { cmd: 'solid test sarah "..." --expect "Mon-Fri 9-5"',     why: 'Assert substring in response' },

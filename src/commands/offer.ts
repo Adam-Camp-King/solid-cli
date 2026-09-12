@@ -18,8 +18,9 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { fail } from '../lib/command-kit';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -28,10 +29,6 @@ function requireAuth() {
   }
 }
 
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) {
-  s.fail(chalk.red(m));
-  console.error(chalk.red(`  ${handleApiError(e).message}`));
-}
 
 const money = (cents: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format((cents || 0) / 100);

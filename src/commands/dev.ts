@@ -32,10 +32,6 @@ function requireAuth(): void {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): void {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(error).message}`));
-}
 
 export const devCommand = new Command('dev')
   .description('Custom module development — scaffold, push, deploy code that runs in Solid# scoped to your company');
@@ -177,9 +173,7 @@ async function pullModuleToDisk(folderName: string, outDir: string): Promise<voi
     }
     spinner.succeed(chalk.green(`Pulled ${files.length} file(s) → ${target}`));
   } catch (error) {
-    spinner.fail(chalk.red(`Pull failed`));
-    console.error(chalk.red(`  ${handleApiError(error).message}`));
-    process.exit(1);
+    fail(spinner, `Pull failed`, error);
   }
 }
 
@@ -398,7 +392,7 @@ moduleCmd
 
 devCommand.addCommand(moduleCmd);
 
-import { appendExamples as __ae_dev } from '../lib/command-kit';
+import { appendExamples as __ae_dev, fail } from '../lib/command-kit';
 __ae_dev(devCommand, [
   { cmd: 'solid dev list',                       why: 'Your custom modules' },
   { cmd: 'solid dev scaffold <name>',            why: 'New custom module boilerplate' },

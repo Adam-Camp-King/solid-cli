@@ -12,7 +12,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
-import { requireAuth } from '../lib/command-kit';
+import { fail, requireAuth } from '../lib/command-kit';
 
 export const antCommand = new Command('ant')
   .description('Ant Farm — code import system');
@@ -51,9 +51,7 @@ antCommand
       console.log('');
       console.log(chalk.dim(`  Next: Run \`solid ant execute ${data.import_id || data.id}\` to apply`));
     } catch (error) {
-      spinner.fail(chalk.red('Import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Import failed', error);
     }
   });
 
@@ -83,9 +81,7 @@ antCommand
       console.log('');
       console.log(chalk.dim(`  Next: Run \`solid ant execute ${data.import_id || data.id}\` to apply`));
     } catch (error) {
-      spinner.fail(chalk.red('URL import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'URL import failed', error);
     }
   });
 
@@ -122,9 +118,7 @@ antCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Execution failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Execution failed', error);
     }
   });
 
@@ -165,9 +159,7 @@ antCommand
       ]);
       console.log(ui.table(headers, rows));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load imports'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load imports', error);
     }
   });
 
@@ -205,9 +197,7 @@ antCommand
         console.log(ui.label('Executed', new Date(data.executed_at).toLocaleString()));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load import'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load import', error);
     }
   });
 
@@ -243,9 +233,7 @@ antCommand
         console.log(chalk.dim(`  Reverted: ${JSON.stringify(data.rolled_back)}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Rollback failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Rollback failed', error);
     }
   });
 
@@ -284,9 +272,7 @@ antCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Analysis failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Analysis failed', error);
     }
   });
 

@@ -188,9 +188,7 @@ connectCommand
         printImportSummary(response.data);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Figma import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Figma import failed', error);
     }
   });
 
@@ -242,9 +240,7 @@ connectCommand
         console.log(chalk.dim('  Training data queued. Run `solid train status` to check progress.'));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Slack import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Slack import failed', error);
     }
   });
 
@@ -294,9 +290,7 @@ connectCommand
         console.log(chalk.dim(`  ${entity} records created. Run \`solid ${entity === 'contacts' ? 'crm contacts' : entity} list\` to view.`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Notion import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Notion import failed', error);
     }
   });
 
@@ -342,9 +336,7 @@ connectCommand
         console.log(chalk.dim('  CMS pages created. Run `solid pages list` to view.'));
       }
     } catch (error) {
-      spinner.fail(chalk.red('WordPress import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'WordPress import failed', error);
     }
   });
 
@@ -426,9 +418,7 @@ connectCommand
         printImportSummary(response.data);
       }
     } catch (error) {
-      spinner.fail(chalk.red('CSV import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'CSV import failed', error);
     }
   });
 
@@ -467,9 +457,7 @@ connectCommand
       console.log('');
       console.log(chalk.dim('  Documentation added to KB. Run `solid kb list` to view.'));
     } catch (error) {
-      spinner.fail(chalk.red('GitHub import failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'GitHub import failed', error);
     }
   });
 
@@ -522,6 +510,7 @@ connectCommand
         console.error('');
         console.error(chalk.dim('  Google OAuth may not be connected. Check your Google integration in the dashboard.'));
       }
+      process.exit(1);
     }
   });
 
@@ -564,6 +553,7 @@ connectCommand
         console.error('');
         console.error(chalk.dim('  Google OAuth may not be connected. Check your Google integration in the dashboard.'));
       }
+      process.exit(1);
     }
   });
 
@@ -648,9 +638,7 @@ connectCommand
       console.log('');
       console.log(chalk.dim('  Full history: solid connect history'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to fetch connections'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to fetch connections', error);
     }
   });
 
@@ -732,9 +720,7 @@ connectCommand
         console.log(chalk.dim(`  Showing ${imports.length} of ${response.data.total}. Use --limit to see more.`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to fetch history'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to fetch history', error);
     }
   });
 
@@ -809,13 +795,11 @@ connectCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to check status'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to check status', error);
     }
   });
 
-import { appendExamples as __ae_connect } from '../lib/command-kit';
+import { appendExamples as __ae_connect, fail } from '../lib/command-kit';
 __ae_connect(connectCommand, [
   { cmd: 'solid connect figma <url>',           why: 'Import a Figma page into Solid#' },
   { cmd: 'solid connect list',                  why: 'Active external connections' },

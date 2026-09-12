@@ -97,9 +97,7 @@ export const logsCommand = new Command('logs')
         }
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load errors'));
-        console.error(chalk.red(`  ${handleApiError(error).message}`));
-        process.exit(1);
+        fail(spinner, 'Failed to load errors', error);
       }
       return;
     }
@@ -207,7 +205,7 @@ export const logsCommand = new Command('logs')
     await fetchAndDisplay();
   });
 
-import { appendExamples as __ae_logs } from '../lib/command-kit';
+import { appendExamples as __ae_logs, fail } from '../lib/command-kit';
 __ae_logs(logsCommand, [
   { cmd: 'solid logs',              why: 'Live agent activity stream' },
   { cmd: 'solid logs --agent sarah', why: 'Only Sarah (customer service)' },

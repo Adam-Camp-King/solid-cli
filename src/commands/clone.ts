@@ -48,6 +48,7 @@ export const cloneCommand = new Command('clone')
       console.log(ui.header(`Bulk Clone — ${options.company.length} companies × ${templateName}`));
       console.log('');
 
+      let bulkFailures = 0;
       for (const companyName of options.company) {
         const spinner = ora(`Creating ${companyName}...`).start();
         try {
@@ -63,6 +64,9 @@ export const cloneCommand = new Command('clone')
 
           spinner.succeed(chalk.green(`${companyName} — ID: ${newId} — ${templateName} template applied`));
         } catch (error) {
+          // Per-company failure must not abandon the rest of the batch, but it
+          // does have to reach the exit code — see below.
+          bulkFailures++;
           spinner.fail(chalk.red(`${companyName} — failed: ${(error as Error).message}`));
         }
       }
@@ -76,6 +80,11 @@ export const cloneCommand = new Command('clone')
       console.log('');
       console.log(chalk.dim(`  Switch to any: solid switch <id>`));
       console.log('');
+      // A bulk clone that dropped companies is not a success.
+      if (bulkFailures > 0) {
+        console.error(chalk.red(`  ${bulkFailures} of ${options.company.length} failed.`));
+        process.exitCode = 1;
+      }
       return;
     }
 
@@ -114,9 +123,7 @@ export const cloneCommand = new Command('clone')
         console.log(`  ${chalk.dim('Preview:')}  ${chalk.cyan('solid clone <template> --preview')}`);
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load templates'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to load templates', error);
       }
       return;
     }
@@ -165,6 +172,7 @@ export const cloneCommand = new Command('clone')
         const apiError = handleApiError(error);
         console.error(chalk.red(`  ${apiError.message}`));
         console.log(chalk.dim('  Run `solid clone --list` to see available templates.'));
+        process.exit(1);
       }
       return;
     }
@@ -221,6 +229,7 @@ export const cloneCommand = new Command('clone')
       if (apiError.status === 404) {
         console.log(chalk.dim('  Run `solid clone --list` to see available templates.'));
       }
+      process.exit(1);
     }
   });
 
@@ -243,7 +252,7 @@ function categorize(name: string): string {
   return 'Other';
 }
 
-import { appendExamples as __ae_clone } from '../lib/command-kit';
+import { appendExamples as __ae_clone, fail } from '../lib/command-kit';
 __ae_clone(cloneCommand, [
   { cmd: 'solid clone plumber',        why: 'Scaffold from 52 industry templates' },
   { cmd: 'solid clone --list',         why: 'All available industry templates' },

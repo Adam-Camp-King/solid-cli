@@ -10,7 +10,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -19,7 +19,6 @@ function requireAuth() {
     process.exit(1);
   }
 }
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.red(m)); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
 
 export const subscriptionsCommand = new Command('subscriptions')
   .alias('subs')
@@ -157,7 +156,7 @@ subscriptionsCommand
     } catch (e) { fail(s, 'Failed', e); }
   });
 
-import { appendExamples as __appendExamplesSubs } from '../lib/command-kit';
+import { appendExamples as __appendExamplesSubs, fail } from '../lib/command-kit';
 __appendExamplesSubs(subscriptionsCommand, [
   { cmd: 'solid subs list', why: 'All recurring products YOU sell' },
   { cmd: 'solid subs create --name Gold --price 29.99 --interval month', why: 'Create a plan' },

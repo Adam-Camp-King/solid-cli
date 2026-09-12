@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -16,7 +16,6 @@ function requireAuth() {
     process.exit(1);
   }
 }
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.red(m)); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
 
 export const landingCommand = new Command('landing')
   .alias('landing-pages')
@@ -168,7 +167,7 @@ landingCommand
     } catch (e) { fail(s, 'Failed', e); }
   });
 
-import { appendExamples as __ae_landing } from '../lib/command-kit';
+import { appendExamples as __ae_landing, fail } from '../lib/command-kit';
 __ae_landing(landingCommand, [
   { cmd: 'solid landing list',                    why: 'Your landing pages' },
   { cmd: 'solid landing templates',               why: 'Prebuilt templates' },

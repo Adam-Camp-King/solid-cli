@@ -100,9 +100,7 @@ siteCommand
       console.log(chalk.dim('  Pull files:  ') + chalk.cyan('solid pull'));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create site'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create site', error);
     }
   });
 
@@ -150,9 +148,7 @@ siteCommand
       }
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load site'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load site', error);
     }
   });
 
@@ -178,9 +174,7 @@ siteCommand
       await apiClient.siteDelete(siteId);
       spinner.succeed(chalk.green(`Site #${siteId} deleted`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to delete site'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to delete site', error);
     }
   });
 
@@ -215,9 +209,7 @@ siteCommand
       console.log(chalk.dim('  Create site: ') + chalk.cyan(`solid site create my-site --template ${recommended || 'basecamp'}`));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load templates'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load templates', error);
     }
   });
 
@@ -261,6 +253,7 @@ siteCommand
       spinner?.fail(chalk.red('Failed to load guardrails'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
     }
   });
 
@@ -320,9 +313,7 @@ siteCommand
       }
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to set guardrails'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to set guardrails', error);
     }
   });
 
@@ -344,9 +335,7 @@ siteCommand
       await apiClient.delete(`/api/v1/cms/guardrails/sites/${siteId}`);
       spinner.succeed(chalk.green(`Guardrails reset for site #${siteId} (now default: copy-only)`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to reset guardrails'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to reset guardrails', error);
     }
   });
 
@@ -381,13 +370,11 @@ siteCommand
       if (data.pages_skipped) console.log(`  ${chalk.dim('Pages skipped (customized):')} ${data.pages_skipped}`);
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to regenerate'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to regenerate', error);
     }
   });
 
-import { appendExamples as __appendExamplesSite } from '../lib/command-kit';
+import { appendExamples as __appendExamplesSite, fail } from '../lib/command-kit';
 __appendExamplesSite(siteCommand, [
   { cmd: 'solid site list', why: 'All sites (main, subdomains, landing)' },
   { cmd: 'solid site create --name "ACME Plumbing"', why: 'Provision a new site from defaults' },

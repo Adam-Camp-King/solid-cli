@@ -10,7 +10,8 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
+import { fail } from '../lib/command-kit';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -34,6 +35,27 @@ export const crmCommand = new Command('crm')
 
 // ── Contacts ────────────────────────────────────────────────────────
 
+/**
+ * `solid crm contacts` and `solid crm contacts list` are the same command.
+ *
+ * These three groups list when invoked bare and have no `list` subcommand,
+ * but the bare-vs-`list` split is invisible from the outside — the CLI's own
+ * help examples and COOKBOOK.md/SCHEMAS.md all document the `list` form, and
+ * every sibling group (`pages list`, `orders list`) really does have one.
+ * The trailing word used to be silently discarded; now that excess arguments
+ * are rejected, it has to be accepted deliberately. Only the literal "list"
+ * passes, so a genuine typo still fails loudly.
+ */
+function listLiteral(arg: string | undefined, group: string): void {
+  if (arg !== undefined && arg !== 'list') {
+    console.error(
+      chalk.red(`error: unknown subcommand '${arg}' for '${group}'.`),
+    );
+    console.error(chalk.dim(`  \`solid crm ${group}\` lists them; see \`solid crm ${group} --help\`.`));
+    process.exit(1);
+  }
+}
+
 const contactsCommand = new Command('contacts')
   .description('List contacts')
   .option('-s, --search <query>', 'Search contacts')
@@ -44,7 +66,9 @@ const contactsCommand = new Command('contacts')
   .option('--offset <n>', 'Start offset for pagination', '0')
   .option('--all', 'Auto-paginate until the server runs out')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { search?: string; status?: string; source?: string; type?: string; limit: string; offset: string; all?: boolean; json?: boolean }) => {
+  .argument('[list]', 'Optional literal "list" — same as omitting it')
+  .action(async (listArg: string | undefined, opts: { search?: string; status?: string; source?: string; type?: string; limit: string; offset: string; all?: boolean; json?: boolean }) => {
+    listLiteral(listArg, 'contacts');
     requireAuth();
     const spinner = ora({ text: 'Loading contacts...', stream: process.stderr }).start();
     try {
@@ -65,7 +89,7 @@ const contactsCommand = new Command('contacts')
           { limit: 100 },
         );
         spinner.stop();
-        if (isJsonOutput(opts)) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+        if (isJsonOutput(opts)) { printJson({ items, count: items.length }); return; }
       } else {
         const res = await apiClient.get('/api/v1/crm/contacts', {
           params: { ...baseParams, page_size: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
@@ -94,7 +118,7 @@ const contactsCommand = new Command('contacts')
         String(c.phone || chalk.dim('—')), String(c.status || chalk.dim('—')),
       ])));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load contacts')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load contacts', e); }
   });
 
 contactsCommand.command('get <id>').description('Get contact details').option('--json', 'Output as JSON')
@@ -111,7 +135,7 @@ contactsCommand.command('get <id>').description('Get contact details').option('-
         `Phone:    ${c.phone || '—'}`, `Company:  ${c.company_name || '—'}`, `Status:   ${c.status || '—'}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load contact', e); }
   });
 
 contactsCommand.command('create').description('Create a new contact')
@@ -134,7 +158,7 @@ contactsCommand.command('create').description('Create a new contact')
       const c = res.data as Rec;
       console.log(ui.successBox('Contact Created', [`ID: ${c.id}`, `Name: ${contactName(c)}`, `Email: ${c.email || '—'}`]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to create contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to create contact', e); }
   });
 
 contactsCommand.command('import <file>').description('Import contacts from a CSV (first row is a header)')
@@ -271,7 +295,7 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
           if (opts.stopOnError) {
             aborted = true;
             spinner.fail(chalk.red(`Aborted on row ${t.row}: ${msg}`));
-            if (isJsonOutput(opts)) console.log(JSON.stringify({ summary: { total, created, failed, skipped }, results }, null, 2));
+            if (isJsonOutput(opts)) printJson({ summary: { total, created, failed, skipped }, results });
             process.exit(1);
           }
         }
@@ -285,7 +309,7 @@ contactsCommand.command('import <file>').description('Import contacts from a CSV
     else spinner.warn(chalk.yellow(`Imported ${created} / ${total}  (failed: ${failed}, skipped: ${skipped})`));
 
     if (isJsonOutput(opts)) {
-      console.log(JSON.stringify({ summary: { total, created, failed, skipped, dry_run: !!isPreview }, results }, null, 2));
+      printJson({ summary: { total, created, failed, skipped, dry_run: !!isPreview }, results });
       return;
     }
     if (failed > 0) {
@@ -316,7 +340,7 @@ contactsCommand.command('update <id>').description('Update a contact')
       const c = res.data as Rec;
       console.log(ui.successBox('Updated', [`ID: ${c.id || id}`, `Name: ${contactName(c)}`]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to update contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to update contact', e); }
   });
 
 contactsCommand.command('delete <id>').description('Delete a contact (prompts by default)')
@@ -330,7 +354,7 @@ contactsCommand.command('delete <id>').description('Delete a contact (prompts by
     try {
       await apiClient.delete(`/api/v1/crm/contacts/${id}`);
       spinner.succeed(chalk.green('Contact deleted'));
-    } catch (e) { spinner.fail(chalk.red('Failed to delete contact')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to delete contact', e); }
   });
 
 contactsCommand.command('search <query>').description('Typeahead search for contacts').option('--json', 'Output as JSON')
@@ -348,7 +372,7 @@ contactsCommand.command('search <query>').description('Typeahead search for cont
         String(c.id), contactName(c), String(c.email || chalk.dim('—')), String(c.phone || chalk.dim('—')),
       ])));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Search failed')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Search failed', e); }
   });
 
 contactsCommand.command('timeline <id>').description('View contact activity timeline').option('--json', 'Output as JSON')
@@ -368,7 +392,7 @@ contactsCommand.command('timeline <id>').description('View contact activity time
         console.log(`  ${chalk.dim(date)}  ${type}  ${a.description || a.summary || a.title || ''}`);
       }
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load timeline')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load timeline', e); }
   });
 
 crmCommand.addCommand(contactsCommand);
@@ -382,7 +406,9 @@ const dealsCommand = new Command('deals')
   .option('--offset <n>', 'Pagination offset', '0')
   .option('--all', 'Auto-paginate until the server runs out')
   .option('--json', 'Output as JSON')
-  .action(async (opts: { stage?: string; limit: string; offset: string; all?: boolean; json?: boolean }) => {
+  .argument('[list]', 'Optional literal "list" — same as omitting it')
+  .action(async (listArg: string | undefined, opts: { stage?: string; limit: string; offset: string; all?: boolean; json?: boolean }) => {
+    listLiteral(listArg, 'deals');
     requireAuth();
     const spinner = ora({ text: 'Loading deals...', stream: process.stderr }).start();
     try {
@@ -399,7 +425,7 @@ const dealsCommand = new Command('deals')
           { limit: 100 },
         );
         spinner.stop();
-        if (isJsonOutput(opts)) { console.log(JSON.stringify({ items, count: items.length }, null, 2)); return; }
+        if (isJsonOutput(opts)) { printJson({ items, count: items.length }); return; }
       } else {
         const res = await apiClient.get('/api/v1/crm/deals', {
           params: { ...base, limit: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
@@ -426,7 +452,7 @@ const dealsCommand = new Command('deals')
         String(d.stage || chalk.dim('—')), String(d.contact_name || d.contact_id || chalk.dim('—')),
       ])));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load deals')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load deals', e); }
   });
 
 dealsCommand.command('get <id>').description('Get deal details').option('--json', 'Output as JSON')
@@ -444,7 +470,7 @@ dealsCommand.command('get <id>').description('Get deal details').option('--json'
         `Stage:   ${d.stage || '—'}`, `Contact: ${d.contact_name || d.contact_id || '—'}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load deal', e); }
   });
 
 dealsCommand.command('create').description('Create a new deal')
@@ -467,7 +493,7 @@ dealsCommand.command('create').description('Create a new deal')
         `ID: ${d.id}`, `Title: ${d.title}`, `Value: ${d.value ? '$' + Number(d.value).toLocaleString() : '—'}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to create deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to create deal', e); }
   });
 
 dealsCommand.command('update <id>').description('Update a deal')
@@ -488,7 +514,7 @@ dealsCommand.command('update <id>').description('Update a deal')
         `ID: ${d.id || id}`, `Stage: ${d.stage || '—'}`, `Value: ${d.value ? '$' + Number(d.value).toLocaleString() : '—'}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to update deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to update deal', e); }
   });
 
 dealsCommand.command('close <id>').description('Close a deal as won or lost')
@@ -502,7 +528,7 @@ dealsCommand.command('close <id>').description('Close a deal as won or lost')
       await apiClient.post(`/api/v1/crm/deals/${id}/close`, { outcome });
       const color = outcome === 'won' ? chalk.green : chalk.red;
       spinner.succeed(color(`Deal ${id} closed as ${outcome.toUpperCase()}`));
-    } catch (e) { spinner.fail(chalk.red('Failed to close deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to close deal', e); }
   });
 
 dealsCommand.command('move-stage <id> <stage>').description('Move a deal to a new pipeline stage')
@@ -521,7 +547,7 @@ dealsCommand.command('move-stage <id> <stage>').description('Move a deal to a ne
         `Value: ${d.value ? '$' + Number(d.value).toLocaleString() : '—'}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to move deal')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to move deal', e); }
   });
 
 crmCommand.addCommand(dealsCommand);
@@ -533,7 +559,9 @@ const tasksCommand = new Command('tasks')
   .option('--status <status>', 'Filter by status').option('--priority <priority>', 'Filter by priority')
   .option('--overdue', 'Show only overdue tasks').option('-l, --limit <n>', 'Max results', '25')
   .option('--json', 'Output as JSON')
-  .action(async (opts) => {
+  .argument('[list]', 'Optional literal "list" — same as omitting it')
+  .action(async (listArg: string | undefined, opts) => {
+    listLiteral(listArg, 'tasks');
     requireAuth();
     const spinner = ora('Loading tasks...').start();
     try {
@@ -554,7 +582,7 @@ const tasksCommand = new Command('tasks')
           overdue ? chalk.red(due) : chalk.dim(due), String(t.status || chalk.dim('—'))];
       })));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load tasks')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load tasks', e); }
   });
 
 tasksCommand.command('create').description('Create a new task')
@@ -578,7 +606,7 @@ tasksCommand.command('create').description('Create a new task')
         `Due: ${t.due_date ? String(t.due_date).split('T')[0] : '—'}`,
       ]));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to create task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to create task', e); }
   });
 
 tasksCommand.command('complete <id>').description('Mark a task as complete')
@@ -588,7 +616,7 @@ tasksCommand.command('complete <id>').description('Mark a task as complete')
     try {
       await apiClient.put(`/api/v1/crm/tasks/${id}/complete`);
       spinner.succeed(chalk.green(`Task ${id} marked complete`));
-    } catch (e) { spinner.fail(chalk.red('Failed to complete task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to complete task', e); }
   });
 
 tasksCommand.command('update <id>').description('Update a task')
@@ -611,7 +639,7 @@ tasksCommand.command('update <id>').description('Update a task')
     try {
       await apiClient.put(`/api/v1/crm/tasks/${id}`, body);
       spinner.succeed(chalk.green(`Task ${id} updated`));
-    } catch (e) { spinner.fail(chalk.red('Failed to update task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to update task', e); }
   });
 
 tasksCommand.command('delete <id>').description('Delete a task')
@@ -621,7 +649,7 @@ tasksCommand.command('delete <id>').description('Delete a task')
     try {
       await apiClient.delete(`/api/v1/crm/tasks/${id}`);
       spinner.succeed(chalk.green(`Task ${id} deleted`));
-    } catch (e) { spinner.fail(chalk.red('Failed to delete task')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to delete task', e); }
   });
 
 crmCommand.addCommand(tasksCommand);
@@ -646,7 +674,7 @@ crmCommand.command('dashboard').description('CRM summary — contacts, deals, re
       console.log(ui.label('Tasks Due', String(d.tasks_due ?? d.overdue_tasks ?? '—')));
       console.log(ui.label('Activities', String(d.recent_activities ?? d.activities_count ?? '—')));
       console.log('');
-    } catch (e) { spinner.fail(chalk.red('Failed to load dashboard')); console.error(chalk.red(`  ${handleApiError(e).message}`)); process.exit(1); }
+    } catch (e) { fail(spinner, 'Failed to load dashboard', e); }
   });
 
 crmCommand.addHelpText('after', `

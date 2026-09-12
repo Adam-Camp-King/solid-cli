@@ -19,18 +19,13 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { apiClient } from '../lib/api-client';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { ui } from '../lib/ui';
-import { requireAuth } from '../lib/command-kit';
+import { fail, requireAuth } from '../lib/command-kit';
 
 type Rec = Record<string, unknown>;
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown): void {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-  process.exit(1);
-}
 
 function dollars(cents: unknown): string {
   const n = Number(cents);
@@ -120,7 +115,7 @@ salesCommand
       const contacts = ((highValueRes.data as Rec).high_value_contacts || []) as Rec[];
 
       if (isJsonOutput(opts)) {
-        console.log(JSON.stringify({ stats, prospects: contacts }, null, 2));
+        printJson({ stats, prospects: contacts });
         return;
       }
 
@@ -208,7 +203,7 @@ salesCommand
       const pipeline = pipelineRes.data as Rec;
 
       if (isJsonOutput(opts)) {
-        console.log(JSON.stringify({ revenue, pipeline }, null, 2));
+        printJson({ revenue, pipeline });
         return;
       }
 
@@ -263,7 +258,7 @@ salesCommand
       const customers = customersRes.data as Rec;
 
       if (isJsonOutput(opts)) {
-        console.log(JSON.stringify({ period: p, summary, leads, customers }, null, 2));
+        printJson({ period: p, summary, leads, customers });
         return;
       }
 
@@ -420,7 +415,7 @@ salesCommand
       const tiers = tierRes.data as Rec;
 
       if (isJsonOutput(opts)) {
-        console.log(JSON.stringify({ funnel, tiers }, null, 2));
+        printJson({ funnel, tiers });
         return;
       }
 

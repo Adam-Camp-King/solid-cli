@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { fail } from '../lib/command-kit';
 
 const API_SECTIONS: Record<string, { description: string; endpoints: string[] }> = {
   auth: {
@@ -266,9 +267,7 @@ apiCommand
         console.log(JSON.stringify(response.data, null, 2));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Request failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Request failed', error);
     }
   });
 

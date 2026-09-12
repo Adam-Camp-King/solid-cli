@@ -21,7 +21,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ ucpConsentCommand
       await apiClient.delete(`/api/v1/ucp/consent/grant/${encodeURIComponent(grantId)}`);
       if (spinner) spinner.stop();
       if (wantJson) {
-        console.log(JSON.stringify({ revoked: grantId }, null, 2));
+        printJson({ revoked: grantId });
         return;
       }
       console.log('');

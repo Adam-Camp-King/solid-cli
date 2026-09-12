@@ -21,7 +21,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
@@ -31,10 +31,6 @@ function requireAuth(): void {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): void {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(error).message}`));
-}
 
 export const inboundCommand = new Command('inbound')
   .description('Inbound webhooks — receive events from Zapier/Stripe/external systems and fire chains');
@@ -257,7 +253,7 @@ inboundCommand
     } catch (error) { fail(spinner, 'Replay failed', error); }
   });
 
-import { appendExamples as __ae_inbound } from '../lib/command-kit';
+import { appendExamples as __ae_inbound, fail } from '../lib/command-kit';
 __ae_inbound(inboundCommand, [
   { cmd: 'solid inbound list',                              why: 'Inbound webhook endpoints' },
   { cmd: 'solid inbound create --name zapier --event *',    why: 'New inbound endpoint' },

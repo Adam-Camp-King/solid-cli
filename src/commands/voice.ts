@@ -9,9 +9,9 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -20,10 +20,6 @@ function requireAuth(): void {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): void {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(error).message}`));
-}
 
 export const voiceCommand = new Command('voice')
   .description('Voice calls, phone numbers, voicemail & personality');
@@ -779,7 +775,7 @@ async function _toggleTranslate(phone: string, enabled: boolean, options: { json
     });
     if (isJsonOutput(options)) {
       spinner.stop();
-      console.log(JSON.stringify({ phone: row.phone_number, translate_enabled: enabled, response: res.data }, null, 2));
+      printJson({ phone: row.phone_number, translate_enabled: enabled, response: res.data });
       return;
     }
     spinner.succeed(chalk.green(`Live translation ${enabled ? 'enabled' : 'disabled'} on ${row.phone_number}.`));
@@ -821,7 +817,7 @@ translateCmd
       const enabled = Boolean((row.voice_config as any)?.translate_enabled);
       if (isJsonOutput(options)) {
         spinner.stop();
-        console.log(JSON.stringify({ phone: row.phone_number, translate_enabled: enabled }, null, 2));
+        printJson({ phone: row.phone_number, translate_enabled: enabled });
         return;
       }
       spinner.succeed(`${row.phone_number}: translate ${enabled ? chalk.green('enabled') : chalk.dim('disabled')}`);
@@ -870,7 +866,7 @@ voiceCommand
     } catch (error) { fail(spinner, 'Dispatch failed', error); }
   });
 
-import { appendExamples as __appendExamplesVoice } from '../lib/command-kit';
+import { appendExamples as __appendExamplesVoice, fail } from '../lib/command-kit';
 __appendExamplesVoice(voiceCommand, [
   { cmd: 'solid voice calls list --today', why: "Today's call log" },
   { cmd: 'solid voice calls get <id>', why: 'Transcript + recording link' },

@@ -774,6 +774,18 @@ try {
 import { setProgram as __setProgramForRegistry } from './lib/program-registry';
 __setProgramForRegistry(program);
 
+// Reject unknown POSITIONAL arguments, the way unknown --flags are already
+// rejected. Commander 12 defaults to permissive (v13 flips it), so a
+// hallucinated subcommand like `solid crm contacts export` silently parsed
+// as `solid crm contacts` and returned the full list with exit 0 — an agent
+// then reports "exported" having exported nothing. Commander still allows
+// declared variadic (`<items...>`) and optional (`[file]`) arguments, so
+// this only fires on genuinely excess input.
+(function forbidExcessArgs(cmd: Command): void {
+  cmd.allowExcessArguments(false);
+  cmd.commands.forEach((c) => forbidExcessArgs(c as Command));
+})(program);
+
 program.parse(process.argv);
 
 // T11.2 — on exit, print a dry-run summary if any mutations were intercepted.

@@ -130,6 +130,7 @@ seoCommand
     } catch (error) {
       spinner.fail(chalk.red('No SEO audit found'));
       console.error(chalk.dim('  Run `solid seo site-audit` first.'));
+      process.exit(1);
     }
   });
 

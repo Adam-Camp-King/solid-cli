@@ -89,9 +89,7 @@ export const inboxCommand = new Command('inbox')
         console.log(chalk.dim(`    ${truncate(msg.message || msg.body || msg.subject, 80)}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load inbox'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load inbox', error);
     }
   });
 
@@ -118,7 +116,7 @@ inboxCommand
         console.log(`  ${dir} ${ch} ${chalk.bold(msg.contact_name || 'Unknown')}  ${formatDate(msg.created_at)}`);
         console.log(chalk.dim(`    ${truncate(msg.message || msg.body || msg.subject, 80)}`));
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Reply (top-level) ───────────────────────────────────────────────
@@ -131,7 +129,7 @@ inboxCommand
     try {
       await apiClient.post(`/api/v1/communications/inbox/${messageId}/reply`, { body });
       spinner.succeed(chalk.green('Reply sent'));
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Mark Read (top-level) ───────────────────────────────────────────
@@ -144,7 +142,7 @@ inboxCommand
     try {
       await apiClient.post(`/api/v1/communications/inbox/${messageId}/read`, {});
       spinner.succeed(chalk.green('Marked as read'));
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Stats ────────────────────────────────────────────────────────────
@@ -175,9 +173,7 @@ inboxCommand
         console.log(`  ${chalk.bold(label)}: ${chalk.cyan(String(value))}`);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load inbox stats'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load inbox stats', error);
     }
   });
 
@@ -227,10 +223,7 @@ inboxCommand
       const channel = (result.channel as string) || opts.channel || 'auto';
       spinner.succeed(chalk.green(`Message sent via ${channel}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to send message'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to send message', error);
     }
   });
 
@@ -282,9 +275,7 @@ emailCmd
         console.log(chalk.dim(`    ${addr}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load emails'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load emails', error);
     }
   });
 
@@ -318,9 +309,7 @@ emailCmd
       console.log('');
       console.log(email.body || email.text || chalk.dim('(empty body)'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load email'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load email', error);
     }
   });
 
@@ -343,9 +332,7 @@ emailCmd
 
       spinner.succeed(chalk.green(`Email sent to ${options.to}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to send email'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to send email', error);
     }
   });
 
@@ -360,9 +347,7 @@ emailCmd
       await apiClient.post(`/api/v1/crm/emails/${id}/reply`, { body });
       spinner.succeed(chalk.green('Reply sent'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to send reply'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to send reply', error);
     }
   });
 
@@ -396,9 +381,7 @@ emailCmd
         console.log('');
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load thread'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load thread', error);
     }
   });
 
@@ -445,9 +428,7 @@ const campaignsCmd = inboxCommand
         if (c.subject) console.log(chalk.dim(`    Subject: ${truncate(c.subject, 60)}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load campaigns'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load campaigns', error);
     }
   });
 
@@ -471,9 +452,7 @@ campaignsCmd
       const campaign = response.data as Record<string, any> || {};
       spinner.succeed(chalk.green(`Campaign created: ${campaign.id || campaign.name || 'OK'}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create campaign'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create campaign', error);
     }
   });
 
@@ -488,9 +467,7 @@ campaignsCmd
       await apiClient.post(`/api/v1/crm/campaigns/${id}/send`);
       spinner.succeed(chalk.green(`Campaign ${id} sent`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to send campaign'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to send campaign', error);
     }
   });
 
@@ -521,13 +498,11 @@ campaignsCmd
         console.log(`  ${chalk.bold(label)}: ${chalk.cyan(String(value))}`);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load campaign stats'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load campaign stats', error);
     }
   });
 
-import { appendExamples as __appendExamplesInbox } from '../lib/command-kit';
+import { appendExamples as __appendExamplesInbox, fail } from '../lib/command-kit';
 __appendExamplesInbox(inboxCommand, [
   { cmd: 'solid inbox stats', why: 'Unread/total counts across channels' },
   { cmd: 'solid inbox send <recipient> <message>', why: 'Send a message' },

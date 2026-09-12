@@ -76,9 +76,7 @@ scheduleCommand
       ];
       for (const [k, v] of fields) { if (v) console.log(`  ${chalk.bold(k + ':')}  ${v}`); }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load appointment'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to load appointment', error);
     }
   });
 
@@ -110,9 +108,7 @@ scheduleCommand
       spinner.succeed(chalk.green(`Appointment created (#${apt.id || 'OK'})`));
       console.log(chalk.dim(`  ${options.date} at ${options.time}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create appointment'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to create appointment', error);
     }
   });
 
@@ -141,9 +137,7 @@ scheduleCommand
       await apiClient.patch(`/api/v1/schedule/${id}`, body);
       spinner.succeed(chalk.green(`Appointment #${id} updated`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to update appointment'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to update appointment', error);
     }
   });
 
@@ -165,9 +159,7 @@ scheduleCommand
       spinner.succeed(chalk.green(`Hold: ${r.hold_id || r.id}`));
       if (r.expires_at) console.log(chalk.dim(`  expires: ${r.expires_at}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to hold slot'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to hold slot', error);
     }
   });
 
@@ -195,9 +187,7 @@ scheduleCommand
       const a = res.data as Record<string, any>;
       spinner.succeed(chalk.green(`Appointment booked: ${a.id}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to book'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to book', error);
     }
   });
 
@@ -217,9 +207,7 @@ scheduleCommand
       const a = res.data as Record<string, any>;
       spinner.succeed(chalk.green(`Rescheduled: ${a.id}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to reschedule'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to reschedule', error);
     }
   });
 
@@ -239,9 +227,7 @@ scheduleCommand
       });
       spinner.succeed(chalk.green(`Appointment #${id} cancelled`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to cancel appointment'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to cancel appointment', error);
     }
   });
 
@@ -275,9 +261,7 @@ scheduleCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load calendar'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to load calendar', error);
     }
   });
 
@@ -312,13 +296,11 @@ scheduleCommand
         console.log(`  ${chalk.green(slot.time || slot.start || '')}${end ? chalk.dim(` - ${end}`) : ''}`);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to check availability'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to check availability', error);
     }
   });
 
-import { appendExamples as __appendExamplesSchedule } from '../lib/command-kit';
+import { appendExamples as __appendExamplesSchedule, fail } from '../lib/command-kit';
 __appendExamplesSchedule(scheduleCommand, [
   { cmd: 'solid schedule list --today', why: "Today's appointments" },
   { cmd: 'solid schedule list --from 2026-04-20 --to 2026-04-27', why: 'Date range' },
@@ -369,9 +351,7 @@ scheduleCommand
       console.log(chalk.dim('  external_id:'), a.external_id);
       console.log(chalk.dim('  run_at:    '), a.run_at);
     } catch (error) {
-      spinner.fail(chalk.red('Failed to schedule'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to schedule', error);
     }
   });
 

@@ -135,15 +135,19 @@ export const healthCommand = new Command('health')
       spinner.fail(chalk.red('Health check failed'));
       const apiError = handleApiError(error);
 
-      console.log('');
-      console.log(ui.errorBox('Connection Failed', [
+      // Failure output belongs on stderr — `solid health` prints its report
+      // to stdout, so a caller piping it must not receive the failure box
+      // mixed into the payload.
+      console.error('');
+      console.error(ui.errorBox('Connection Failed', [
         apiError.message,
         '',
         `${chalk.dim('API URL:')} ${config.apiUrl}`,
         '',
         chalk.dim('Check if the API server is running.'),
       ]));
-      console.log('');
+      console.error('');
+      process.exit(1);
     }
   });
 

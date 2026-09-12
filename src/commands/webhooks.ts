@@ -7,7 +7,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput } from '../lib/json-output';
-import { requireCompanyContext } from '../lib/command-kit';
+import { fail, requireCompanyContext } from '../lib/command-kit';
 
 export const webhooksCommand = new Command('webhooks')
   .description('Custom webhook management')
@@ -160,9 +160,7 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
       ].filter(Boolean)));
       console.log('');
     } catch (e) {
-      spinner.fail(chalk.red(`Failed to send ${event}`));
-      console.error(chalk.red(`  ${handleApiError(e).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to send ${event}`, e);
     }
   });
 

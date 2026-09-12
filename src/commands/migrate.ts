@@ -192,13 +192,11 @@ export const migrateCommand = new Command('migrate')
       ].filter(Boolean)));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Migration failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Migration failed', error);
     }
   });
 
-import { appendExamples as __ae_migrate } from '../lib/command-kit';
+import { appendExamples as __ae_migrate, fail } from '../lib/command-kit';
 __ae_migrate(migrateCommand, [
   { cmd: 'solid migrate --from <src_id> --to <dst_id> --pages',              why: 'Copy pages between companies' },
   { cmd: 'solid migrate --from <src_id> --to <dst_id> --kb --overwrite',     why: 'Copy KB + overwrite conflicts' },

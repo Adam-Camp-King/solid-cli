@@ -9,7 +9,8 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
+import { fail } from '../lib/command-kit';
 import {
   chatEmbedSnippet,
   formEmbedSnippet,
@@ -27,7 +28,7 @@ function requireAuth() {
 
 function emit(snippet: string, meta: Record<string, unknown>, options: { json?: boolean }) {
   if (isJsonOutput(options)) {
-    console.log(JSON.stringify({ ...meta, snippet }, null, 2));
+    printJson({ ...meta, snippet });
     return;
   }
   console.log('');
@@ -100,8 +101,6 @@ embedCommand
       const snippet = paylinkEmbedSnippet(checkoutUrl, options.label);
       emit(snippet, { type: 'paylink', link_id: linkId, checkout_url: checkoutUrl }, options);
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load payment link'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to load payment link', error);
     }
   });

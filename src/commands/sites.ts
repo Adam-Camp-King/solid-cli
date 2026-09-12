@@ -21,7 +21,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 interface SiteEntry {
   company_id: number;
@@ -114,7 +114,7 @@ sitesCommand
       spinner?.stop();
 
       if (wantsJson) {
-        console.log(JSON.stringify({ success: true, ...manifest }, null, 2));
+        printJson({ success: true, ...manifest });
         return;
       }
       console.log(chalk.green(`✓ Bound to ${target.slug || `co-${target.company_id}`} (#${target.company_id})`));

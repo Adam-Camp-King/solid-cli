@@ -13,7 +13,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 export const companyCommand = new Command('company')
   .description('Manage companies (agencies & multi-company developers)');
@@ -69,9 +69,7 @@ companyCommand
       console.log(chalk.dim('  Switch with: solid switch <id>'));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to list companies'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to list companies', error);
     }
   });
 
@@ -152,9 +150,7 @@ companyCommand
         console.log(chalk.dim(`  Check status: solid droplet status ${slug}`));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to provision droplet'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to provision droplet', error);
       }
     } else {
       // ── Shared Platform Flow (existing) ──
@@ -188,9 +184,7 @@ companyCommand
         console.log(chalk.dim('  Need a dedicated server? Add --dedicated'));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to create company'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to create company', error);
       }
     }
   });
@@ -207,7 +201,7 @@ companyCommand
     }
     const id = config.companyId;
     if (isJsonOutput(options)) {
-      console.log(JSON.stringify({ company_id: id ?? null, email: config.userEmail ?? null }, null, 2));
+      printJson({ company_id: id ?? null, email: config.userEmail ?? null });
       return;
     }
     if (!id) {
@@ -248,9 +242,7 @@ companyCommand
       ]));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load company info'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load company info', error);
     }
   });
 
@@ -304,9 +296,7 @@ const membersCommand = new Command('members')
       console.log(ui.table(headers, rows));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to list members'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to list members', error);
     }
   });
 
@@ -350,9 +340,7 @@ membersCommand
       await apiClient.companyMemberRevoke(companyId, targetUserId);
       spinner.succeed(chalk.green(`Member (user_id=${targetUserId}) removed from company ${companyId}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to revoke member'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to revoke member', error);
     }
   });
 
@@ -383,9 +371,7 @@ companyCommand
       spinner.succeed(chalk.green('Invitation sent'));
       console.log(chalk.dim(`  ${email} invited as ${options.role} to company ${companyId}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to send invitation'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to send invitation', error);
     }
   });
 
@@ -514,10 +500,7 @@ companyCommand
         res.data.next_steps.forEach((s) => console.log(chalk.dim(`    • ${s}`)));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Provisioning failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Provisioning failed', error);
     }
   });
 
@@ -578,10 +561,7 @@ companyCommand
       spinner.succeed(chalk.green(`Locked: ${areas.join(', ')}`));
       printLocks(res.data.locks);
     } catch (error) {
-      spinner.fail(chalk.red('Lock failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Lock failed', error);
     }
   });
 
@@ -616,10 +596,7 @@ companyCommand
       spinner.succeed(chalk.green(`Unlocked: ${label}`));
       printLocks(res.data.locks);
     } catch (error) {
-      spinner.fail(chalk.red('Unlock failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Unlock failed', error);
     }
   });
 
@@ -647,10 +624,7 @@ companyCommand
       console.log(chalk.dim(`  Agency owner: user_id=${res.data.agency_owner_user_id}`));
       console.log(chalk.dim(`  Keys: ${res.data.areas.join(', ')}`));
     } catch (error) {
-      spinner.fail(chalk.red('Request failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Request failed', error);
     }
   });
 
@@ -675,14 +649,11 @@ companyCommand
       spinner.succeed(chalk.green(`Applied: ${profile}`));
       printLocks(res.data.locks);
     } catch (error) {
-      spinner.fail(chalk.red('Preset failed'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Preset failed', error);
     }
   });
 
-import { appendExamples as __ae_company } from '../lib/command-kit';
+import { appendExamples as __ae_company, fail } from '../lib/command-kit';
 __ae_company(companyCommand, [
   { cmd: 'solid company list',                            why: 'Companies you have access to' },
   { cmd: 'solid company current',                         why: 'Active company (same as whoami)' },

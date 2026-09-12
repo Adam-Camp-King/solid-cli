@@ -47,9 +47,7 @@ async function flowAction(flowId: string, action: string, verb: string, color: (
     await apiClient.post(`/api/v1/cli/flows/${flowId}/${action}`);
     spinner.succeed(color(`Flow ${flowId} ${verb.toLowerCase()}`));
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to ${action} flow`));
-    const apiError = handleApiError(error);
-    console.error(chalk.red(`  ${apiError.message}`));
+    fail(spinner, `Failed to ${action} flow`, error);
   }
 }
 
@@ -116,9 +114,7 @@ flowsCommand
       if (data.trial_days) console.log(ui.label('Trial', `${data.trial_days} days`));
       if (data.created_at) console.log(ui.label('Created', new Date(data.created_at).toLocaleDateString()));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load flow'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load flow', error);
     }
   });
 
@@ -153,9 +149,7 @@ flowsCommand
       console.log('');
       console.log(chalk.dim(`  Next: Run \`solid flow activate ${data.id}\` to go live`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create flow'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create flow', error);
     }
   });
 
@@ -184,9 +178,7 @@ flowsCommand
       await apiClient.patch(`/api/v1/cli/flows/${flowId}`, body);
       spinner.succeed(chalk.green(`Flow ${flowId} updated`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to update flow'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to update flow', error);
     }
   });
 
@@ -225,9 +217,7 @@ flowsCommand
       console.log(ui.label('Conversion', data.conversion_rate ? `${data.conversion_rate}%` : '-'));
       console.log(ui.label('Churn', data.churn_rate ? `${data.churn_rate}%` : '-'));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load metrics'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load metrics', error);
     }
   });
 
@@ -254,9 +244,7 @@ flowsCommand
       console.log(ui.label('Name', data.name));
       console.log(ui.label('Status', statusColor(data.status || 'draft')));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to clone flow'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to clone flow', error);
     }
   });
 
@@ -285,13 +273,11 @@ flowsCommand
         a.status === 'active' ? chalk.green(a.status) : chalk.dim(a.status),
       ])));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load agents'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load agents', error);
     }
   });
 
-import { appendExamples as __ae_flows } from '../lib/command-kit';
+import { appendExamples as __ae_flows, fail } from '../lib/command-kit';
 __ae_flows(flowsCommand, [
   { cmd: 'solid flow list',               why: 'Commerce flows + subscriptions' },
   { cmd: 'solid flow create --file f.json', why: 'New flow from definition' },

@@ -13,8 +13,9 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { frontendUrlFor } from '../lib/url-utils';
+import { fail } from '../lib/command-kit';
 
 // ---------------------------------------------------------------------------
 // Browser login (loopback OAuth — like `npm login`, `gh auth login`)
@@ -475,10 +476,7 @@ authCommand
 
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Login failed'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
-        process.exit(1);
+        fail(spinner, 'Login failed', error);
       }
     } catch (error) {
       console.error(chalk.red('Error:'), error);
@@ -494,7 +492,7 @@ authCommand
   .action(async (options: { json?: boolean }) => {
     if (!config.refreshToken) {
       if (isJsonOutput(options)) {
-        console.log(JSON.stringify({ refreshed: false, reason: 'no_refresh_token' }, null, 2));
+        printJson({ refreshed: false, reason: 'no_refresh_token' });
       } else {
         console.error(chalk.red('No refresh token cached. Run `solid auth login` first.'));
       }
@@ -505,7 +503,7 @@ authCommand
     if (!ok) {
       spinner.fail(chalk.red('Refresh failed — your refresh token may be expired.'));
       if (isJsonOutput(options)) {
-        console.log(JSON.stringify({ refreshed: false, reason: 'refresh_rejected' }, null, 2));
+        printJson({ refreshed: false, reason: 'refresh_rejected' });
       } else {
         console.error(chalk.dim('  Run `solid auth login` to re-authenticate.'));
       }
@@ -513,10 +511,10 @@ authCommand
     }
     spinner.succeed(chalk.green('Token refreshed'));
     if (isJsonOutput(options)) {
-      console.log(JSON.stringify({
+      printJson({
         refreshed: true,
         token_expires_at: config.tokenExpiresAt ? config.tokenExpiresAt.toISOString() : null,
-      }, null, 2));
+      });
       return;
     }
     const ttl = formatTokenTTL();
@@ -552,6 +550,8 @@ authCommand
         await apiClient.post('/api/v1/auth/logout', { all_devices: true });
         spinner.succeed(chalk.green('All sessions revoked server-side'));
       } catch (error) {
+        // Deliberately NOT a failure: the local session is cleared either way,
+        // so logout succeeded from the caller's point of view. Stays exit 0.
         spinner.warn(chalk.yellow('Server-side revoke failed — clearing local session anyway'));
         const apiError = handleApiError(error);
         console.error(chalk.dim(`  ${apiError.message}`));
@@ -729,9 +729,12 @@ async function runAuthStatus(options: { json?: boolean; features?: boolean } = {
       if (ttl) console.log(chalk.dim(`  Token:       ${ttl}`));
       console.log(chalk.dim('  (Could not verify with server)'));
     } else {
+      // Network failed AND there is no cached identity — nothing to report.
+      // (The branch above is a successful offline answer and stays exit 0.)
       spinner.fail(chalk.red('Failed to check status'));
       const apiError = handleApiError(error);
       console.error(chalk.red(`  ${apiError.message}`));
+      process.exit(1);
     }
   }
 }
@@ -798,9 +801,7 @@ tokenCommand
       }
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create API key'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create API key', error);
     }
   });
 
@@ -849,9 +850,7 @@ tokenCommand
       console.log(ui.table(headers, rows));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to list API keys'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to list API keys', error);
     }
   });
 
@@ -876,9 +875,7 @@ tokenCommand
       await apiClient.apiKeyRevoke(keyId);
       spinner.succeed(chalk.green(`API key ${keyId} revoked`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to revoke API key'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to revoke API key', error);
     }
   });
 

@@ -95,9 +95,7 @@ blogCommand
         console.log(`  ${post.content.substring(0, 500)}${post.content.length > 500 ? '...' : ''}`);
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load blog post', error);
     }
   });
 
@@ -166,9 +164,7 @@ blogCommand
       spinner.succeed(chalk.green(`Blog post created: "${title}"`));
       if (post.id) console.log(chalk.dim(`  ID: ${post.id}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create blog post', error);
     }
   });
 
@@ -199,9 +195,7 @@ blogCommand
       await apiClient.patch(`/api/v1/cms/blog/posts/${id}`, body);
       spinner.succeed(chalk.green(`Post #${id} updated`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to update blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to update blog post', error);
     }
   });
 
@@ -225,10 +219,7 @@ blogCommand
       await apiClient.delete(`/api/v1/cms/blog/posts/${id}`);
       spinner.succeed(chalk.green(`Blog post #${id} deleted`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to delete blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to delete blog post', error);
     }
   });
 
@@ -270,10 +261,7 @@ blogCommand
       spinner.succeed(chalk.green(`Blog post published: "${post.title || `#${postId}`}"`));
       if (post.published_at) console.log(chalk.dim(`  Published: ${post.published_at}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to publish blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to publish blog post', error);
     }
   });
 
@@ -298,10 +286,7 @@ blogCommand
 
       spinner.succeed(chalk.green(`Blog post unpublished: "${post.title || `#${postId}`}"`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to unpublish blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to unpublish blog post', error);
     }
   });
 
@@ -350,10 +335,7 @@ blogCommand
         if (data.task_id) console.log(chalk.dim(`  Job: ${data.task_id}`));
         console.log(chalk.dim('  Run `solid blog list --status draft` shortly to see them.'));
       } catch (error) {
-        spinner.fail(chalk.red('Failed to queue blog generation'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
-        process.exit(1);
+        fail(spinner, 'Failed to queue blog generation', error);
       }
       return;
     }
@@ -380,10 +362,7 @@ blogCommand
       const published = data.published ?? post.published ?? !!options.autoPublish;
       console.log(chalk.dim(`  Status: ${published ? 'published' : 'draft'}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to generate blog post'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to generate blog post', error);
     }
   });
 
@@ -430,9 +409,7 @@ seoCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to run SEO audit'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to run SEO audit', error);
     }
   });
 
@@ -460,9 +437,7 @@ seoCommand
       if (data.phone) console.log(ui.label('Phone', data.phone));
       if (data.categories?.length) console.log(ui.label('Categories', data.categories.join(', ')));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load SEO profile'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load SEO profile', error);
     }
   });
 
@@ -500,9 +475,7 @@ seoCommand
         if (gap.description) console.log(chalk.dim(`         ${gap.description}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load SEO gaps'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load SEO gaps', error);
     }
   });
 
@@ -539,13 +512,11 @@ seoCommand
         if (c.url) console.log(chalk.dim(`    ${c.url}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load citations'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load citations', error);
     }
   });
 
-import { appendExamples as __appendExamplesBlog } from '../lib/command-kit';
+import { appendExamples as __appendExamplesBlog, fail } from '../lib/command-kit';
 __appendExamplesBlog(blogCommand, [
   { cmd: 'solid blog list --status draft', why: 'Drafts only' },
   { cmd: 'solid blog create --title "..." --file post.md', why: 'Publish from markdown' },

@@ -5,7 +5,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 interface VersionRecord {
   version: number;
@@ -116,7 +116,7 @@ export const historyCommand = new Command('history')
         const kbData = kbRes.data as KBHistoryResponse;
 
         if (isJsonOutput(options)) {
-          console.log(JSON.stringify({ pages: pagesData, kb: kbData }, null, 2));
+          printJson({ pages: pagesData, kb: kbData });
           return;
         }
 
@@ -162,9 +162,7 @@ export const historyCommand = new Command('history')
         console.log(chalk.dim('         solid history kb <entry_id>'));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load history'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to load history', error);
       }
       return;
     }
@@ -198,9 +196,7 @@ export const historyCommand = new Command('history')
           console.log(chalk.dim(`  Rollback: solid rollback page ${v.slug} --to ${v.version}`));
           console.log('');
         } catch (error) {
-          spinner.fail(chalk.red('Failed to load version'));
-          const apiError = handleApiError(error);
-          console.error(chalk.red(`  ${apiError.message}`));
+          fail(spinner, 'Failed to load version', error);
         }
         return;
       }
@@ -244,9 +240,7 @@ export const historyCommand = new Command('history')
         }
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load history'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to load history', error);
       }
       return;
     }
@@ -292,9 +286,7 @@ export const historyCommand = new Command('history')
         }
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load history'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to load history', error);
       }
       return;
     }
@@ -371,9 +363,7 @@ export const rollbackCommand = new Command('rollback')
         ]));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Rollback failed'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Rollback failed', error);
       }
       return;
     }
@@ -413,9 +403,7 @@ export const rollbackCommand = new Command('rollback')
         ]));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Rollback failed'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Rollback failed', error);
       }
       return;
     }
@@ -449,7 +437,7 @@ historyCommand
         console.log(`  v${v.version}  ${type} #${v.entity_id}  ${verb}  ${date}`);
         if (changes) console.log(chalk.dim(`    changed: ${changes}`));
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 historyCommand
@@ -473,7 +461,7 @@ historyCommand
         const verb = c.verb_name ? chalk.cyan(c.verb_name) : '';
         console.log(`  ${chalk.bold(c.entity_type)} #${c.entity_id}  v${c.version}  ${verb}  ${date}`);
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Universal Entity Rollback ───────────────────────────────────
@@ -503,11 +491,11 @@ rollbackCommand
       } else {
         spinner.fail(chalk.red(data.summary || 'Rollback failed'));
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 
-import { appendExamples as __ae_history } from '../lib/command-kit';
+import { appendExamples as __ae_history, fail } from '../lib/command-kit';
 __ae_history(historyCommand, [
   { cmd: 'solid history pages <slug>',           why: 'Version history for a page' },
   { cmd: 'solid history kb <id>',                why: 'KB entry versions' },

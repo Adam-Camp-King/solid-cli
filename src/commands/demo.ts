@@ -181,7 +181,7 @@ demoCommand
         console.log(chalk.dim('  A real AI receptionist will answer as your business.'));
       } else {
         console.log(chalk.yellow('  ⚠  Phone provisioning pending — check back in a minute with:'));
-        console.log(chalk.cyan(`    solid voice status --company ${companyId}`));
+        console.log(chalk.cyan(`    solid voice numbers --company ${companyId}`));
       }
       console.log('');
       console.log(chalk.dim('  Visit the site:'));

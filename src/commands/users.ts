@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -17,10 +17,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const usersCommand = new Command('users')
   .description('Team — invite, list, set roles, manage AI permissions');
@@ -425,7 +421,7 @@ usersCommand
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
-import { appendExamples as __appendExamplesUsers } from '../lib/command-kit';
+import { appendExamples as __appendExamplesUsers, fail } from '../lib/command-kit';
 __appendExamplesUsers(usersCommand, [
   { cmd: 'solid users list', why: 'Everyone on this company' },
   { cmd: 'solid users invite a@b.com --role admin', why: 'Send invite with role' },

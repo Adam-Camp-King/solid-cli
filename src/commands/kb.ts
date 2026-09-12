@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { fail } from '../lib/command-kit';
 
 export const kbCommand = new Command('kb')
   .description('Knowledge base management');
@@ -136,9 +137,7 @@ kbCommand
         console.log(chalk.dim(`  ID: ${(response.data as Record<string, any>).id}`));
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create KB entry'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create KB entry', error);
     }
   });
 
@@ -172,9 +171,7 @@ kbCommand
       await apiClient.kbUpdate(entryId, body);
       spinner.succeed(chalk.green(`KB entry #${entryId} updated`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to update KB entry'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to update KB entry', error);
     }
   });
 
@@ -202,10 +199,7 @@ kbCommand
       await apiClient.kbDelete(parseInt(id, 10));
       spinner.succeed(chalk.green(`KB entry #${id} deleted`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to delete KB entry'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to delete KB entry', error);
     }
   });
 

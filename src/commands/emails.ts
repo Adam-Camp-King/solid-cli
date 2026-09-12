@@ -8,7 +8,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -17,7 +17,6 @@ function requireAuth() {
     process.exit(1);
   }
 }
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.red(m)); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
 
 export const emailsCommand = new Command('emails')
   .alias('email')
@@ -261,7 +260,7 @@ emailsCommand
     } catch (e) { fail(s, 'Failed', e); }
   });
 
-import { appendExamples as __appendExamplesEmails } from '../lib/command-kit';
+import { appendExamples as __appendExamplesEmails, fail } from '../lib/command-kit';
 __appendExamplesEmails(emailsCommand, [
   { cmd: 'solid emails list', why: 'Your sending addresses + templates' },
   { cmd: 'solid emails send --to a@b.com --subject Hi --body "text"', why: 'Transactional send' },

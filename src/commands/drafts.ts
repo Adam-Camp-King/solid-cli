@@ -19,7 +19,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth(): void {
@@ -29,10 +29,6 @@ function requireAuth(): void {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, error: unknown): void {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(error).message}`));
-}
 
 export const draftsCommand = new Command('drafts')
   .description('Pending CMS page drafts — list, preview, discard (pair with `solid publish`)');
@@ -111,7 +107,7 @@ draftsCommand
     } catch (error) { fail(spinner, 'Discard failed', error); }
   });
 
-import { appendExamples as __ae_drafts } from '../lib/command-kit';
+import { appendExamples as __ae_drafts, fail } from '../lib/command-kit';
 __ae_drafts(draftsCommand, [
   { cmd: 'solid drafts list',          why: 'Pages awaiting publish' },
   { cmd: 'solid drafts preview <id>',  why: 'Shareable preview URL' },

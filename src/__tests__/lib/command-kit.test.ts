@@ -35,12 +35,17 @@ function makeStubSpinner() {
 describe('command-kit', () => {
   let logSpy: jest.SpyInstance;
   let errSpy: jest.SpyInstance;
+  // emitErrorAndExit writes prose straight to the stream (unbuffered, and
+  // independent of a replaced global console), so failure-path assertions
+  // watch process.stderr.write. requireAuth/confirm still use console.error.
+  let stderrSpy: jest.SpyInstance;
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
     __setLoggedIn(true);
     logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`EXIT:${code}`);
     }) as never);
@@ -49,6 +54,7 @@ describe('command-kit', () => {
   afterEach(() => {
     logSpy.mockRestore();
     errSpy.mockRestore();
+    stderrSpy.mockRestore();
     exitSpy.mockRestore();
     __setSpinnerFactoryForTest(null);
   });
@@ -138,7 +144,7 @@ describe('command-kit', () => {
 
       expect(calls[0]).toContain('fail:');
       expect(calls[0]).toContain('Could not load');
-      expect(errSpy).toHaveBeenCalled();
+      expect(stderrSpy).toHaveBeenCalled();
     });
 
     it('surfaces the structured API error message', async () => {
@@ -158,7 +164,7 @@ describe('command-kit', () => {
         ),
       ).rejects.toThrow('EXIT:1');
 
-      const errCalls = errSpy.mock.calls.map((c) => c.join(' '));
+      const errCalls = stderrSpy.mock.calls.map((c) => String(c[0]));
       expect(errCalls.some((c) => c.includes('invalid company_id'))).toBe(true);
     });
 

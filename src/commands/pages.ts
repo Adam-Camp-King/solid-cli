@@ -19,6 +19,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { fail } from '../lib/command-kit';
 
 export const pagesCommand = new Command('pages')
   .description('Website page management');
@@ -73,9 +74,7 @@ pagesCommand
       await apiClient.pagesPublish(parseInt(id));
       spinner.succeed(chalk.green(`Page #${id} published`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to publish page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to publish page', error);
     }
   });
 
@@ -95,9 +94,7 @@ pagesCommand
       await apiClient.pagesUnpublish(parseInt(id));
       spinner.succeed(chalk.green(`Page #${id} unpublished`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to unpublish page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to unpublish page', error);
     }
   });
 
@@ -143,9 +140,7 @@ pagesCommand
       }
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to load page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to load page', error);
     }
   });
 
@@ -223,9 +218,7 @@ pagesCommand
       console.log(chalk.dim('  Edit in browser: ') + chalk.cyan(`/dashboard/cms/builder/${page.id}`));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to create page', error);
     }
   });
 
@@ -332,9 +325,7 @@ pagesCommand
       await apiClient.pageDelete(pageId);
       spinner.succeed(chalk.green(`Page #${pageId} deleted`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to delete page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to delete page', error);
     }
   });
 
@@ -372,9 +363,7 @@ pagesCommand
       }
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to generate page'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      fail(spinner, 'Failed to generate page', error);
     }
   });
 
@@ -400,9 +389,7 @@ pagesCommand
       console.log(`  ${chalk.dim('Type:')}      ${p.page_type || '—'}`);
       console.log(`  ${chalk.dim('Published:')} ${p.is_published ?? false}`);
     } catch (error) {
-      spinner.fail(chalk.red('Failed to look up page'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to look up page', error);
     }
   });
 
@@ -421,9 +408,7 @@ pagesCommand
       const p = res.data as Record<string, any>;
       spinner.succeed(chalk.green(`Coming-soon page created: ${p.id || ''}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create coming-soon page'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to create coming-soon page', error);
     }
   });
 
@@ -443,9 +428,7 @@ pagesCommand
       spinner.succeed(chalk.green('Website regenerated'));
       if (r.pages_generated !== undefined) console.log(chalk.dim(`  ${r.pages_generated} pages generated`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to regenerate'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to regenerate', error);
     }
   });
 
@@ -465,9 +448,7 @@ pagesCommand
       const r = res.data as Record<string, any>;
       spinner.succeed(chalk.green(`Website generated: ${r.pages_count ?? r.pages?.length ?? '?'} pages`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to generate website'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to generate website', error);
     }
   });
 

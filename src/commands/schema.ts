@@ -17,7 +17,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { getProgram } from '../lib/program-registry';
 import { buildVerbManifest } from '../lib/verb-manifest';
 import { CLI_VERSION } from '../lib/api-client';
@@ -146,7 +146,7 @@ schemaCommand
 
     // --json → full schema
     if (isJsonOutput(opts)) {
-      console.log(JSON.stringify({ ...schema, blocks }, null, 2));
+      printJson({ ...schema, blocks });
       return;
     }
 

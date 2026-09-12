@@ -130,10 +130,11 @@ designCommand
       const e = err as ErrorLike;
       spinner.fail('Could not check Stitch status');
       if (e.response?.status === 401) {
-        console.log(chalk.yellow('\n  Run `solid auth login` first.\n'));
+        console.error(chalk.yellow('\n  Run `solid auth login` first.\n'));
       } else {
-        console.log(chalk.red(`\n  ${e.message || 'request failed'}\n`));
+        console.error(chalk.red(`\n  ${e.message || 'request failed'}\n`));
       }
+      process.exit(1);
     }
   });
 
@@ -196,14 +197,15 @@ designCommand
       const e = err as ErrorLike;
       spinner.fail('Design generation failed');
       if (e.response?.status === 503) {
-        console.log(
+        console.error(
           chalk.yellow(
             '\n  Stitch is not configured. Run `solid design status` for details.\n',
           ),
         );
       } else {
-        console.log(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
+        console.error(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
       }
+      process.exit(1);
     }
   });
 
@@ -276,6 +278,7 @@ designCommand
       const e = err as ErrorLike;
       spinner.fail('HTML import failed');
       console.log(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
+      process.exit(1);
     }
   });
 
@@ -330,13 +333,14 @@ designCommand
       const e = err as ErrorLike;
       spinner.fail('Pull failed');
       if (e.response?.status === 503) {
-        console.log(
+        console.error(
           chalk.yellow(
             '\n  Stitch is not configured. Run `solid design status` for details.\n',
           ),
         );
       } else {
-        console.log(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
+        console.error(chalk.red(`\n  ${e.response?.data?.detail || e.message || 'request failed'}\n`));
       }
+      process.exit(1);
     }
   });

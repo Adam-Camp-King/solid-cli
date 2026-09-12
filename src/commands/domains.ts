@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 export const domainsCommand = new Command('domains')
   .description('Per-site domain management — list, add, verify, set canonical')
@@ -42,7 +42,7 @@ domainsCommand.command('list').alias('ls').description('List every site + every 
       const sites: any[] = body.sites || [];
 
       if (isJsonOutput(options)) {
-        console.log(JSON.stringify({ sites }, null, 2));
+        printJson({ sites });
         return;
       }
 

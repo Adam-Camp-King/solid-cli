@@ -177,10 +177,7 @@ export const pullCommand = new Command('pull')
       totalFiles++;
       infoSpinner.succeed(chalk.green(`${company.name} — solid.config.json`));
     } catch (error) {
-      infoSpinner.fail(chalk.red('Failed to pull company info'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
-      process.exit(1);
+      fail(infoSpinner, 'Failed to pull company info', error);
     }
 
     // ── Pages ────────────────────────────────────────────────────────
@@ -234,9 +231,7 @@ export const pullCommand = new Command('pull')
           pagesSpinner.succeed(chalk.dim('No pages yet'));
         }
       } catch (error) {
-        pagesSpinner.fail(chalk.red('Failed to pull pages'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(pagesSpinner, 'Failed to pull pages', error);
       }
     }
 
@@ -280,9 +275,7 @@ export const pullCommand = new Command('pull')
           kbSpinner.succeed(chalk.dim('No KB entries yet'));
         }
       } catch (error) {
-        kbSpinner.fail(chalk.red('Failed to pull KB'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(kbSpinner, 'Failed to pull KB', error);
       }
     }
 
@@ -330,9 +323,7 @@ export const pullCommand = new Command('pull')
           svcSpinner.succeed(chalk.dim('No services yet'));
         }
       } catch (error) {
-        svcSpinner.fail(chalk.red('Failed to pull services'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(svcSpinner, 'Failed to pull services', error);
       }
     }
 
@@ -379,9 +370,7 @@ export const pullCommand = new Command('pull')
           prodSpinner.succeed(chalk.dim('No products yet'));
         }
       } catch (error) {
-        prodSpinner.fail(chalk.red('Failed to pull products'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(prodSpinner, 'Failed to pull products', error);
       }
     }
 
@@ -456,7 +445,7 @@ export const pullCommand = new Command('pull')
     console.log('');
   });
 
-import { appendExamples as __ae_pull } from '../lib/command-kit';
+import { appendExamples as __ae_pull, fail } from '../lib/command-kit';
 __ae_pull(pullCommand, [
   { cmd: 'solid pull',                  why: 'Download your business (pages, KB, settings) as local files' },
   { cmd: 'solid pull --pages-only',     why: 'Pages only — faster' },

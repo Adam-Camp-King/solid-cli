@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -16,7 +16,6 @@ function requireAuth() {
     process.exit(1);
   }
 }
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.red(m)); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
 
 export const chainsCommand = new Command('chains')
   .description('Agent chains — multi-step AI workflows (build, execute, approve)');
@@ -302,7 +301,7 @@ chainsCommand
     } catch (e) { fail(s, 'Failed', e); }
   });
 
-import { appendExamples as __ae_chains } from '../lib/command-kit';
+import { appendExamples as __ae_chains, fail } from '../lib/command-kit';
 __ae_chains(chainsCommand, [
   { cmd: 'solid chains list',                           why: 'Your agent-chain workflows' },
   { cmd: 'solid chains templates',                      why: 'Starter chains from the platform' },

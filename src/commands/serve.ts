@@ -405,6 +405,7 @@ export const serveCommand = new Command('serve')
         spinner.fail(chalk.red('Failed to fetch preview'));
         console.error(chalk.red(`  ${handleErr(error).message}`));
         return;
+        process.exit(1);
       }
     }
 

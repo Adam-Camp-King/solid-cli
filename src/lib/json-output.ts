@@ -7,7 +7,9 @@
  *   3. Program-level --json option
  *   4. SOLID_JSON=1 env var
  *   5. SOLID_NO_JSON=1 env var (explicit human override)
- *   6. **NEW:** auto-detect — when stdout is NOT a TTY (piped, redirected,
+ *   6. explicit --format csv|tsv → NOT json (beats the inference in 7,
+ *      loses to an explicit --json in 1-5)
+ *   7. **NEW:** auto-detect — when stdout is NOT a TTY (piped, redirected,
  *      called by an agent over MCP, run inside CI), default to JSON.
  *      Agents read structured output; humans read prose. The TTY signal
  *      is the cleanest discriminator and matches the convention modern
@@ -29,6 +31,28 @@ export function setProgramJson(on: boolean): void {
 function explicitHumanOptOut(localOptions?: { json?: boolean } | Record<string, unknown>): boolean {
   if (localOptions && (localOptions as any).json === false) return true;
   if (process.env.SOLID_NO_JSON && /^(1|true|yes|on)$/i.test(process.env.SOLID_NO_JSON)) return true;
+  return false;
+}
+
+/**
+ * True when the caller passed an explicit `--format csv` / `--format tsv`.
+ *
+ * Read from argv rather than command-kit's `getListFormat()` on purpose:
+ * command-kit imports this module, and a static import back would close
+ * an require() cycle at load time. `quietFromEnv()` reads argv the same way.
+ */
+export function explicitDelimitedFormat(): boolean {
+  const argv = process.argv;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--format') {
+      const v = argv[i + 1];
+      if (v === 'csv' || v === 'tsv') return true;
+    } else if (a.startsWith('--format=')) {
+      const v = a.slice('--format='.length);
+      if (v === 'csv' || v === 'tsv') return true;
+    }
+  }
   return false;
 }
 
@@ -54,6 +78,12 @@ export function isJsonOutput(localOptions?: { json?: boolean } | Record<string, 
   if (explicitHumanOptOut(localOptions)) return false;
   if (programJson) return true;
   if (process.env.SOLID_JSON && /^(1|true|yes|on)$/i.test(process.env.SOLID_JSON)) return true;
+  // An explicit `--format csv|tsv` is a direct instruction about the output
+  // SHAPE, so it must beat the non-TTY *inference* below. Without this, the
+  // flag silently degraded to JSON the moment stdout was piped — i.e. for
+  // every script and every agent, the only callers who pass it. An explicit
+  // --json / SOLID_JSON still wins, because those are checked above.
+  if (explicitDelimitedFormat()) return false;
   // Jest in-process — preserve the legacy human-mode default. JEST_WORKER_ID
   // is set on every jest worker but does NOT propagate to subprocesses
   // spawned via execSync/execFileSync that override env, which is exactly
@@ -62,6 +92,29 @@ export function isJsonOutput(localOptions?: { json?: boolean } | Record<string, 
   // Auto-detect: agents and scripts pipe; humans use TTYs.
   if (isNonTty()) return true;
   return false;
+}
+
+/**
+ * Print a pretty JSON payload to stdout, normalizing the list envelope first.
+ *
+ * Use this instead of `console.log(JSON.stringify(x, null, 2))` whenever the
+ * payload is a fresh object the command built itself. The axios interceptor
+ * aliases .items/.total onto RESPONSE bodies, but a command that repackages
+ * them (`{ forms: rows }`, `{ sites }`) threw that away, so those lists spoke
+ * a private dialect. Non-destructive: the original key stays and .items,
+ * .total, .has_more join it. A no-op for anything not list-shaped.
+ *
+ * Deliberately keeps console.log as the write path (rather than
+ * process.stdout.write) so existing output assertions keep working.
+ */
+export function printJson(data: unknown): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    (require('./list-envelope') as typeof import('./list-envelope')).applyListEnvelope(data);
+  } catch {
+    // Normalization is additive and best-effort; never block the payload.
+  }
+  console.log(JSON.stringify(data, null, 2));
 }
 
 /** Emit JSON to stdout (pretty-printed) and return true so caller can early-return. */

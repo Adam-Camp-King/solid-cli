@@ -23,10 +23,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const storageCommand = new Command('storage')
   .alias('files')
@@ -437,7 +433,7 @@ storageCommand
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
-import { appendExamples as __appendExamplesStorage } from '../lib/command-kit';
+import { appendExamples as __appendExamplesStorage, fail } from '../lib/command-kit';
 __appendExamplesStorage(storageCommand, [
   { cmd: 'solid storage list', why: 'All files + folders' },
   { cmd: 'solid storage upload ./logo.png --folder brand', why: 'Upload to a folder' },

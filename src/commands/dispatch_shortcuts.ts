@@ -20,7 +20,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
-import { requireAuth } from '../lib/command-kit';
+import { fail, requireAuth } from '../lib/command-kit';
 
 async function _dispatch(verb: string, args: Record<string, unknown>, options: { json?: boolean }, spinnerLabel: string) {
   requireAuth();
@@ -152,7 +152,7 @@ calendarCommand
   });
 
 
-// ── solid lead promote ───────────────────────────────────────────────
+// ── solid lead-promote ───────────────────────────────────────────────
 
 export const leadDispatchCommand = new Command('lead-promote')
   .description('Promote a lead_submission to a real CRM contact')
@@ -199,8 +199,10 @@ async function _invokeAgentVerb(verbName: string, payload: Record<string, unknow
     }
     console.log(chalk.dim('  ' + JSON.stringify(compact, null, 2).replace(/\n/g, '\n  ')));
   } catch (error) {
-    spinner.fail(chalk.red(`${verbName} failed: ${handleApiError(error).message}`));
-    process.exit(1);
+    // Shared by every verb shortcut, so this one line decides whether a
+    // whole family of commands can be trusted by an agent. `fail` exits 1
+    // AND emits the JSON error envelope under --json.
+    fail(spinner, `${verbName} failed`, error);
   }
 }
 

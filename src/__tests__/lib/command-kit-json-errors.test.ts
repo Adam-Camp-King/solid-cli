@@ -48,7 +48,9 @@ describe('command-kit — JSON error envelope', () => {
       throw new Error(`EXIT:${code}`);
     }) as unknown as jest.SpyInstance;
     stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // emitErrorAndExit writes prose straight to the stream (unbuffered,
+    // console-wrapper-independent) — spy on the stream, not on console.
+    errSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(() => {

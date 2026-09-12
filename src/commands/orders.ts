@@ -9,8 +9,8 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
-import { requireCompanyContext } from '../lib/command-kit';
+import { isJsonOutput, printJson } from '../lib/json-output';
+import { fail, requireCompanyContext } from '../lib/command-kit';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -19,10 +19,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const ordersCommand = new Command('orders')
   .description('Order lifecycle + progress (list, create, confirm, progress, milestone, fulfill, cancel, refund, import, watch)');
@@ -247,7 +243,7 @@ ordersCommand
     }
 
     if (isJsonOutput(opts)) {
-      console.log(JSON.stringify({ summary: { total: result.total, created: result.created, failed: result.failed, skipped: result.skipped, dry_run: result.dry_run }, results: result.results }, null, 2));
+      printJson({ summary: { total: result.total, created: result.created, failed: result.failed, skipped: result.skipped, dry_run: result.dry_run }, results: result.results });
       return;
     }
     if (result.failed > 0) process.exit(1);

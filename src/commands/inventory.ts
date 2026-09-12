@@ -81,9 +81,7 @@ inventoryCommand
       if (item.category) console.log(`  ${chalk.bold('Category:')}  ${item.category}`);
       if (item.updated_at) console.log(`  ${chalk.bold('Updated:')}   ${item.updated_at}`);
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to load item ${sku}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to load item ${sku}`, error);
     }
   });
 
@@ -113,9 +111,7 @@ inventoryCommand
       spinner.succeed(chalk.green(`Item created: ${options.sku}`));
       console.log(chalk.dim(`  ${options.name} — qty: ${options.quantity}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create item'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to create item', error);
     }
   });
 
@@ -142,9 +138,7 @@ inventoryCommand
       await apiClient.post('/api/v1/Inventory/update', { ...body, sku });
       spinner.succeed(chalk.green(`Item ${sku} updated`));
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to update item ${sku}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to update item ${sku}`, error);
     }
   });
 
@@ -169,9 +163,7 @@ inventoryCommand
       const direction = parseInt(options.quantity) >= 0 ? '+' : '';
       spinner.succeed(chalk.green(`Stock adjusted: ${sku} (${direction}${options.quantity})`));
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to adjust stock for ${sku}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to adjust stock for ${sku}`, error);
     }
   });
 
@@ -196,9 +188,7 @@ inventoryCommand
       await apiClient.post('/api/v1/Inventory/archive', { sku });
       spinner.succeed(chalk.green(`Item ${sku} archived`));
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to archive ${sku}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to archive ${sku}`, error);
     }
   });
 
@@ -214,9 +204,7 @@ inventoryCommand
       await apiClient.post('/api/v1/Inventory/unarchive', { sku });
       spinner.succeed(chalk.green(`Item ${sku} restored`));
     } catch (error) {
-      spinner.fail(chalk.red(`Failed to restore ${sku}`));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, `Failed to restore ${sku}`, error);
     }
   });
 
@@ -269,13 +257,11 @@ inventoryCommand
         }
       }
     } catch (error) {
-      spinner.fail(chalk.red('Failed to import CSV'));
-      console.error(chalk.red(`  ${handleApiError(error).message}`));
-      process.exit(1);
+      fail(spinner, 'Failed to import CSV', error);
     }
   });
 
-import { appendExamples as __appendExamplesInventory } from '../lib/command-kit';
+import { appendExamples as __appendExamplesInventory, fail } from '../lib/command-kit';
 __appendExamplesInventory(inventoryCommand, [
   { cmd: 'solid inventory list --low-stock', why: 'Items below reorder threshold' },
   { cmd: 'solid inventory adjust <sku> --delta -5 --reason "sold in person"', why: 'Stock adjustment with audit trail' },

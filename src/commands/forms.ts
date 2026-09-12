@@ -7,8 +7,8 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { apiClient } from '../lib/api-client';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { parseJsonArg } from '../lib/json-arg';
 
 function requireAuth() {
@@ -17,7 +17,6 @@ function requireAuth() {
     process.exit(1);
   }
 }
-function fail(s: ReturnType<typeof ora>, m: string, e: unknown) { s.fail(chalk.red(m)); console.error(chalk.red(`  ${handleApiError(e).message}`)); }
 
 export const formsCommand = new Command('forms')
   .alias('surveys')
@@ -49,7 +48,7 @@ export const formsCommand = new Command('forms')
           }
         } catch { /* one provider down must not blank the list */ }
       }
-      if (isJsonOutput(opts)) { s2.stop(); console.log(JSON.stringify({ forms: rows }, null, 2)); return; }
+      if (isJsonOutput(opts)) { s2.stop(); printJson({ forms: rows }); return; }
       s2.stop();
       if (!rows.length) {
         console.log(chalk.dim('  No forms yet.'));
@@ -711,7 +710,7 @@ formsCommand
           process.exitCode = 1;
           return;
         }
-        if (isJsonOutput(opts)) { console.log(JSON.stringify({ ...out, answered }, null, 2)); return; }
+        if (isJsonOutput(opts)) { printJson({ ...out, answered }); return; }
         console.log(`  ${chalk.bold(String(out.title ?? id))}  ${chalk.dim(`${out.answered_count ?? 0} answered`)}`);
         if (out.complete) {
           console.log(chalk.green('  The playbook is finished.'));
@@ -779,7 +778,7 @@ formsCommand
         ...base, ...(session ? { session_ref: session } : {}),
       });
       sp.stop();
-      if (isJsonOutput(opts)) { console.log(JSON.stringify({ ...next, session_ref: session }, null, 2)); return; }
+      if (isJsonOutput(opts)) { printJson({ ...next, session_ref: session }); return; }
       if (session) console.log(`  ${chalk.dim('session')} ${session}`);
       if (next.complete) {
         console.log(chalk.green('  Every question answered.'));
@@ -882,7 +881,7 @@ formsCommand
     } catch (e) { fail(sp, 'Failed to load the vocabulary', e); }
   });
 
-import { appendExamples as __appendExamplesForms } from '../lib/command-kit';
+import { appendExamples as __appendExamplesForms, fail } from '../lib/command-kit';
 __appendExamplesForms(formsCommand, [
   { cmd: 'solid forms list', why: 'Every form with its lifecycle, across every provider' },
   { cmd: 'solid forms build --intent intake --save', why: "A starter in this industry's own words" },

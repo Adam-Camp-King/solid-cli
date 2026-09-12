@@ -51,7 +51,7 @@ codeCommand
           .join(', ');
         console.log(`  ${chalk.bold(name)}: ${status}${details ? `  ${chalk.dim(details)}` : ''}`);
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── History ─────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ codeCommand
         const date = h.at ? chalk.dim(new Date(h.at).toLocaleString()) : '';
         console.log(`  ${sys} ${entity}  v${h.version}  ${verb}  ${date}`);
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Diff ────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ codeCommand
           console.log(chalk.dim(`    ${JSON.stringify(info)}`));
         }
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
 // ── Rollback ────────────────────────────────────────────────────────
@@ -146,10 +146,10 @@ codeCommand
       } else {
         spinner.fail(chalk.red(data.summary || 'Rollback failed'));
       }
-    } catch (error) { spinner.fail(chalk.red('Failed')); console.error(chalk.red(`  ${handleApiError(error).message}`)); }
+    } catch (error) { fail(spinner, 'Failed', error); }
   });
 
-import { appendExamples as __ae_code } from '../lib/command-kit';
+import { appendExamples as __ae_code, fail } from '../lib/command-kit';
 __ae_code(codeCommand, [
   { cmd: 'solid code status',                        why: 'Unified view of all code systems' },
   { cmd: 'solid code history',                        why: 'Recent changes across pages, entities, modules' },

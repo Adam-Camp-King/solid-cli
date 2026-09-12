@@ -6,7 +6,7 @@ import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
 import { isJsonOutput } from '../lib/json-output';
-import { requireCompanyContext } from '../lib/command-kit';
+import { fail, requireCompanyContext } from '../lib/command-kit';
 
 function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -89,9 +89,7 @@ export const deployCommand = new Command('deploy')
         console.log(chalk.dim('  List all:         solid deploy list'));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to create preview'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to create preview', error);
       }
       return;
     }
@@ -126,9 +124,7 @@ export const deployCommand = new Command('deploy')
         }
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to list previews'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to list previews', error);
       }
       return;
     }
@@ -185,9 +181,7 @@ export const deployCommand = new Command('deploy')
         ]));
         console.log('');
       } catch (error) {
-        infoSpinner.fail(chalk.red('Promote failed'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(infoSpinner, 'Promote failed', error);
       }
       return;
     }
@@ -207,9 +201,7 @@ export const deployCommand = new Command('deploy')
         console.log(chalk.dim('  The preview URL is no longer accessible.'));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to expire preview'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to expire preview', error);
       }
       return;
     }
@@ -245,9 +237,7 @@ export const deployCommand = new Command('deploy')
         ].filter(Boolean)));
         console.log('');
       } catch (error) {
-        spinner.fail(chalk.red('Failed to load preview'));
-        const apiError = handleApiError(error);
-        console.error(chalk.red(`  ${apiError.message}`));
+        fail(spinner, 'Failed to load preview', error);
       }
       return;
     }

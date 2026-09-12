@@ -12,7 +12,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 export const switchCommand = new Command('switch')
   .description('Switch active company')
@@ -36,7 +36,7 @@ export const switchCommand = new Command('switch')
       // --list: enumerate and exit without switching
       if (options.list) {
         if (isJsonOutput(options)) {
-          console.log(JSON.stringify({ active_company_id, companies }, null, 2));
+          printJson({ active_company_id, companies });
           return;
         }
         if (companies.length === 0) {

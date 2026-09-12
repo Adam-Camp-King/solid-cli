@@ -258,8 +258,7 @@ nestCommand
       console.log(ui.table(headers, rows));
     } catch (error) {
       if (spinner) spinner.fail(chalk.red('Failed to load drops'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      emitErrorAndExit(error);
     }
   });
 
@@ -328,8 +327,7 @@ nestCommand
       console.log(ui.table(dropHeaders, dropRows));
     } catch (error) {
       if (spinner) spinner.fail(chalk.red('Failed to query outcomes'));
-      const apiError = handleApiError(error);
-      console.error(chalk.red(`  ${apiError.message}`));
+      emitErrorAndExit(error);
     }
   });
 
@@ -369,12 +367,9 @@ nestCommand
       console.log(chalk.dim("  It's a draft on your site. Publish when ready."));
     } catch (error) {
       if (spinner) spinner.fail(chalk.red('Promote failed'));
-      const apiError = handleApiError(error);
-      if (flags.json) {
-        console.log(JSON.stringify({ error: apiError.message }));
-      } else {
-        console.error(chalk.red(`  ${apiError.message}`));
-      }
+      // fail() emits the standard error envelope under --json and the red
+      // prose otherwise, so the hand-rolled {error} shape is no longer needed.
+      emitErrorAndExit(error);
     }
   });
 
@@ -413,7 +408,7 @@ nestCommand
 // Examples
 // ---------------------------------------------------------------------------
 
-import { appendExamples as __ae_nest } from '../lib/command-kit';
+import { appendExamples as __ae_nest, emitErrorAndExit } from '../lib/command-kit';
 __ae_nest(nestCommand, [
   { cmd: 'solid nest anglebuild.com', why: 'Fetch a URL, classify, save to Sandbox' },
   { cmd: 'solid nest page.html --type landing --live', why: 'Nest a local file, place live as a landing page' },

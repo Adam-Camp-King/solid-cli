@@ -409,6 +409,39 @@ class ApiClient {
           // normalization is additive and best-effort; never break a response.
         }
 
+        // A 200 carrying an error-shaped body is still a failure. Detect it
+        // and reject, so it lands in the same catch path as a real 4xx and
+        // the command exits 1 with an error envelope instead of exiting 0
+        // with a payload that merely *says* "not found". Detection is
+        // wrapped (never let a detector bug break a good response); the
+        // throw is deliberately OUTSIDE that try, or it would swallow itself.
+        let bodyError: { message: string; code?: string } | null = null;
+        if (!legacyOkBodies()) {
+          try {
+            bodyError = detectErrorBody(response.data);
+          } catch {
+            bodyError = null;
+          }
+        }
+        if (bodyError) {
+          const notFound = /not[ _-]?found|does not exist|no such|unknown/i.test(
+            `${bodyError.code || ''} ${bodyError.message}`,
+          );
+          throw Object.assign(new Error(bodyError.message), {
+            isAxiosError: true,
+            config: response.config,
+            request: response.request,
+            response: {
+              status: notFound ? 404 : 400,
+              statusText: notFound ? 'Not Found' : 'Bad Request',
+              headers: response.headers,
+              config: response.config,
+              data: { detail: bodyError.message },
+            },
+            toJSON: () => ({ message: bodyError?.message }),
+          });
+        }
+
         // A+.6b — auto-flush. A successful mutation response proves
         // connectivity. If there are queued mutations from a prior
         // offline window, drain them silently in the background.
@@ -1672,6 +1705,78 @@ function flattenValidation(detail: unknown): string {
 // Sprint 1 T1.1 — pure structured classifier + envelope.
 import { classifyError, type ClassifiedError } from './error-codes';
 
+/**
+ * Detect an error that the backend delivered with HTTP 200.
+ *
+ * Some endpoints answer a miss with a 200 and an error-shaped body rather
+ * than a 4xx: `solid forms get <bad>` returned
+ *   {"status":"error","summary":"survey ... not found for this company"}
+ * and `solid invoices get <bad>` returned
+ *   {"ok":true,"verb":"invoice.get","result":{"error":"invoice_not_found"}}
+ * Axios does not reject either, so no catch block ever runs and the command
+ * exits 0. An agent cannot tell that from a hit.
+ *
+ * Deliberately narrow, because false positives would break working commands.
+ * Checked against live responses:
+ *   - `solid health` returns {status:"healthy"} — only the exact string
+ *     "error" counts, never any other status.
+ *   - `solid invoices list` returns {ok:true, ...} with no result.error —
+ *     ok:true alone is never an error; only ok:false, or a truthy
+ *     result.error inside the verb envelope.
+ *
+ * Opt out with SOLID_LEGACY_OK_BODIES=1.
+ */
+export function detectErrorBody(data: unknown): { message: string; code?: string } | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const d = data as Record<string, unknown>;
+
+  const str = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() ? v : null;
+
+  const probe = (o: Record<string, unknown>): { message: string; code?: string } | null => {
+    // {"status":"error"|"invalid", summary|message|detail|error}
+    if (typeof o.status === 'string' && /^(error|invalid|failed)$/i.test(o.status)) {
+      return {
+        message:
+          str(o.summary) || str(o.message) || str(o.detail) || str(o.error) || 'Request failed',
+        code: str(o.code) || undefined,
+      };
+    }
+    // {"ok":false, ...}
+    if (o.ok === false) {
+      return {
+        message: str(o.error) || str(o.message) || str(o.detail) || 'Request failed',
+        code: str(o.code) || undefined,
+      };
+    }
+    // {"error":"invoice_not_found", message?}
+    const code = str(o.error);
+    if (code) return { message: str(o.message) || code, code };
+    return null;
+  };
+
+  // The verb surface answers as {ok, verb, result} on some endpoints and as
+  // the bare result on others, and the failure can sit at EITHER level:
+  // `forms get` returns {ok:true, result:{status:'error', summary}}, while
+  // `invoices get` returns {ok:true, result:{error:'invoice_not_found'}}.
+  // Probe the envelope first, then one level into `result`.
+  const outer = probe(d);
+  if (outer) return outer;
+
+  const r = d.result;
+  if (r && typeof r === 'object' && !Array.isArray(r)) {
+    return probe(r as Record<string, unknown>);
+  }
+
+  return null;
+}
+
+/** True when the caller opted out of 200-with-error-body detection. */
+function legacyOkBodies(): boolean {
+  const v = process.env.SOLID_LEGACY_OK_BODIES;
+  return typeof v === 'string' && /^(1|true|yes|on)$/i.test(v);
+}
+
 export function handleApiError(error: unknown): ApiError {
   // Non-axios errors: plain Error or unknown. Return as-is with light redaction.
   if (!axios.isAxiosError(error)) {
@@ -1829,15 +1934,17 @@ export function handleApiError(error: unknown): ApiError {
  * exit 0 on a 502 outage.
  */
 export function failApi(error: unknown): never {
-  // Local require to avoid forcing every importer to pull chalk just
-  // for the type. Chalk is already a transitive dep of every CLI cmd.
+  // Delegates to the one emitter so failApi callers get the JSON error
+  // envelope under --json instead of prose an agent cannot parse. Lazy
+  // require breaks the api-client <-> command-kit import cycle; by the
+  // time any command calls this, both modules are loaded.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const chalk = require('chalk');
-  const err = handleApiError(error);
-  process.stderr.write(chalk.red(err.message || 'Request failed.') + '\n');
-  if (err.hint) process.stderr.write(chalk.dim(err.hint) + '\n');
-  if (err.docs_url) process.stderr.write(chalk.dim(`  see: ${err.docs_url}`) + '\n');
-  process.exit(1);
+  const { emitErrorAndExit } = require('./command-kit') as {
+    emitErrorAndExit: (e: unknown) => never;
+  };
+  emitErrorAndExit(error);
+  // Unreachable; emitErrorAndExit always exits. Declared for the `never`.
+  throw new Error('unreachable');
 }
 
 /** Copy structured fields from a ClassifiedError onto an ApiError. Pure. */

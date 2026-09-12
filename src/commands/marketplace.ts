@@ -8,7 +8,7 @@ import { Command } from 'commander';
 import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -18,10 +18,6 @@ function requireAuth() {
   }
 }
 
-function fail(spinner: ReturnType<typeof ora>, msg: string, err: unknown) {
-  spinner.fail(chalk.red(msg));
-  console.error(chalk.red(`  ${handleApiError(err).message}`));
-}
 
 export const marketplaceCommand = new Command('marketplace')
   .alias('mp')
@@ -171,7 +167,7 @@ marketplaceCommand
     } catch (e) { fail(spinner, 'Failed bulk publish', e); }
   });
 
-import { appendExamples as __ae_mp } from '../lib/command-kit';
+import { appendExamples as __ae_mp, fail } from '../lib/command-kit';
 __ae_mp(marketplaceCommand, [
   { cmd: 'solid mp status',         why: 'Marketplace enrollment + listed items' },
   { cmd: 'solid mp enable',         why: 'Opt in to the marketplace' },

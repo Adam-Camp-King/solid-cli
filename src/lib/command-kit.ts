@@ -381,6 +381,18 @@ export async function run<T>(
 
     if (options.json) {
       if (spinner) spinner.stop();
+      // Normalize the list shape on the way OUT, not just on the way in.
+      // The axios interceptor aliases .items/.total onto response bodies,
+      // but a command that builds a fresh object from them (kb list returns
+      // `{ results: items }`, forms list `{ forms }`, deals `{ deals }`)
+      // threw that away — so every list spoke a different dialect and no
+      // agent could write one "read a page, check for more" routine.
+      // Additive: the original key stays, .items/.total/.has_more join it.
+      try {
+        (await import('./list-envelope')).applyListEnvelope(result);
+      } catch {
+        // Normalization is additive and best-effort; never break a payload.
+      }
       const payload = JSON.stringify(result, null, 2);
       const targetFile = options.outputFile || globalOutputFile;
       if (targetFile) {
@@ -465,12 +477,61 @@ export function emitErrorAndExit(error: unknown): never {
     );
     process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
   } else {
-    console.error(chalk.red(`  ${apiError.message}`));
+    // Write to the stream directly rather than via console.error: this is
+    // the last thing that runs before process.exit(1), so it must be
+    // synchronous and unbuffered, and it must not depend on a global
+    // `console` that a test runner (or a caller) may have replaced. The
+    // post-incident guard in __tests__/fail-api.test.ts asserts exactly
+    // this — `solid verbs invoke` once reported exit 0 on a 502 because
+    // the failure path produced no bytes at all.
+    process.stderr.write(chalk.red(`  ${apiError.message}`) + '\n');
+    // Keep the actionable extras humans rely on. `failApi` used to print
+    // these and nothing else did; now every prose failure carries them.
+    if (apiError.hint) process.stderr.write(chalk.dim(`  ${apiError.hint}`) + '\n');
+    if (apiError.docs_url) process.stderr.write(chalk.dim(`  see: ${apiError.docs_url}`) + '\n');
   }
   // eslint-disable-next-line no-process-exit
   process.exit(1);
   // Unreachable; declared `never` return.
   throw new Error('unreachable');
+}
+
+/**
+ * Minimal structural type for "something spinner-shaped". Accepts a real
+ * `ora` instance, a `SpinnerLike`, or a test double — without dragging
+ * ora's types into every command module.
+ */
+export interface FailableSpinner {
+  fail(text?: string): unknown;
+}
+
+/**
+ * THE terminal-failure helper for command action handlers.
+ *
+ * Replaces the `function fail(spinner, msg, err)` that had been
+ * copy-pasted into 23 command modules. Every copy did:
+ *
+ *     spinner.fail(chalk.red(msg));
+ *     console.error(chalk.red(`  ${handleApiError(err).message}`));
+ *     // ...and then fell out of the catch block, exiting 0.
+ *
+ * Exit 0 on a failed call is the single worst outcome for an agent
+ * caller: it cannot distinguish "fetched nothing" from "the fetch
+ * failed", so it reports success and moves on. Routing through
+ * `emitErrorAndExit` fixes all three problems at once —
+ *   - always exit 1
+ *   - JSON error envelope on stdout under --json (agents branch on .code)
+ *   - red prose on stderr otherwise (unchanged for humans)
+ *
+ * Returns `never`, so TypeScript knows nothing after a `fail()` runs.
+ */
+export function fail(
+  spinner: FailableSpinner | null | undefined,
+  msg: string,
+  error: unknown,
+): never {
+  if (spinner) spinner.fail(chalk.red(msg));
+  emitErrorAndExit(error);
 }
 
 /**

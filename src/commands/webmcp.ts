@@ -25,7 +25,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 
 // ── Types matching the backend envelopes ───────────────────────────────────
@@ -371,7 +371,7 @@ consentCommand
       await apiClient.delete(`/api/v1/webmcp/consent/${encodeURIComponent(decisionId)}`);
       if (spinner) spinner.stop();
       if (wantJson) {
-        console.log(JSON.stringify({ revoked: decisionId }, null, 2));
+        printJson({ revoked: decisionId });
         return;
       }
       console.log('');
