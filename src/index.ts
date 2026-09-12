@@ -166,6 +166,7 @@ import { verbsCommand } from './commands/verbs';
 import { sitesCommand } from './commands/sites';
 import { mcpCommand } from './commands/mcp';
 import { doctorCommand } from './commands/doctor';
+import { updateCommand } from './commands/update';
 import { graphCommand } from './commands/graph';
 import { ui } from './lib/ui';
 import { importESM } from './lib/esm-import';
@@ -424,6 +425,7 @@ program.addCommand(onboardingCommand);
 // Core workflow
 program.addCommand(authCommand);
 program.addCommand(whoamiCommand);
+program.addCommand(updateCommand);
 program.addCommand(statusCommand);
 program.addCommand(todayCommand);
 program.addCommand(howToCommand);

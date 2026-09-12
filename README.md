@@ -118,6 +118,7 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid auth logout` | Clear stored credentials |
 | `solid auth whoami` | Show current session |
 | `solid status` | Company dashboard |
+| `solid update` | Update the CLI — knows npm, Homebrew and scoop |
 | `solid pull` | Download pages, KB, settings as files |
 | `solid push` | Push local changes to production |
 | `solid diff` | Preview changes before pushing |
@@ -401,6 +402,20 @@ as your UID can read it.
 Full contract: see the [Scripting Contract doc](https://github.com/Adam-Camp-King/solid-cli/blob/main/docs/SCRIPTING-CONTRACT.md) (or `Owners-Manual/45-Developer-CLI/21-SCRIPTING-CONTRACT.md` in the Solid# platform repo).
 
 ## Update notifier
+
+When it says there's a new version, run:
+
+```bash
+solid update            # check, then upgrade this copy
+solid update --check    # say what would happen, change nothing
+```
+
+It works out how this copy was installed and runs the right thing —
+`npm install -g`, `brew upgrade`, or `scoop update`. It also warns when a
+**second** `solid` is on your PATH at a different version: an npm global under
+nvm in front of a Homebrew formula is easy to end up with, whichever comes
+first in PATH wins, and upgrading one leaves the other lying in wait. The
+notifier cannot see that — it only ever looks at the copy that is running.
 
 The CLI checks npm once every **4 hours** for a newer release and prints
 a boxed notice on the next run. Suppress it:
