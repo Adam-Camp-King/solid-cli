@@ -317,7 +317,7 @@ function renderTools(m: ToolManifestResponse): void {
   console.log(chalk.dim('    solid map                  every noun, its verb count, its Atlas address'));
   console.log(chalk.dim('    solid verbs list 5         scope by Atlas coordinate (5 = money, 52 = payments)'));
   console.log(chalk.dim('    solid find "<goal>"        search by what you are trying to do'));
-  console.log(chalk.dim('    solid where <noun>         which verbs touch that noun'));
+  console.log(chalk.dim('    solid where <place>        where a verb runs, and what breaks with it'));
   console.log('');
   const maxCmd = Math.max(...m.tools.map((t) => t.command.length));
   const maxScope = Math.max(...m.tools.map((t) => t.scope.length));
@@ -480,10 +480,10 @@ export const contextCommand = new Command('context')
           // entire surface as its opening move.
           finding_verbs: {
             note: 'The verb surface is addressable. Do not list all verbs to find one.',
-            map: 'solid map — every noun, its verb count, its Atlas address',
+            map: 'solid map — every NOUN, its verb count, its Atlas address',
             scope: 'solid verbs list <prefix> — Atlas coordinate, e.g. 5 = money, 52 = payments',
             search: 'solid find "<goal>" — search by intent',
-            noun: 'solid where <noun> — which verbs touch that noun',
+            place: 'solid where <place-id> — the Gazetteer: where a verb runs and what depends on it (e.g. svc.api)',
           },
         });
         return;
