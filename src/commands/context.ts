@@ -309,6 +309,16 @@ function renderTools(m: ToolManifestResponse): void {
   console.log(chalk.bold(`  CLI tool manifest — ${m.total} verbs (${m.read_only} read, ${m.mutating} mutate)`));
   console.log(chalk.dim(`  Scopes in use: ${m.scopes_in_use.join(', ')}`));
   console.log('');
+  // An agent that does not know Atlas exists dumps the whole surface to find
+  // one verb, and then reasons over a list far larger than the task. Say here
+  // — where the count is printed, which is exactly where that impulse starts —
+  // that the surface is addressable.
+  console.log(chalk.dim('  This is the whole surface. To find a verb without reading all of it:'));
+  console.log(chalk.dim('    solid map                  every noun, its verb count, its Atlas address'));
+  console.log(chalk.dim('    solid verbs list 5         scope by Atlas coordinate (5 = money, 52 = payments)'));
+  console.log(chalk.dim('    solid find "<goal>"        search by what you are trying to do'));
+  console.log(chalk.dim('    solid where <noun>         which verbs touch that noun'));
+  console.log('');
   const maxCmd = Math.max(...m.tools.map((t) => t.command.length));
   const maxScope = Math.max(...m.tools.map((t) => t.scope.length));
   m.tools.forEach((t) => {
@@ -464,8 +474,17 @@ export const contextCommand = new Command('context')
             'solid context --section <name>   one section, cheap refresh',
             'solid context --tools-only       the tool manifest (~2.4K tok)',
             'solid context --full             everything (~27K tok)',
-            'solid map                        every noun and its address',
           ],
+          // Atlas + the Gazetteer are how an agent finds a verb without
+          // listing every verb. Named here so a cold agent does not dump the
+          // entire surface as its opening move.
+          finding_verbs: {
+            note: 'The verb surface is addressable. Do not list all verbs to find one.',
+            map: 'solid map — every noun, its verb count, its Atlas address',
+            scope: 'solid verbs list <prefix> — Atlas coordinate, e.g. 5 = money, 52 = payments',
+            search: 'solid find "<goal>" — search by intent',
+            noun: 'solid where <noun> — which verbs touch that noun',
+          },
         });
         return;
       }
