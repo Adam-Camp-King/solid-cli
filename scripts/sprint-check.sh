@@ -356,6 +356,47 @@ case "$SC" in
   *)                           ck 4.4 "solid scope answers bare" 1 "unexpected output" ;;
 esac
 
+# 4.5 — the Gazetteer answers, and "how many APIs" is a query rather than an
+#       argument. Asserted on the SHAPE, because the verb catch-all will happily
+#       answer this URL with a 404 envelope if the static route is ever
+#       declared after /{name}.
+solidx where >"$TMP/gz.json" 2>/dev/null
+GZ=$(jq_get schema <"$TMP/gz.json"); GZN=$(jq_get count <"$TMP/gz.json")
+if [ "$GZ" != "solid:gazetteer/v1" ]; then
+  ck 4.5 "the Gazetteer answers" 1 "${GZ:-no schema} — endpoint missing or shadowed"
+elif [ -z "$GZN" ] || [ "$GZN" -lt 10 ]; then
+  ck 4.5 "the Gazetteer answers" 1 "only ${GZN:-0} places"
+else
+  APIS=$(solidx where --kind service --serves verbs 2>/dev/null | jq_get count)
+  { [ -n "$APIS" ] && [ "$APIS" -ge 1 ] && [ "$APIS" -lt "$GZN" ]; } \
+    && ck 4.5 "the Gazetteer answers" 0 "${GZN} places · \"how many APIs\" = ${APIS}" \
+    || ck 4.5 "the Gazetteer answers" 1 "${GZN} places but the kind/serves filter does not narrow"
+fi
+
+# 4.6 — a verb's location RESOLVES to a place. The whole point of the join: an
+#       id that does not resolve is the silent-404 this replaces.
+LOC=$(solidx verbs describe payment.refund 2>/dev/null | jq_get location)
+if [ -z "$LOC" ]; then
+  ck 4.6 "a verb's location resolves to a place" 1 "no location field"
+else
+  FOUND=$(solidx where "$LOC" 2>/dev/null | jq_get count)
+  { [ "$FOUND" = "1" ]; } \
+    && ck 4.6 "a verb's location resolves to a place" 0 "$LOC" \
+    || ck 4.6 "a verb's location resolves to a place" 1 "location=$LOC does not resolve"
+fi
+
+# 4.7 — surface membership is a policy over facets. Checked from outside the
+#       way an agent sees it: no write reaches a browser surface without consent.
+WMNC=$(solidx verbs list --full 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const o=JSON.parse(s);const v=(o.verbs||[]).filter(x=>(x.surfaces||[]).includes("webmcp")&&x.side_effects!=="read");console.log(v.length+":"+v.filter(x=>!x.requires_consent).length)}catch(e){console.log("")}})')
+WMW=${WMNC%%:*}; WMBAD=${WMNC##*:}
+if [ -z "$WMNC" ] || [ -z "$WMW" ] || [ "$WMW" -lt 50 ]; then
+  ck 4.7 "no unconsented write on a browser surface" 1 "only ${WMW:-0} webmcp writes seen — vacuous"
+elif [ "$WMBAD" = "0" ]; then
+  ck 4.7 "no unconsented write on a browser surface" 0 "0 of $WMW"
+else
+  ck 4.7 "no unconsented write on a browser surface" 1 "$WMBAD of $WMW writes lack consent"
+fi
+
 # ═══════════════════════════ the score ═══════════════════════════
 COLD=$(( VL_BYTES / 4 ))
 CHAIN=$(( (F_BYTES + $(solidx verbs describe payment.refund 2>/dev/null | wc -c | tr -d ' ') + $(wc -c <"$TMP/d.json" | tr -d ' ')) / 4 ))
