@@ -160,10 +160,12 @@ describe('fixFor', () => {
     const r = validatePayload({}, SCHEMA);
     const fix = fixFor('payments.preview_refund_impact', r);
     expect(fix).toContain('transaction_id');
-    expect(fix).toContain('solid verbs describe');
-    // `solid verbs example` is 4.1. Naming it now would be the same
-    // documented-but-nonexistent bug this sprint keeps finding.
-    expect(fix).not.toContain('verbs example');
+    // `solid verbs example` shipped in 4.1, so `fix` may now name it. Until it
+    // did, this asserted the opposite — naming a planned command is the same
+    // documented-but-nonexistent bug this sprint kept finding. The guard that
+    // matters is not which command is named but that it RESOLVES; that lives
+    // in error-fix.test.ts, checked against the real command tree.
+    expect(fix).toContain('solid verbs example');
   });
 
   it('explains a type error in terms of want and got', () => {

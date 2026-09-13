@@ -27,6 +27,7 @@ import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput, printJson } from '../lib/json-output';
 import { clip } from '../lib/verb-search';
 import { validatePayload, fixFor, type JsonSchema } from '../lib/schema-validate';
+import { buildExample } from '../lib/verb-example';
 import { parseJsonArg } from '../lib/json-arg';
 import { isDryRun } from '../lib/dry-run';
 import { emitErrorAndExit } from '../lib/command-kit';
@@ -67,6 +68,8 @@ interface VerbManifest {
   total_registered: number;
   filtered_by: { surface: string | null; shape: string | null };
   verbs: VerbRecord[];
+  /** VNP 4.2. Absent on a backend that predates it — never assume it is there. */
+  etag?: string;
 }
 
 // Verbs that go through GET instead of POST. The Phase 5 verb-index
@@ -122,6 +125,12 @@ verbsCommand
   .option('--writes', 'Only verbs that mutate')
   .option('--reads', 'Only verbs that cannot mutate')
   .option('--no-consent', 'Only verbs that do not require consent')
+  // VNP 4.2 — the manifest changes on release, not per call. An agent that
+  // cached it can hand the etag back and be told "unchanged" in ~20 tokens
+  // instead of re-reading 23K. `--since` is the whole contract: no local cache
+  // file to go stale, no invalidation to get wrong — the agent already holds
+  // the payload it fetched, and this only answers whether it is still current.
+  .option('--since <etag>', 'Only fetch if the manifest changed since this etag')
   .option('--full', 'Every field including input_schema — the old default, ~316K tokens')
   .option('--names-only', 'Just the names, nothing else')
   .option('-n, --limit <n>', 'Return at most this many verbs')
@@ -133,16 +142,34 @@ verbsCommand
       if (options.surface) params.surface = options.surface;
       if (options.shape) params.shape = options.shape;
       if (options.tier) params.tier = options.tier;
-      const res = await apiClient.get('/api/v1/agent/verbs', { params });
+
+      // ⛔ 304 is a SUCCESS, not an error. axios rejects any status outside
+      // 2xx by default, so without this the cheap answer arrives as a thrown
+      // exception and gets reported as a failure — the feature working
+      // perfectly and looking broken.
+      const conditional = options.since
+        ? {
+            headers: { 'If-None-Match': options.since },
+            validateStatus: (s: number) => (s >= 200 && s < 300) || s === 304,
+          }
+        : {};
+      const res = await apiClient.get('/api/v1/agent/verbs', { params, ...conditional });
       spinner?.stop();
+
+      if (res.status === 304) {
+        // ~20 tokens. The agent keeps what it already has.
+        printJson({ schema: 'solid:agent-verb-index/v1', unchanged: true, etag: options.since });
+        return;
+      }
+
       const data = res.data as VerbManifest;
 
       const limit = options.limit ? Math.max(1, parseInt(options.limit, 10) || 0) : null;
       let all = data.verbs || [];
 
       // Scope by Atlas prefix. Filtered here rather than server-side because
-      // the manifest is one fetch either way; when 4.2 adds etag caching this
-      // becomes zero calls.
+      // the manifest is one fetch either way — and with 4.2's etag that fetch
+      // is a 304 on every repeat, so the client-side filter costs nothing.
       if (prefix) {
         if (!/^[0-9]{1,2}$/.test(prefix)) {
           emitErrorAndExit(Object.assign(
@@ -186,9 +213,14 @@ verbsCommand
 
       if (wantsJson) {
         if (options.full) {
-          // The old behaviour, kept whole: codegen and tooling need it, and
-          // removing it would break them to save tokens they are not paying.
-          printJson(limit ? { ...data, verbs: shown, count: shown.length } : data);
+          // Full records, but still the FILTERED set. ⛔ This used to print the
+          // untouched `data` whenever --limit was absent, so `verbs list 5
+          // --full` returned all 845 and `--writes --full` returned all 845 —
+          // every filter silently discarded on exactly one output tier. Found
+          // by the acceptance harness asserting that a prefix NARROWS rather
+          // than that it is accepted. The old behaviour that codegen needs is
+          // `verbs list --full` with no filters, which is unchanged.
+          printJson({ ...data, verbs: shown, count: shown.length, has_more: shown.length < all.length });
           return;
         }
 
@@ -197,6 +229,7 @@ verbsCommand
             count: shown.length,
             total: data.total_registered,
             has_more: shown.length < all.length,
+            ...(data.etag ? { etag: data.etag } : {}),
             names: shown.map((v) => v.name),
           });
           return;
@@ -212,8 +245,12 @@ verbsCommand
           total: data.total_registered,
           has_more: shown.length < all.length,
           filtered_by: data.filtered_by,
+          // Published on the index tier too, not just --full: an agent that
+          // never fetches the full manifest still wants to know whether the
+          // one it holds is current.
+          ...(data.etag ? { etag: data.etag } : {}),
           verbs: shown.map((v) => [v.name, clip(v.description || '', 90), v.side_effects]),
-          next: 'solid verbs describe <name>  ·  full records: --full',
+          next: 'solid verbs describe <name>  ·  unchanged? --since <etag>  ·  full records: --full',
         });
         return;
       }
@@ -430,4 +467,63 @@ verbsCommand
     } catch (e) {
       failApi(e);
     }
+  });
+
+verbsCommand
+  .command('example <verbName>')
+  .description('A ready-to-edit call for this verb, built from its schema')
+  .option('--json', 'Output as raw JSON (default for AI consumption)')
+  .action(async (verbName, options) => {
+    const wantsJson = options.json || isJsonOutput();
+    const spinner = wantsJson ? null : ora('Building an example…').start();
+
+    let v: VerbRecord;
+    try {
+      const res = await apiClient.get(`/api/v1/agent/verbs/${encodeURIComponent(verbName)}`);
+      v = res.data as VerbRecord;
+    } catch (e) {
+      spinner?.stop();
+      failApi(e);
+      return;
+    }
+    spinner?.stop();
+
+    const ex = buildExample(v.name, (v.input_schema ?? {}) as JsonSchema, {
+      sideEffects: v.side_effects,
+    });
+
+    if (wantsJson) {
+      printJson({
+        schema: 'solid:agent-verb-example/v1',
+        ...ex,
+        side_effects: v.side_effects,
+        requires_consent: v.requires_consent,
+        // Naming the twin here and not only in `invoke` is the point of 0.3:
+        // the moment an agent sees the call shape is the moment it can still
+        // choose the other half of the pair cheaply.
+        ...(v.same_as ? { same_as: v.same_as } : {}),
+        next: `solid verbs describe ${v.name}`,
+      });
+      return;
+    }
+
+    console.log('');
+    console.log(chalk.cyan(v.name) + chalk.dim(`  ${v.side_effects}`));
+    console.log(`  ${v.description}`);
+    console.log('');
+    console.log(chalk.bold('  ' + ex.command));
+    console.log('');
+    if (ex.notes.length) {
+      for (const n of ex.notes) console.log(chalk.yellow(`  ⚠ ${n}`));
+      console.log('');
+    }
+    if (ex.injected.length) {
+      console.log(chalk.dim(`  Supplied by the server, never send: ${ex.injected.join(', ')}`));
+    }
+    if (ex.optional.length) {
+      console.log(chalk.dim(`  Optional: ${ex.optional.slice(0, 12).join(', ')}` +
+        (ex.optional.length > 12 ? chalk.dim(` … +${ex.optional.length - 12} more`) : '')));
+    }
+    console.log(chalk.dim(`  Full schema: solid verbs describe ${v.name}`));
+    console.log('');
   });

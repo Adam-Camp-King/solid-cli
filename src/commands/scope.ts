@@ -17,16 +17,27 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 export const scopeCommand = new Command('scope')
-  .description('Inspect your agent scope (what you can read/write)');
+  .description('Inspect your agent scope (what you can read/write)')
+  // Sprint VNP 4.4. `scope` had exactly one subcommand, so the obvious call —
+  // `solid scope` — printed help and cost an agent a turn before it found
+  // `scope whoami`. A group with one member should answer as that member.
+  // `whoami` stays, because anything that already types it must keep working.
+  .action(async function (this: Command) {
+    await runWhoami(this.opts());
+  });
 
 scopeCommand
   .command('whoami')
   .description('Return the effective scope contract for this session (agent-readable JSON)')
   .option('--json', 'Output as JSON (default true for this command)')
-  .action(async (options) => {
+  .action(runWhoami);
+
+/** Shared by `solid scope` and `solid scope whoami` — one implementation, so
+ *  the default action can never drift from the subcommand it stands in for. */
+async function runWhoami(options: Record<string, any>) {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
@@ -48,7 +59,10 @@ scopeCommand
     // Human-readable mode is opt-out via --no-json (commander
     // convention) or omitted in favor of JSON.
     if (isJsonOutput(options) || options.json !== false) {
-      console.log(JSON.stringify(data, null, 2));
+      // printJson, not JSON.stringify(_, null, 2): indentation is 35% of a
+      // payload and 1.1 removed it everywhere else. A second stringify path is
+      // how that comes back one command at a time.
+      printJson(data);
       return;
     }
 
@@ -87,4 +101,4 @@ scopeCommand
     printList('Forbidden', data.forbidden);
 
     console.log(chalk.dim(`Runtime: ${data.runtime.agent_runtime || 'unknown'} from ${data.runtime.ip || '?'}`));
-  });
+}

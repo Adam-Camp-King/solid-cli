@@ -147,7 +147,13 @@ export function validatePayload(
 export function fixFor(verb: string, report: ValidationReport): string {
   if (report.missing_required.length) {
     const first = report.missing_required[0];
-    return `add ${first} — solid verbs describe ${verb}`;
+    // `verbs example` from 4.1, not `describe`: a caller missing a field wants
+    // a filled-in call, not the whole schema. This deliberately did NOT say
+    // `example` until 4.1 shipped — VNP's own draft named it while it was still
+    // a plan, which is the same defect as the 403 hint pointing at
+    // `solid upgrade`, a command that never existed. Guarded by
+    // src/__tests__/lib/error-fix.test.ts against the live command tree.
+    return `add ${first} — solid verbs example ${verb}`;
   }
   if (report.type_errors.length) {
     const { field, want, got } = report.type_errors[0];

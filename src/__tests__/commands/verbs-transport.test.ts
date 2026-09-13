@@ -315,6 +315,7 @@ describe('verbs list — tiered output (VNP 2.2)', () => {
         description: 'x'.repeat(400),
         side_effects: 'write',
         shape: 'receipt',
+        coordinate: '53',
         input_schema: { type: 'object', properties: { a: {}, b: {}, c: {} } },
       },
       {
@@ -322,6 +323,7 @@ describe('verbs list — tiered output (VNP 2.2)', () => {
         description: 'Create a contact.',
         side_effects: 'write',
         shape: 'transaction',
+        coordinate: '30',
         input_schema: { type: 'object', properties: {} },
       },
       {
@@ -329,6 +331,7 @@ describe('verbs list — tiered output (VNP 2.2)', () => {
         description: 'Money in and out.',
         side_effects: 'read',
         shape: 'aggregate',
+        coordinate: '59',
         input_schema: { type: 'object', properties: {} },
       },
     ],
@@ -372,6 +375,41 @@ describe('verbs list — tiered output (VNP 2.2)', () => {
     const out = JSON.parse(printed);
     expect(out.verbs[0].input_schema).toBeDefined();
     expect(out.verbs[0].description).toHaveLength(400);
+    expect(out.verbs).toHaveLength(3);   // unfiltered: the codegen path
+  });
+
+  // ⛔ --full used to print the untouched manifest whenever --limit was absent,
+  // so every filter was silently discarded on this one output tier:
+  // `verbs list 5 --full` returned all 845. The index tier filtered correctly,
+  // which is why it went unnoticed — the tests exercised the tier that worked.
+  it('--full honours the Atlas prefix', async () => {
+    await list(['5', '--full']);
+    const out = JSON.parse(printed);
+    expect(out.verbs.map((v: any) => v.name)).toEqual(['payment.refund', 'books.summary']);
+    expect(out.count).toBe(2);
+    expect(out.verbs[0].input_schema).toBeDefined();  // still full records
+  });
+
+  it('--full honours a facet filter', async () => {
+    await list(['--full', '--writes']);
+    const out = JSON.parse(printed);
+    expect(out.verbs.map((v: any) => v.name)).toEqual(['payment.refund', 'contact.create']);
+  });
+
+  it('the prefix narrows on every tier identically', async () => {
+    // `printed` accumulates, so it has to be cleared between calls — otherwise
+    // the second parse reads two concatenated payloads and the test fails for
+    // a reason that has nothing to do with the filter.
+    const listOnce = async (args: string[]) => { printed = ''; await list(args); return JSON.parse(printed); };
+
+    const index = (await listOnce(['53'])).verbs.map((r: any) => r[0]);
+    const full = (await listOnce(['53', '--full'])).verbs.map((v: any) => v.name);
+    const names = (await listOnce(['53', '--names-only'])).names;
+    // Three tiers, one answer. A filter that disagrees with itself by output
+    // format is the defect, not the count.
+    expect(index).toEqual(['payment.refund']);
+    expect(full).toEqual(index);
+    expect(names).toEqual(index);
   });
 
   it('--names-only returns names and nothing else', async () => {
@@ -392,6 +430,84 @@ describe('verbs list — tiered output (VNP 2.2)', () => {
   it('has_more is false when everything fits', async () => {
     await list([]);
     expect(JSON.parse(printed).has_more).toBe(false);
+  });
+});
+
+describe('verbs list — conditional fetch (VNP 4.2)', () => {
+  const manifest = {
+    count: 1,
+    total_registered: 845,
+    etag: 'W/"deadbeefdeadbeefdead"',
+    filtered_by: { surface: null, shape: null, tier: null },
+    verbs: [{ name: 'a.b', description: 'x', side_effects: 'read', shape: 'aggregate', coordinate: '10' }],
+  };
+
+  let printed: string;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    printed = '';
+    jest.spyOn(console, 'log').mockImplementation((s?: unknown) => { printed += String(s); });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const list = (extra: string[]) => { resetOptions(); return verbsCommand.parseAsync(['list', '--json', ...extra], { from: 'user' }); };
+
+  it('publishes the etag on the index tier, not only on --full', async () => {
+    // An agent that never fetches full records still needs to know whether
+    // what it holds is current.
+    mockGet.mockResolvedValue({ status: 200, data: manifest });
+    await list([]);
+    expect(JSON.parse(printed).etag).toBe('W/"deadbeefdeadbeefdead"');
+  });
+
+  it('--since sends If-None-Match', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: manifest });
+    await list(['--since', 'W/"abc"']);
+    const [, cfg] = mockGet.mock.calls[0] as [string, any];
+    expect(cfg.headers['If-None-Match']).toBe('W/"abc"');
+  });
+
+  it('a 304 is a cheap success, not a thrown error', async () => {
+    // ⛔ axios rejects any status outside 2xx by default, so without an
+    // explicit validateStatus the cheap answer arrives as an exception and
+    // reads as a failure — the feature working and looking broken.
+    mockGet.mockResolvedValue({ status: 304, data: '' });
+    await list(['--since', 'W/"abc"']);
+    const out = JSON.parse(printed);
+    expect(out.unchanged).toBe(true);
+    expect(out.etag).toBe('W/"abc"');
+    expect(out.verbs).toBeUndefined();
+    // The whole point is the size of this answer.
+    expect(printed.length).toBeLessThan(120);
+  });
+
+  it('accepts 304 through validateStatus, and still rejects a real failure', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: manifest });
+    await list(['--since', 'W/"abc"']);
+    const [, cfg] = mockGet.mock.calls[0] as [string, any];
+    expect(cfg.validateStatus(304)).toBe(true);
+    expect(cfg.validateStatus(200)).toBe(true);
+    expect(cfg.validateStatus(404)).toBe(false);
+    expect(cfg.validateStatus(500)).toBe(false);
+  });
+
+  it('sends no conditional header when --since is absent', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: manifest });
+    await list([]);
+    const [, cfg] = mockGet.mock.calls[0] as [string, any];
+    expect(cfg.headers).toBeUndefined();
+  });
+
+  it('works against a backend that does not send an etag yet', async () => {
+    // The backend change is committed and not deployed. If the CLI required
+    // the field, every list would break the moment this ships and before the
+    // backend does — the same trap 0.2 already walked into once.
+    const { etag, ...noEtag } = manifest;
+    mockGet.mockResolvedValue({ status: 200, data: noEtag });
+    await list([]);
+    const out = JSON.parse(printed);
+    expect(out.count).toBe(1);
+    expect('etag' in out).toBe(false);
   });
 });
 
