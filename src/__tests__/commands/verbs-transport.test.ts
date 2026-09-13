@@ -213,16 +213,57 @@ describe('verbs invoke — the consent gate (VNP 1.3)', () => {
     });
   });
 
-  it('lets a DRY RUN through without --confirm', async () => {
-    // A dry run cannot mutate — the interceptor short-circuits every mutation
-    // before it leaves the process. Demanding consent to preview a write makes
-    // the sandbox useless for the one thing it is for.
+  it('lets a DRY RUN through without --confirm, and sends nothing at all', async () => {
+    // Demanding consent to preview a write makes the sandbox useless for the
+    // one thing it is for.
+    //
+    // Stronger than it was: before 2.3 this asserted the request WAS made and
+    // relied on the dry-run interceptor to swallow it. Now validation happens
+    // locally against input_schema and the preview is built without any call,
+    // so "nothing left the process" is a property of this code rather than of
+    // an interceptor somewhere else.
+    const printed: string[] = [];
+    (console.log as jest.Mock).mockImplementation((v?: unknown) => {
+      printed.push(String(v));
+    });
+
     mockGet.mockResolvedValue(writeVerb());
     mockIsDryRun.mockReturnValue(true);
 
-    await invoke('contact.create');
+    await invoke('contact.create', ['-p', '{"name":"Probe"}']);
 
-    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+    const out = JSON.parse(printed.join(''));
+    expect(out.dry_run).toBe(true);
+    expect(out.valid).toBe(true);
+    expect(out.would.url).toBe('/api/v1/agent/contact/create');
+    // 1.5: a preview never claims success.
+    expect(out.success).toBeUndefined();
+  });
+
+  it('a dry run with a bad payload is invalid and exits 1', async () => {
+    mockGet.mockResolvedValue(
+      verb({
+        name: 'thing.do',
+        side_effects: 'write',
+        transport: 'http',
+        http_endpoint: '/api/v1/agent/thing/do',
+        input_schema: {
+          type: 'object',
+          properties: { company_id: { type: 'integer' }, ref: { type: 'string' } },
+          required: ['company_id', 'ref'],
+        },
+      }),
+    );
+    mockIsDryRun.mockReturnValue(true);
+
+    const exit = jest.spyOn(process, 'exit').mockImplementation(((): never => {
+      throw new Error('EXIT1');
+    }) as never);
+
+    await expect(invoke('thing.do', ['-p', '{}'])).rejects.toThrow('EXIT1');
+    expect(mockPost).not.toHaveBeenCalled();
+    exit.mockRestore();
   });
 });
 

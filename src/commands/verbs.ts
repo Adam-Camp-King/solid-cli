@@ -26,6 +26,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput, printJson } from '../lib/json-output';
 import { clip } from '../lib/verb-search';
+import { validatePayload, fixFor, type JsonSchema } from '../lib/schema-validate';
 import { parseJsonArg } from '../lib/json-arg';
 import { isDryRun } from '../lib/dry-run';
 import { emitErrorAndExit } from '../lib/command-kit';
@@ -272,6 +273,41 @@ verbsCommand
     // it, so this reads the answer instead of assuming one.
     const transport = verb.transport
       ?? (verb.http_endpoint ? 'http' : undefined);
+
+    // ── Playground: validate locally, then show exactly what would be sent.
+    // The schema is already in hand, so a dry run can answer "is this call
+    // even well-formed?" without touching the network. Before 2.3 it answered
+    // `success: true` to a missing field, a wrong type and a field that does
+    // not exist — a green light from the sandbox and a red one from
+    // production.
+    if (previewOnly) {
+      const report = validatePayload(payload, verb.input_schema as JsonSchema);
+      const url =
+        transport === 'dispatch'
+          ? (verb.dispatch_endpoint || '/api/v1/agent/cli-dispatch')
+          : (verb.http_endpoint || '(unknown — see transport)');
+      const body =
+        transport === 'dispatch'
+          ? { verb: verb.name, args: payload, ...(isWrite ? { confirm: true } : {}) }
+          : (isWrite ? { ...payload, confirm: true } : payload);
+
+      printJson({
+        dry_run: true,
+        valid: report.valid,
+        verb: verb.name,
+        transport,
+        missing_required: report.missing_required,
+        type_errors: report.type_errors,
+        unknown_fields: report.unknown_fields,
+        would: { method: 'POST', url, body },
+        ...(report.valid ? {} : { fix: fixFor(verb.name, report) }),
+      });
+
+      // Exit non-zero when invalid. A preview that reports a problem and exits
+      // 0 is the same false green in a new costume.
+      if (!report.valid) process.exit(1);
+      return;
+    }
 
     // Refuse BEFORE the try. This is a precondition, not a failed request —
     // leaving it inside meant the catch below treated our own refusal as an
