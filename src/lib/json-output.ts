@@ -95,6 +95,24 @@ export function isJsonOutput(localOptions?: { json?: boolean } | Record<string, 
 }
 
 /**
+ * Serialize for stdout: indented for a human at a terminal, compact for
+ * everything else.
+ *
+ * Indentation is 35% of the verb manifest — 171,089 tokens of leading spaces
+ * that no agent asked for and every agent pays for. A terminal is the only
+ * place it earns its keep, and `isNonTty()` is already how this CLI decides
+ * who is reading.
+ *
+ * Deliberately NOT carved out for jest. The in-process suite runs non-TTY, so
+ * it sees exactly what a piped caller sees, which is the behaviour worth
+ * testing. A carve-out here would mean the tests assert on a format no real
+ * caller ever receives.
+ */
+export function stringifyForStdout(data: unknown): string {
+  return isNonTty() ? JSON.stringify(data) : JSON.stringify(data, null, 2);
+}
+
+/**
  * Print a pretty JSON payload to stdout, normalizing the list envelope first.
  *
  * Use this instead of `console.log(JSON.stringify(x, null, 2))` whenever the
@@ -114,12 +132,12 @@ export function printJson(data: unknown): void {
   } catch {
     // Normalization is additive and best-effort; never block the payload.
   }
-  console.log(JSON.stringify(data, null, 2));
+  console.log(stringifyForStdout(data));
 }
 
 /** Emit JSON to stdout (pretty-printed) and return true so caller can early-return. */
 export function emitJson(data: unknown): true {
-  process.stdout.write(JSON.stringify(data, null, 2));
+  process.stdout.write(stringifyForStdout(data));
   if (!String(JSON.stringify(data)).endsWith('\n')) process.stdout.write('\n');
   return true;
 }

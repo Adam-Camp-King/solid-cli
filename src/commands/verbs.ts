@@ -24,7 +24,7 @@ import ora from 'ora';
 import * as fs from 'fs';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { parseJsonArg } from '../lib/json-arg';
 import { emitErrorAndExit } from '../lib/command-kit';
 
@@ -103,7 +103,7 @@ verbsCommand
       const data = res.data as VerbManifest;
 
       if (wantsJson) {
-        console.log(JSON.stringify(data, null, 2));
+        printJson(data);
         return;
       }
 
@@ -137,7 +137,7 @@ verbsCommand
       const v = res.data as VerbRecord;
 
       if (wantsJson) {
-        console.log(JSON.stringify(v, null, 2));
+        printJson(v);
         return;
       }
 
@@ -248,7 +248,7 @@ verbsCommand
           : await apiClient.post(verb.http_endpoint as string, body);
       }
 
-      console.log(JSON.stringify(res.data, null, 2));
+      printJson(res.data);
     } catch (e) {
       failApi(e);
     }

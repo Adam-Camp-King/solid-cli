@@ -128,7 +128,10 @@ describe('command-kit', () => {
 
       expect(render).not.toHaveBeenCalled();
       expect(calls).toEqual(['stop']);
-      expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ value: 42 }, null, 2));
+      // Compact, because the suite runs non-TTY and so does every agent and
+      // script. Indentation is 35% of the verb manifest and only earns its
+      // keep at a terminal — see stringifyForStdout.
+      expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ value: 42 }));
     });
 
     it('fails the spinner and exits on task error', async () => {
@@ -313,7 +316,7 @@ describe('command-kit', () => {
 
         await run(async () => ({ x: 2 }), { spinner: 'loading', quiet: true, json: true });
 
-        expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ x: 2 }, null, 2));
+        expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ x: 2 }));
       });
 
       it('SOLID_QUIET=1 env var engages quiet mode', async () => {

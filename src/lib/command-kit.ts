@@ -393,8 +393,12 @@ export async function run<T>(
       } catch {
         // Normalization is additive and best-effort; never break a payload.
       }
-      const payload = JSON.stringify(result, null, 2);
+      // A file is read by a person later, so it keeps its indentation. stdout
+      // on a pipe is read by a program now, and pays 35% for spaces.
       const targetFile = options.outputFile || globalOutputFile;
+      const payload = targetFile
+        ? JSON.stringify(result, null, 2)
+        : (await import('./json-output')).stringifyForStdout(result);
       if (targetFile) {
         const fs = await import('fs');
         const path = await import('path');
