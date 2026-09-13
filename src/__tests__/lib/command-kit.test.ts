@@ -33,6 +33,21 @@ function makeStubSpinner() {
 }
 
 describe('command-kit', () => {
+  // ⛔ stringifyForStdout branches on process.stdout.isTTY, and jest INHERITS
+  // it from whoever ran the suite. Piped (CI, an agent, `npm test | cat`) it is
+  // compact; in a human's terminal it is indented. The JSON assertions below
+  // were written against the piped shape and silently required that the person
+  // running them was not at a terminal — so `npm publish` failed on a developer
+  // machine while CI stayed green. Pin it here, and cover the other branch
+  // explicitly further down rather than leaving it to the environment.
+  const realIsTty = process.stdout.isTTY;
+  beforeEach(() => {
+    process.stdout.isTTY = undefined as unknown as boolean;
+  });
+  afterAll(() => {
+    process.stdout.isTTY = realIsTty;
+  });
+
   let logSpy: jest.SpyInstance;
   let errSpy: jest.SpyInstance;
   // emitErrorAndExit writes prose straight to the stream (unbuffered, and
@@ -128,10 +143,22 @@ describe('command-kit', () => {
 
       expect(render).not.toHaveBeenCalled();
       expect(calls).toEqual(['stop']);
-      // Compact, because the suite runs non-TTY and so does every agent and
-      // script. Indentation is 35% of the verb manifest and only earns its
-      // keep at a terminal — see stringifyForStdout.
+      // Compact, because stdout is pinned non-TTY above — which is what every
+      // agent and script gets. Indentation is 35% of the verb manifest and only
+      // earns its keep at a terminal; the TTY branch is covered below.
       expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ value: 42 }));
+    });
+
+    it('indents JSON at a terminal, and only there', async () => {
+      const { api } = makeStubSpinner();
+      __setSpinnerFactoryForTest(() => api);
+      process.stdout.isTTY = true;
+
+      await run(async () => ({ value: 42 }), { spinner: 'loading', json: true });
+
+      // A human reading the terminal gets indentation; a pipe never does. Both
+      // halves are asserted so neither can drift with the environment.
+      expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ value: 42 }, null, 2));
     });
 
     it('fails the spinner and exits on task error', async () => {
