@@ -243,18 +243,30 @@ export function loginSuccessScreen(args: {
   lines.push(box(workspace.join('\n'), { title: 'Active workspace', padding: 1 }));
   lines.push('');
 
-  // 4. "Try these next" — the highest-signal commands for a new session
-  // (the AI-agent hook, workspace switching, the at-a-glance view), then
-  // `update` and the catch-all.
+  // 4. "Try these next" — the first screen a human sees after logging in, and
+  // for most people the only list they will ever read. Ordered by what someone
+  // actually does next, not by what we shipped most recently.
   //
-  // This list is hand-written: nothing adds a command to it automatically,
-  // so a new command stays invisible here until someone types it in.
+  // ⛔ HAND-WRITTEN, AND THAT IS THE BUG THIS KEEPS CAUSING. Nothing adds a
+  // command here automatically, so a shipped command stays invisible until
+  // somebody types it in. `solid update` existed for weeks before anyone found
+  // it; on 2026-09-13 `find`, `map` and `where` had all shipped and none of the
+  // three appeared, so the discovery work of an entire sprint was unreachable
+  // from the one screen every user reads.
+  //
+  // KEEP IT SHORT. The temptation on noticing the gap is to list everything —
+  // that turns the highest-signal screen in the product into a second --help
+  // and it stops being read at all. Seven is about the limit. Earning a place
+  // here means displacing something, and `solid --help` stays last because it
+  // is the escape hatch.
   lines.push(`  ${chalk.bold('Try these next')}`);
   lines.push('');
   lines.push(commandHelp([
     { cmd: 'solid ai', desc: 'launch Claude / Cursor with this company loaded' },
-    { cmd: 'solid switch', desc: 'change to a different company (picker)' },
+    { cmd: 'solid find "…"', desc: 'say what you want in words — get the exact command' },
     { cmd: 'solid status', desc: 'your business, at a glance' },
+    { cmd: 'solid switch', desc: 'change to a different company (picker)' },
+    { cmd: 'solid map', desc: 'everything this platform can do, one screen' },
     { cmd: 'solid update', desc: 'get the latest CLI (npm, Homebrew or scoop)' },
     { cmd: 'solid --help', desc: 'all commands' },
   ]));
