@@ -142,6 +142,7 @@ function printResults(results: ExecResult[]): void {
   for (const r of results) {
     const tag = ICON[r.action] ?? r.action;
     const suffix = r.status === 'failed' ? chalk.red(`  FAILED: ${r.error}`)
+      : r.pendingPublish ? chalk.yellow('  (draft — not live until published)')
       : r.reason ? chalk.dim(`  (${r.reason})`) : '';
     console.log(`  ${tag}  ${chalk.cyan(r.kind)}/${r.identity}${suffix}`);
   }
@@ -271,6 +272,17 @@ export const applyCommand = new Command('apply')
       (counts.failed ? chalk.red(`, ${counts.failed} failed`) : '') +
       (counts.unsupported ? chalk.magenta(`, ${counts.unsupported} unsupported`) : ''),
     );
+    // A page write lands in a draft. Saying only "Applied" sent people to a
+    // site that still served the old content, looking like a silent failure.
+    const drafts = results.filter((r) => r.pendingPublish);
+    if (!dryRun && drafts.length > 0) {
+      console.log(
+        chalk.yellow(`\n${drafts.length} write(s) went to a DRAFT and are not live yet.`),
+      );
+      for (const d of drafts) {
+        console.log(chalk.dim(`  solid ${d.kind}s publish ${d.id ?? d.identity}`));
+      }
+    }
     if (dryRun && changes.length > 0) console.log(chalk.dim('Run without --dry-run to apply.'));
     if (lockWritten) console.log(chalk.dim(`Lock: ${path.relative(process.cwd(), lockWritten)}  run ${runId}`));
     if (counts.failed > 0) process.exit(1);

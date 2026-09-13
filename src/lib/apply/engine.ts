@@ -261,6 +261,18 @@ export function actionIdempotencyKey(a: PlannedAction): string {
 export interface ExecResult extends PlannedAction {
   status: 'done' | 'skipped' | 'failed';
   error?: string;
+  /** The write landed in a DRAFT — the live page is unchanged until publish.
+   *  Without this, apply reported plain "done" on a page edit and the site kept
+   *  serving the old content, which reads as the write having silently failed. */
+  pendingPublish?: boolean;
+}
+
+/** True when a write went to a draft rather than the live record. */
+function wroteDraft(res: unknown): boolean {
+  if (!res || typeof res !== 'object') return false;
+  const r = res as Record<string, unknown>;
+  const body = (r.data && typeof r.data === 'object' ? r.data : r) as Record<string, unknown>;
+  return body.has_draft === true;
 }
 
 /** Count results by action (+ failed) for a summary line. */
@@ -337,16 +349,17 @@ export async function executePlan(
       });
       continue;
     }
+    let updateResponse: unknown;
     try {
       if (a.action === 'create') {
         if (recon.create === null) throw new Error(`${recon.kind} cannot be created by apply`);
         await client.post(recon.create, a.spec, { idempotencyKey: key });
       } else if (a.action === 'update') {
-        await executeUpdate(client, recon, a, item as string, key);
+        updateResponse = await executeUpdate(client, recon, a, item as string, key);
       } else if (a.action === 'prune') {
         await client.delete(item as string, { idempotencyKey: key });
       }
-      results.push({ ...a, status: 'done' });
+      results.push({ ...a, status: 'done', ...(wroteDraft(updateResponse) ? { pendingPublish: true } : {}) });
     } catch (e) {
       results.push({ ...a, status: 'failed', error: e instanceof Error ? e.message : String(e) });
     }
@@ -367,13 +380,12 @@ async function executeUpdate(
   a: PlannedAction,
   item: string,
   key: string,
-): Promise<void> {
+): Promise<unknown> {
   const spec = a.spec ?? {};
   if (!recon.updateRoutes) {
     const body = toWriteBody(recon, spec);
-    if (recon.updateMethod === 'put') await client.put(item, body, { idempotencyKey: key });
-    else await client.patch(item, body, { idempotencyKey: key });
-    return;
+    if (recon.updateMethod === 'put') return await client.put(item, body, { idempotencyKey: key });
+    return await client.patch(item, body, { idempotencyKey: key });
   }
   const changed = new Set(a.changed ?? Object.keys(spec));
   for (let i = 0; i < recon.updateRoutes.length; i++) {

@@ -960,7 +960,12 @@ class ApiClient {
   }
 
   async pagesPublish(pageId: number): Promise<ApiResponse<{ success: boolean }>> {
-    const response = await this.client.post(`/api/v1/cms/pages/${pageId}/publish`);
+    // The endpoint takes a required WebsitePagePublish body (generate_mcp,
+    // notify_search_engines, calculate_seo_score). Every field has a default,
+    // so `{}` is the correct "use the defaults" call — but sending NO body at
+    // all made FastAPI report a missing required field, and `solid pages
+    // publish` returned 422 for every tenant, on every page.
+    const response = await this.client.post(`/api/v1/cms/pages/${pageId}/publish`, {});
     return { data: response.data, status: response.status, success: true };
   }
 
