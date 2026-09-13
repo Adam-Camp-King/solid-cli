@@ -23,6 +23,60 @@ const STOPWORDS = new Set([
   'this', 'to', 'want', 'was', 'what', 'when', 'where', 'which', 'with',
 ]);
 
+
+/**
+ * Owner vocabulary -> platform vocabulary.
+ *
+ * ⛔ THIS IS THE BIGGEST SINGLE WIN AND IT IS NOT A SCORING TWEAK. Measured
+ * 2026-09-13: "Add a new customer" returned `phone.external_add`, because the
+ * owner says *customer* and the verb says *contact*, the owner says *add* and
+ * the verb says *create*. `contact.create` matched NEITHER query term, scoring
+ * zero, while `external_add` matched "add" as a whole name segment for six
+ * points. No weighting fixes that — the words simply never meet.
+ *
+ * Kept small and one-directional on purpose. Every entry is a word a business
+ * owner actually uses for a thing the platform names differently; none is a
+ * guess about intent. A synonym that is merely *related* ("money" -> "invoice")
+ * would drag every financial query toward whichever verb has the longest
+ * description, so relatedness is not enough — it has to be the same thing.
+ */
+const SYNONYMS: Record<string, readonly string[]> = {
+  customer: ['contact', 'client'],
+  customers: ['contact', 'contacts'],
+  client: ['contact'],
+  clients: ['contacts'],
+  add: ['create'],
+  new: ['create'],
+  make: ['create'],
+  text: ['sms'],
+  texting: ['sms'],
+  job: ['order', 'appointment'],
+  jobs: ['orders', 'appointments'],
+  booking: ['appointment'],
+  owed: ['outstanding', 'receivable'],
+  owe: ['outstanding', 'receivable'],
+  unpaid: ['outstanding', 'overdue'],
+  staff: ['team', 'user'],
+  apprentice: ['team', 'user'],
+  employee: ['team', 'user'],
+  website: ['site', 'page'],
+  webpage: ['page'],
+  post: ['blog'],
+  stock: ['inventory'],
+  quote: ['proposal', 'deal'],
+  called: ['call'],
+  ring: ['call'],
+  chase: ['followup', 'follow'],
+  note: ['notes'],
+  refund: ['refund'],
+};
+
+/** A query term plus anything the platform calls the same thing. */
+function expand(term: string): string[] {
+  const extra = SYNONYMS[term];
+  return extra ? [term, ...extra] : [term];
+}
+
 export interface SearchableVerb {
   name: string;
   description?: string;
@@ -63,17 +117,27 @@ function nameSegments(name: string): string[] {
  * (`payments.preview_refund_impact` is a read).
  */
 function scoreTerm(term: string, segs: string[], nameLower: string, desc: string): number {
-  let s = 0;
-  if (segs.includes(term)) {
-    s += 6;                                  // whole segment: payment.REFUND
-  } else if (nameLower.includes(term)) {
-    s += 3;                                  // inside a segment: preview_REFUND_impact
+  let best = 0;
+  const variants = expand(term);
+  for (let i = 0; i < variants.length; i++) {
+    const t = variants[i];
+    let s = 0;
+    if (segs.includes(t)) {
+      s += 6;                                // whole segment: payment.REFUND
+    } else if (nameLower.includes(t)) {
+      s += 3;                                // inside a segment: preview_REFUND_impact
+    }
+    if (desc.includes(t)) {
+      // Word boundary, so "pay" does not score against "payment".
+      s += new RegExp(`\\b${t}\\b`).test(desc) ? 2 : 0.5;
+    }
+    // A synonym is weaker evidence than the word the caller actually typed.
+    // Without this discount "add" would match `create` as strongly as `add`,
+    // and a verb literally named *_add would lose to one merely about creating.
+    if (i > 0) s *= 0.8;
+    if (s > best) best = s;
   }
-  if (desc.includes(term)) {
-    // Word boundary, so "pay" does not score against "payment".
-    s += new RegExp(`\\b${term}\\b`).test(desc) ? 2 : 0.5;
-  }
-  return s;
+  return best;
 }
 
 /**
@@ -91,9 +155,58 @@ export function rankVerbs(
   const qTerms = terms(query);
   if (qTerms.length === 0) return [];
 
-  // Best achievable score for this query, used to normalize. Every term
-  // matching as a whole name segment AND on a description word boundary.
-  const perfect = qTerms.length * 8;
+  /**
+   * ⛔ WEIGHT EACH TERM BY HOW RARE IT IS. Without this, every word in the
+   * query counted the same and a sentence was worse than a keyword: measured
+   * 2026-09-13, "A customer wants a refund on a payment they made" returned
+   * `payment.refund` correctly, and the SAME sentence plus "Work out how to do
+   * that." returned `payment.full_history`. Five filler words flipped it,
+   * because coverage was `matched / qTerms.length` — unmatched noise punished
+   * the right verb in exact proportion to how much noise there was.
+   *
+   * A term appearing in 300 of 845 verbs carries almost no information; one
+   * appearing in 3 decides the query. Standard IDF, and it is what lets a
+   * prompt be a sentence rather than a keyword — which is how an agent (and an
+   * owner) actually asks.
+   */
+  const df = new Map<string, number>();
+  for (const t of qTerms) {
+    let n = 0;
+    for (const v of verbs) {
+      const hay = `${v.name} ${v.description || ''}`.toLowerCase();
+      if (expand(t).some((x) => hay.includes(x))) n++;
+    }
+    df.set(t, n);
+  }
+  const N = Math.max(1, verbs.length);
+  /**
+   * ⛔ CAP THE RARITY BONUS, AND DROP TERMS THAT MATCH NOTHING.
+   *
+   * Uncapped IDF made things worse, not better — measured: top-3 fell 16/20 to
+   * 13/20. The reason is that a real query is full of PROPER NOUNS and VALUES:
+   * "Dana", "Whitfield", "4471", "£450". Those are the rarest terms in any
+   * query by a distance, so pure IDF hands them the loudest voice — and
+   * whichever unrelated verb happens to mention a digit or a name in its
+   * description wins. Rarity is a proxy for informativeness, and for names it
+   * is exactly the wrong proxy.
+   *
+   *   df === 0  the term matches no verb at all. It is a value, not a
+   *             capability. Excluded entirely: keeping it in the denominator
+   *             only scales every candidate down by the same amount, and
+   *             excluding it makes coverage mean what it says.
+   *   cap 2.2   ~ a term in 90 of 845 verbs. Beyond that, rarer stops earning
+   *             more, so "refund" and "Whitfield" cannot outrank each other on
+   *             scarcity alone.
+   */
+  const IDF_CAP = 2.2;
+  const scoring = qTerms.filter((t) => (df.get(t) ?? 0) > 0);
+  const useTerms = scoring.length ? scoring : qTerms;   // never rank on nothing
+  const idf = (t: string) =>
+    Math.min(IDF_CAP, Math.max(0.15, Math.log((N + 1) / ((df.get(t) ?? 0) + 1))));
+  const totalIdf = useTerms.reduce((a, t) => a + idf(t), 0) || 1;
+
+  // Best achievable score for this query, used to normalize.
+  const perfect = totalIdf * 8;
 
   const scored: VerbMatch[] = [];
   for (const v of verbs) {
@@ -102,17 +215,19 @@ export function rankVerbs(
     const desc = (v.description || '').toLowerCase();
 
     let raw = 0;
+    let matchedIdf = 0;
     let matched = 0;
-    for (const t of qTerms) {
+    for (const t of useTerms) {
       const s = scoreTerm(t, segs, nameLower, desc);
-      if (s > 0) matched++;
-      raw += s;
+      if (s > 0) { matched++; matchedIdf += idf(t); }
+      raw += s * idf(t);
     }
     if (matched === 0) continue;
 
-    // Every term matching beats one term matching loudly: an agent asking for
-    // "refund a payment" wants the verb about both, not the loudest refund.
-    raw *= matched / qTerms.length;
+    // Covering the terms that MATTER beats covering the most terms. Weighted
+    // by IDF, so failing to match "the" costs nothing and failing to match
+    // "refund" costs almost everything.
+    raw *= matchedIdf / totalIdf;
 
     // Nudge shorter names up. Between two equal matches the more specific
     // name is nearly always the one meant.

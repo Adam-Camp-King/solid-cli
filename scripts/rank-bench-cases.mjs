@@ -1,0 +1,23 @@
+// Query -> the verb an owner meant. Drawn from the 50 tasks, phrased as they are.
+export const CASES = [
+  ["Add a new customer: Dana Whitfield, dana@example.com", "contact.create"],
+  ["Do we have anyone called Whitfield on file?", "contact"],
+  ["A customer wants a refund on a payment they made", "payment.refund"],
+  ["A customer wants a refund on a payment they made. Work out how to do that.", "payment.refund"],
+  ["Book Dana in for Tuesday morning", "appointment.book"],
+  ["Which customers have unpaid invoices?", "invoice"],
+  ["How much money is owed to us right now?", "invoice|receivable|outstanding"],
+  ["Text Dana to say we're running twenty minutes late", "sms|send"],
+  ["Who called us yesterday and what did they want?", "call"],
+  ["Write a short post about our winter hours and put it on the site", "blog"],
+  ["Our hours changed. Update the website to say we open at 8 now", "page"],
+  ["What jobs are still open?", "order"],
+  ["How many of part 4471 do we have left?", "inventory|stock"],
+  ["I just got off the phone with Dana. Make a note that she wants a quote", "note"],
+  ["The job for Dana went well. Ask her for a review.", "review"],
+  ["Send Dana a link so she can pay online", "link|payment"],
+  ["My new apprentice Sam starts Monday. Give him access.", "team|invite|user"],
+  ["What work have we got coming in, and what's it worth?", "deal|pipeline|sales"],
+  ["Send our regulars an email about the winter discount", "campaign|email"],
+  ["Add a new service: gutter clearing, £120", "product|service"],
+];
