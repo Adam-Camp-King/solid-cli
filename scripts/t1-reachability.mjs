@@ -32,11 +32,29 @@
  * retried slowly and only then judged. Counting them as failures would have
  * overstated the damage by a quarter.
  *
- * WHAT IT CANNOT TELL YOU: it calls with EMPTY arguments, so `internal_error`
- * is ambiguous — either the verb is genuinely broken, or it needs an argument
- * and the handler raises instead of validating. Both are defects, and they are
- * the same family as the 33 verbs answering "Request failed". Separating them
- * needs T2 (dry-run contract), which is blocked on nothing now that 2.3 exists.
+ * ⛔⛔ WHAT IT CANNOT TELL YOU — AND THIS IS BIGGER THAN IT SOUNDS.
+ *
+ * 1. Empty arguments make `internal_error` ambiguous: either the verb is
+ *    genuinely broken, or it needs an argument and the handler raises instead
+ *    of validating. Same family as the 33 verbs answering "Request failed".
+ *
+ * 2. **A GATE THAT FIRES EARLY MASKS EVERYTHING BEHIND IT.** T1 can only see a
+ *    failure that happens before the first thing that rejects. For a write that
+ *    is the consent gate, which sits BEFORE the dispatcher's audit-row insert —
+ *    so a verb broken at the insert looks perfectly healthy.
+ *
+ *    Measured, not theorised. On 2026-09-13 an enum mismatch
+ *    (`ai_action_category` missing `safe_write` and six siblings) made **27
+ *    verbs** undispatchable in production. T1 saw **12**. The other 15 passed:
+ *    13 stopped at `REACHED(consent)`, 2 at `role_denied`. **T1 under-reported
+ *    a live outage by 56%.**
+ *
+ *    So read "REACHABLE" precisely: for the ~474 writes it means the route
+ *    resolves and the consent gate works. It does NOT mean the verb runs.
+ *    Proving that needs a call that gets past consent — T2 (dry-run contract),
+ *    or a deliberate --confirm inside a sandbox fork.
+ *
+ * Separating both cases is T2, which is blocked on nothing now that 2.3 exists.
  *
  * Usage:  node scripts/t1-reachability.mjs [--json out.json]
  */
