@@ -23,6 +23,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'VALIDATION_FAILED'
   | 'CONFLICT'
+  | 'BAD_REQUEST'
   | 'RATE_LIMITED'
   | 'SERVER_ERROR'
   | 'NETWORK_ERROR'
@@ -37,6 +38,7 @@ export const ERROR_CODES: ErrorCode[] = [
   'NOT_FOUND',
   'VALIDATION_FAILED',
   'CONFLICT',
+  'BAD_REQUEST',
   'RATE_LIMITED',
   'SERVER_ERROR',
   'NETWORK_ERROR',
@@ -175,7 +177,19 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
 
     case status === 422:
       return withRequestId(
-        { code: 'VALIDATION_FAILED', hint: 'Run with --help to see required flags' },
+        {
+          code: 'VALIDATION_FAILED',
+          // Was "Run with --help to see required flags". The verb path takes
+          // JSON through -p, not flags, so --help shows nothing relevant.
+          // `verbs describe` prints the input_schema, which is the answer.
+          hint: 'Required fields: solid verbs describe <verb>',
+        },
+        requestId,
+      );
+
+    case status === 408:
+      return withRequestId(
+        { code: 'TIMEOUT', hint: 'Try --timeout=60, or run: solid health' },
         requestId,
       );
 
@@ -188,6 +202,21 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
     case status >= 500 && status < 600:
       return withRequestId(
         { code: 'SERVER_ERROR', hint: 'Try again, or run: solid health' },
+        requestId,
+      );
+
+    // Every remaining 4xx — 400, 405, 410, 415 and the rest — is the caller's
+    // fault. This used to fall through to the default below and come back as
+    // SERVER_ERROR, which isRetryable() reports as retryable:true. An agent
+    // honouring that field re-sends an identical bad request forever: passing
+    // `--surface bogusXYZ` was an infinite loop, not an error. 408 and 429 are
+    // handled above because a plain retry genuinely can fix those two.
+    case status >= 400 && status < 500:
+      return withRequestId(
+        {
+          code: 'BAD_REQUEST',
+          hint: 'Fix the request — retrying it unchanged will fail the same way.',
+        },
         requestId,
       );
 
@@ -259,6 +288,7 @@ export function isRetryable(code: ErrorCode): boolean {
     case 'NOT_FOUND':
     case 'VALIDATION_FAILED':
     case 'CONFLICT':
+    case 'BAD_REQUEST':
     case 'DRY_RUN_BLOCKED':
       return false;
     default: {

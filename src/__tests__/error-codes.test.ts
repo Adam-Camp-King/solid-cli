@@ -88,7 +88,9 @@ describe('classifyError — HTTP statuses', () => {
   it('422 → VALIDATION_FAILED', () => {
     const c = classifyError({ status: 422 });
     expect(c.code).toBe('VALIDATION_FAILED');
-    expect(c.hint).toMatch(/--help/);
+    // Was /--help/. The verb path takes JSON via -p, so --help shows nothing
+    // relevant; `verbs describe` prints the input_schema, which is the answer.
+    expect(c.hint).toMatch(/verbs describe/);
   });
 
   it('429 → RATE_LIMITED', () => {
@@ -99,8 +101,16 @@ describe('classifyError — HTTP statuses', () => {
     expect(classifyError({ status }).code).toBe('SERVER_ERROR');
   });
 
-  it('unknown status (418) defaults to SERVER_ERROR', () => {
-    expect(classifyError({ status: 418 }).code).toBe('SERVER_ERROR');
+  it('unknown 4xx (418) is BAD_REQUEST, not SERVER_ERROR', () => {
+    // This assertion used to expect SERVER_ERROR, and in doing so pinned the
+    // bug: SERVER_ERROR is retryable, so any 4xx we had not enumerated told an
+    // agent to send the identical request again, forever. An unrecognised 4xx
+    // is still the caller's fault.
+    expect(classifyError({ status: 418 }).code).toBe('BAD_REQUEST');
+  });
+
+  it('a non-HTTP status still defaults to SERVER_ERROR', () => {
+    expect(classifyError({ status: 302 }).code).toBe('SERVER_ERROR');
   });
 
   it('status=0 with ECONNABORTED → TIMEOUT', () => {
@@ -319,6 +329,7 @@ describe('ERROR_CODES vocabulary', () => {
       'NOT_FOUND',
       'VALIDATION_FAILED',
       'CONFLICT',
+      'BAD_REQUEST',
       'RATE_LIMITED',
       'SERVER_ERROR',
       'NETWORK_ERROR',
