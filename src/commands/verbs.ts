@@ -25,6 +25,7 @@ import * as fs from 'fs';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput, printJson } from '../lib/json-output';
+import { clip } from '../lib/verb-search';
 import { parseJsonArg } from '../lib/json-arg';
 import { isDryRun } from '../lib/dry-run';
 import { emitErrorAndExit } from '../lib/command-kit';
@@ -97,6 +98,15 @@ verbsCommand
   // that errors. Verified against the live API: starter 843, professional 845.
   .option('--tier <name>', 'Filter to verbs available at this tier (starter|builder|professional|enterprise)')
   .option('--json', 'Output the raw manifest as JSON')
+  // ⛔ THE DEFAULT USED TO BE EVERYTHING. `verbs list --json` returned all 845
+  // records with full input_schemas — 1,947,944 bytes, ~486,986 tokens before
+  // 1.1 and ~315,898 after. That is more than most context windows, to answer
+  // "what can I do?". The schemas are why: they are ~85% of the payload and
+  // nobody choosing a verb needs them, because choosing is what `describe` is
+  // for. So the default is now an index and the full dump is opt-in.
+  .option('--full', 'Every field including input_schema — the old default, ~316K tokens')
+  .option('--names-only', 'Just the names, nothing else')
+  .option('-n, --limit <n>', 'Return at most this many verbs')
   .action(async (options) => {
     const wantsJson = options.json || isJsonOutput();
     const spinner = wantsJson ? null : ora('Fetching verb manifest...').start();
@@ -109,16 +119,54 @@ verbsCommand
       spinner?.stop();
       const data = res.data as VerbManifest;
 
+      const limit = options.limit ? Math.max(1, parseInt(options.limit, 10) || 0) : null;
+      const all = data.verbs || [];
+      const shown = limit ? all.slice(0, limit) : all;
+
       if (wantsJson) {
-        printJson(data);
+        if (options.full) {
+          // The old behaviour, kept whole: codegen and tooling need it, and
+          // removing it would break them to save tokens they are not paying.
+          printJson(limit ? { ...data, verbs: shown, count: shown.length } : data);
+          return;
+        }
+
+        if (options.namesOnly) {
+          printJson({
+            count: shown.length,
+            total: data.total_registered,
+            has_more: shown.length < all.length,
+            names: shown.map((v) => v.name),
+          });
+          return;
+        }
+
+        // The index tier. Rows are arrays, not objects: repeating the three
+        // keys 845 times is roughly a fifth of the payload, and a documented
+        // positional shape costs nothing to parse.
+        printJson({
+          schema: 'solid:agent-verb-index/v1',
+          row: ['name', 'description', 'side_effects'],
+          count: shown.length,
+          total: data.total_registered,
+          has_more: shown.length < all.length,
+          filtered_by: data.filtered_by,
+          verbs: shown.map((v) => [v.name, clip(v.description || '', 90), v.side_effects]),
+          next: 'solid verbs describe <name>  ·  full records: --full',
+        });
         return;
       }
 
-      console.log(chalk.cyan(`${data.count} verbs (of ${data.total_registered} total)`));
+      if (options.namesOnly) {
+        for (const v of shown) console.log(v.name);
+        return;
+      }
+
+      console.log(chalk.cyan(`${shown.length} verbs (of ${data.total_registered} total)`));
       if (data.filtered_by.surface) console.log(chalk.dim(`  surface=${data.filtered_by.surface}`));
       if (data.filtered_by.shape) console.log(chalk.dim(`  shape=${data.filtered_by.shape}`));
       console.log('');
-      for (const v of data.verbs) {
+      for (const v of shown) {
         const tag = v.side_effects === 'write' ? chalk.yellow(' write') :
                     v.side_effects === 'mixed' ? chalk.magenta(' mixed') : '';
         console.log(`  ${chalk.gray(v.shape.padEnd(11))} ${v.name}${tag}`);

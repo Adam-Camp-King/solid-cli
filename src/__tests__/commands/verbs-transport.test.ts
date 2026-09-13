@@ -262,3 +262,94 @@ describe('verbs list — filters reach the backend (VNP 1.4)', () => {
     expect(cfg.params).toEqual({});
   });
 });
+
+describe('verbs list — tiered output (VNP 2.2)', () => {
+  const manifest = {
+    count: 3,
+    total_registered: 845,
+    filtered_by: { surface: null, shape: null, tier: null },
+    verbs: [
+      {
+        name: 'payment.refund',
+        description: 'x'.repeat(400),
+        side_effects: 'write',
+        shape: 'receipt',
+        input_schema: { type: 'object', properties: { a: {}, b: {}, c: {} } },
+      },
+      {
+        name: 'contact.create',
+        description: 'Create a contact.',
+        side_effects: 'write',
+        shape: 'transaction',
+        input_schema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'books.summary',
+        description: 'Money in and out.',
+        side_effects: 'read',
+        shape: 'aggregate',
+        input_schema: { type: 'object', properties: {} },
+      },
+    ],
+  };
+
+  let printed: string;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    printed = '';
+    jest.spyOn(console, 'log').mockImplementation((s?: unknown) => { printed += String(s); });
+    mockGet.mockResolvedValue({ data: manifest });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  function list(extra: string[]) {
+    resetOptions();
+    return verbsCommand.parseAsync(['list', '--json', ...extra], { from: 'user' });
+  }
+
+  it('defaults to the index — no input_schema anywhere', async () => {
+    await list([]);
+    const out = JSON.parse(printed);
+    expect(out.schema).toBe('solid:agent-verb-index/v1');
+    expect(printed).not.toContain('input_schema');
+    expect(out.verbs[0]).toEqual(['payment.refund', expect.any(String), 'write']);
+  });
+
+  it('documents its own row shape, since rows are positional', async () => {
+    await list([]);
+    expect(JSON.parse(printed).row).toEqual(['name', 'description', 'side_effects']);
+  });
+
+  it('clips descriptions to the index budget', async () => {
+    await list([]);
+    const [, desc] = JSON.parse(printed).verbs[0];
+    expect(desc.length).toBeLessThanOrEqual(91); // 90 + the ellipsis
+  });
+
+  it('--full still returns whole records, because codegen needs them', async () => {
+    await list(['--full']);
+    const out = JSON.parse(printed);
+    expect(out.verbs[0].input_schema).toBeDefined();
+    expect(out.verbs[0].description).toHaveLength(400);
+  });
+
+  it('--names-only returns names and nothing else', async () => {
+    await list(['--names-only']);
+    const out = JSON.parse(printed);
+    expect(out.names).toEqual(['payment.refund', 'contact.create', 'books.summary']);
+    expect(out.verbs).toBeUndefined();
+  });
+
+  it('--limit caps rows and says there are more', async () => {
+    await list(['-n', '2']);
+    const out = JSON.parse(printed);
+    expect(out.verbs).toHaveLength(2);
+    expect(out.has_more).toBe(true);
+    expect(out.total).toBe(845);
+  });
+
+  it('has_more is false when everything fits', async () => {
+    await list([]);
+    expect(JSON.parse(printed).has_more).toBe(false);
+  });
+});
