@@ -26,6 +26,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput, printJson } from '../lib/json-output';
 import { parseJsonArg } from '../lib/json-arg';
+import { isDryRun } from '../lib/dry-run';
 import { emitErrorAndExit } from '../lib/command-kit';
 
 interface VerbRecord {
@@ -189,7 +190,16 @@ verbsCommand
     // use something imaginary (found 2026-08-20). The flag is deliberately NOT
     // implicit: consent is the user's act, not a default we assume for them.
     const isWrite = verb.side_effects !== 'read';
-    if (isWrite && !options.confirm) {
+
+    // ⛔ A DRY RUN NEVER NEEDS CONSENT. The gate below used to fire first, so
+    // previewing a write required consenting to it — which makes the sandbox
+    // useless for the one job it exists to do: find out what a call would send
+    // BEFORE agreeing to send it. The request never leaves the process in dry
+    // run (the interceptor short-circuits every mutation), so there is nothing
+    // to consent to. --confirm stays mandatory for the real call.
+    const previewOnly = isDryRun();
+
+    if (isWrite && !previewOnly && !options.confirm) {
       console.error(chalk.red(`${verb.name} writes (side_effects=${verb.side_effects}).`));
       console.error(chalk.dim(`  Re-run with --confirm to consent:`));
       console.error(chalk.dim(`    solid verbs invoke ${verb.name} --confirm${options.payload ? ` -p '${typeof options.payload === 'string' ? options.payload : ''}'` : ''}`));

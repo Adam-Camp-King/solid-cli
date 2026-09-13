@@ -110,11 +110,20 @@ describe('makeDryRunResult', () => {
     expect(r).toMatchObject<Partial<DryRunResult>>({
       dry_run: true,
       status: 'dry_run',
-      success: true,
       would: { method: 'POST', url: '/api/v1/kb/company', body: { title: 'X' } },
     });
     expect(r.id).toMatch(/^dry_run_\d+$/);
     expect(r.message).toContain('dry run');
+  });
+
+  it('never claims success — a preview is not a completed write', () => {
+    // This assertion used to be `success: true`. `success` is the field a
+    // caller checks to decide whether the thing happened, so a preview
+    // carrying it reads as a finished write to anything that does not also
+    // know to look for `dry_run`.
+    const r = makeDryRunResult('POST', '/api/v1/kb/company', { title: 'X' });
+    expect('success' in r).toBe(false);
+    expect((r as unknown as Record<string, unknown>).success).toBeUndefined();
   });
 
   it('prints "[DRY] METHOD url" to stderr, NEVER stdout', () => {

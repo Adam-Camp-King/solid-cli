@@ -37,6 +37,12 @@ jest.mock('../../lib/config', () => ({
   config: { isLoggedIn: () => true, companyId: 1 },
 }));
 
+const mockIsDryRun = jest.fn<() => boolean>(() => false);
+jest.mock('../../lib/dry-run', () => ({
+  ...(jest.requireActual('../../lib/dry-run') as object),
+  isDryRun: () => mockIsDryRun(),
+}));
+
 const mockEmitErrorAndExit = jest.fn<(...a: any[]) => never>(() => {
   throw new Error('EMIT_ERROR');
 });
@@ -48,7 +54,21 @@ jest.mock('../../lib/command-kit', () => ({
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { verbsCommand } = require('../../commands/verbs');
 
+/**
+ * Commander commands are singletons and parseAsync MERGES into whatever option
+ * values are already on them. Without this reset, `--confirm` from one test
+ * silently stays set for every later one — which made a "blocks without
+ * --confirm" test pass a write straight through. Clear before each parse.
+ */
+function resetOptions(): void {
+  for (const sub of verbsCommand.commands) {
+    (sub as any)._optionValues = {};
+    (sub as any)._optionValueSources = {};
+  }
+}
+
 function invoke(name: string, extra: string[] = []) {
+  resetOptions();
   return verbsCommand.parseAsync(['invoke', name, ...extra], { from: 'user' });
 }
 
@@ -158,5 +178,50 @@ describe('verbs invoke — transport routing', () => {
     expect(arg.response.data.code).toBe('WRONG_TRANSPORT');
     expect(arg.response.data.detail).toContain('mcp');
     expect(arg.response.status).toBe(400);
+  });
+});
+
+describe('verbs invoke — the consent gate (VNP 1.3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockPost.mockResolvedValue({ data: { ok: true } });
+    mockIsDryRun.mockReturnValue(false);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const writeVerb = () =>
+    verb({
+      name: 'contact.create',
+      side_effects: 'write',
+      transport: 'http',
+      http_endpoint: '/api/v1/agent/contact/create',
+    });
+
+  it('still blocks a real write with no --confirm', () => {
+    mockGet.mockResolvedValue(writeVerb());
+    mockIsDryRun.mockReturnValue(false);
+
+    const exit = jest.spyOn(process, 'exit').mockImplementation(((): never => {
+      throw new Error('EXIT');
+    }) as never);
+
+    return expect(invoke('contact.create')).rejects.toThrow('EXIT').then(() => {
+      expect(mockPost).not.toHaveBeenCalled();
+      exit.mockRestore();
+    });
+  });
+
+  it('lets a DRY RUN through without --confirm', async () => {
+    // A dry run cannot mutate — the interceptor short-circuits every mutation
+    // before it leaves the process. Demanding consent to preview a write makes
+    // the sandbox useless for the one thing it is for.
+    mockGet.mockResolvedValue(writeVerb());
+    mockIsDryRun.mockReturnValue(true);
+
+    await invoke('contact.create');
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
   });
 });

@@ -69,12 +69,17 @@ function showBanner(): void {
 export interface DryRunResult {
   dry_run: true;
   would: { method: string; url: string; body?: unknown };
-  // Optimistic placeholders so `response.data.id`, `.status`, `.success`
-  // don't crash the rendering code:
+  // Optimistic placeholders so `response.data.id` / `.status` don't crash the
+  // rendering code.
   id: string;
   status: 'dry_run';
-  success: true;
   message: string;
+  // ⛔ NO `success` FIELD. It used to be `success: true`, for the same
+  // don't-crash-the-renderer reason as the two above — but `success` is the
+  // field a caller checks to decide whether the thing happened, and nothing in
+  // this repo actually reads it off a dry run. So the placeholder bought
+  // nothing and told every agent that a preview was a completed write. Read
+  // `dry_run` or `status` instead; both say plainly that nothing was sent.
 }
 
 export function makeDryRunResult(method: string, url: string, body?: unknown): DryRunResult {
@@ -95,7 +100,6 @@ export function makeDryRunResult(method: string, url: string, body?: unknown): D
     would: { method: method.toUpperCase(), url, body },
     id: `dry_run_${actions.length}`,
     status: 'dry_run',
-    success: true,
     message: 'dry run — no changes made',
   };
 }
