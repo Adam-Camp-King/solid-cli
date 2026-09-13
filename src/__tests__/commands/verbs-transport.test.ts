@@ -225,3 +225,40 @@ describe('verbs invoke — the consent gate (VNP 1.3)', () => {
     expect(mockPost).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('verbs list — filters reach the backend (VNP 1.4)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockGet.mockResolvedValue({ data: { count: 0, verbs: [], filtered_by: {} } });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  function list(extra: string[]) {
+    resetOptions();
+    return verbsCommand.parseAsync(['list', ...extra], { from: 'user' });
+  }
+
+  it('forwards --tier, which the backend has always accepted', async () => {
+    // The backend has taken ?tier= since Phase 8 and echoes it in
+    // `filtered_by` on every response, but the flag did not exist here — so an
+    // agent reading the envelope to learn its options was told about one that
+    // errors. Live check: starter 843, professional 845.
+    await list(['--tier', 'starter', '--json']);
+    const [, cfg] = mockGet.mock.calls[0] as [string, any];
+    expect(cfg.params.tier).toBe('starter');
+  });
+
+  it('forwards --surface and --shape too', async () => {
+    await list(['--surface', 'webmcp', '--shape', 'preview', '--json']);
+    const [, cfg] = mockGet.mock.calls[0] as [string, any];
+    expect(cfg.params.surface).toBe('webmcp');
+    expect(cfg.params.shape).toBe('preview');
+  });
+
+  it('sends no filter params when none are given', async () => {
+    await list(['--json']);
+    const [, cfg] = mockGet.mock.calls[0] as [string, any];
+    expect(cfg.params).toEqual({});
+  });
+});

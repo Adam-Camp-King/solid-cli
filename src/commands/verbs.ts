@@ -91,6 +91,11 @@ verbsCommand
   .description('List every agent-attraction verb the backend exposes')
   .option('--surface <name>', 'Filter to verbs on this surface (http|mcp_stdio|webmcp|ucp|cli|public)')
   .option('--shape <name>', 'Filter to verbs of this shape (preview|explain|aggregate|suggest|...)')
+  // The backend has accepted ?tier= since Phase 8 and reports it back in
+  // `filtered_by` on every response — but the flag did not exist here, so an
+  // agent reading the envelope to learn its own options was told about one
+  // that errors. Verified against the live API: starter 843, professional 845.
+  .option('--tier <name>', 'Filter to verbs available at this tier (starter|builder|professional|enterprise)')
   .option('--json', 'Output the raw manifest as JSON')
   .action(async (options) => {
     const wantsJson = options.json || isJsonOutput();
@@ -99,6 +104,7 @@ verbsCommand
       const params: Record<string, string> = {};
       if (options.surface) params.surface = options.surface;
       if (options.shape) params.shape = options.shape;
+      if (options.tier) params.tier = options.tier;
       const res = await apiClient.get('/api/v1/agent/verbs', { params });
       spinner?.stop();
       const data = res.data as VerbManifest;
