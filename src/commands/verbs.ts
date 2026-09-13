@@ -26,6 +26,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 import { parseJsonArg } from '../lib/json-arg';
+import { emitErrorAndExit } from '../lib/command-kit';
 
 interface VerbRecord {
   name: string;
@@ -36,7 +37,21 @@ interface VerbRecord {
   requires_consent: boolean;
   tier_floor: string;
   input_schema: Record<string, any>;
-  http_endpoint: string;
+  /** Null for any verb whose transport is not "http" — see `transport`. */
+  http_endpoint: string | null;
+  /**
+   * How this verb is reached. Absent on a backend that predates the field,
+   * in which case we fall back to http_endpoint (the old behaviour).
+   *
+   *   "http"     a real REST route at /api/v1/agent/<ns>/<verb>
+   *   "dispatch" no REST route — reachable via POST /api/v1/agent/cli-dispatch
+   *   "mcp"      reachable only over an MCP connection
+   */
+  transport?: 'http' | 'dispatch' | 'mcp';
+  /** Where a dispatch-transport verb is actually invoked. */
+  dispatch_endpoint?: string | null;
+  /** The canonical verb this one duplicates, when it is not canonical. */
+  same_as?: string | null;
 }
 
 interface VerbManifest {
@@ -181,12 +196,58 @@ verbsCommand
       process.exit(1);
     }
 
+    // ⛔ ROUTE BY TRANSPORT, NOT BY GUESSWORK. Every verb used to be POSTed at
+    // /api/v1/agent/<name>, and for a third of them that route has never
+    // existed: the agent-verb router ends in a catch-all needing TWO path
+    // segments, so a flat snake_case name matched nothing and 404'd. The verb
+    // was fine — it lives in ADA's registry and answers on cli-dispatch — but
+    // a 404 reads as "this does not exist", so the natural conclusion was that
+    // a third of the registry was phantom. It is not.
+    //
+    // The manifest now says which transport a verb speaks and where to send
+    // it, so this reads the answer instead of assuming one.
+    const transport = verb.transport
+      ?? (verb.http_endpoint ? 'http' : undefined);
+
+    // Refuse BEFORE the try. This is a precondition, not a failed request —
+    // leaving it inside meant the catch below treated our own refusal as an
+    // API error and reported it as one.
+    if (transport !== 'dispatch' && transport !== 'http') {
+      // Name the transport rather than letting it fail as a 404 somewhere
+      // downstream. "I know where this lives and cannot reach it from here" is
+      // a different problem from "this does not exist", and an agent has to be
+      // able to tell them apart.
+      const detail =
+        `${verb.name} is reachable over "${verb.transport ?? 'unknown'}", ` +
+        'which this CLI cannot speak.';
+      emitErrorAndExit(Object.assign(new Error(detail), {
+        isAxiosError: true,
+        response: { status: 400, data: { detail, code: 'WRONG_TRANSPORT' } },
+      }));
+      return;
+    }
+
     try {
-      const method = GET_VERBS.has(verb.name) ? 'GET' : 'POST';
       const body = isWrite ? { ...payload, confirm: true } : payload;
-      const res = method === 'GET'
-        ? await apiClient.get(verb.http_endpoint, { params: body })
-        : await apiClient.post(verb.http_endpoint, body);
+      let res;
+
+      if (transport === 'dispatch') {
+        // cli-dispatch takes the verb name in the body and resolves it against
+        // ADA's registry first. `confirm` is a sibling of `args`, not a member
+        // of it — putting it inside args would reach the verb as an argument
+        // it never declared.
+        res = await apiClient.post(verb.dispatch_endpoint || '/api/v1/agent/cli-dispatch', {
+          verb: verb.name,
+          args: payload,
+          confirm: isWrite ? true : undefined,
+        });
+      } else {
+        const method = GET_VERBS.has(verb.name) ? 'GET' : 'POST';
+        res = method === 'GET'
+          ? await apiClient.get(verb.http_endpoint as string, { params: body })
+          : await apiClient.post(verb.http_endpoint as string, body);
+      }
+
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) {
       failApi(e);
