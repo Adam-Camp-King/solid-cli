@@ -394,3 +394,70 @@ describe('verbs list — tiered output (VNP 2.2)', () => {
     expect(JSON.parse(printed).has_more).toBe(false);
   });
 });
+
+describe('verbs invoke — the canonical twin (VNP 3.3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockPost.mockResolvedValue({ data: { ok: true } });
+    mockIsDryRun.mockReturnValue(false);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('surfaces same_as in a dry run, where an agent can act on it', async () => {
+    const printed: string[] = [];
+    (console.log as jest.Mock).mockImplementation((v?: unknown) => { printed.push(String(v)); });
+    mockIsDryRun.mockReturnValue(true);
+    mockGet.mockResolvedValue(
+      verb({
+        name: 'blog_publish',
+        transport: 'dispatch',
+        dispatch_endpoint: '/api/v1/ada/cli-dispatch',
+        same_as: 'blog.publish',
+        input_schema: { type: 'object', properties: { blog_post_id: { type: 'integer' } } },
+      }),
+    );
+
+    await invoke('blog_publish', ['-p', '{"blog_post_id":1}']);
+
+    const out = JSON.parse(printed.join(''));
+    expect(out.same_as).toBe('blog.publish');
+  });
+
+  it('says nothing when a verb is canonical', async () => {
+    const printed: string[] = [];
+    (console.log as jest.Mock).mockImplementation((v?: unknown) => { printed.push(String(v)); });
+    mockIsDryRun.mockReturnValue(true);
+    mockGet.mockResolvedValue(
+      verb({ name: 'blog.publish', transport: 'http', http_endpoint: '/api/v1/agent/blog/publish' }),
+    );
+
+    await invoke('blog.publish');
+
+    expect(JSON.parse(printed.join('')).same_as).toBeUndefined();
+  });
+
+  it('does not call the twin deprecated, because it is not', async () => {
+    // Both halves are live. Labelling one deprecated would be a false claim of
+    // exactly the kind this sprint exists to remove.
+    const errs: string[] = [];
+    (console.error as jest.Mock).mockImplementation((v?: unknown) => { errs.push(String(v)); });
+    mockGet.mockResolvedValue(
+      verb({
+        name: 'blog_publish',
+        transport: 'dispatch',
+        dispatch_endpoint: '/api/v1/ada/cli-dispatch',
+        same_as: 'blog.publish',
+      }),
+    );
+
+    await invoke('blog_publish');
+
+    const note = errs.join(' ');
+    expect(note).toContain('blog.publish');
+    expect(note.toLowerCase()).not.toContain('deprecat');
+    // And it must warn that the arguments do not carry over.
+    expect(note).toMatch(/argument shape|own schema/);
+  });
+});

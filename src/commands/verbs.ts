@@ -55,6 +55,10 @@ interface VerbRecord {
   dispatch_endpoint?: string | null;
   /** The canonical verb this one duplicates, when it is not canonical. */
   same_as?: string | null;
+  /** Atlas address: class digit then division digit, e.g. "52". */
+  coordinate?: string | null;
+  /** Human label for the division, e.g. "payment". */
+  noun?: string | null;
 }
 
 interface VerbManifest {
@@ -90,7 +94,12 @@ export const verbsCommand = new Command('verbs')
 
 verbsCommand
   .command('list')
-  .description('List every agent-attraction verb the backend exposes')
+  .description('List verbs. Pass an Atlas prefix to scope: `verbs list 5` money, `verbs list 52` payments')
+  // ⛔ THE PREFIX IS THE QUERY. No --coordinate flag, deliberately: truncating
+  // the address widens the scope, so an agent that knows 52 already knows how
+  // to ask for its neighbourhood. A flag would be one more thing to learn for
+  // no expressive gain.
+  .argument('[prefix]', 'Atlas coordinate prefix — 5 = money, 52 = payments')
   .option('--surface <name>', 'Filter to verbs on this surface (http|mcp_stdio|webmcp|ucp|cli|public)')
   .option('--shape <name>', 'Filter to verbs of this shape (preview|explain|aggregate|suggest|...)')
   // The backend has accepted ?tier= since Phase 8 and reports it back in
@@ -108,7 +117,7 @@ verbsCommand
   .option('--full', 'Every field including input_schema — the old default, ~316K tokens')
   .option('--names-only', 'Just the names, nothing else')
   .option('-n, --limit <n>', 'Return at most this many verbs')
-  .action(async (options) => {
+  .action(async (prefix: string | undefined, options) => {
     const wantsJson = options.json || isJsonOutput();
     const spinner = wantsJson ? null : ora('Fetching verb manifest...').start();
     try {
@@ -121,7 +130,30 @@ verbsCommand
       const data = res.data as VerbManifest;
 
       const limit = options.limit ? Math.max(1, parseInt(options.limit, 10) || 0) : null;
-      const all = data.verbs || [];
+      let all = data.verbs || [];
+
+      // Scope by Atlas prefix. Filtered here rather than server-side because
+      // the manifest is one fetch either way; when 4.2 adds etag caching this
+      // becomes zero calls.
+      if (prefix) {
+        if (!/^[0-9]{1,2}$/.test(prefix)) {
+          emitErrorAndExit(Object.assign(
+            new Error(`"${prefix}" is not an Atlas prefix — expected 1 or 2 digits, e.g. 5 or 52.`),
+            {
+              isAxiosError: true,
+              response: {
+                status: 400,
+                data: {
+                  detail: `"${prefix}" is not an Atlas prefix — expected 1 or 2 digits, e.g. 5 or 52. Run: solid map`,
+                  code: 'BAD_REQUEST',
+                },
+              },
+            },
+          ));
+          return;
+        }
+        all = all.filter((v) => (v.coordinate || '').startsWith(prefix));
+      }
       const shown = limit ? all.slice(0, limit) : all;
 
       if (wantsJson) {
@@ -244,6 +276,23 @@ verbsCommand
     // every write verb was uninvokable from the CLI and the error told you to
     // use something imaginary (found 2026-08-20). The flag is deliberately NOT
     // implicit: consent is the user's act, not a default we assume for them.
+    // VNP 3.3 — say when a verb has a canonical twin.
+    //
+    // 71 pairs name the same operation twice. The sprint doc calls the second
+    // half a "deprecated_alias"; it is NOT deprecated and saying so would be a
+    // false claim of exactly the kind this sprint keeps removing. Both halves
+    // are live, and they are NOT interchangeable — blog.publish takes post_id,
+    // blog_publish takes blog_post_id; appointment.book and appointment_book
+    // model an appointment differently. So this surfaces the twin and names
+    // the canonical one WITHOUT implying the arguments carry over.
+    const twin = verb.same_as || null;
+    if (twin && !isJsonOutput(options)) {
+      console.error(chalk.dim(
+        `  note: ${verb.name} is the ${verb.transport ?? 'non-canonical'} twin of ` +
+        `${twin}. Same operation, different argument shape — read this verb's own schema.`,
+      ));
+    }
+
     const isWrite = verb.side_effects !== 'read';
 
     // ⛔ A DRY RUN NEVER NEEDS CONSENT. The gate below used to fire first, so
@@ -296,6 +345,7 @@ verbsCommand
         valid: report.valid,
         verb: verb.name,
         transport,
+        ...(twin ? { same_as: twin } : {}),
         missing_required: report.missing_required,
         type_errors: report.type_errors,
         unknown_fields: report.unknown_fields,
