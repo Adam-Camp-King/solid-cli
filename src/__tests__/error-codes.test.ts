@@ -236,6 +236,8 @@ describe('toErrorEnvelope', () => {
         status: 403,
         message: 'Missing scope: agents:read',
         retryable: false,
+        // VNP 2.5 — the literal next command, alongside the prose hint.
+        fix: 'solid keys rotate --add-scope agents:read',
         scope: 'agents:read',
         hint: 'rotate key',
         docs_url: 'https://solidnumber.com/docs/errors',

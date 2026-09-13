@@ -90,3 +90,68 @@ export function suggest(input: string, available: string[], opts: SuggestOptions
 
   return out;
 }
+
+/**
+ * Every command path in the tree, space-joined: "crm contacts", "verbs list".
+ *
+ * Sprint VNP 2.4. The unknown-command handler only ever searched siblings at
+ * the level that failed, so `solid contacts` was matched against the top-level
+ * list and suggested `connect` and `context` — while `crm contacts`, which is
+ * what the user meant and does exist, was never a candidate. A flat tree makes
+ * the whole surface reachable by a suggestion.
+ */
+export function flattenCommandTree(
+  cmd: { name(): string; commands: readonly unknown[] },
+  prefix = '',
+): string[] {
+  const out: string[] = [];
+  for (const raw of cmd.commands) {
+    const sub = raw as { name(): string; commands: readonly unknown[]; _hidden?: boolean };
+    const name = sub.name();
+    if (!name || name === '*' || sub._hidden) continue;
+    const path = prefix ? `${prefix} ${name}` : name;
+    out.push(path);
+    if (sub.commands?.length) out.push(...flattenCommandTree(sub, path));
+  }
+  return out;
+}
+
+/**
+ * "Did you mean?" over full command paths rather than a single level.
+ *
+ * A path is a candidate when the typed token matches ANY of its segments, so
+ * `contacts` finds `crm contacts` without the user knowing the namespace. A
+ * leaf whose LAST segment matches outranks one that merely contains it
+ * somewhere — `contacts` should reach `crm contacts` before `crm contacts
+ * import`.
+ */
+export function suggestPath(
+  typed: string,
+  paths: string[],
+  opts: SuggestOptions = {},
+): string[] {
+  const max = opts.max ?? 3;
+  const needle = typed.toLowerCase();
+  if (!needle) return [];
+
+  const scored: Array<{ path: string; rank: number }> = [];
+  for (const path of paths) {
+    const segs = path.toLowerCase().split(' ');
+    const last = segs[segs.length - 1];
+
+    let rank = Infinity;
+    if (last === needle) rank = 0;                       // exact leaf
+    else if (segs.includes(needle)) rank = 1;            // exact, deeper in
+    else if (last.startsWith(needle)) rank = 2;          // prefix of the leaf
+    else if (segs.some((s) => s.startsWith(needle))) rank = 3;
+    else {
+      const d = Math.min(...segs.map((s) => levenshtein(needle, s)));
+      const threshold = needle.length <= 4 ? 1 : needle.length <= 7 ? 2 : 3;
+      if (d <= threshold) rank = 4 + d;
+    }
+    if (rank !== Infinity) scored.push({ path, rank });
+  }
+
+  scored.sort((a, b) => a.rank - b.rank || a.path.length - b.path.length);
+  return scored.slice(0, max).map((s) => s.path);
+}

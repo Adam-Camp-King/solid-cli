@@ -142,7 +142,9 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
             code: 'FEATURE_GATED',
             feature: pickString(body, 'feature'),
             upgrade_to: pickString(body, 'upgrade_to'),
-            hint: 'Run: solid whoami --features  ·  Upgrade: solid upgrade',
+            // `solid upgrade` does not exist. `solid billing` is the group
+            // that does, and `status` shows the current plan.
+            hint: 'Run: solid whoami --features  ·  Upgrade: solid billing status',
           },
           requestId,
         );
@@ -255,6 +257,8 @@ export interface ErrorEnvelope {
     message: string;
     /** True when an automated retry could plausibly succeed (network blip, 5xx, rate limit, timeout). */
     retryable: boolean;
+    /** The literal next command. Absent when no single command repairs it. */
+    fix?: string;
     scope?: string;
     feature?: string;
     upgrade_to?: string;
@@ -274,6 +278,50 @@ export interface ErrorEnvelope {
  *
  * Pure on the code; no I/O, no env. Unit-tested.
  */
+/**
+ * The literal next command for an error, or undefined when there is not one.
+ *
+ * Sprint VNP 2.5. `hint` is prose; `fix` is something you can run. The rule
+ * that matters more than coverage: a `fix` must be a REAL command. Emitting a
+ * template like `solid verbs describe <verb>` would look like coverage and
+ * hand the caller a string that fails — which is how this codebase ended up
+ * telling people to run `solid upgrade`, a command that has never existed, in
+ * the 403 hint. Where no concrete command applies, there is no `fix` and the
+ * `hint` still explains.
+ *
+ * Every command named here was checked against the live tree.
+ */
+export function fixForCode(c: ClassifiedError): string | undefined {
+  switch (c.code) {
+    case 'AUTH_REQUIRED':
+      return 'solid auth login';
+    case 'SCOPE_MISSING':
+      return c.scope ? `solid keys rotate --add-scope ${c.scope}` : 'solid keys rotate';
+    case 'FEATURE_GATED':
+      return 'solid billing status';
+    case 'FORBIDDEN':
+      return 'solid whoami --features';
+    case 'NETWORK_ERROR':
+    case 'TIMEOUT':
+    case 'SERVER_ERROR':
+      return 'solid health';
+    // No honest one-liner for these: the repair depends on the call, and the
+    // message already names the field or the conflict.
+    case 'VALIDATION_FAILED':
+    case 'BAD_REQUEST':
+    case 'NOT_FOUND':
+    case 'CONFLICT':
+    case 'RATE_LIMITED':
+    case 'DRY_RUN_BLOCKED':
+      return undefined;
+    default: {
+      const _exhaustive: never = c.code;
+      void _exhaustive;
+      return undefined;
+    }
+  }
+}
+
 export function isRetryable(code: ErrorCode): boolean {
   switch (code) {
     case 'NETWORK_ERROR':
@@ -311,6 +359,8 @@ export function toErrorEnvelope(
     message,
     retryable: isRetryable(classified.code),
   };
+  const fix = fixForCode(classified);
+  if (fix) envelope.fix = fix;
   if (classified.scope) envelope.scope = classified.scope;
   if (classified.feature) envelope.feature = classified.feature;
   if (classified.upgrade_to) envelope.upgrade_to = classified.upgrade_to;

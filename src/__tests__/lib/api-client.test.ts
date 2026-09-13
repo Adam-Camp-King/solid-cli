@@ -66,7 +66,10 @@ describe('handleApiError — status-specific hints', () => {
     expect(r.message).toMatch(/vibe-coding/);
     expect(r.message).toMatch(/professional tier/);
     expect(r.message).toMatch(/not a bug/);
-    expect(r.message).toMatch(/solid upgrade/);
+    // Was /solid upgrade/ — a command that has never existed. The 403 hint
+    // told every feature-gated caller to run it. `solid billing status` is the
+    // real one, checked against the live command tree.
+    expect(r.message).toMatch(/solid billing status/);
   });
 
   it('404 → surfaces method+url', () => {

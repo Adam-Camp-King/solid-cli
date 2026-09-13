@@ -719,29 +719,74 @@ program.addHelpText('after', () => {
 // unknown subcommands like `solid kb xyzzy` — which breaks pipelines
 // that rely on exit codes to detect typos. (Phase 0.7 of
 // SPRINT-JSONLD-GRAPH-MOAT.md / I-8 every-advertised-command-exists.)
-import { suggest } from './lib/suggest';
+import { flattenCommandTree, suggestPath } from './lib/suggest';
 
+/**
+ * Sprint VNP 2.4 — one error contract.
+ *
+ * Two things were wrong here. The suggestion only ever searched siblings at
+ * the level that failed, so `solid contacts` was matched against the top-level
+ * list and offered `connect` and `context`, while `crm contacts` — which
+ * exists and is what was meant — could never be a candidate. And the whole
+ * thing was prose on stderr with nothing on stdout, so an agent running with
+ * --json got an empty stdout and a non-zero exit and no way to tell a typo
+ * from an outage.
+ *
+ * Now: suggestions come from the flattened command tree, and in JSON mode the
+ * failure is a normal error envelope on stdout with `did_you_mean` and `fix`,
+ * the same shape every API error uses.
+ */
 function attachUnknownCommandHandler(cmd: Command, displayPath: string): void {
   cmd.on('command:*', (operands: string[]) => {
     const unknown = operands[0];
-    const available = cmd.commands.map((c) => c.name()).filter((n) => n !== '*');
-    const suggestions = suggest(unknown, available);
     const fullCmd = `${displayPath} ${unknown}`.trim();
 
+    // Search the WHOLE tree, not this level. `contacts` has to be able to
+    // reach `crm contacts`.
+    const allPaths = flattenCommandTree(program).map((p) => `solid ${p}`);
+    const suggestions = suggestPath(unknown, flattenCommandTree(program)).map(
+      (p) => `solid ${p}`,
+    );
+
+    try {
+      emitTelemetry('unknown_command', { command: fullCmd, extra: { suggestions } });
+    } catch { /* noop */ }
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { isJsonOutput } = require('./lib/json-output');
+    if (isJsonOutput()) {
+      // Same envelope as every other failure, on stdout, so one parser
+      // handles both. BAD_REQUEST because a typo is the caller's to fix, and
+      // retryable:false because re-running it unchanged cannot help.
+      process.stdout.write(
+        JSON.stringify({
+          error: {
+            code: 'UNKNOWN_COMMAND',
+            status: 404,
+            message: `Unknown command: ${fullCmd}`,
+            retryable: false,
+            did_you_mean: suggestions,
+            fix: suggestions[0] ?? `${displayPath} --help`,
+          },
+        }) + '\n',
+      );
+      process.exit(1);
+    }
+
+    void allPaths;
     const line = (s: string) => process.stderr.write(s + '\n');
     line('');
     line(`  ${chalk.red('✗')} Unknown command: ${chalk.bold(fullCmd)}`);
     line('');
     if (suggestions.length === 1) {
-      line(`  ${chalk.dim('Did you mean')} ${chalk.cyan(`${displayPath} ${suggestions[0]}`)}${chalk.dim('?')}`);
+      line(`  ${chalk.dim('Did you mean')} ${chalk.cyan(suggestions[0])}${chalk.dim('?')}`);
     } else if (suggestions.length > 1) {
       line(`  ${chalk.dim('Did you mean one of these?')}`);
-      for (const s of suggestions) line(`    ${chalk.cyan(`${displayPath} ${s}`)}`);
+      for (const s of suggestions) line(`    ${chalk.cyan(s)}`);
     } else {
       line(`  ${chalk.dim('Run')} ${chalk.cyan(`${displayPath} --help`)} ${chalk.dim('to see all subcommands.')}`);
     }
     line('');
-    try { emitTelemetry('unknown_command', { command: fullCmd, extra: { suggestions } }); } catch { /* noop */ }
     process.exit(1);
   });
 

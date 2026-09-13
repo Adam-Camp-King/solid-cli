@@ -1857,7 +1857,7 @@ export function handleApiError(error: unknown): ApiError {
         message =
           `Tier limit: the ${d.feature} feature${required} is not on your current plan. ` +
           `This is a subscription limit, not a bug. ` +
-          `Run: solid whoami --features  ·  Upgrade: solid upgrade`;
+          `Run: solid whoami --features  ·  Upgrade: solid billing status`;
       } else {
         message = serverMessage
           ? `Forbidden: ${serverMessage}. Check your tier: solid whoami --features`
