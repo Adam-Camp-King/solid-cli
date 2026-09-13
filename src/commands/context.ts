@@ -29,7 +29,7 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, printJson } from '../lib/json-output';
 import { requireTenantManifest, tenantManifestForHook } from '../lib/tenant-guard';
 
 type ContextSection = 'company' | 'content' | 'operations' | 'capabilities' | 'history' | 'tooling';
@@ -325,11 +325,18 @@ export const contextCommand = new Command('context')
   .option('--save', 'Save to ./SOLID-CONTEXT.md')
   .option('--claude', 'Save a Dewey-classified library: slim .claude/CLAUDE.md spine + .claude/library/<NNN>-<slug>.md shelves Claude loads on demand')
   .option('--ladder', '(Deprecated alias for --claude ladder mode; retained for compatibility)')
-  .option('--full', 'With --claude, emit the legacy monolithic CLAUDE.md (every KB entry inline — can exceed 40KB and trigger Claude Code size warnings)')
+  .option('--full', 'Everything. Without --claude: the complete context (~27K tok, the old default). With --claude: the legacy monolithic CLAUDE.md (every KB entry inline — can exceed 40KB and trigger Claude Code size warnings)')
   .option('--cursor', 'Save to ./.cursorrules')
   .option('--codex', 'Save to ./AGENTS.md (the emerging cross-agent standard: Codex / Claude / Cursor / Gemini)')
   .option('--json', 'Output JSON to stdout')
-  .option('--minimal', 'Compact markdown (drops the tool manifest table)')
+  // ⚠️ Measured 2026-09-12: --minimal and the default differ ONLY by the
+  // `generated_at` timestamp — 109,477 bytes either way. The backend does
+  // honour ?minimal= on /api/v1/cli/context (44,518 -> 35,782 chars), but that
+  // portion is a minority of what the CLI assembles, so the saving does not
+  // survive. Kept and re-described honestly rather than left claiming a
+  // compaction it does not deliver; the real lever is --section or the new
+  // default brief.
+  .option('--minimal', 'Ask the backend for its compact form (small effect — prefer --section or the default brief)')
   .option('--section <name>', 'Return only one section: company, content, operations, capabilities, history, tooling')
   .option('--tools-only', 'Just the CLI tool manifest (for MCP servers / AI harnesses)')
   .option('--summary', 'Lightweight counts (fast)')
@@ -431,6 +438,38 @@ export const contextCommand = new Command('context')
     let jsonDoc: string | null = null;
     let jsonLdDoc: string | null = null;
     try {
+      // ── VNP 4.3 — orientation by default, the full dump on request.
+      //
+      // `solid context` returned 109,477 bytes (~27,369 tokens) and it is
+      // wired into Claude Code's session-start hook, so it was paid whether or
+      // not the session ever touched the business. Almost none of it is needed
+      // to orient: the summary is 97 tokens and answers "what is this company"
+      // outright.
+      //
+      // Only the plain stdout path is tiered. --save/--claude/--cursor/--codex
+      // write files a person or an editor reads later and must stay complete;
+      // truncating those would break the tenant context contract rather than
+      // save anyone tokens.
+      const isFileWrite = !!(options.save || options.claude || options.cursor || options.codex);
+      if (!options.full && !isFileWrite && !options.section && !options.toolsOnly && !options.summary) {
+        // fetchSummary() already exists and is what --summary uses; reusing it
+        // keeps one definition of "the brief facts about this company".
+        const brief = await fetchSummary().catch(() => ({}));
+
+        printJson({
+          schema: 'solid:context-brief/v1',
+          company: brief,
+          sections: ['company', 'content', 'operations', 'capabilities', 'history', 'tooling'],
+          next: [
+            'solid context --section <name>   one section, cheap refresh',
+            'solid context --tools-only       the tool manifest (~2.4K tok)',
+            'solid context --full             everything (~27K tok)',
+            'solid map                        every noun and its address',
+          ],
+        });
+        return;
+      }
+
       if (isJsonOutput(options)) {
         const data = await fetchContext('json', !!options.minimal);
         doc = JSON.stringify(data, null, 2);
