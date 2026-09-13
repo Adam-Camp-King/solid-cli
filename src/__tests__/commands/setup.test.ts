@@ -200,10 +200,33 @@ describeOrSkip('solid setup — bare-solid first-run trigger', () => {
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    // Help is printed (not the setup banner).
     const combined = (result.stdout || '') + (result.stderr || '');
-    expect(combined).toMatch(/Usage: solid|Quick Start|Run Your Business/);
-    // Setup banner should NOT appear when wizard is suppressed.
+
+    // VNP 3.4 changed what bare `solid` emits on a NON-TTY (which spawnSync
+    // is): the compact command index instead of ~4,760 tokens of formatted
+    // help. The guarantee this test exists for is unchanged and still asserted
+    // below — the wizard must not auto-trigger.
+    expect(combined).toMatch(/solid:command-index|Usage: solid|Quick Start|Run Your Business/);
+
+    // The actual point: no wizard when it is suppressed.
     expect(combined).not.toMatch(/Setup complete/);
+  });
+
+  it('bare solid on a non-TTY emits the compact index, not a help screen', () => {
+    // The saving 3.4 is for: 19,041 bytes of prose down to ~1.5 KB, on the
+    // first thing an agent runs, every session.
+    const result = spawnSync(process.execPath, [distEntry], {
+      encoding: 'utf-8',
+      env: { ...process.env, SOLID_SKIP_VERSION_CHECK: '1', SOLID_SKIP_FIRST_RUN_WIZARD: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const out = JSON.parse(result.stdout);
+    expect(out.schema).toBe('solid:command-index/v1');
+    expect(Array.isArray(out.names)).toBe(true);
+    expect(out.names.length).toBeGreaterThan(50);
+    // It must point somewhere useful, or it is just a shorter dead end.
+    expect(out.next.join(' ')).toContain('solid find');
+    expect(result.status).toBe(0);
+    expect(result.stdout.length).toBeLessThan(5000);
   });
 });

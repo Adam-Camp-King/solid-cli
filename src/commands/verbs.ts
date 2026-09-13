@@ -114,6 +114,14 @@ verbsCommand
   // "what can I do?". The schemas are why: they are ~85% of the payload and
   // nobody choosing a verb needs them, because choosing is what `describe` is
   // for. So the default is now an index and the full dump is opt-in.
+  // VNP 3.5 — facets as filters. side_effects, requires_consent and tier_floor
+  // already exist on all 845 verbs; they were simply not filterable, so
+  // "what can I do here without writing anything?" meant fetching everything
+  // and filtering client-side anyway. Applied locally for the same reason the
+  // prefix is: it is one fetch either way, and zero once 4.2 lands caching.
+  .option('--writes', 'Only verbs that mutate')
+  .option('--reads', 'Only verbs that cannot mutate')
+  .option('--no-consent', 'Only verbs that do not require consent')
   .option('--full', 'Every field including input_schema — the old default, ~316K tokens')
   .option('--names-only', 'Just the names, nothing else')
   .option('-n, --limit <n>', 'Return at most this many verbs')
@@ -154,6 +162,26 @@ verbsCommand
         }
         all = all.filter((v) => (v.coordinate || '').startsWith(prefix));
       }
+
+      // --writes and --reads are opposites, so asking for both is a mistake
+      // worth naming rather than silently returning nothing.
+      if (options.writes && options.reads) {
+        emitErrorAndExit(Object.assign(
+          new Error('--writes and --reads are mutually exclusive.'),
+          {
+            isAxiosError: true,
+            response: {
+              status: 400,
+              data: { detail: '--writes and --reads are mutually exclusive — pass one.', code: 'BAD_REQUEST' },
+            },
+          },
+        ));
+        return;
+      }
+      if (options.writes) all = all.filter((v) => v.side_effects !== 'read');
+      if (options.reads) all = all.filter((v) => v.side_effects === 'read');
+      // commander maps --no-consent to consent:false
+      if (options.consent === false) all = all.filter((v) => !v.requires_consent);
       const shown = limit ? all.slice(0, limit) : all;
 
       if (wantsJson) {

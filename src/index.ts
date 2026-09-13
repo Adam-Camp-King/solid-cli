@@ -37,7 +37,7 @@ activateQueueModeIfRequested(process.argv);
 
 // T11.3 — program-level --json flag that cascades to subcommands which
 // don't explicitly declare their own --json option.
-import { activateProgramJsonIfRequested } from './lib/json-output';
+import { activateProgramJsonIfRequested, isNonTty, printJson } from './lib/json-output';
 activateProgramJsonIfRequested(process.argv);
 
 // AI-first I/O — soft warn when a non-TTY caller (agent / MCP / CI) is
@@ -842,6 +842,41 @@ __setProgramForRegistry(program);
   cmd.allowExcessArguments(false);
   cmd.commands.forEach((c) => forbidExcessArgs(c as Command));
 })(program);
+
+// VNP 3.4 — a compact index for the caller that is not a person.
+//
+// Bare `solid` emitted 19,041 bytes (~4,760 tokens) of formatted help — box
+// rules, a quick-start tour — to STDERR, and it is the first thing an agent
+// runs, paid every session. Everywhere else this CLI switches to JSON on a
+// non-TTY; help was the exception.
+//
+// This has to run BEFORE parse. The post-parse no-args block further down
+// never sees this case: with subcommands registered and no arguments,
+// commander errors during parse, prints help to stderr and exits 1, so
+// anything after parse is unreachable here.
+//
+// Names only. Orientation is now `solid find` and `solid map` rather than
+// reading a catalogue; descriptions would triple the payload to buy an agent
+// nothing it cannot get better from find.
+if (!process.argv.slice(2).length && isNonTty()) {
+  const names = program.commands
+    .map((c) => c.name())
+    .filter((n) => n && n !== '*')
+    .sort();
+  printJson({
+    schema: 'solid:command-index/v1',
+    version: pkg.version,
+    commands: names.length,
+    names,
+    next: [
+      'solid find "<what you want to do>"   intent -> a callable verb',
+      'solid map                            every noun and its address',
+      'solid <command> --help               one command in detail',
+    ],
+  });
+  // Exit 0: an index is an answer, not a failure.
+  process.exit(0);
+}
 
 program.parse(process.argv);
 

@@ -461,3 +461,60 @@ describe('verbs invoke — the canonical twin (VNP 3.3)', () => {
     expect(note).toMatch(/argument shape|own schema/);
   });
 });
+
+describe('verbs list — facet filters (VNP 3.5)', () => {
+  const manifest = {
+    count: 4, total_registered: 845,
+    filtered_by: { surface: null, shape: null, tier: null },
+    verbs: [
+      { name: 'payment.refund', description: 'r', side_effects: 'write', requires_consent: true, coordinate: '52' },
+      { name: 'payment.full_history', description: 'r', side_effects: 'read', requires_consent: false, coordinate: '52' },
+      { name: 'contact.create', description: 'c', side_effects: 'write', requires_consent: false, coordinate: '35' },
+      { name: 'books.summary', description: 'b', side_effects: 'read', requires_consent: false, coordinate: '57' },
+    ],
+  };
+  let printed: string;
+  beforeEach(() => {
+    jest.clearAllMocks(); printed = '';
+    jest.spyOn(console, 'log').mockImplementation((v?: unknown) => { printed += String(v); });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockGet.mockResolvedValue({ data: manifest });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const list = (extra: string[]) => { resetOptions(); return verbsCommand.parseAsync(['list', '--json', ...extra], { from: 'user' }); };
+  const names = () => JSON.parse(printed).verbs.map((r: unknown[]) => r[0]);
+
+  it('--writes keeps only mutating verbs', async () => {
+    await list(['--writes']);
+    expect(names()).toEqual(['payment.refund', 'contact.create']);
+  });
+
+  it('--reads keeps only non-mutating verbs', async () => {
+    await list(['--reads']);
+    expect(names()).toEqual(['payment.full_history', 'books.summary']);
+  });
+
+  it('--no-consent drops the ones that need consent', async () => {
+    await list(['--no-consent']);
+    expect(names()).not.toContain('payment.refund');
+  });
+
+  it('a prefix composes with a facet', async () => {
+    // "everything readable about money" — the query VNP names as the payoff.
+    await list(['5', '--reads']);
+    expect(names()).toEqual(['payment.full_history', 'books.summary']);
+  });
+
+  it('--writes and --reads together is an error, not an empty list', async () => {
+    const exit = jest.spyOn(process, 'exit').mockImplementation(((): never => { throw new Error('EXIT'); }) as never);
+    await expect(list(['--writes', '--reads'])).rejects.toThrow();
+    exit.mockRestore();
+  });
+
+  it('a malformed prefix is rejected rather than matching nothing', async () => {
+    const exit = jest.spyOn(process, 'exit').mockImplementation(((): never => { throw new Error('EXIT'); }) as never);
+    await expect(list(['abc'])).rejects.toThrow();
+    exit.mockRestore();
+  });
+});
