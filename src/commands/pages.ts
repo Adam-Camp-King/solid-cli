@@ -62,7 +62,10 @@ export const pagesCommand = new Command('pages')
 pagesCommand
   .command('publish <id>')
   .description('Publish a page by ID')
-  .action(async (id) => {
+  .option('--wait', 'Poll the live URL until the change is actually being served')
+  .option('--timeout <seconds>', 'How long --wait polls before giving up', '120')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
       process.exit(1);
@@ -71,8 +74,36 @@ pagesCommand
     const spinner = ora(`Publishing page #${id}...`).start();
 
     try {
-      await apiClient.pagesPublish(parseInt(id));
+      await apiClient.pagesPublish(parseInt(id, 10));
+
+      // "Published" is a database fact, not a visible one. The edge caches, and
+      // replicas turn over independently — during one session two of them served
+      // different versions of the same page for several minutes, and a change
+      // that had worked was diagnosed as broken. Say which of the two happened.
+      const page = (await apiClient.get(`/api/v1/cms/pages/${parseInt(id, 10)}`)).data as Record<string, any>;
+      const liveUrl = await publicUrlFor(page);
+      let served: boolean | null = null;
+
+      if (options.wait && liveUrl) {
+        spinner.text = `Published. Waiting for ${liveUrl} to serve it...`;
+        served = await waitUntilServed(liveUrl, page, Number(options.timeout) || 120);
+      }
+
+      if (isJsonOutput(options)) {
+        spinner.stop();
+        console.log(JSON.stringify({ page_id: Number(id), published: true, url: liveUrl, serving: served }, null, 2));
+        return;
+      }
+
       spinner.succeed(chalk.green(`Page #${id} published`));
+      if (served === true) {
+        console.log(chalk.dim(`  Live now: ${liveUrl}`));
+      } else if (served === false) {
+        console.log(chalk.yellow(`  Not being served yet after ${options.timeout}s — the edge is still turning over.`));
+        console.log(chalk.dim(`  ${liveUrl}`));
+      } else if (liveUrl) {
+        console.log(chalk.dim(`  ${liveUrl} — may take a moment to turn over. Add --wait to block until it does.`));
+      }
     } catch (error) {
       fail(spinner, 'Failed to publish page', error);
     }
@@ -369,6 +400,57 @@ pagesCommand
 
 // Lookup by slug
 pagesCommand
+  .command('preview <id>')
+  .description('Signed preview URL for a page, draft included — see it before publishing')
+  .option('--ttl <hours>', 'How long the link stays valid (1-168)', '24')
+  .option('--open', 'Open the preview in a browser')
+  .option('--json', 'Output as JSON')
+  .action(async (id: string, options) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    const spinner = ora(`Creating preview link for page #${id}...`).start();
+    try {
+      // A READ that mints a signed, expiring token; the page is untouched.
+      // This exists so nobody has to publish to a live site to see a change —
+      // the draft renders at the URL, and the token IS the auth.
+      const res = await apiClient.post(
+        `/api/v1/cms/pages/${parseInt(id, 10)}/preview-link?ttl_hours=${parseInt(String(options.ttl), 10) || 24}`,
+        {},
+      );
+      const d = res.data as Record<string, any>;
+      const base = (config.apiUrl || process.env.SOLID_API_URL || '').replace(/\/$/, '');
+      const url = d.preview_url?.startsWith('http') ? d.preview_url : `${base}${d.preview_url}`;
+
+      if (isJsonOutput(options)) {
+        spinner.stop();
+        console.log(JSON.stringify({ ...d, preview_url: url }, null, 2));
+        return;
+      }
+      spinner.succeed(chalk.green(`Preview link for page #${id}`));
+      console.log('');
+      console.log(`  ${chalk.cyan(url)}`);
+      console.log('');
+      // Whether a draft exists is the question the link is usually asked to
+      // answer: no draft means this shows what is already live.
+      console.log(
+        d.has_draft
+          ? chalk.dim('  Shows the pending DRAFT — not what the site serves now.')
+          : chalk.dim('  No draft pending, so this shows what is already published.'),
+      );
+      console.log(chalk.dim(`  Expires ${d.expires_at}`));
+      if (options.open) {
+        const { execFile } = await import('child_process');
+        const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+        execFile(opener, [url], () => undefined);
+      }
+    } catch (error) {
+      fail(spinner, 'Failed to create preview link', error);
+    }
+  });
+
+pagesCommand
   .command('slug <slug>')
   .description('Get a page by slug (path)')
   .option('--json', 'Output as JSON')
@@ -465,3 +547,57 @@ Examples:
 Versioning: every publish creates a snapshot. See: solid history pages <slug>
 and solid rollback pages <slug> --version <n>.
 `);
+
+/**
+ * Public URL for a page, or null when its site has no resolvable host.
+ *
+ * The host lives on the SITE, not on the page and not in the public context:
+ * each site carries `canonical_host` and an `addresses[]` whose canonical entry
+ * holds the URL. A page with no site_id has no address to serve from.
+ */
+async function publicUrlFor(page: Record<string, any>): Promise<string | null> {
+  try {
+    if (!page.site_id) return null;
+    const res = (await apiClient.get('/api/v1/sites')).data as Record<string, any>;
+    const sites: Array<Record<string, any>> = res.sites ?? res.items ?? [];
+    const site = sites.find((x) => x.id === page.site_id);
+    if (!site) return null;
+
+    const canonical =
+      (site.addresses ?? []).find((a: Record<string, any>) => a.is_canonical && a.is_active)?.url ??
+      (site.canonical_host ? `https://${site.canonical_host}` : null);
+    if (!canonical) return null;
+
+    const origin = String(canonical).replace(/\/$/, '');
+    const slug = String(page.slug ?? '');
+    return slug === 'home' || slug === '' ? origin : `${origin}/${slug}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Poll the live URL until it serves this version.
+ *
+ * The marker is the page title, which changes with the content and is present
+ * in the served HTML. Cache-busting each request matters: without it the poll
+ * can be answered from the same cached copy every time and report success for
+ * a page nobody else can see yet.
+ */
+async function waitUntilServed(url: string, page: Record<string, any>, timeoutSec: number): Promise<boolean> {
+  const marker = String(page.title || '').trim();
+  if (!marker) return false;
+  const deadline = Date.now() + timeoutSec * 1000;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}_cb=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok && (await res.text()).includes(marker)) return true;
+    } catch {
+      // network blips are expected mid-rollout; keep polling until the deadline
+    }
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  return false;
+}
