@@ -19,6 +19,7 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 const SANDBOX_DIR = '.sandbox';
 const SANDBOX_META = '.sandbox/meta.json';
@@ -123,11 +124,14 @@ sandboxCommand
   .command('status')
   .description('Show sandbox state and what changed')
   .option('--dir <path>', 'Working directory', process.cwd())
+  .option('--json', 'Machine-readable output')
   .action(async (options) => {
     const dir = options.dir;
     const metaPath = path.join(dir, SANDBOX_META);
 
     if (!fs.existsSync(metaPath)) {
+      // An agent needs "no sandbox" as a value, not as prose it has to parse.
+      if (isJsonOutput(options)) { printJson({ active: false, changes: null }); return; }
       console.log(chalk.dim('No active sandbox. Run `solid sandbox create` to start one.'));
       return;
     }
@@ -173,6 +177,23 @@ sandboxCommand
 
     const total = pagesChanged + pagesNew + kbChanged + kbNew;
     const age = Math.round((Date.now() - new Date(meta.created_at).getTime()) / 60000);
+
+    if (isJsonOutput(options)) {
+      printJson({
+        active: true,
+        company_name: meta.company_name,
+        created_at: meta.created_at,
+        age_minutes: age,
+        changes: {
+          pages_modified: pagesChanged,
+          pages_added: pagesNew,
+          kb_modified: kbChanged,
+          kb_added: kbNew,
+          total: pagesChanged + pagesNew + kbChanged + kbNew,
+        },
+      });
+      return;
+    }
 
     console.log('');
     console.log(`  ${chalk.bold('Sandbox Active')} — ${meta.company_name}`);

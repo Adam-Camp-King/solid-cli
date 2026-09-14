@@ -37,9 +37,15 @@ export function buildImplicitTenantWarning(companyId: number): ImplicitTenantWar
   return {
     warning: {
       code: 'IMPLICIT_TENANT',
-      message: `Operating on implicit current company (id=${companyId}). Pass --company to be explicit.`,
+      message: `Operating on implicit current company (id=${companyId}). Confirm this is the tenant you mean.`,
       company_id: companyId,
-      hint: 'Add --company <id> to lock the tenant for this call, or set SOLID_COMPANY_ID. Silence with SOLID_NO_TENANT_WARN=1.',
+      // ⛔ The old hint named "--company <id>" and SOLID_COMPANY_ID. Neither
+      // scopes a call: --company exists on four commands out of 171, and the
+      // tenant is derived from the JWT, so an env var cannot change it. An
+      // agent that followed this hint got an "unknown option" error, or worse,
+      // set the env var and carried on against the wrong company. `solid
+      // switch` is the one thing that actually changes tenant.
+      hint: `Currently authenticated as company ${companyId}. To act on a different tenant, run \`solid switch\` (or \`solid auth login\` as a user of that company) — the tenant comes from your session, not from a flag. Silence with SOLID_NO_TENANT_WARN=1.`,
     },
   };
 }
@@ -64,7 +70,13 @@ export function shouldWarnImplicitTenant(opts: {
   if (opts.env.SOLID_NO_TENANT_WARN && /^(1|true|yes|on)$/i.test(opts.env.SOLID_NO_TENANT_WARN)) {
     return false;
   }
-  if (opts.env.SOLID_COMPANY_ID) return false;
+  // ⛔ Deliberately NOT silenced by SOLID_COMPANY_ID.
+  //
+  // It used to be, and that was the dangerous case: the variable silences
+  // nothing real, because the tenant comes from the JWT. Setting it produced a
+  // quiet session that operated on whichever company the session was actually
+  // authenticated as. A mismatch is now an error (see assertTenantEnvMatches),
+  // and a match is not a reason to suppress the warning.
   // Walk argv for any --company / --company-id / -c <value> form.
   for (const arg of opts.argv) {
     if (arg === '--company' || arg === '--company-id' || arg === '-c') return false;
@@ -98,4 +110,31 @@ export function maybeWarnImplicitTenant(opts: {
   if (!shouldWarnImplicitTenant(opts)) return;
   if (opts.companyId == null) return;
   emitImplicitTenantWarning(opts.companyId);
+}
+
+/**
+ * Refuse to run when SOLID_COMPANY_ID names a tenant the session is not.
+ *
+ * The variable cannot scope a request — the backend derives company_id from the
+ * JWT. So when it disagrees with the authenticated company, the caller believes
+ * it is acting on one tenant while every write lands on another. Silence there
+ * is the failure: better to stop than to write a page, an invoice or a contact
+ * into the wrong business.
+ *
+ * Returns an error message, or null when there is nothing to complain about.
+ */
+export function tenantEnvMismatch(
+  env: NodeJS.ProcessEnv,
+  authenticatedCompanyId: number | undefined,
+): string | null {
+  const raw = env.SOLID_COMPANY_ID;
+  if (!raw || authenticatedCompanyId === undefined) return null;
+  const wanted = parseInt(raw, 10);
+  if (!Number.isFinite(wanted) || wanted === authenticatedCompanyId) return null;
+  return (
+    `SOLID_COMPANY_ID=${wanted} but this session is authenticated as company ` +
+    `${authenticatedCompanyId}. The tenant comes from your session, not from ` +
+    `that variable — every call would act on company ${authenticatedCompanyId}. ` +
+    `Run \`solid switch\` to change tenant, or unset SOLID_COMPANY_ID.`
+  );
 }

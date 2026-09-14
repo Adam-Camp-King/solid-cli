@@ -84,6 +84,21 @@ class ConfigManager {
     return this.data.company_id;
   }
 
+  /**
+   * The company this session is actually authenticated as — the cached value
+   * from `solid auth login`, with no env pin applied.
+   *
+   * `companyId` deliberately lets SOLID_COMPANY_ID/OVERRIDE win, which is right
+   * for the surfaces that write those pins into a config. But the pin cannot
+   * change who the JWT says you are, so anything that needs the REAL tenant —
+   * warnings, mismatch guards, anything reported to a human or an agent — must
+   * read this instead. Reporting the pin as the current company is how a
+   * session came to announce "company 999" while every call acted on 61.
+   */
+  get sessionCompanyId(): number | undefined {
+    return this.data.company_id;
+  }
+
   set companyId(id: number | undefined) {
     if (id) {
       this.data.company_id = id;

@@ -433,3 +433,146 @@ appendExamples(doctorCommand, [
   { cmd: 'solid doctor scopes',      why: 'Check if API key scopes match tenant features (T1.6)' },
   { cmd: 'solid doctor env',         why: 'Local env diagnostic — hook/manifest/token/freshness/backend (§ 650.5)' },
 ]);
+
+/**
+ * Capability probes — "what on this platform is currently non-functional?"
+ *
+ * The core battery smoke-tests DATA: can I read contacts, pages, orders. That
+ * answers a different question, and it cannot see a subsystem that is wired,
+ * documented, and simply not configured. Finding that ASSETS_BUCKET was unset
+ * took an hour of reading a production Secret against the service that consumed
+ * it, because nothing in 846 verbs could be asked.
+ *
+ * Each probe makes the cheapest call that forces the subsystem to declare
+ * itself, and reports NOT CONFIGURED with the reason the server gave — never a
+ * guess, and never a bare failure.
+ */
+interface CapabilityResult {
+  name: string;
+  state: 'ready' | 'not_configured' | 'degraded' | 'unknown';
+  detail: string;
+  fix?: string;
+}
+
+async function probeAssetStore(): Promise<CapabilityResult> {
+  // upload-intent is a write that stores nothing until finalize: it mints a
+  // presigned URL, so it is the cheapest honest question to ask of the store.
+  try {
+    const res = (await apiClient.post('/api/v1/assets/upload-intent', {
+      filename: 'capability-probe.jpg',
+      mime: 'image/jpeg',
+    })) as { data?: Record<string, unknown> };
+    const url = res.data?.upload_url;
+    return url
+      ? { name: 'asset store (website images)', state: 'ready', detail: `bucket ${(res.data as any)?.s3?.bucket ?? 'configured'}` }
+      : { name: 'asset store (website images)', state: 'degraded', detail: 'no upload_url returned' };
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail ?? e?.message ?? 'unknown error';
+    const missing = /not configured|ASSETS_BUCKET/i.test(String(detail));
+    return {
+      name: 'asset store (website images)',
+      state: missing ? 'not_configured' : 'degraded',
+      detail: String(detail).slice(0, 160),
+      fix: missing ? 'Set ASSETS_BUCKET to a PUBLIC Spaces/R2 bucket (never the recordings bucket).' : undefined,
+    };
+  }
+}
+
+/** Verbs that are registered and documented but raise on every call. */
+async function probeUnbuiltVerbs(): Promise<CapabilityResult> {
+  try {
+    const res = (await apiClient.get('/api/v1/agent/verbs')) as { data?: unknown };
+    const raw = res.data as any;
+    const verbs: Array<Record<string, any>> = Array.isArray(raw) ? raw : raw?.verbs ?? raw?.items ?? [];
+    const unbuilt = verbs.filter(
+      (v) =>
+        /not implemented|always raises|stub/i.test(String(v?.description ?? '')) &&
+        !/NOT EXECUTABLE from an agent surface/.test(String(v?.description ?? '')),
+    );
+    return {
+      name: 'verb surface',
+      state: unbuilt.length ? 'degraded' : 'ready',
+      detail: unbuilt.length
+        ? `${verbs.length} verbs, ${unbuilt.length} registered but always raise (e.g. ${unbuilt.slice(0, 3).map((v) => v.name).join(', ')})`
+        : `${verbs.length} verbs, none known-unbuilt`,
+      fix: unbuilt.length ? 'solid doctor capabilities --json lists them; unregister or implement.' : undefined,
+    };
+  } catch (e: any) {
+    return { name: 'verb surface', state: 'unknown', detail: e?.message ?? 'could not read the registry' };
+  }
+}
+
+async function probeSiteAddress(): Promise<CapabilityResult> {
+  try {
+    const res = (await apiClient.get('/api/v1/sites')) as { data?: any };
+    const sites: Array<Record<string, any>> = res.data?.sites ?? res.data?.items ?? [];
+    const withHost = sites.filter((x) => x.canonical_host || (x.addresses ?? []).length);
+    return {
+      name: 'public site address',
+      state: withHost.length ? 'ready' : 'not_configured',
+      detail: withHost.length
+        ? withHost.map((x) => x.canonical_host).filter(Boolean).join(', ')
+        : `${sites.length} site(s), none with a canonical host`,
+      fix: withHost.length ? undefined : 'solid domains add <host> — nothing is publicly reachable without one.',
+    };
+  } catch (e: any) {
+    return { name: 'public site address', state: 'unknown', detail: e?.message ?? 'could not list sites' };
+  }
+}
+
+const CAPABILITY_PROBES: Array<() => Promise<CapabilityResult>> = [
+  probeAssetStore,
+  probeSiteAddress,
+  probeUnbuiltVerbs,
+];
+
+doctorCommand
+  .command('capabilities')
+  .alias('caps')
+  .description('What is wired but NOT working — asset store, site address, unbuilt verbs')
+  .option('--json', 'Machine-readable')
+  .action(async (options: { json?: boolean }) => {
+    if (!config.isLoggedIn()) {
+      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+      process.exit(1);
+    }
+    if (!isJsonOutput(options)) console.log(chalk.dim('  Probing capabilities...'));
+    const results: CapabilityResult[] = [];
+    for (const probe of CAPABILITY_PROBES) {
+      try {
+        results.push(await probe());
+      } catch (e: any) {
+        results.push({ name: 'unknown probe', state: 'unknown', detail: e?.message ?? 'threw' });
+      }
+    }
+    const broken = results.filter((r) => r.state === 'not_configured' || r.state === 'degraded');
+
+    if (isJsonOutput(options)) {
+      printJson({ ok: broken.length === 0, capabilities: results });
+      return;
+    }
+    console.log('');
+    for (const r of results) {
+      const mark =
+        r.state === 'ready' ? chalk.green('✔')
+        : r.state === 'not_configured' ? chalk.red('✗')
+        : r.state === 'degraded' ? chalk.yellow('!')
+        : chalk.dim('?');
+      const label =
+        r.state === 'not_configured' ? chalk.red('NOT CONFIGURED')
+        : r.state === 'degraded' ? chalk.yellow('DEGRADED')
+        : r.state === 'unknown' ? chalk.dim('UNKNOWN')
+        : chalk.green('ready');
+      console.log(`  ${mark} ${chalk.cyan(r.name.padEnd(30))} ${label}`);
+      console.log(chalk.dim(`      ${r.detail}`));
+      if (r.fix) console.log(chalk.dim(`      fix: ${r.fix}`));
+    }
+    console.log('');
+    console.log(
+      broken.length
+        ? chalk.yellow(`  ${broken.length} capability/capabilities need attention.`)
+        : chalk.green('  Everything probed is configured.'),
+    );
+    // Exit non-zero so CI and agents can branch on it without parsing prose.
+    if (results.some((r) => r.state === 'not_configured')) process.exitCode = 1;
+  });

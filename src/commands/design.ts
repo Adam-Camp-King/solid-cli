@@ -25,6 +25,7 @@ import ora from 'ora';
 import * as fs from 'fs';
 import * as path from 'path';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 // ── API helpers ────────────────────────────────────────────────────
 
@@ -87,11 +88,16 @@ ${chalk.bold('Examples:')}
 designCommand
   .command('status')
   .description('Check Stitch integration status')
-  .action(async () => {
-    const spinner = ora('Checking Stitch status...').start();
+  .option('--json', 'Machine-readable output')
+  .action(async (options: { json?: boolean } = {}) => {
+    const spinner = isJsonOutput(options) ? null : ora('Checking Stitch status...').start();
     try {
       const data = await apiCall<StitchStatus>('GET', '/stitch/status');
-      spinner.stop();
+      spinner?.stop();
+
+      // Whether a design layer is usable is a branch an agent takes, not prose
+      // it reads: enabled/api_configured/connected decide whether to call it.
+      if (isJsonOutput(options)) { printJson(data as unknown as Record<string, unknown>); return; }
 
       console.log('');
       console.log(chalk.bold('  Stitch Design Layer'));
@@ -128,7 +134,7 @@ designCommand
       }
     } catch (err) {
       const e = err as ErrorLike;
-      spinner.fail('Could not check Stitch status');
+      spinner?.fail('Could not check Stitch status');
       if (e.response?.status === 401) {
         console.error(chalk.yellow('\n  Run `solid auth login` first.\n'));
       } else {

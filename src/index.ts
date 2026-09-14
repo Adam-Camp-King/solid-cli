@@ -205,12 +205,30 @@ const program = new Command();
 // unknown-command error or fires on `--help` / `--version`.
 program.hook('preAction', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { maybeWarnImplicitTenant } = require('./lib/tenant-warn');
+  const { maybeWarnImplicitTenant, tenantEnvMismatch } = require('./lib/tenant-warn');
+
+  // ⛔ Stop before doing anything when SOLID_COMPANY_ID disagrees with the
+  // session. That variable cannot scope a call — the tenant is derived from the
+  // JWT — so a mismatch means every write would land on a company the caller
+  // did not name. This used to pass silently AND suppress the implicit-tenant
+  // warning, which is the worst of both.
+  const mismatch = tenantEnvMismatch(
+    process.env,
+    // The SESSION's company, never config.companyId — that getter already
+    // returns the env pin, so comparing the pin to itself can never mismatch.
+    typeof config.sessionCompanyId === 'number' ? config.sessionCompanyId : undefined,
+  );
+  if (mismatch) {
+    process.stderr.write(`\x1b[31m✗ ${mismatch}\x1b[0m\n`);
+    process.exit(1);
+  }
+
   maybeWarnImplicitTenant({
     argv: process.argv,
     env: process.env,
-    hasCurrentCompany: typeof config.companyId === 'number',
-    companyId: typeof config.companyId === 'number' ? config.companyId : null,
+    hasCurrentCompany: typeof config.sessionCompanyId === 'number',
+    // Report the tenant that calls will ACTUALLY hit.
+    companyId: typeof config.sessionCompanyId === 'number' ? config.sessionCompanyId : null,
   });
 });
 

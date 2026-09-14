@@ -25,9 +25,12 @@ describe('buildImplicitTenantWarning', () => {
     expect(buildImplicitTenantWarning(61)).toEqual({
       warning: {
         code: 'IMPLICIT_TENANT',
-        message: 'Operating on implicit current company (id=61). Pass --company to be explicit.',
+        message: 'Operating on implicit current company (id=61). Confirm this is the tenant you mean.',
         company_id: 61,
-        hint: 'Add --company <id> to lock the tenant for this call, or set SOLID_COMPANY_ID. Silence with SOLID_NO_TENANT_WARN=1.',
+        // The hint must only name things that work. It used to say "--company
+        // <id>" (present on 4 of 171 commands) and SOLID_COMPANY_ID (scopes
+        // nothing). `solid switch` is what actually changes tenant.
+        hint: 'Currently authenticated as company 61. To act on a different tenant, run `solid switch` (or `solid auth login` as a user of that company) — the tenant comes from your session, not from a flag. Silence with SOLID_NO_TENANT_WARN=1.',
       },
     });
   });
@@ -50,8 +53,13 @@ describe('shouldWarnImplicitTenant', () => {
     expect(shouldWarnImplicitTenant({ argv: ['node', 'cli', '--company=15', 'pages', 'list'], env: {}, hasCurrentCompany: true })).toBe(false);
   });
 
-  it('does NOT warn when SOLID_COMPANY_ID is set', () => {
-    expect(shouldWarnImplicitTenant({ argv: ['node', 'cli', 'pages', 'list'], env: { SOLID_COMPANY_ID: '15' }, hasCurrentCompany: true })).toBe(false);
+  it('STILL warns when SOLID_COMPANY_ID is set — it scopes nothing', () => {
+    // The tenant comes from the JWT, so this variable cannot redirect a call.
+    // Silencing on it produced a quiet session that operated on whichever
+    // company the JWT actually named, which is the failure the warning exists
+    // to prevent. A mismatch is refused outright at boot; a match is not a
+    // reason to go quiet.
+    expect(shouldWarnImplicitTenant({ argv: ['node', 'cli', 'pages', 'list'], env: { SOLID_COMPANY_ID: '15' }, hasCurrentCompany: true })).toBe(true);
   });
 
   it('does NOT warn when SOLID_NO_TENANT_WARN=1', () => {
