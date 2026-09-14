@@ -118,3 +118,107 @@ describe('terms()', () => {
     expect(terms('a refund on the payment')).toEqual(['refund', 'payment']);
   });
 });
+
+// ── 2026-09-14: idioms, emphasis, and the apostrophe ────────────────────────
+//
+//   + stopwords (pronouns, contractions, filler)   top-1 14/20  top-3 16/20
+//   + PHRASES, consumed not added                  top-1 17/20  top-3 18/20
+//   + emphasis on idiom + leading imperative       top-1 18/20  top-3 20/20
+//   + idiom maps its own verb ("make a note")      top-1 19/20  top-3 20/20
+//   + lead emphasis gated on document frequency    top-1 19/20  top-3 20/20
+//   + grounded vocabulary, apostrophes closed up   top-1 19/20  top-3 20/20
+//
+// Held out on 18 eval prompts never inspected while tuning (rank-bench-holdout):
+//   before 6/18 top-1, 10/18 top-3  ->  after 8/18, 11/18. 3 gains, 0 losses.
+//
+// The tuned set moved a lot and the unseen set moved a little. Both numbers
+// are reported because only the second one is an estimate of anything.
+
+import { analyse, leadingAction, normalise } from '../../lib/verb-search';
+
+describe('idioms translate what words alone get wrong', () => {
+  const corpus = [
+    V('contact.create', 'Create a contact.'),
+    V('contact.search', 'Find a contact by name or email.'),
+    V('phone.call_queue', 'Who called us and what they wanted.'),
+    V('file.search', 'Search uploaded files by name.'),
+    V('notes.add', 'Add a work note that persists across sessions.'),
+    V('notes.list', 'List work notes.'),
+    V('deal.create', 'Create a CRM deal for a quote or opportunity.'),
+  ];
+
+  it('"anyone called X on file" is about contacts, not calls or files', () => {
+    // Both misleading words are CONSUMED. Leaving either in keeps its verb
+    // in the running no matter how the rest is weighted.
+    const t = analyse(normalise('Do we have anyone called Whitfield on file?')).translated;
+    expect(t).not.toMatch(/\bcalled\b/);
+    expect(t).not.toMatch(/\bfile\b/);
+    expect(t).toMatch(/\bcontact\b/);
+  });
+
+  it('"make a note" carries its own verb, so it reaches add and not list', () => {
+    // Mapping to ['notes'] alone lost the create intent with the consumed
+    // words, and notes.list outranked notes.add for a phrase that can only
+    // mean "write one down".
+    const r = rankVerbs('Make a note that she wants a quote', corpus, 3);
+    expect(r[0].name).toBe('notes.add');
+  });
+
+  it('leaves "who called us yesterday" as a call query', () => {
+    // The SYNONYMS entry called -> call is right here; only the naming idiom
+    // is overridden, so the general case must not regress.
+    expect(rankVerbs('Who called us yesterday?', corpus, 3)[0].name).toBe('phone.call_queue');
+  });
+});
+
+describe('emphasis: what the caller named beats what they mentioned', () => {
+  // ⛔ THE GATE IS PROPORTIONAL, SO THE FIXTURE MUST BE. Emphasis is granted
+  // only to a lead appearing in under 5% of the manifest. In a two-verb
+  // fixture one mention IS 50%, so nothing is ever rare and the rule cannot
+  // fire — the first draft of this test failed for exactly that reason and the
+  // rule was right. `pad()` supplies the denominator a real registry has.
+  const pad = (n: number) =>
+    Array.from({ length: n }, (_, i) => V(`filler.verb_${i}`, `Unrelated capability number ${i}.`));
+
+  it('a leading imperative that discriminates is emphasised', () => {
+    const corpus = [
+      V('sms.send', 'Send a text through the Switchboard.'),
+      V('kb.search', 'Search the knowledge base; say what you are running late for.'),
+      ...pad(60),
+    ];
+    expect(rankVerbs("Text Dana to say we're running twenty minutes late", corpus, 3)[0].name)
+      .toBe('sms.send');
+  });
+
+  it('a leading imperative that does NOT discriminate is left alone', () => {
+    // ⛔ REGRESSION GUARD, FOUND BY THE HELD-OUT SET. Emphasising every lead
+    // put `user_change_role` on top of "Change the phone greeting…", because
+    // `change` appears in 6.9% of the manifest and the noun that mattered was
+    // `phone`. Only a lead rare enough to name a capability is emphasised.
+    const corpus = [
+      V('user.change_role', 'Change a user role.'),
+      V('voice.greeting_set', 'Change the phone greeting callers hear.'),
+      ...pad(60),
+    ];
+    const r = rankVerbs('Change the phone greeting to say we are closed', corpus, 3);
+    expect(r[0].name).toBe('voice.greeting_set');
+  });
+
+  it('reads the lead from the raw query, not from the translated one', () => {
+    expect(leadingAction('Text Dana about the delay')).toBe('text');
+    expect(leadingAction('I just got off the phone. Make a note.')).toBeNull();
+  });
+});
+
+describe('an apostrophe joins a word, it does not split one', () => {
+  it('closes contractions up instead of leaving fragments', () => {
+    // "we're" used to yield `we` + `re`; `re` is not a word, survived the
+    // two-character filter, and diluted every real term in the query.
+    expect(normalise("we're running late")).toBe('were running late');
+    expect(terms("we're running late")).not.toContain('re');
+  });
+
+  it('lets an idiom be written the way it is spoken', () => {
+    expect(analyse(normalise("Dana can't make Tuesday")).translated).toMatch(/reschedule/);
+  });
+});
