@@ -305,7 +305,7 @@ import { appendExamples as __ae_chains, fail } from '../lib/command-kit';
 __ae_chains(chainsCommand, [
   { cmd: 'solid chains list',                           why: 'Your agent-chain workflows' },
   { cmd: 'solid chains templates',                      why: 'Starter chains from the platform' },
-  { cmd: 'solid chains from-template <id>',             why: 'Instantiate a template' },
+  { cmd: 'solid chains from-template --template <id>',             why: 'Instantiate a template' },
   { cmd: 'solid chains create --file chain.json',       why: 'Create from a definition file' },
   { cmd: 'solid chains pending-approvals',              why: 'Chains waiting for human approval' },
 ]);

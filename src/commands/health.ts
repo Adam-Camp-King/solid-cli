@@ -159,7 +159,7 @@ export const healthCommand = new Command('health')
 import { appendExamples as __ae_health } from '../lib/command-kit';
 __ae_health(healthCommand, [
   { cmd: 'solid health',         why: 'Quick check (auth + backend)' },
-  { cmd: 'solid health quick',   why: 'Same as default — fast' },
-  { cmd: 'solid health full',    why: 'Full battery (use solid doctor for CI)' },
-  { cmd: 'solid health mcp',     why: 'MCP server reachability' },
+  { cmd: 'solid health',   why: 'Same as default — fast' },
+  { cmd: 'solid health --full',    why: 'Full battery (use solid doctor for CI)' },
+  { cmd: 'solid health --mcp',     why: 'MCP server reachability' },
 ]);

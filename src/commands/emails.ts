@@ -266,5 +266,5 @@ __appendExamplesEmails(emailsCommand, [
   { cmd: 'solid emails send --to a@b.com --subject Hi --body "text"', why: 'Transactional send' },
   { cmd: 'solid emails send --to <id> --template welcome', why: 'Send from a saved template' },
   { cmd: 'solid emails addresses list', why: 'Verified sender addresses' },
-  { cmd: 'solid emails templates list', why: 'Saved templates' },
+  { cmd: 'solid emails templates', why: 'Saved templates' },
 ]);

@@ -253,5 +253,5 @@ widgetsCommand
 import { appendExamples as __ae_widgets, fail } from '../lib/command-kit';
 __ae_widgets(widgetsCommand, [
   { cmd: 'solid widget list',             why: 'Embeddable widgets you can put on sites' },
-  { cmd: 'solid widget install <id>',     why: 'Add to current site' },
+  { cmd: 'solid widget activate <id>',     why: 'Add to current site' },
 ]);

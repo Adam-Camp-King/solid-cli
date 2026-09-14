@@ -657,7 +657,7 @@ import { appendExamples as __ae_company, fail } from '../lib/command-kit';
 __ae_company(companyCommand, [
   { cmd: 'solid company list',                            why: 'Companies you have access to' },
   { cmd: 'solid company current',                         why: 'Active company (same as whoami)' },
-  { cmd: 'solid company info <id>',                       why: 'Settings, tier, domain' },
+  { cmd: 'solid company info',                       why: 'Settings, tier, domain' },
   { cmd: 'solid company create-for-client --name "..."',  why: 'Agency: spin up a new tenant' },
   { cmd: 'solid company lock-preset 47 --profile design-lock', why: 'Lock design + deletes; new pages and copy edits stay open' },
   { cmd: 'solid company lock 47 --area design:write,pages:delete', why: 'Lock individual keys (area:verb)' },

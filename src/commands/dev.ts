@@ -395,9 +395,9 @@ devCommand.addCommand(moduleCmd);
 import { appendExamples as __ae_dev, fail } from '../lib/command-kit';
 __ae_dev(devCommand, [
   { cmd: 'solid dev list',                       why: 'Your custom modules' },
-  { cmd: 'solid dev scaffold <name>',            why: 'New custom module boilerplate' },
-  { cmd: 'solid dev push <folder>',              why: 'Upload local custom module code' },
-  { cmd: 'solid dev deploy <folder>',            why: 'Build + activate custom module' },
+  { cmd: 'solid dev module create <name>',            why: 'New custom module boilerplate' },
+  { cmd: 'solid dev module push <folder>',              why: 'Upload local custom module code' },
+  { cmd: 'solid dev module deploy <folder>',            why: 'Build + activate custom module' },
   { cmd: 'solid dev module history <folder>',    why: 'Version history for a module' },
   { cmd: 'solid dev module rollback <folder> --to 1', why: 'Restore a module to a previous version' },
 ]);

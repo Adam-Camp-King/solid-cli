@@ -526,5 +526,5 @@ __appendExamplesBlog(blogCommand, [
   { cmd: 'solid blog generate --topic "spring HVAC tune-ups" --auto-publish', why: 'AI-write + publish one post' },
   { cmd: 'solid blog generate --count 3', why: 'Batch-generate 3 drafts in the background' },
   { cmd: 'solid blog get <slug> --json', why: 'Scriptable fetch' },
-  { cmd: 'solid seo audit <slug>', why: 'SEO pass on a post' },
+  { cmd: 'solid seo audit', why: 'SEO pass on a post' },
 ]);

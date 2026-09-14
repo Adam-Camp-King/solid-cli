@@ -424,8 +424,8 @@ usersCommand
 import { appendExamples as __appendExamplesUsers, fail } from '../lib/command-kit';
 __appendExamplesUsers(usersCommand, [
   { cmd: 'solid users list', why: 'Everyone on this company' },
-  { cmd: 'solid users invite a@b.com --role admin', why: 'Send invite with role' },
-  { cmd: 'solid users set-role <id> --role viewer', why: 'Change permissions' },
-  { cmd: 'solid users remove <id> --yes', why: 'Revoke access (prompts by default)' },
-  { cmd: 'solid users ai-permissions <id>', why: 'What this user can do with AI agents' },
+  { cmd: 'solid users invite --email a@b.com --role admin', why: 'Send invite with role' },
+  { cmd: 'solid users role <id> --role viewer', why: 'Change permissions' },
+  { cmd: 'solid users delete <id> --yes', why: 'Revoke access (prompts by default)' },
+  { cmd: 'solid users ai-perms <id>', why: 'What this user can do with AI agents' },
 ]);

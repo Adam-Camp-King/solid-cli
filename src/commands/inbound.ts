@@ -257,5 +257,5 @@ import { appendExamples as __ae_inbound, fail } from '../lib/command-kit';
 __ae_inbound(inboundCommand, [
   { cmd: 'solid inbound list',                              why: 'Inbound webhook endpoints' },
   { cmd: 'solid inbound create --name zapier --event *',    why: 'New inbound endpoint' },
-  { cmd: 'solid inbound events <id>',                       why: 'Recent received events' },
+  { cmd: 'solid inbound events --endpoint <id>',                       why: 'Recent received events' },
 ]);

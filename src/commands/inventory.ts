@@ -265,6 +265,6 @@ import { appendExamples as __appendExamplesInventory, fail } from '../lib/comman
 __appendExamplesInventory(inventoryCommand, [
   { cmd: 'solid inventory list --low-stock', why: 'Items below reorder threshold' },
   { cmd: 'solid inventory adjust <sku> --delta -5 --reason "sold in person"', why: 'Stock adjustment with audit trail' },
-  { cmd: 'solid inventory reorder <sku> --qty 50', why: 'Trigger a reorder' },
-  { cmd: 'solid inventory movements <sku>', why: 'Full in/out history' },
+  { cmd: 'solid inventory adjust <sku> --qty 50', why: 'Trigger a reorder' },
+  { cmd: 'solid inventory get <sku>', why: 'Full in/out history' },
 ]);

@@ -160,6 +160,6 @@ import { appendExamples as __appendExamplesSubs, fail } from '../lib/command-kit
 __appendExamplesSubs(subscriptionsCommand, [
   { cmd: 'solid subs list', why: 'All recurring products YOU sell' },
   { cmd: 'solid subs create --name Gold --price 29.99 --interval month', why: 'Create a plan' },
-  { cmd: 'solid subs subscribe <customer> <plan-id>', why: 'Enroll a customer' },
-  { cmd: 'solid subs cancel <sub-id> --yes', why: 'Cancel at period end' },
+  { cmd: 'solid subs upgrade --customer <id> --plan <plan-id>', why: 'Enroll a customer' },
+  { cmd: 'solid subs cancel --customer <id> --yes', why: 'Cancel at period end' },
 ]);

@@ -437,7 +437,7 @@ import { appendExamples as __appendExamplesStorage, fail } from '../lib/command-
 __appendExamplesStorage(storageCommand, [
   { cmd: 'solid storage list', why: 'All files + folders' },
   { cmd: 'solid storage upload ./logo.png --folder brand', why: 'Upload to a folder' },
-  { cmd: 'solid storage download <id> ./out.png', why: 'Download by file ID' },
+  { cmd: 'solid storage download <id> -o ./out.png', why: 'Download by file ID' },
   { cmd: 'solid storage folders list', why: 'Folder tree' },
   { cmd: 'solid storage delete <id> --yes', why: 'Delete a file' },
 ]);

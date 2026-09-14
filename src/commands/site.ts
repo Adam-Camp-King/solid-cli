@@ -380,5 +380,5 @@ __appendExamplesSite(siteCommand, [
   { cmd: 'solid site create --name "ACME Plumbing"', why: 'Provision a new site from defaults' },
   { cmd: 'solid site info main', why: 'DNS, SSL, custom-domain status' },
   { cmd: 'solid site templates', why: '52 industry templates' },
-  { cmd: 'solid site regenerate main', why: 'Rebuild after template change' },
+  { cmd: 'solid site regenerate', why: 'Rebuild after template change' },
 ]);
