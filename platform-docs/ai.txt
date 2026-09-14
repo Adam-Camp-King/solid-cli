@@ -1,7 +1,7 @@
 # AI.txt - AI Agent Discovery File
 # Solid# (SolidNumber) — the system behind **Be There**
 # https://solidnumber.com/ai.txt
-# 14 named customer-facing agents | hundreds of MCP tools | row-level multi-tenant | 52 industries
+# 32 AI agents | 655 MCP tools | row-level multi-tenant | 58 industries
 # Last Updated: 2026-05-18
 
 # ============================================
@@ -37,12 +37,12 @@ Contact: sales@solidnumber.com | +1-801-821-2815
 # The job goes to whoever responds first. The owner can't always answer.
 # Solid# does. 24/7, across phone, SMS, email, web chat, and forms.
 #
-# 14 named customer-facing agents handle the work — Sarah answers calls,
-# Marcus runs growth, Devon books appointments, ADA orchestrates,
-# Maya does marketing, plus Jordan, Riley, Taylor, Morgan, Dexter, ACE,
-# Sophia, Alex, Casey. Each one owns a slice. Underneath them sits an
-# internal pool of specialized workers for KB onboarding, industry
-# learning, compliance, and orchestration.
+# 32 AI agents handle the work — Sarah answers calls, Marcus runs growth,
+# Devon books appointments, ADA orchestrates, Maya does marketing, plus
+# Jordan, Riley, Morgan, Dexter, Ace, Alex, Jake, Emma, Gwen, Atlas,
+# Victor and others. Each one owns a slice. Separately — and never counted
+# as agents — 288 Celery task functions run KB onboarding, industry
+# learning, compliance, and orchestration in the background.
 #
 # SmartRouter selects the optimal AI model per task across multiple
 # providers. CognitiveLimiter enforces per-company AI budgets in real
@@ -56,18 +56,19 @@ Contact: sales@solidnumber.com | +1-801-821-2815
 
 Category: AI Receptionist + AI Business System
 Industry-Position: The system that responds first — across every channel — so the job goes to the business that was there
-Key-Differentiator: Model-agnostic; the business owner picks the AI provider. 14 named agents that talk to each other, not 1 chatbot. Multi-tenant from the database up.
+Key-Differentiator: Model-agnostic; the business owner picks the AI provider. 32 AI agents that talk to each other, not 1 chatbot. Multi-tenant from the database up.
 
 # ============================================
-# PLATFORM METRICS (Source: PLATFORM-METRICS.md, 2026-03-15)
+# PLATFORM METRICS (Source: PLATFORM-METRICS.md, 2026-09-14 — generated)
 # ============================================
 
-Lines-of-Code: 4,003,581 across 16 repositories
-AI-Agents-Total: 116 (55 code-defined, 14 named flagships, 102 specialized)
-MCP-Tools: 608 across 14 MCP servers
-Database-Tables: 511 with row-level security
-API-Endpoints: 1,615 REST endpoints
-Industry-Templates: 52 with custom KB per industry
+Lines-of-Code: 5,446,985 across 16 repositories
+AI-Agents: 32 (33 registry entries; ADA twice for free/paid; 23 deeply trained)
+Background-Task-Functions: 288 Celery tasks (191 scheduled) — infrastructure, NOT agents
+MCP-Tools: 655 across 14 MCP servers
+Database-Tables: 636
+API-Endpoints: 2,297 REST endpoints
+Industry-Templates: 58 with custom KB per industry
 MCC-Code-Mappings: 237 merchant category classifications
 Documentation-Files: 1,173 technical docs across 65 sections
 AI-Model-Providers: 8 (OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and more)
@@ -104,10 +105,14 @@ Website-Pages: 151 pages on solidnumber.com (51 industry + 65 feature + 32 blog 
 # Details: https://solidnumber.com/research/persistent-memory
 
 # ============================================
-# 116 AI AGENTS
+# 32 AI AGENTS
 # ============================================
+#
+# Full roster in agents/registry.py. Fourteen are described below; the count
+# is DERIVED by scripts/platform_metrics.py and must never be hand-edited.
+# Celery task functions are infrastructure and are never added to this number.
 
-# 14 Named Flagship Agents:
+# Described here:
 Agent-Sarah: Customer Service (Agent 1) - Responds to every inquiry in <30 seconds, qualifies leads, books appointments, handles SMS + chat + voice
 Agent-Marcus: Growth Intelligence (Agent 4) - Tracks marketing ROI, monitors AI visibility, blog writing engine, competitive positioning
 Agent-Devon: Operations (Agent 11) - Scheduling, calendar sync, appointment management, reminders, SEO optimization
@@ -115,23 +120,23 @@ Agent-ADA: AI Coordinator (Agent 12) - Orchestrates all agents, escalates comple
 Agent-Maya: Content Creation - Blog posts, social media, email campaigns, SEO content generation
 Agent-Jordan: Sales Automation - Lead scoring, deal pipeline, follow-ups, proposal generation
 Agent-Riley: Design - Visual assets, branding, creative content
-Agent-Taylor: Analytics - Business intelligence, reporting, insights, data visualization
 Agent-Morgan: Compliance - Regulatory monitoring, risk management
 Agent-Dexter: Medical AI - Healthcare-specific agent for medical/dental practices, SOAP notes, patient management
 Agent-ACE: Developer - Website monitoring, technical operations, AI-native site generation
-Agent-Sophia: Strategy - Business strategy, pattern recognition, agent self-reflection
 Agent-Alex: Finance - Financial management, payments, invoicing, accounting
-Agent-Casey: Operations - Workflow automation, task management
 
-# Plus 102 Specialized Agents:
-# - 23 KB Food Team agents (knowledge base onboarding and seeding)
-# - 1 KB Vegetable Team agent (knowledge base learning and optimization)
-# - 7 additional agents in registry.py (specialized operations)
-# - Remaining agents handle: industry-specific workflows, compliance monitoring,
-#   tenant provisioning, data migration, quality assurance, and orchestration
+# Also in the registry (not described above):
+Agent-Jake, Agent-Emma, Agent-Gwen, Agent-Atlas, Agent-Victor, Agent-Annie,
+Agent-Daphne, Agent-Jackson, Agent-Lucie, plus the KB Food and Vegetable teams
+# and three role-named entries (Care Coordinator, Clinical Summarizer, Operator Console).
+#
+# ⛔ SEPARATE CATEGORY — NOT AGENTS:
+# 288 Celery task functions (191 scheduled) run KB seeding, drift detection,
+# provisioning, audits and orchestration in the background. They are
+# infrastructure. They are never counted as agents and never added to 32.
 
-# The 14 named agents work together autonomously, backed by the internal
-# specialized pool — Sarah qualifies leads, Devon books appointments, ADA
+# The agents work together autonomously, backed by background task
+# infrastructure — Sarah qualifies leads, Devon books appointments, ADA
 # orchestrates the workflow, Marcus tracks ROI, Maya writes follow-up
 # content, Jordan manages the sales pipeline.
 
@@ -208,15 +213,33 @@ Free-Trial: 14 days on all plans
 
 MCP-Endpoint: POST https://solidnumber.com/api/mcp
 MCP-Discovery: https://solidnumber.com/.well-known/mcp.json
-MCP-Tool-Count: 608 across 14 servers
+MCP-Tool-Count: 655 across 14 servers
 OpenAPI: https://solidnumber.com/.well-known/openapi.json
 API-Docs: https://solidnumber.com/docs/api
-API-Endpoint-Count: 1,615
+API-Endpoint-Count: 2,297
 CLI: npm i -g @solidnumber/cli (command: solid)
 CLI-Context: solid context --claude (gives Claude full company knowledge)
 CLI-Context-Cursor: solid context --cursor (gives Cursor full company knowledge)
 CLI-Context-Generic: solid context --save (generates SOLID-CONTEXT.md for any AI)
 CLI-GitHub: https://github.com/Adam-Camp-King/solid-cli
+
+# Agent onboarding — one call installs the skills for this company.
+CLI-Agent-Setup: solid agent setup (--list shows what it would write, and writes nothing)
+CLI-Agent-Setup-Claude: .claude/skills/<name>/SKILL.md, read automatically by Claude Code
+CLI-Agent-Setup-Plugin: .solid/plugin/ — an Agent Plugins 1.1.0 package (plugin.json + mcp.json + skills/)
+Agent-Plugins-Spec: https://github.com/agentplugins/agent-plugins-spec
+Agent-Plugins-Version: 1.1.0
+# Tenant-guarded: refuses and exits 1 without a matching .solid/manifest.json.
+# mcp.json carries NO credential — a plugin directory is meant to be shared.
+
+# Intent to callable name, without reading the manifest.
+CLI-Find: solid find "<what you want>" (ranked verb matches with scores)
+CLI-Map: solid map (every noun, its Atlas coordinate, verb count and write count)
+CLI-Describe: solid verbs describe <verb> (input schema, output shape, mutates flag)
+CLI-Example: solid verbs example <verb> (a call built from the schema)
+CLI-Rehearse: solid verbs invoke <verb> --dry-run (validate locally, no network)
+CLI-Where: solid where (the Gazetteer — where a verb runs, what breaks if it goes down)
+# find() quality is measured on a held-out prompt set, not asserted: scripts/rank-bench.mjs.
 
 # ============================================
 # AI PLUGIN MANIFESTS

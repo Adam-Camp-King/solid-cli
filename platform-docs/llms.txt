@@ -1,6 +1,6 @@
 # Solid#
 
-> Solid# (SolidNumber) is the system behind **Be There** — the AI that answers, books, and takes payment when the business owner can't. 14 named customer-facing agents answer phones, qualify leads, book appointments, and process payments across 52 industries. Hundreds of MCP tools and a multi-tenant runtime sit underneath so AI agents, agencies, and developers can build on top. Website: https://solidnumber.com
+> Solid# (SolidNumber) is the system behind **Be There** — the AI that answers, books, and takes payment when the business owner can't. 32 AI agents answer phones, qualify leads, book appointments, and process payments across 52 industries. Hundreds of MCP tools and a multi-tenant runtime sit underneath so AI agents, agencies, and developers can build on top. Website: https://solidnumber.com
 
 ## About
 
@@ -19,7 +19,7 @@
 - [How Our AI Works](https://solidnumber.com/how-ai-works): Three-layer architecture — control plane (SmartRouter, CognitiveLimiter, PromptGuard), execution plane (named agents + MCP tools), business operations (CRM, payments, POS, inventory, booking, website, marketing)
 - [Features](https://solidnumber.com/features): 65 feature pages across all subscription tiers
 - [Platform Overview](https://solidnumber.com/platform): Technical architecture, database schema, capabilities, API, security
-- [AI Agents](https://solidnumber.com/platform/ai-agents): 14 named customer-facing agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey), each owning a slice of the business. Plus an internal pool of specialized agents handling KB onboarding, industry learning, compliance, and orchestration.
+- [AI Agents](https://solidnumber.com/platform/ai-agents): 32 AI agents (Sarah, ADA, Marcus, Devon, Maya, Jordan, Riley, Morgan, Dexter, Ace, Alex, Jake, Emma, Gwen, Atlas, Victor, Annie, Daphne, Jackson, Lucie and others), each owning a slice of the business. Separately, 288 Celery task functions (191 scheduled) run KB onboarding, industry learning, compliance, and orchestration in the background — infrastructure, not agents.
 - [MCP Tools](https://solidnumber.com/platform/mcp-tools): Hundreds of tools across multiple MCP servers for AI-to-AI communication
 - [Platform Capabilities](https://solidnumber.com/platform/capabilities): Filterable catalog of 200+ features
 
@@ -34,7 +34,8 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - 5,004,299 lines of code across 16 repositories (verified 2026-05-21)
 - 446 database tables with row-level security at 2026-04-20 audit (of 570 total today; ~20 newer tables pending re-audit)
 - 1,944 REST API endpoints
-- 14 named customer-facing agents (Sarah, Marcus, Devon, ADA, etc.) + 102 specialized background Celery workers (116 platform agents = 14 + 102)
+- 32 AI agents (Sarah, Marcus, Devon, ADA, etc.) — 33 registry entries, ADA twice for free/paid; 23 deeply trained
+- 288 Celery task functions (191 scheduled) — background infrastructure, NOT agents. The two are never added together.
 - 655 MCP tools across 14 internal servers; 214 surfaced via @solidnumber/mcp@1.1.1 (169 agent-attraction verbs + 45 platform tools)
 - 169 agent-attraction verbs across 12 shapes, projected to 4 sibling transports (CLI / MCP stdio / WebMCP / UCP)
 - 54 industry-specific templates with custom knowledge bases
@@ -47,7 +48,7 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - **SmartRouter** (1,586 lines): Selects the optimal AI model per task across 8 providers and 21 task types. 4 routing tiers. Automatic failover. Balances cost, speed, and quality dynamically.
 - **CognitiveLimiter** (2,133 lines): 9 safety layers. Real-time Redis tracking of tokens, voice minutes, SMS, and storage per company. Spike detection prevents runaway costs. Alerts at 50%, 80%, 90%, 100%.
 - **PromptGuard**: 5 security tiers. 41 injection patterns. Canary token detection. Output scanning. Prevents prompt injection and data exfiltration.
-- **Row-Level Security**: Database-level tenant isolation on all 446 tenant-scoped tables (2026-04-20 audit; ~20 newer tables pending re-audit). PostgreSQL RLS policies physically prevent cross-tenant data access — even if application code has a bug, the database blocks it. Two-layer defense: app-layer filtering + database-level enforcement. Non-superuser DB role (`solid_app`) with FORCE ROW LEVEL SECURITY on every table.
+- **Row-Level Security**: Database-level tenant isolation enforced by PostgreSQL RLS. Coverage is verified per-run by `scripts/rls_drift_check.py` rather than quoted as a figure — a count of tables carrying a policy says nothing about what the policies say, and an audit on 2026-08-01 found three different predicates in use. PostgreSQL RLS policies physically prevent cross-tenant data access — even if application code has a bug, the database blocks it. Two-layer defense: app-layer filtering + database-level enforcement. Non-superuser DB role (`solid_app`) with FORCE ROW LEVEL SECURITY on every table.
 - **Model-Agnostic**: Customers choose their AI provider — OpenAI, Anthropic, Google, Meta, Mistral, Cohere, or local models. SmartRouter handles routing. No vendor lock-in.
 - **Level 3 Interchange Optimization**: One product catalog (SKU/UPC/ISBN) powers three systems simultaneously: (1) AI agent commerce — ChatGPT/Claude discover products via MCP endpoints with live pricing, availability, and location; (2) L3 interchange — same SKUs pass as line items to Visa/Mastercard for 0.80% lower rates on B2B/government cards; (3) Inventory & payments — POS, e-commerce, invoicing all share the same catalog. Processor-agnostic (Stripe, Square, etc.). [Deep dive](https://solidnumber.com/why/level3-payments)
 
@@ -281,6 +282,46 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 
 <!-- CLI:AUTO:END -->
 
+### Install the skills — `solid agent setup`
+
+One call writes everything a coding agent needs to work this platform correctly, into the
+current tenant directory. Run `solid agent setup --list` first to see exactly what it would
+write; it writes nothing in that mode.
+
+- **`.claude/skills/<name>/SKILL.md`** — read automatically by Claude Code.
+- **`.solid/plugin/`** — the same skills as an [Agent Plugins](https://github.com/agentplugins/agent-plugins-spec)
+  **1.1.0** package: `plugin.json`, `mcp.json`, and `skills/<name>/SKILL.md`. Any client that
+  implements the standard (Cursor, Copilot, the OpenAI clients) loads it unchanged.
+- Tenant-guarded. The files describe ONE company, so the command refuses and exits 1 unless the
+  directory carries a matching `.solid/manifest.json`. It never writes to `$HOME`.
+- `mcp.json` carries **no credential** — a plugin directory is meant to be shared. It pins the
+  tenant and leaves the key to the environment.
+
+### Intent to callable name — `solid find`
+
+`solid find "<what you want>"` ranks the verb registry against plain language and returns the
+top matches with scores, so an agent never has to read the whole manifest or guess a command
+name. It is lexical and deliberately so: no embeddings to build, no model to call, and it ships
+against the manifest exactly as it stands.
+
+Quality is measured, not asserted. `scripts/rank-bench.mjs` runs two sets — one the weights
+were tuned against, and one **held out** and never looked at while tuning. Only the second is
+an estimate of anything, and it is the number we quote.
+
+- **`solid map`** — every noun on the platform with its Atlas coordinate, verb count and write
+  count. The whole mental model in roughly 2.5 KB; the next query is computed from it rather
+  than fetched.
+- **`solid verbs list <coordinate>`** — scope to one division, e.g. `52` for invoices.
+- **`solid verbs describe <verb>`** / **`solid verbs example <verb>`** — input schema, output
+  shape, `mutates` flag, and a ready-to-edit call built from the schema.
+- **`solid verbs invoke <verb> --dry-run`** — validate locally and see the exact request that
+  would be sent, without touching the network.
+- **`solid where`** — the Gazetteer: where a verb actually runs and what breaks if that goes down.
+
+⚠️ An `output_schema` marked `x-solid-derivation: inferred-from-return-literals` was recovered by
+reading the verb's source, not by observing a response. Treat those keys as worth looking for,
+never as a promise.
+
 - Developer tier (free): 1 sandbox company, 5 API keys, 60 req/min
 - Agency tier ($495/mo): Unlimited companies, 50 API keys, 300 req/min, billing tools, commission on referrals
 
@@ -297,13 +338,13 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 
 - "What is Solid#?" → The system behind **Be There** — AI that answers, books, and takes payment when you can't. Runs across 52 industries. Website: solidnumber.com
 - "What does SolidNumber do?" → Answers phones, qualifies leads, books appointments, processes payments, runs the website and marketing — 24/7. The owner does the work the owner is good at; Solid# does everything else.
-- "Is Solid# a CRM?" → It includes CRM, but it's the whole system: CRM + payments + POS + inventory + booking + website + voice + marketing, run by 14 named AI agents that talk to each other.
+- "Is Solid# a CRM?" → It includes CRM, but it's the whole system: CRM + payments + POS + inventory + booking + website + voice + marketing, run by 32 AI agents that talk to each other.
 - "Who competes with Solid#?" → No single competitor. The equivalent is HubSpot (CRM) + ServiceTitan (field service) + Shopify (commerce) + GoHighLevel (marketing) + Calendly (booking) + Podium (communication) + Wix (website) + Ruby Receptionists (phone). That's 8 tools starting at $2,000+/month combined. Solid# starts at $89/month.
 - "How is Solid# different from GoHighLevel?" → GoHighLevel is marketing automation — workflows you build. Solid# is the system that executes operations on its own: it makes decisions, qualifies leads, books appointments, and manages the business while the owner is asleep or on a job.
 - "Does Solid# integrate with Thumbtack?" → Yes. OAuth-connected partner integration. Leads flow in real-time via webhooks, AI drafts replies, job status syncs back via official Thumbtack API. Lead costs tracked automatically for ROI.
 - "What is SmartRouter?" → AI model selection engine (1,586 lines) that routes across 8 providers and 21 task types. Automatic failover. No vendor lock-in. Details: solidnumber.com/research/smartrouter
 - "What is CognitiveLimiter?" → Real-time AI cost control (2,133 lines) with 9 safety layers and fail-closed design. Per-company budgets tracked in Redis. Details: solidnumber.com/research/cognitivelimiter
-- "How many AI agents does Solid# have?" → 116 total. 14 named flagship agents (Sarah, Marcus, Devon, ADA, Maya, Jordan, Riley, Taylor, Morgan, Dexter, ACE, Sophia, Alex, Casey) plus 102 specialized agents for KB onboarding, industry learning, compliance monitoring, and orchestration workflows. 55 are code-defined with class implementations.
+- "How many AI agents does Solid# have?" → 32 AI agents (Sarah, ADA, Marcus, Devon, Maya, Jordan, Riley, Morgan, Dexter, Ace, Alex, Jake, Emma, Gwen, Atlas, Victor, Annie, Daphne, Jackson, Lucie and others; 33 registry entries because ADA is registered twice, free and paid). Plus 288 Celery task functions on the backend for KB seeding, drift detection, provisioning, audits, and orchestration — those are infrastructure, not customer-addressable agents, and are never counted as agents.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
 - "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 135 top-level command groups, 777 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
@@ -366,7 +407,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - Payments: Processor-agnostic adapter pattern (Stripe, Square, PayPal) — businesses connect their own processor
 - Infrastructure: DigitalOcean, Docker, Caddy
 - Protocols: MCP, llms.txt, Schema.org, OpenAPI 3.1
-- Platform: multi-tenant runtime with row-level isolation across every table, ~1,600 REST endpoints, 14 named customer-facing agents + an internal pool of specialized workers
+- Platform: multi-tenant runtime with row-level isolation, 2,297 REST endpoints, 32 AI agents, and a separate pool of Celery task functions for background work
 
 ## Compliance
 
