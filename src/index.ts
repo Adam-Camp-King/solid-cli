@@ -823,6 +823,94 @@ function attachUnknownCommandHandler(cmd: Command, displayPath: string): void {
 
 attachUnknownCommandHandler(program, 'solid');
 
+/**
+ * Unknown / malformed OPTIONS get the same envelope as unknown commands.
+ *
+ * `command:*` covers a bad command word. A bad FLAG never reached it:
+ * commander printed "error: unknown option '--nonsense'" to stderr, wrote
+ * nothing to stdout and exited 1 — so a caller parsing --json got an empty
+ * body, no code, and no fix. A typoed flag is the likeliest mistake an agent
+ * makes, and it was the one failure with nothing to act on.
+ *
+ * exitOverride turns commander's internal exit into a throw we can shape.
+ * Only the argument-level codes are handled; `commander.helpDisplayed` and
+ * `commander.version` are successful outcomes and must keep exiting 0.
+ */
+function attachOptionErrorHandler(cmd: Command, displayPath: string): void {
+  cmd.exitOverride((err) => {
+    const OK = new Set(['commander.helpDisplayed', 'commander.help', 'commander.version']);
+    if (OK.has(err.code)) process.exit(err.exitCode ?? 0);
+
+    const CODES: Record<string, string> = {
+      'commander.unknownOption': 'UNKNOWN_OPTION',
+      'commander.missingArgument': 'MISSING_ARGUMENT',
+      'commander.excessArguments': 'TOO_MANY_ARGUMENTS',
+      'commander.optionMissingArgument': 'OPTION_MISSING_VALUE',
+      'commander.missingMandatoryOptionValue': 'MISSING_REQUIRED_OPTION',
+      'commander.invalidArgument': 'INVALID_ARGUMENT',
+      'commander.conflictingOption': 'CONFLICTING_OPTIONS',
+    };
+    const code = CODES[err.code];
+    if (!code) throw err; // not ours to shape — let commander behave normally
+
+    // The flag the caller typed, recovered from commander's message: it is the
+    // only place the offending token survives.
+    const typed = /'([^']+)'/.exec(err.message)?.[1] ?? '';
+    // What this command actually accepts, so a near-miss can be named.
+    const known = cmd.options.map((o) => o.long || o.short).filter(Boolean) as string[];
+    const suggestions = typed.startsWith('-')
+      ? suggestPath(typed.replace(/^-+/, ''), known.map((k) => k.replace(/^-+/, '')))
+          .map((k) => `--${k}`)
+      : [];
+
+    try {
+      emitTelemetry('option_error', { command: displayPath, extra: { code, typed } });
+    } catch { /* noop */ }
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { isJsonOutput } = require('./lib/json-output');
+    if (isJsonOutput()) {
+      process.stdout.write(
+        JSON.stringify({
+          error: {
+            code,
+            status: 400,
+            message: err.message.replace(/^error:\s*/i, ''),
+            retryable: false,
+            command: displayPath,
+            did_you_mean: suggestions,
+            // Always actionable: a near-miss if there is one, otherwise the
+            // help for THIS command — never the root help, which is 171 lines
+            // and does not list this command's flags.
+            fix: suggestions.length ? `${displayPath} ${suggestions[0]}` : `${displayPath} --help`,
+            accepts: known,
+          },
+        }) + '\n',
+      );
+      process.exit(1);
+    }
+
+    const line = (t: string) => process.stderr.write(t + '\n');
+    line('');
+    line(`  ${chalk.red('✗')} ${err.message.replace(/^error:\s*/i, '')}`);
+    if (suggestions.length) {
+      line('');
+      line(`  ${chalk.dim('Did you mean')} ${chalk.cyan(suggestions[0])}${chalk.dim('?')}`);
+    }
+    line('');
+    line(`  ${chalk.dim('Run')} ${chalk.cyan(`${displayPath} --help`)}`);
+    line('');
+    process.exit(1);
+  });
+
+  for (const sub of cmd.commands) {
+    attachOptionErrorHandler(sub, `${displayPath} ${sub.name()}`.trim());
+  }
+}
+
+attachOptionErrorHandler(program, 'solid');
+
+
 // First-run — silent identity + install ping. No prompt, no banner, no pitch.
 // Matches gh/vercel/stripe behavior: the tool just works. Email is captured
 // later at value-exchange moments (demo/feedback/auth), not as a greeting.

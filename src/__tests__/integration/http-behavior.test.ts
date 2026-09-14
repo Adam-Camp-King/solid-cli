@@ -157,8 +157,10 @@ describe('CLI HTTP Behavior', () => {
         const result = await runCli('company list --json', port);
         expect(result.exitCode).toBe(0);
         const parsed = JSON.parse(result.stdout);
-        expect(parsed.companies).toHaveLength(2);
-        expect(parsed.companies[0].name).toBe('My Company');
+        // T1.7 step two — rows are canonical on `items` for backend passthrough.
+        expect(parsed.items).toHaveLength(2);
+        expect(parsed.companies).toBeUndefined();
+        expect(parsed.items[0].name).toBe('My Company');
         expect(parsed.active_company_id).toBe(42);
       } finally {
         server.close();

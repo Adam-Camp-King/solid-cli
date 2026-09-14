@@ -270,11 +270,17 @@ describe('CLI Contract Tests', () => {
         const result = await runCliAsync('company list --json', port);
         expect(result.exitCode).toBe(0);
         const parsed = JSON.parse(result.stdout);
-        expect(parsed).toHaveProperty('companies');
+        // T1.7 step two. This command passes a BACKEND list straight through,
+        // so the server's `companies` key was a pure alias of `items` and the
+        // two shipped identical rows on every call. `items` is canonical; the
+        // source key is kept in-process (non-enumerable) so the 20 commands
+        // that read their own key keep working, but it costs no wire bytes.
+        expect(parsed).toHaveProperty('items');
+        expect(parsed).not.toHaveProperty('companies');
         expect(parsed).toHaveProperty('active_company_id');
         expect(parsed).toHaveProperty('count');
-        expect(Array.isArray(parsed.companies)).toBe(true);
-        const co = parsed.companies[0];
+        expect(Array.isArray(parsed.items)).toBe(true);
+        const co = parsed.items[0];
         expect(co).toHaveProperty('id');
         expect(co).toHaveProperty('name');
         expect(co).toHaveProperty('role');

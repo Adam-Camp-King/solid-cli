@@ -48,7 +48,12 @@ export type TelemetryEventName =
   | 'help_shown'
   | 'bare_invocation'
   | 'feedback_sent'
-  | 'unknown_command';
+  | 'unknown_command'
+  // A malformed FLAG, not a malformed command. Tracked separately
+  // because it is the likeliest agent mistake and the fix differs:
+  // a bad command needs a different command, a bad flag needs this
+  // command's own --help.
+  | 'option_error';
 
 function getApiBase(): string {
   return process.env.SOLID_API_URL || 'https://api.solidnumber.com';

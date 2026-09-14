@@ -404,7 +404,9 @@ class ApiClient {
         // results, leads, logs, api_keys, ...). Non-destructive: original
         // keys stay. Opt out via SOLID_LEGACY_LIST_SHAPES=1.
         try {
-          applyListEnvelope(response.data);
+          // Backend responses only: the server's list key is a pure alias of
+          // `items`, so shipping both doubles every list an agent reads.
+          applyListEnvelope(response.data, undefined, { hideSourceKey: true });
         } catch {
           // normalization is additive and best-effort; never break a response.
         }

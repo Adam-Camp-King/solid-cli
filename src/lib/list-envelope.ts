@@ -169,13 +169,26 @@ export function normalizeListEnvelope(body: unknown): NormalizedEnvelope | null 
 }
 
 /**
- * Apply the normalization in-place on a response body, adding the
- * aliased keys without removing existing ones. Returns the body back
- * for easy chaining in the axios response interceptor.
+ * Apply the normalization in-place on a response body: promote the rows to
+ * `items`, add `total / page / has_more`, and DROP the source key.
+ *
+ * ⛔ T1.7 STEP TWO. Step one aliased the rows to `items` and kept the original
+ * key so existing callers would not break. Step two — dropping it — never
+ * landed, and every list response has carried both ever since: `solid find`
+ * was 49% duplicate bytes, `solid where` about half the Gazetteer, on reads an
+ * agent makes constantly.
+ *
+ * The compatibility being protected is agents, which re-read the schema on
+ * every call and do not hold a cached shape between them. Paying ~2x on every
+ * list forever to protect a consumer that does not exist is the wrong trade —
+ * particularly in a repo that took context from 27,369 tokens to 177.
+ *
+ * `SOLID_LEGACY_LIST_SHAPES=1` restores the old shape entirely (no `items`,
+ * no dropping) for anything that genuinely pinned a source key.
  *
  * No-op when:
  *  - body is not a list envelope
- *  - body already has `items` (then we just ensure `total` is present)
+ *  - the source key IS `items` (nothing to drop)
  *  - SOLID_LEGACY_LIST_SHAPES is truthy
  *
  * Pure wrt env: caller can pass its own env map for tests.
@@ -183,6 +196,7 @@ export function normalizeListEnvelope(body: unknown): NormalizedEnvelope | null 
 export function applyListEnvelope<T>(
   body: T,
   env?: NodeJS.ProcessEnv,
+  opts?: { hideSourceKey?: boolean },
 ): T {
   if (legacyListShapesEnabled(env)) return body;
   const normalized = normalizeListEnvelope(body);
@@ -201,6 +215,42 @@ export function applyListEnvelope<T>(
   }
   if (!('has_more' in record) || record.has_more === undefined) {
     record.has_more = normalized.has_more;
+  }
+
+  // ⛔ Drop the source key now its rows live on `items` — the half of T1.7
+  // that never shipped. Only when `items` actually holds THESE rows: if a
+  // caller supplied its own `items`, the source key is different data and
+  // removing it would lose rows rather than duplicate them.
+  // ⛔ HIDE THE SOURCE KEY, DO NOT DELETE IT.
+  //
+  // Deleting is what step two was supposed to do, and it breaks the CLI's own
+  // commands: 20 files read their source key straight off the response —
+  // `solid where` does `(res.data as {places?: Place[]}).places || []` — so a
+  // delete turned the Gazetteer into `count: 0, items: []`. That is almost
+  // certainly why step two never landed.
+  //
+  // Non-enumerable gets the whole byte win with none of that risk:
+  // JSON.stringify skips non-enumerable properties, so the duplicate rows
+  // leave the wire entirely, while `d.places` still resolves for every
+  // internal caller. Those can migrate to `.items` on their own schedule, and
+  // this stops costing anything the moment they do.
+  // ⛔ ONLY for backend responses (the axios interceptor), never for a
+  // command's own payload.
+  //
+  // A backend key IS a duplicate alias: `items` carries the same rows and the
+  // caller was told to read `items`. A command's payload is different — it
+  // declares its own shape next to a versioned `schema:` tag, and
+  // `solid verbs list` promising `verbs` is a contract, not an accident.
+  // Hiding both indiscriminately silently rewrote ~20 declared schemas, which
+  // is a breaking change wearing a byte-saving costume.
+  const sourceKey = normalized._source_key;
+  if (opts?.hideSourceKey && sourceKey && sourceKey !== 'items' && record.items === normalized.items) {
+    Object.defineProperty(record, sourceKey, {
+      value: record[sourceKey],
+      enumerable: false,   // <- invisible to JSON.stringify and Object.keys
+      writable: true,
+      configurable: true,
+    });
   }
   return body;
 }

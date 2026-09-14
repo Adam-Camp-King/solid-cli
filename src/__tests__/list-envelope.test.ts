@@ -114,16 +114,40 @@ describe('legacyListShapesEnabled', () => {
 });
 
 describe('applyListEnvelope', () => {
-  it('adds items/total/page/has_more non-destructively', () => {
+  it('promotes rows to items and DROPS the source key (T1.7 step two)', () => {
     const body = { pages: [1, 2], total: 2 };
-    const out = applyListEnvelope(body, {});
+    const out = applyListEnvelope(body, {}, { hideSourceKey: true });
     expect(out).toBe(body); // same reference — mutated in place
     expect((body as any).items).toEqual([1, 2]);
     expect((body as any).total).toBe(2);
     expect((body as any).page).toBeNull();
     expect((body as any).has_more).toBeNull();
-    // Original key preserved
+
+    // ⛔ The source key is off the WIRE but still readable in-process.
+    // Step one kept it enumerable, so every list response carried the rows
+    // twice — `solid find` was 49% duplicate bytes, `solid where` about half
+    // the Gazetteer. Deleting it outright broke 20 commands that read their
+    // source key straight off the response, so it is hidden instead.
+    expect(JSON.parse(JSON.stringify(body)).pages).toBeUndefined();
     expect((body as any).pages).toEqual([1, 2]);
+  });
+
+  it('keeps the legacy shape when SOLID_LEGACY_LIST_SHAPES is set', () => {
+    // The escape hatch for anything that genuinely pinned a source key: the
+    // body is returned untouched, so no items AND no dropping.
+    const body = { pages: [1, 2], total: 2 };
+    applyListEnvelope(body, { SOLID_LEGACY_LIST_SHAPES: '1' } as NodeJS.ProcessEnv);
+    expect((body as any).pages).toEqual([1, 2]);
+    expect('items' in (body as any)).toBe(false);
+  });
+
+  it('never drops a source key whose rows are not the ones on items', () => {
+    // A caller-supplied `items` means the source key holds DIFFERENT data;
+    // dropping it would lose rows rather than de-duplicate them.
+    const body: Record<string, unknown> = { pages: [1, 2], items: ['explicit'] };
+    applyListEnvelope(body, {});
+    expect(body.items).toEqual(['explicit']);
+    expect(body.pages).toEqual([1, 2]);
   });
 
   it('does NOT clobber a caller-supplied items/total/page/has_more', () => {
