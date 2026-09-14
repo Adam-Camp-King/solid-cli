@@ -1253,6 +1253,25 @@ agentCommand
     }
   });
 
+/**
+ * The CLI's own version, for the plugin manifest.
+ *
+ * ⛔ READ, NEVER HARDCODE. Same rule and same idiom as src/index.ts: the
+ * version lives in package.json and a second copy would be a second thing to
+ * forget at release. Returns undefined rather than guessing if it cannot be
+ * read — `buildPluginManifest` omits an absent version, which is the honest
+ * encoding, and a wrong version in a distributed manifest is worse than none.
+ */
+function cliVersion(): string | undefined {
+  try {
+    const pkgPath = path.join(__dirname, '..', '..', 'package.json');
+    const v = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version;
+    return typeof v === 'string' && v.length > 0 ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ── agent setup ──────────────────────────────────────────────────────
 //
 // ⛔ WHY THIS EXISTS. Everything a coding agent needed to work this platform
@@ -1280,6 +1299,7 @@ agentCommand
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
     const { SKILLS, installSkills } = await import('../lib/skills/index');
+    const { writePlugin, PLUGIN_DIR, AGENT_PLUGINS_VERSION } = await import('../lib/skills/plugin');
     const listOnly = Boolean(opts.list || opts.dryRun);
 
     if (listOnly) {
@@ -1290,6 +1310,11 @@ agentCommand
             description: s.description,
             path: path.join('.claude', 'skills', s.dirname, 'SKILL.md'),
           })),
+          agent_plugin: {
+            spec: `agent-plugins/${AGENT_PLUGINS_VERSION}`,
+            root: PLUGIN_DIR,
+            files: ['plugin.json', 'mcp.json', ...SKILLS.map((s) => path.join('skills', s.dirname, 'SKILL.md'))],
+          },
           installed: false,
         });
         return;
@@ -1299,6 +1324,7 @@ agentCommand
         console.log(`  ${chalk.cyan(s.dirname)}`);
         console.log(`  ${chalk.dim(s.description)}\n`);
       }
+      console.log(chalk.dim(`  Also written as an Agent Plugins ${AGENT_PLUGINS_VERSION} package in ${PLUGIN_DIR}/`));
       console.log(chalk.dim('  Run `solid agent setup` to install them here.\n'));
       return;
     }
@@ -1311,12 +1337,31 @@ agentCommand
     const results = installSkills(process.cwd());
     const written = results.filter((r) => r.state === 'written');
 
+    // The same skills again, packaged to the open standard. Claude Code reads
+    // `.claude/skills/`; every client that implements Agent Plugins reads the
+    // package. Writing both is two small JSON files, and writing only the
+    // second would break the client most likely to be pointed here.
+    const pkg = writePlugin(process.cwd(), SKILLS, {
+      manifest: {
+        name: 'solid',
+        version: cliVersion(),
+        description: 'Operate this Solid# company correctly: verb discovery, response contracts, tenant safety.',
+        homepage: 'https://solidnumber.com',
+      },
+      mcp: { companyId: config.companyId as number },
+    });
+
     if (isJsonOutput(opts)) {
       printJson({
         installed: true,
         skills: results.map((r) => ({ name: r.dirname, path: r.path, state: r.state })),
         written: written.length,
         unchanged: results.length - written.length,
+        agent_plugin: {
+          spec: `agent-plugins/${AGENT_PLUGINS_VERSION}`,
+          root: PLUGIN_DIR,
+          files: pkg.map((f) => ({ path: f.rel, state: f.state })),
+        },
       });
       return;
     }
@@ -1326,6 +1371,12 @@ agentCommand
       const mark = r.state === 'written' ? chalk.green('written') : chalk.dim('unchanged');
       console.log(`  ${chalk.cyan(r.dirname.padEnd(18))} ${mark}`);
     }
+    const pkgWritten = pkg.filter((f) => f.state === 'written').length;
+    console.log(
+      chalk.green(`\n✓ Agent Plugins ${AGENT_PLUGINS_VERSION} package in ${PLUGIN_DIR}/`) +
+      chalk.dim(`  (${pkgWritten} of ${pkg.length} files written)`),
+    );
+    console.log(chalk.dim('  plugin.json · mcp.json · skills/ — loadable by any client that implements the standard.'));
     console.log(chalk.dim('\n  A coding agent in this directory now reads them automatically.'));
     console.log(chalk.dim('  Start with: solid schema verbs --json\n'));
   });
