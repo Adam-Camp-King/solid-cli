@@ -278,7 +278,7 @@ export const RECONCILERS: Record<string, Reconciler> = {
     // Drift is REPORTED and left alone.
     itemPath: null,
     updateMethod: null,
-    updateReason: 'a connected processor is never edited by apply — reconnect it with `solid processor connect`',
+    updateReason: 'a connected processor is never edited by apply — reconnect it with `solid payment connect`',
     idField: 'id',
     listKey: 'processors',
     prunable: false,

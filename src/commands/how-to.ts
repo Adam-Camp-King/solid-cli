@@ -51,7 +51,12 @@ export const HOWTO_TOPICS: HowToTopic[] = [
   {
     id: 'capabilities',
     title: 'What the CLI can do',
-    keywords: ['what can', 'capabilities', 'commands', 'features', 'able', 'do', 'list'],
+    // ⛔ 'do' WAS HERE AND IT MATCHED ALMOST EVERY QUESTION. People ask "how DO
+    // I …", so this topic won any question that did not match something else —
+    // "how do I change which company I'm on" came back as "What the CLI can
+    // do". Word-boundary matching does not save a keyword this common; the
+    // keyword itself has to go. "what can" already carries the intent.
+    keywords: ['what can', 'capabilities', 'commands', 'features', 'able to', 'list commands'],
     body: [
       'Run the business from the terminal:',
       '  solid today / crm / sales / leads / inbox    # see and work the pipeline',
@@ -79,22 +84,57 @@ export const HOWTO_TOPICS: HowToTopic[] = [
 
 const DEFAULT_ID = 'start';
 
+/**
+ * Does this keyword appear as a WORD in the question?
+ *
+ * ⛔ SUBSTRING MATCHING MADE SHORT KEYWORDS MATCH EVERYTHING. `q.includes(kw)`
+ * meant the `connect` topic's keyword `ai` fired on "expl-AI-n",
+ * "em-AI-l", "av-AI-lable" and "f-AI-l", and the `capabilities` topic's
+ * keyword `do` fired on any question containing the word "do" — which is most
+ * of them, since people ask "how DO I…". Measured 2026-09-14:
+ *
+ *   "explain the pipeline"                     -> connect       (via expl-ai-n)
+ *   "how do I change which company I'm on"     -> capabilities  (via do)
+ *
+ * Both answered confidently and neither question was about the topic
+ * returned. A keyword is a word, so it is matched as one. Multi-word
+ * keywords ("what can") still match as a phrase.
+ */
+function mentions(q: string, kw: string): boolean {
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(q);
+}
+
 function score(question: string, t: HowToTopic): number {
   const q = question.toLowerCase();
   if (!q) return 0;
-  let s = t.keywords.reduce((acc, kw) => acc + (q.includes(kw) ? 1 : 0), 0);
-  s += t.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3 && q.includes(w)).length;
+  let s = t.keywords.reduce((acc, kw) => acc + (mentions(q, kw) ? 1 : 0), 0);
+  s += t.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3 && mentions(q, w)).length;
   return s;
 }
 
-/** Pure: best-matching topics for a question; never empty (falls back to "start"). */
+/**
+ * Pure: topics that actually match the question. MAY BE EMPTY.
+ *
+ * ⛔ AN UNMATCHED QUESTION USED TO RETURN THE "start" TOPIC, AND THE CALLER
+ * COULD NOT TELL. That is the expensive failure for an agent: "how do I switch
+ * company?" came back with a confident list of unrelated commands and no
+ * signal that nothing had matched, so the agent reads it as answered and stops
+ * looking. A tool that cannot answer has to say so — an empty result is a fact
+ * the caller can act on, and a wrong one is not.
+ */
 export function findHowTo(question: string, limit = 2): HowToTopic[] {
-  const ranked = HOWTO_TOPICS
+  return HOWTO_TOPICS
     .map((t) => ({ t, s: score(question, t) }))
-    .sort((a, b) => b.s - a.s);
-  const hits = ranked.filter((r) => r.s > 0).slice(0, Math.max(1, limit)).map((r) => r.t);
-  if (hits.length) return hits;
-  return [HOWTO_TOPICS.find((t) => t.id === DEFAULT_ID) as HowToTopic];
+    .sort((a, b) => b.s - a.s)
+    .filter((r) => r.s > 0)
+    .slice(0, Math.max(1, limit))
+    .map((r) => r.t);
+}
+
+/** The topic shown when someone runs `how-to` with no question at all. */
+export function defaultHowTo(): HowToTopic {
+  return HOWTO_TOPICS.find((t) => t.id === DEFAULT_ID) as HowToTopic;
 }
 
 function renderTopic(t: HowToTopic): void {
@@ -120,6 +160,28 @@ export const howToCommand = new Command('how-to')
       return;
     }
 
-    for (const t of findHowTo(question)) renderTopic(t);
+    const hits = findHowTo(question);
+
+    if (hits.length === 0) {
+      // ⛔ SAY SO. The previous behaviour printed the "start" topic here, which
+      // reads exactly like an answer. Point at the two surfaces that DO cover
+      // the whole CLI, so a miss still ends with the caller knowing where to go.
+      console.log('');
+      console.log(chalk.yellow(`No how-to topic matches ${JSON.stringify(question)}.`));
+      console.log(chalk.dim('  how-to covers a few common topics only:'));
+      for (const t of HOWTO_TOPICS) {
+        console.log(`    ${chalk.cyan(t.id.padEnd(14))} ${t.title}`);
+      }
+      console.log('');
+      console.log(chalk.dim('  For anything else, these cover the whole surface:'));
+      console.log(chalk.dim('    solid schema verbs --json     every command, flag and description'));
+      console.log(chalk.dim('    solid find "<what you want>"  rank backend verbs by intent'));
+      console.log(chalk.dim('    solid --help                  the full command list'));
+      console.log('');
+      process.exitCode = 1;
+      return;
+    }
+
+    for (const t of hits) renderTopic(t);
     console.log('');
   });

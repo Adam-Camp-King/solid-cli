@@ -52,7 +52,7 @@ export const visualCommand = new Command('visual')
     'after',
     `
 ${chalk.dim('  The canvas lives at /dashboard/cms/visual and requires an authenticated session.')}
-${chalk.dim('  Run `solid login` first, or use your browser login to Solid#.')}
+${chalk.dim('  Run `solid auth login` first, or use your browser login to Solid#.')}
 
 ${chalk.bold('Examples:')}
   ${chalk.cyan('solid visual')}                           Open the workspace

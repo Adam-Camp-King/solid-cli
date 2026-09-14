@@ -77,6 +77,34 @@ function leadingTokens(raw: string): string[] | null {
   return out.length ? out : null;
 }
 
+/**
+ * Is this backticked command something a USER reads, and is it literal?
+ *
+ * ⛔ THREE FALSE-POSITIVE CLASSES, ALL REAL, ALL FOUND ON THE FIRST RUN.
+ *
+ *   comments     index.ts documents commands that are deliberately INVALID —
+ *                "`solid kb xyzzy`, `solid agent foo bar`" is a note about
+ *                unknown-subcommand handling. A developer comment is not a
+ *                promise to a user.
+ *   interpolation  "`solid integrations test ${id.slice(0, 8)}`" — the
+ *                expression contains a space and a comma, so splitting it
+ *                invents two positionals that never reach the CLI.
+ *   alternation  "`solid audit a11y|perf|mobile <slug>`" is notation for three
+ *                commands, not one command with a pipe in it.
+ *
+ * Each is excluded by what it IS rather than by name, so the next one of its
+ * kind is excluded too. Everything else — the `why` prose beside an example,
+ * a hint in an error, a line in a skill — is a string a user acts on, and is
+ * checked.
+ */
+function userFacing(src: string, index: number, raw: string): boolean {
+  if (raw.includes('${')) return false;
+  if (/\|/.test(raw)) return false;
+  const lineStart = src.lastIndexOf('\n', index) + 1;
+  const line = src.slice(lineStart, index).trimStart();
+  return !(line.startsWith('//') || line.startsWith('*') || line.startsWith('/*'));
+}
+
 /** Collect both example formats from every source file. */
 function allExamples(): Example[] {
   const out: Example[] = [];
@@ -93,6 +121,25 @@ function allExamples(): Example[] {
     for (const m of src.matchAll(/cmd:\s*'(solid [^']+)'/g)) {
       const t = leadingTokens(m[1]);
       if (t) out.push({ tokens: t, source: rel, raw: m[1].trim() });
+    }
+    // Format C — backticked, anywhere in a string a user reads.
+    //
+    // ⛔ THE `why` HALF OF THE TABLE WAS NEVER CHECKED, AND IT LIES TOO. The
+    // switch command's own example read "Switch to a specific company by ID
+    // (find IDs via `solid auth companies`)" — and `solid auth companies` does
+    // not exist; auth has login, refresh, logout, status, token and config.
+    // mcp.ts pointed at the same phantom. Two formats were guarded and the
+    // prose beside them was not, which is the same shape of gap this file was
+    // written to close.
+    for (const m of src.matchAll(/`(solid [^`\n]+)`/g)) {
+      // A backtick ESCAPED inside a template literal (\`solid switch\`) leaves a
+      // trailing backslash on the capture, and "switch\" resolves to nothing.
+      // That is an artefact of how the source quotes the example, not a defect
+      // in the example.
+      const raw = m[1].replace(/\\+$/, '').trim();
+      if (!userFacing(src, m.index ?? 0, raw)) continue;
+      const t = leadingTokens(raw);
+      if (t) out.push({ tokens: t, source: rel, raw });
     }
   }
   // Dedupe on the example text; the same one may appear in several files.

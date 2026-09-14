@@ -332,7 +332,7 @@ import { appendExamples as __ae_mcp } from '../lib/command-kit';
 __ae_mcp(mcpCommand, [
   { cmd: 'solid mcp install claude',            why: 'Wire Solid# into Claude Desktop' },
   { cmd: 'solid mcp install vscode',            why: 'Wire Solid# into the Claude Code VS Code extension (works on older macOS)' },
-  { cmd: 'solid mcp install cursor --company <id>', why: 'Install pinned to a specific company (find IDs via `solid auth companies`)' },
+  { cmd: 'solid mcp install cursor --company <id>', why: 'Install pinned to a specific company (find IDs via `solid company list`)' },
   { cmd: 'solid mcp install claude --preview',  why: 'Show what WOULD be written — no disk write' },
   { cmd: 'solid mcp tools --json',              why: 'Machine-readable tool manifest' },
   { cmd: 'solid mcp serve',                      why: 'Launch the stdio server directly' },

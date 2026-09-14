@@ -58,20 +58,36 @@ export const findCommand = new Command('find')
       printJson({
         query,
         matches: matches.map((m) => [m.name, m.score, clip(m.description, 72), m.side_effects]),
+        // ⛔ SAY WHICH SPACE WAS SEARCHED, BECAUSE THE ANSWER MAY NOT BE IN IT.
+        // find ranks the BACKEND verb manifest. A large class of things an
+        // agent wants are CLI-local commands that change session state and are
+        // not verbs at all — switching company, logging in, pull/push.
+        // Measured 2026-09-14: "switch to another company" returned
+        // switchboard.get_usage, and "create a new company" returned
+        // company.create_field_schema at 0.95. Both are the best answers
+        // available in this space and neither is the answer. A ranker that
+        // cannot say "not in here" turns a miss into a confident wrong turn,
+        // so the envelope now names the space and the place to look next.
+        searched: `${verbs.length} backend verbs (GET /api/v1/agent/verbs)`,
+        not_searched:
+          'CLI-local commands (switch, company, auth, pull, push) are not verbs — ' +
+          'list them with: solid schema verbs --json',
         // The literal next command. An answer that does not say what to do
         // with it sends the agent back to discovery, which is the thing this
         // command exists to avoid.
         next: matches.length
           ? `solid verbs describe ${matches[0].name}`
-          : 'solid verbs list --names-only',
+          : 'solid schema verbs --json',
       });
       return;
     }
 
     if (!matches.length) {
       console.log('');
-      console.log(chalk.yellow(`  Nothing matched "${query}".`));
+      console.log(chalk.yellow(`  Nothing matched "${query}" in ${verbs.length} backend verbs.`));
       console.log(chalk.dim('  Try fewer or plainer words, or: solid verbs list --names-only'));
+      console.log(chalk.dim('  CLI-local commands (switch, company, auth) are not verbs:'));
+      console.log(chalk.dim('    solid schema verbs --json     every command, flag and description'));
       console.log('');
       return;
     }
@@ -86,6 +102,9 @@ export const findCommand = new Command('find')
     }
     console.log('');
     console.log(chalk.dim(`  Next:  solid verbs describe ${matches[0].name}`));
+    console.log(
+      chalk.dim(`  Searched ${verbs.length} backend verbs. CLI commands live in: solid schema verbs --json`),
+    );
     console.log('');
   });
 
