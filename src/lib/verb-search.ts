@@ -83,6 +83,12 @@ const SYNONYMS: Record<string, readonly string[]> = {
   job: ['order', 'appointment'],
   jobs: ['orders', 'appointments'],
   booking: ['appointment'],
+  // ⛔ THE TENSE MATTERS AND `booking` ALONE DID NOT COVER IT. "Who's BOOKED
+  // in this week?" left `booked` matching nothing but prose, and four verbs
+  // tied on score — `list_recent_calls` then won on being the shorter name.
+  // A tie decided by name length is a coin flip wearing a rule.
+  booked: ['appointment'],
+  books: ['accounting'],
   owed: ['outstanding', 'receivable'],
   owe: ['outstanding', 'receivable'],
   unpaid: ['outstanding', 'overdue'],
@@ -256,6 +262,18 @@ export function leadingAction(query: string): string | null {
   return first && IMPERATIVE.has(first) ? first : null;
 }
 
+/**
+ * The other number of a word: contact <-> contacts.
+ *
+ * Deliberately the naive rule and nothing more. A real stemmer would also
+ * fold `serialize`/`serialization` and `pricing`/`price`, which is how a
+ * lexical ranker starts matching things the caller did not say. Plural `s` is
+ * the inflection this registry actually splits on.
+ */
+function inflect(term: string): string {
+  return term.endsWith('s') ? term.slice(0, -1) : `${term}s`;
+}
+
 /** A query term plus anything the platform calls the same thing. */
 function expand(term: string): string[] {
   const extra = SYNONYMS[term];
@@ -301,9 +319,16 @@ export function normalise(query: string): string {
 
 export function terms(query: string): string[] {
   const normalised = normalise(query);
-  return applyPhrases(normalised)
+  const kept = applyPhrases(normalised)
     .split(/\s+/)
     .filter((t) => t.length > 1 && !STOPWORDS.has(t));
+  // ⛔ DEDUPE. Two idioms can translate to the same platform word — "anyone
+  // called Whitfield ON FILE" hits both `anyone called` and `on file`, and
+  // both mean `contact`. A repeated term is scored once per occurrence and
+  // counted twice in the IDF total, so the query silently doubles its own
+  // emphasis on one word and the ranking turns on which verb name is
+  // shortest. The owner said one thing; it counts once.
+  return [...new Set(kept)];
 }
 
 /** The pieces of a verb name: "payment.refund" -> ["payment", "refund"]. */
@@ -419,6 +444,16 @@ function scoreTerm(term: string, segs: string[], nameLower: string, desc: string
     let s = 0;
     if (segs.includes(t)) {
       s += 6;                                // whole segment: payment.REFUND
+    } else if (segs.includes(inflect(t))) {
+      // ⛔ SINGULAR AND PLURAL ARE THE SAME SEGMENT, AND THIS REGISTRY SPLITS
+      // THEM CONSTANTLY: contact/contacts, invoice/invoices, page/pages,
+      // order/orders, deal/deals. Without this, `contact` scored 6 against
+      // `contact.create` and only 3 against `crm_contacts_search` — a
+      // substring match — so a search verb lost to whatever else happened to
+      // carry the exact singular. Below a whole-segment hit, above a mere
+      // substring, because an inflection is weaker evidence than the exact
+      // word and stronger than an accidental overlap.
+      s += 5;
     } else if (nameLower.includes(t)) {
       s += 3;                                // inside a segment: preview_REFUND_impact
     }
