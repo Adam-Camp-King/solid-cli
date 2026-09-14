@@ -158,6 +158,52 @@ export function getListOrder(): 'asc' | 'desc' { return globalListOrder === 'des
  *   - JSON to stdout or file (run() handles --output)
  *   - errorText + exit 1 on failure
  */
+
+/**
+ * Fields that are a whole document, not a property of a list row.
+ *
+ * A list answers "what exists". Inlining a page's entire `layout_json` — every
+ * section, every paragraph of body prose — makes `solid pages list` 12KB to
+ * answer a question about six rows, and the caller then pays to parse prose it
+ * did not ask for. Fetch the row by id when the body is what you want.
+ */
+const HEAVY_ROW_FIELDS = new Set([
+  'layout_json', 'custom_head', 'custom_body_start', 'custom_body_end',
+  'content', 'body', 'html', 'raw_html', 'markdown', 'transcript',
+  'input_schema', 'output_schema', 'config', 'settings_json', 'metadata_json',
+]);
+
+/**
+ * Compact one list row for machine output.
+ *
+ * Drops two things, both measured on a real tenant where `solid pages list`
+ * returned 49 fields per row of which 25 were null:
+ *
+ *   nulls  — "kb_id": null tells a caller nothing it could not infer from the
+ *            key's absence, and 25 of them is half the row.
+ *   bodies — a document inlined into an index. `layout_json` alone was 1,668
+ *            of one row's 2,893 bytes.
+ *
+ * ⛔ Never drops a FALSY value that is not null/undefined. `is_published:
+ * false` and `count: 0` are answers; removing them would make a draft
+ * indistinguishable from a page that never reported its status.
+ */
+export function compactListRow(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const omitted: string[] = [];
+  for (const [k, v] of Object.entries(row)) {
+    if (v === null || v === undefined) continue;
+    if (HEAVY_ROW_FIELDS.has(k)) { omitted.push(k); continue; }
+    out[k] = v;
+  }
+  // Say what was left out, so a caller knows the field exists and where to get
+  // it — silence would read as "this page has no layout".
+  if (omitted.length) out._omitted = omitted;
+  return out;
+}
+
 export async function runListCommand(
   opts: ListFlags,
   spec: {
@@ -190,8 +236,12 @@ export async function runListCommand(
       // sorted inside `render`, which --json skipped.
       applyListSort(items);
       const limit = parseInt(opts.limit, 10);
+      // Compact only for machine output, and only when the caller has not
+      // asked for everything. The human renderer already prints a summary
+      // line, so it never saw these fields anyway.
+      const rows = asJson && !opts.full ? items.map(compactListRow) : items;
       return {
-        items,
+        items: rows,
         total: items.length,
         count: items.length,
         has_more: !opts.all && Number.isFinite(limit) && items.length >= limit,
@@ -247,6 +297,8 @@ export interface ListFlags {
   all?: boolean;
   quiet?: boolean;
   json?: boolean;
+  /** Every field, including nulls and document bodies. Default is compact. */
+  full?: boolean;
 }
 
 /**
@@ -264,6 +316,7 @@ export function withListFlags<T extends { option: (...args: any[]) => T }>(cmd: 
     .option('--offset <n>', 'Pagination offset', '0')
     .option('--all', 'Auto-paginate every page')
     .option('--quiet', 'Suppress spinner + success chrome')
+    .option('--full', 'Every field, including nulls and document bodies (default: compact)')
     .option('--json', 'Output as JSON');
 }
 
