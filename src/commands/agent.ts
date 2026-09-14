@@ -12,6 +12,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput, printJson } from '../lib/json-output';
+import { requireTenantManifest } from '../lib/tenant-guard';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -1250,4 +1251,81 @@ agentCommand
       spinner.fail(chalk.red(`Dispatch failed: ${(error as Error).message || error}`));
       process.exit(1);
     }
+  });
+
+// ── agent setup ──────────────────────────────────────────────────────
+//
+// ⛔ WHY THIS EXISTS. Everything a coding agent needed to work this platform
+// well already existed — a self-describing verb manifest, response envelope
+// contracts, per-verb output schemas, a tenant guard — and none of it was
+// DISCOVERABLE. An agent dropped into a tenant directory had to be told all of
+// it by a human, every session, or it guessed: invented command names, chained
+// on keys no verb returns, and wrote to whichever company happened to be
+// pinned.
+//
+// One skill (`solid-commerce`) shipped, installed as a side effect of
+// `solid context --claude`. That is a fine place for it and a terrible place
+// to LOOK for it. This command is the front door: one call, the standard
+// layout, and `--list` so an agent can ask what it would get before it writes
+// anything.
+//
+// ⛔ Tenant-guarded, deliberately. These files describe one company. The guard
+// is what keeps them out of $HOME and the platform monorepo.
+
+agentCommand
+  .command('setup')
+  .description('Install the Solid# skills into this directory so any coding agent can use the platform correctly')
+  .option('--list', 'Show what would be installed and exit — writes nothing')
+  .option('--dry-run', 'Alias for --list')
+  .option('--json', 'Output as JSON')
+  .action(async (opts) => {
+    const { SKILLS, installSkills } = await import('../lib/skills/index');
+    const listOnly = Boolean(opts.list || opts.dryRun);
+
+    if (listOnly) {
+      if (isJsonOutput(opts)) {
+        printJson({
+          skills: SKILLS.map((s) => ({
+            name: s.dirname,
+            description: s.description,
+            path: path.join('.claude', 'skills', s.dirname, 'SKILL.md'),
+          })),
+          installed: false,
+        });
+        return;
+      }
+      console.log(chalk.bold(`\n${SKILLS.length} skills available\n`));
+      for (const s of SKILLS) {
+        console.log(`  ${chalk.cyan(s.dirname)}`);
+        console.log(`  ${chalk.dim(s.description)}\n`);
+      }
+      console.log(chalk.dim('  Run `solid agent setup` to install them here.\n'));
+      return;
+    }
+
+    // Writes land in a tenant-bound directory or nowhere. requireTenantManifest
+    // prints the reason and exits; do not soften it into a warning.
+    requireLogin();
+    requireTenantManifest(process.cwd(), config.companyId as number);
+
+    const results = installSkills(process.cwd());
+    const written = results.filter((r) => r.state === 'written');
+
+    if (isJsonOutput(opts)) {
+      printJson({
+        installed: true,
+        skills: results.map((r) => ({ name: r.dirname, path: r.path, state: r.state })),
+        written: written.length,
+        unchanged: results.length - written.length,
+      });
+      return;
+    }
+
+    console.log(chalk.green(`\n✓ ${results.length} skills ready in .claude/skills/\n`));
+    for (const r of results) {
+      const mark = r.state === 'written' ? chalk.green('written') : chalk.dim('unchanged');
+      console.log(`  ${chalk.cyan(r.dirname.padEnd(18))} ${mark}`);
+    }
+    console.log(chalk.dim('\n  A coding agent in this directory now reads them automatically.'));
+    console.log(chalk.dim('  Start with: solid schema verbs --json\n'));
   });

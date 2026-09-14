@@ -414,6 +414,10 @@ verbsCommand
         missing_required: report.missing_required,
         type_errors: report.type_errors,
         unknown_fields: report.unknown_fields,
+        // ⛔ WITHOUT THIS THE AGENT LEARNS NOTHING. `valid:false` and no reason
+        // is the same dead end as the server's bare "Fix the request": the only
+        // move left is to guess. value_errors names the field AND why.
+        value_errors: report.value_errors,
         would: { method: 'POST', url, body },
         ...(report.valid ? {} : { fix: fixFor(verb.name, report) }),
       });

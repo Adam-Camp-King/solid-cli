@@ -108,6 +108,97 @@ function nameSegments(name: string): string[] {
 }
 
 /**
+ * Is the caller ASKING something, or TELLING us to do something?
+ *
+ * ⛔ WHY THIS EXISTS. Measured 2026-09-13 by the eval suite: three read-only
+ * questions were answered with a MUTATING verb ranked first.
+ *
+ *     "Is anything failing to sync to the accounts?"  -> invoice_sync   (runs a sync)
+ *     "Is anything on my account not working?"        -> invoice_sync
+ *     "How much will we make next quarter?"           -> crm_task_create
+ *
+ * The ranker carried `side_effects` all the way into its output and never once
+ * consulted it while scoring. So the word "sync" in a question about sync
+ * STATUS scored identically to the same word in a command to sync — and the
+ * verb that acts usually has the shorter, more on-the-nose name, so it wins.
+ *
+ * An agent following our own documented route (find -> describe -> invoke) is
+ * therefore handed something destructive in answer to a question. That is our
+ * defect, not the model's.
+ *
+ * ⛔ DEMOTED, NEVER HIDDEN. A mutating verb still appears, just not first: the
+ * caller may genuinely want it, and a search that silently withholds a
+ * capability is a worse failure than one that ranks it second. Harden, do not
+ * delete.
+ *
+ * ⛔ AN IMPERATIVE ALWAYS WINS. "Delete every contact" contains `delete`, so
+ * this never fires and `gdpr_delete_contact` still ranks first — correctly.
+ * Refusing that request is the JOB OF THE EXECUTION BOUNDARY, not of search;
+ * hiding the verb would move a safety decision somewhere it cannot be audited,
+ * and would break the owner who meant it.
+ */
+const IMPERATIVE = new Set([
+  'create', 'add', 'new', 'make', 'update', 'edit', 'change', 'set', 'rename',
+  'delete', 'remove', 'clear', 'drop', 'void', 'cancel', 'close', 'archive',
+  'send', 'email', 'text', 'call', 'invite', 'publish', 'unpublish', 'post',
+  'refund', 'charge', 'pay', 'bill', 'issue', 'collect',
+  'book', 'schedule', 'reschedule', 'assign', 'dispatch',
+  'enable', 'disable', 'turn', 'switch', 'start', 'stop', 'pause', 'resume',
+  'upload', 'import', 'export', 'sync', 'run', 'apply', 'generate', 'draft',
+  'connect', 'disconnect', 'install', 'grant', 'revoke', 'approve', 'reject',
+]);
+
+const INTERROGATIVE = new Set([
+  'who', 'what', 'whats', 'when', 'where', 'why', 'how', 'which', 'whose',
+  'is', 'are', 'was', 'were', 'do', 'does', 'did', 'can', 'could', 'should',
+  'am', 'have', 'has', 'any', 'anything', 'anyone',
+]);
+
+/**
+ * True when the query reads as a QUESTION and contains no instruction to act.
+ *
+ * Both halves are required. "How do I delete a contact?" is interrogative but
+ * names the action, so the delete verb is exactly what was asked for.
+ */
+export function isReadIntent(query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  const words = q.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return false;
+
+  // ⛔ POSITION, NOT PRESENCE. The first attempt asked whether an imperative
+  // word appeared ANYWHERE, and it got two of the three cases wrong — because
+  // half of these words are also ordinary nouns and verbs:
+  //
+  //   "Is anything failing to SYNC to the accounts?"   sync = a noun here
+  //   "How much will we MAKE next quarter?"            make = earn, not create
+  //
+  // Both were read as commands and kept their write verb on top. An imperative
+  // LEADS its sentence; the same word in the middle of a question is just a
+  // word. Only the first position counts.
+  if (IMPERATIVE.has(words[0])) return false;
+
+  // "How do I delete a contact?" is a question ABOUT an action, and the action
+  // verb is precisely the right answer. Demoting it would break discovery —
+  // the most common way anyone learns what this CLI can do.
+  if (/^how\s+(do|can|to|would|should)\b/.test(q) && words.some((w) => IMPERATIVE.has(w))) {
+    return false;
+  }
+
+  return q.endsWith('?') || INTERROGATIVE.has(words[0]);
+}
+
+/**
+ * How much a mutating verb is held back when the caller only asked a question.
+ *
+ * 0.45 was chosen against the suite, not by feel: it is low enough to move
+ * `invoice_sync` off the top for "is anything failing to sync" (where a read
+ * verb exists and scored close behind), and high enough that a mutating verb
+ * with NO read competitor still surfaces in the list rather than vanishing.
+ */
+const WRITE_PENALTY_ON_QUESTION = 0.45;
+
+/**
  * Score one verb against one term.
  *
  * The weights encode a simple claim: a term appearing in the NAME is far
@@ -154,6 +245,8 @@ export function rankVerbs(
 ): VerbMatch[] {
   const qTerms = terms(query);
   if (qTerms.length === 0) return [];
+
+  const readIntent = isReadIntent(query);
 
   /**
    * ⛔ WEIGHT EACH TERM BY HOW RARE IT IS. Without this, every word in the
@@ -232,6 +325,10 @@ export function rankVerbs(
     // Nudge shorter names up. Between two equal matches the more specific
     // name is nearly always the one meant.
     raw *= 1 + 0.05 / segs.length;
+
+    // A question gets an answer, not an action. See isReadIntent above.
+    const effects = (v.side_effects || 'read').toLowerCase();
+    if (readIntent && effects !== 'read') raw *= WRITE_PENALTY_ON_QUESTION;
 
     scored.push({
       name: v.name,

@@ -41,19 +41,59 @@ export interface TypeError_ {
   got: string;
 }
 
+export interface ValueError_ {
+  field: string;
+  /** 'enum' | 'minimum' | 'maximum' | 'placeholder' */
+  kind: string;
+  detail: string;
+}
+
 export interface ValidationReport {
   valid: boolean;
   missing_required: string[];
   type_errors: TypeError_[];
   unknown_fields: string[];
+  /**
+   * ⛔ VALUES, NOT JUST SHAPES. Added 2026-09-13 after --dry-run reported
+   * `valid: true` for a payload the server then 400'd:
+   *
+   *     solid verbs invoke workflow.list -p '{"status":"<status>","limit":0}' --dry-run
+   *     -> {"valid":true,"missing_required":[],"type_errors":[],"unknown_fields":[]}
+   *
+   * Both fields passed because `"<status>"` IS a string and `0` IS a number.
+   * The validator only ever asked what type a value was, never whether the
+   * schema's own `enum` and `minimum` admitted it — so the playground, the
+   * rung that exists to catch a bad call before it is made, green-lit it.
+   *
+   * Everything checked here is declared in the schema we already hold. This
+   * invents no rules; it stops ignoring the ones we were given.
+   */
+  value_errors: ValueError_[];
+}
+
+export interface SchemaProp {
+  type?: string | string[];
+  nullable?: boolean;
+  enum?: unknown[];
+  minimum?: number;
+  maximum?: number;
 }
 
 export interface JsonSchema {
   type?: string;
-  properties?: Record<string, { type?: string | string[]; nullable?: boolean }>;
+  properties?: Record<string, SchemaProp>;
   required?: string[];
   additionalProperties?: boolean;
 }
+
+/**
+ * An angle-bracketed string is what `solid verbs example` emits for a value
+ * the caller must supply. Reaching the validator still wearing its brackets
+ * means the example was copied and never filled in — the single most likely
+ * reason a generated call fails, and previously invisible because it is a
+ * perfectly good string.
+ */
+const PLACEHOLDER_STRING = /^<[A-Za-z0-9_.-]+>$/;
 
 /** The JSON type name of a value, in the vocabulary schemas use. */
 export function jsonTypeOf(v: unknown): string {
@@ -99,6 +139,7 @@ export function validatePayload(
     missing_required: [],
     type_errors: [],
     unknown_fields: [],
+    value_errors: [],
   };
   if (!schema || typeof schema !== 'object') return report;
 
@@ -124,6 +165,43 @@ export function validatePayload(
         want: Array.isArray(spec.type) ? spec.type.join('|') : String(spec.type),
         got: jsonTypeOf(value),
       });
+      continue;                       // a wrong type makes value checks noise
+    }
+
+    // ---- value checks, all of them from the schema we already hold --------
+    if (typeof value === 'string' && PLACEHOLDER_STRING.test(value)) {
+      report.value_errors.push({
+        field, kind: 'placeholder',
+        detail: `${value} is an unsubstituted placeholder — replace it with a real value`,
+      });
+      continue;
+    }
+    if (value === -1 && (spec.minimum === undefined || spec.minimum >= 0)) {
+      report.value_errors.push({
+        field, kind: 'placeholder',
+        detail: '-1 is the placeholder `solid verbs example` emits for a number — replace it',
+      });
+      continue;
+    }
+    if (Array.isArray(spec.enum) && spec.enum.length && !spec.enum.includes(value as never)) {
+      report.value_errors.push({
+        field, kind: 'enum',
+        detail: `${JSON.stringify(value)} is not one of ${spec.enum.map((e) => JSON.stringify(e)).join(', ')}`,
+      });
+      continue;
+    }
+    if (typeof value === 'number') {
+      if (spec.minimum !== undefined && value < spec.minimum) {
+        report.value_errors.push({
+          field, kind: 'minimum', detail: `${value} is below the minimum ${spec.minimum}`,
+        });
+        continue;
+      }
+      if (spec.maximum !== undefined && value > spec.maximum) {
+        report.value_errors.push({
+          field, kind: 'maximum', detail: `${value} is above the maximum ${spec.maximum}`,
+        });
+      }
     }
   }
 
@@ -131,6 +209,7 @@ export function validatePayload(
   report.valid =
     report.missing_required.length === 0 &&
     report.type_errors.length === 0 &&
+    report.value_errors.length === 0 &&
     (!extrasAreFatal || report.unknown_fields.length === 0);
 
   return report;

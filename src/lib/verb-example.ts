@@ -70,12 +70,17 @@ export function placeholderFor(name: string, p: SchemaProperty = {}): unknown {
   switch (firstType(p.type)) {
     case 'integer':
     case 'number':
-      return 0;
+      // ⛔ NOT 0. `{"site_id": 0}` is a plausible integer, and the payload is
+      // the part that gets copied — nothing in it signals "substitute me".
+      // A string placeholder is angle-bracketed and obviously fake; a numeric
+      // one has to earn that the same way, and -1 is the only value that is
+      // both a legal JSON number and never a real id, limit or count.
+      return -1;
     case 'boolean':
       return false;
     case 'array': {
       const inner = firstType(p.items?.type);
-      if (inner === 'integer' || inner === 'number') return [0];
+      if (inner === 'integer' || inner === 'number') return [-1];   // same reason as the scalar case above
       if (inner === 'object') return [{}];
       return inner === undefined ? [] : [`<${name}>`];
     }
@@ -122,7 +127,7 @@ export function buildExample(
     payload[field] = value;
     // A `0` or a `false` reads as a decision, not a blank. Say so, once per
     // field, rather than trusting the reader to infer it from the type.
-    if (value === 0) notes.push(`${field} is a placeholder 0 — replace it with a real ${firstType(prop.type) ?? 'number'}`);
+    if (value === -1) notes.push(`${field} is a placeholder -1 — replace it with a real ${firstType(prop.type) ?? 'number'}`);
     else if (value === false) notes.push(`${field} defaults to false here — set it deliberately`);
   }
 
@@ -146,19 +151,37 @@ export function buildExample(
   //
   // Containers are skipped: `{}` or `[]` in an example teaches nothing about
   // what belongs inside them.
+  // ⛔ DO NOT PUT OPTIONAL FIELDS IN THE PAYLOAD. This block used to seed up to
+  // three of them so the example never looked empty, and the note said the
+  // result was "a call you can run". It was the opposite: measured 2026-09-13,
+  //
+  //     solid verbs example workflow.list   ->  {"status":"<status>","limit":0}
+  //     that payload                        ->  400 BAD_REQUEST
+  //     {}                                  ->  ok:true
+  //
+  // The same for invoice.summary and report_transactions. Three working verbs
+  // were pinned into the eval baseline as broken, because the example handed
+  // out values the caller never asked for and the server will not take —
+  // `limit: 0` and a literal `"<status>"`. The verbs were fine; the example
+  // broke them, and then certified the break with --dry-run.
+  //
+  // The intent was sound: a bare {} looks useless and teaches nothing. The
+  // answer is to NAME the optional fields, which `optional` already does, and
+  // leave the payload as the call that actually works.
   const seeded: string[] = [];
   if (callerRequired.length === 0) {
-    const candidates = Object.keys(properties).filter((f) => {
-      if (required.includes(f) || AUTH_INJECTED.has(f)) return false;
-      const t = firstType(properties[f]?.type);
-      return t !== 'object' && t !== 'array';
-    });
-    for (const field of candidates.slice(0, 3)) {
-      payload[field] = placeholderFor(field, properties[field] ?? {});
-      seeded.push(field);
-    }
-    if (seeded.length) {
-      notes.push(`no field is required beyond auth — ${seeded.join(', ')} are optional, seeded so this is a call you can run`);
+    const namable = Object.keys(properties).filter(
+      (f) => !required.includes(f) && !AUTH_INJECTED.has(f),
+    );
+    if (namable.length) {
+      notes.push(
+        `no field is required beyond auth — send {} as it stands. ` +
+          `Optional: ${namable.slice(0, 8).join(', ')}` +
+          `${namable.length > 8 ? `, +${namable.length - 8} more` : ''} ` +
+          `(see \`solid verbs describe ${verbName}\` for each one's type).`,
+      );
+    } else {
+      notes.push('no field is required beyond auth — send {} as it stands.');
     }
   }
 

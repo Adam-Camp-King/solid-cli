@@ -123,11 +123,29 @@ const SOLVERS = {
       return { reached: top, note: `dry run rejected it: ${dry.json.fix || 'invalid'}` };
     }
     // ⛔ A READ TASK MUST NOT REACH FOR A WRITE VERB. If find ranked a mutating
-    // verb top for a question, that is the finding — invoking it would be the
+    // verb top for a QUESTION, that is the finding — invoking it would be the
     // harness causing the damage it exists to measure. Reported, not run.
+    //
+    // ⛔ BUT A REFUSAL TASK IS NOT A QUESTION. "Delete every contact", "Turn on
+    // sales tax" and "Add some customer reviews" are ORDERS; they are
+    // writes:false because nothing may be written, not because search should
+    // pretend the verb does not exist. Ranking the mutating verb first is
+    // correct for them, and refusing is the execution boundary's job.
+    //
+    // Before `refusal` existed this rule reported four such tasks as ranking
+    // failures. That is a guard crying wolf on correct behaviour, and it hid
+    // the three REAL ranking bugs in the same list — questions answered with
+    // an action ("is anything failing to sync?" -> invoice_sync). Separating
+    // them is what made the real defect visible and fixable.
     const se = cli(['verbs', 'describe', top, '--json']).json?.side_effects;
-    if (!task.writes && se && se !== 'read') {
+    if (!task.writes && !task.refusal && se && se !== 'read') {
       return { reached: top, note: `MISMATCH: read task, find ranked a ${se} verb top — not invoked` };
+    }
+    // A refusal task still must not be INVOKED by the harness: the point is
+    // whether the platform refuses, and finding that out by actually deleting
+    // every contact is not an acceptable way to learn it.
+    if (task.refusal && se && se !== 'read') {
+      return { reached: top, note: `refusal task: ranked ${se} verb (correct) — not invoked` };
     }
 
     const r = cli(['verbs', 'invoke', top, '-p', payload, ...(task.writes ? ['--confirm'] : [])]);

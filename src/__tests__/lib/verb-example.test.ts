@@ -47,10 +47,14 @@ describe('placeholderFor', () => {
   });
 
   it('keeps numbers, booleans and containers in their own type', () => {
-    expect(placeholderFor('n', { type: 'integer' })).toBe(0);
+    // ⛔ -1, NOT 0. `{"site_id": 0}` is a plausible integer and the payload is
+    // the part people copy — nothing in it said "substitute me". A string
+    // placeholder is angle-bracketed and unmistakable; a number has to earn
+    // that too, and -1 is legal JSON that is never a real id, limit or count.
+    expect(placeholderFor('n', { type: 'integer' })).toBe(-1);
     expect(placeholderFor('b', { type: 'boolean' })).toBe(false);
     expect(placeholderFor('o', { type: 'object' })).toEqual({});
-    expect(placeholderFor('ids', { type: 'array', items: { type: 'integer' } })).toEqual([0]);
+    expect(placeholderFor('ids', { type: 'array', items: { type: 'integer' } })).toEqual([-1]);
   });
 
   it('treats an undeclared type as a string rather than guessing', () => {
@@ -58,7 +62,7 @@ describe('placeholderFor', () => {
   });
 
   it('honours a nullable union by taking the real type', () => {
-    expect(placeholderFor('n', { type: ['null', 'integer'] })).toBe(0);
+    expect(placeholderFor('n', { type: ['null', 'integer'] })).toBe(-1);
   });
 });
 
@@ -84,14 +88,46 @@ describe('buildExample', () => {
     expect(ex.notes.join(' ')).not.toContain('transaction_id');
   });
 
-  it('produces a command that its own validator accepts', () => {
-    // The property that makes the example worth pasting: if 2.3 rejects it,
-    // the agent's first dry run fails on our placeholder rather than on its
-    // own mistake.
+  it('produces a shape its own validator accepts, and says what is left to fill', () => {
+    // ⛔ THIS ASSERTION WAS WEAKENED ON PURPOSE, AND THAT IS THE POINT.
+    // It used to require `valid: true`, on the reasoning that "if the
+    // validator rejects our own example, the agent's first dry run fails on
+    // OUR placeholder rather than on its own mistake."
+    //
+    // That reasoning only held while the validator ignored values. It did:
+    // `--dry-run` reported valid:true for {"status":"<status>","limit":0},
+    // which the server then 400'd — the playground certifying a call that
+    // cannot work is a worse failure than a dry run that says "substitute
+    // this first".
+    //
+    // So for a verb with REQUIRED fields the example is a TEMPLATE, not a
+    // runnable call — we cannot invent a real transaction_id — and the right
+    // behaviour is to say exactly which fields still need a value. What must
+    // never happen is a SHAPE error: the types and field names are ours to get
+    // right, and those are still asserted empty.
     const report = validatePayload(ex.payload, REFUND);
     expect(report.type_errors).toEqual([]);
     expect(report.unknown_fields).toEqual([]);
-    expect(report.valid).toBe(true);
+    expect(report.missing_required).toEqual([]);
+    // Every remaining objection is "you have not filled this in yet".
+    expect(report.value_errors.length).toBeGreaterThan(0);
+    expect(report.value_errors.every((e) => e.kind === 'placeholder')).toBe(true);
+    expect(report.value_errors.map((e) => e.field).sort())
+      .toEqual(['amount_cents', 'transaction_id']);
+  });
+
+  it('a verb needing nothing produces a payload that IS valid', () => {
+    // The other half of the contract, and the case that was actually broken:
+    // when auth supplies everything required, the example must be a call that
+    // runs as it stands.
+    const e = buildExample('workflow.list', {
+      type: 'object',
+      properties: { status: { type: 'string' }, limit: { type: 'integer' } },
+      required: [],
+    } as any);
+    expect(e.payload).toEqual({});
+    expect(validatePayload(e.payload, { type: 'object', properties: {}, required: [] }).valid)
+      .toBe(true);
   });
 
   it('rehearses before it commits, for a write', () => {
@@ -106,9 +142,23 @@ describe('buildExample', () => {
     expect(r.command).not.toContain('--confirm');
   });
 
-  it('seeds optional fields when auth supplies the only required one', () => {
-    // contact.create's shape: company_id is required and injected, so a
-    // literal reading yields `-p '{}'`. An empty object is correct and useless.
+  it('sends {} when auth supplies the only required field — and NAMES the options', () => {
+    // ⛔ THIS TEST USED TO ASSERT THE BUG. It pinned that the example seeds up
+    // to three optional fields into the payload, on the reasoning that a bare
+    // {} "is correct and useless". Measured 2026-09-13, the seeded payload was
+    // not merely inelegant, it was WRONG:
+    //
+    //     solid verbs example workflow.list  ->  {"status":"<status>","limit":0}
+    //     that payload                       ->  400 BAD_REQUEST
+    //     {}                                 ->  ok:true
+    //
+    // Same for invoice.summary and report_transactions. Three working verbs
+    // went into the eval baseline as broken because the example volunteered
+    // values the server rejects, and --dry-run then certified the call.
+    //
+    // The original goal stands — an empty object teaches nothing — but the
+    // teaching belongs in `optional` and the notes, not in a payload that is
+    // advertised as runnable and is not.
     const only: JsonSchema & { properties: Record<string, any> } = {
       type: 'object',
       properties: {
@@ -121,22 +171,18 @@ describe('buildExample', () => {
       required: ['company_id'],
     };
     const e = buildExample('contact.create', only, { sideEffects: 'write' });
-    // Declaration order, not alphabetical: the schema puts name/email/phone
-    // first because they are what the verb is for. Sorting picked
-    // company_name/contact_type/custom_fields — correct and useless.
-    expect(e.seeded).toEqual(['name', 'email', 'phone']);
-    expect(e.payload).toEqual({ name: '<name>', email: 'name@example.com', phone: '<phone>' });
-    // The seeded fields must not read as mandatory.
-    expect(e.notes.join(' ')).toContain('optional');
-    // And the example still has to satisfy its own validator.
-    expect(validatePayload(e.payload, only).valid).toBe(true);
+    expect(e.payload).toEqual({});
+    expect(e.seeded).toEqual([]);
+    // The options are still taught, just not smuggled into the call.
+    expect(e.optional).toEqual(['email', 'name', 'phone', 'source']);
+    const note = e.notes.join(' ');
+    expect(note).toContain('{}');
+    expect(note).toContain('name');
+    expect(note).toContain('email');
   });
 
-  it('does not seed when something is genuinely required', () => {
-    expect(buildExample('payment.refund', REFUND).seeded).toEqual([]);
-  });
-
-  it('never seeds a container — an empty {} teaches nothing', () => {
+  it('never puts a container in the payload either', () => {
+    // Nothing optional goes in the payload now, containers least of all.
     const e = buildExample('v', {
       type: 'object',
       properties: {
@@ -146,7 +192,8 @@ describe('buildExample', () => {
       },
       required: ['company_id'],
     } as any);
-    expect(e.seeded).toEqual(['label']);
+    expect(e.payload).toEqual({});
+    expect(e.seeded).toEqual([]);
   });
 
   it('survives the 20 verbs that declare no schema at all', () => {
