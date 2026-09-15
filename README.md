@@ -437,8 +437,8 @@ writes to stderr so pipelines are unaffected.
 
 The 12 verb shapes (aggregate, explain, preview, suggest, transaction, receipt, revert, subscribe, discovery, trail, reputation, macro) are defined in the verb spec bundled with `@solidnumber/mcp`:
 
-- **Spec docs:** [`solid-mcp-server/spec/`](https://github.com/Adam-Camp-King/solid-mcp-server/tree/main/spec) — shapes, manifest, transport, receipts, consent
-- **JSON schemas:** [`solid-mcp-server/schema/`](https://github.com/Adam-Camp-King/solid-mcp-server/tree/main/schema)
+- **Spec docs:** [solidnumber.com/docs/spec](https://solidnumber.com/docs/spec) — shapes, manifest, transport, receipts, consent
+- **Live manifest:** [`/api/v1/agent/verbs`](https://api.solidnumber.com/api/v1/agent/verbs) — every VerbRecord, filterable by `?surface=`
 - **Docs:** [solidnumber.com/docs/verbs](https://solidnumber.com/docs/verbs)
 
 The CLI is one of four transports projecting the same `UNIFIED_VERB_REGISTRY`. The spec defines the contract; this CLI is one implementation.
