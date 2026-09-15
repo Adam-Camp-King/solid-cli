@@ -12,7 +12,18 @@ import { apiClient, handleApiError } from '../lib/api-client';
 
 export const connectCommand = new Command('connect')
   .alias('conn')
-  .description('Import external data into your Solid# business');
+  .description('Import external data into your Solid# business')
+  // ⛔ THE NAME COLLIDES WITH WHAT PEOPLE ACTUALLY WANT.
+  // "connect" reads as "connect my AI", which is the first thing a new user
+  // needs and is NOT what this command does. Renaming a shipped public command
+  // would break muscle memory and every doc line that names it, so instead the
+  // help text hands them the right one. A wrong guess must cost one line, not
+  // a support ticket.
+  .addHelpText(
+    'after',
+    "\nLooking to connect an AI (ChatGPT, Claude, Cursor, Grok...)?\n" +
+      '  solid mcp connect\n',
+  );
 
 // Ensure logged in
 function requireAuth(): void {

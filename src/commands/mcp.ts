@@ -3,6 +3,7 @@
  *
  * Sprint 1 T1.5. Three subcommands:
  *
+ *   solid mcp connect [tool]     # point ANY AI at this business (start here)
  *   solid mcp install <client>   # wire Claude/Cursor/Windsurf config
  *   solid mcp install <client> --uninstall
  *   solid mcp serve              # spawn the stdio MCP server (npx @solidnumber/mcp)
@@ -32,13 +33,171 @@ import {
   serializeConfig,
   DEFAULT_MCP_PACKAGE,
 } from '../lib/mcp-client-config';
+import {
+  AI_TOOLS,
+  AiTool,
+  CONNECTOR_URL,
+  findTool,
+  toolIds,
+} from '../lib/ai-tool-connect';
 
 // ---------------------------------------------------------------------------
 // Root
 // ---------------------------------------------------------------------------
 export const mcpCommand = new Command('mcp').description(
-  'Install / run the Solid# MCP server for Claude Desktop, Cursor, Windsurf, or VS Code (Claude Code extension)',
+  'Connect an AI to this business, and install / run the Solid# MCP server',
 );
+
+// ---------------------------------------------------------------------------
+// solid mcp connect [tool] — the first thing a new user should run
+// ---------------------------------------------------------------------------
+//
+// ⛔ THE DEAD END THIS EXISTS TO REMOVE.
+//
+// install.sh says it "wires Claude Code". What it does is run `claude mcp add`,
+// which requires `claude` on PATH — and when it is absent the step no-ops
+// SILENTLY. The user then types `claude`, gets `command not found`, and stops.
+// The docs never say to install Claude Code first, and Prerequisites correctly
+// says Claude is not required. Both true; together a wall.
+//
+// So this command's most important job is the case where the tool is NOT
+// installed: name the missing binary, print the one line that installs it, and
+// offer the browser path that needs nothing at all. Never no-op, never assume.
+
+function binaryExists(bin: string): boolean {
+  // `command -v` without a shell: probe PATH ourselves so this stays portable
+  // and cannot be tricked by a shell alias that does not exist for the agent.
+  const paths = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const dir of paths) {
+    for (const ext of exts) {
+      try {
+        fs.accessSync(path.join(dir, bin + ext), fs.constants.X_OK);
+        return true;
+      } catch {
+        /* keep looking */
+      }
+    }
+  }
+  return false;
+}
+
+function printTool(tool: AiTool): void {
+  const missing = tool.requiresBinary && !binaryExists(tool.requiresBinary);
+
+  console.log('');
+  console.log(chalk.bold(`Connect ${tool.label}`));
+  // "nothing to install" is only true when nothing has to be installed.
+  // claude-code speaks the hosted connector AND needs the claude binary, and
+  // saying otherwise recreates the exact dead end this command exists to fix.
+  const transportLine =
+    tool.transport === 'connector'
+      ? tool.requiresBinary
+        ? `hosted OAuth connector — requires ${tool.requiresBinary}`
+        : 'hosted OAuth connector — nothing to install'
+      : 'local MCP server (stdio)';
+  console.log(chalk.dim(`  transport: ${transportLine}`));
+  console.log('');
+
+  if (missing) {
+    console.log(chalk.yellow(`  ⚠ ${tool.requiresBinary} is not installed on this machine.`));
+    if (tool.installHint) {
+      console.log(chalk.yellow('    Install it first:'));
+      console.log(`      ${chalk.cyan(tool.installHint)}`);
+    }
+    console.log(chalk.yellow('    Or skip it entirely — the browser path needs nothing:'));
+    console.log(`      ${chalk.cyan('solid mcp connect claude-web')}`);
+    console.log('');
+  }
+
+  tool.steps.forEach((step, i) => {
+    const looksLikeCommand = /^(solid|claude|npx|npm) /.test(step);
+    console.log(`  ${chalk.dim(String(i + 1) + '.')} ${looksLikeCommand ? chalk.cyan(step) : step}`);
+  });
+
+  if (tool.notes?.length) {
+    console.log('');
+    for (const note of tool.notes) console.log(chalk.dim(`  note: ${note}`));
+  }
+
+  if (tool.transport === 'stdio') {
+    // The tenant-pinning trap, printed where it is acted on rather than
+    // discovered later by an agent answering about the wrong company.
+    console.log('');
+    console.log(chalk.dim('  note: the local server authenticates with a stored API key, and the'));
+    console.log(chalk.dim('        company comes from that key — `solid switch` does NOT move it.'));
+  }
+  console.log('');
+}
+
+function printToolList(): void {
+  console.log('');
+  console.log(chalk.bold('Point your AI at this business.'));
+  console.log(chalk.dim(`If your tool speaks MCP, the whole integration is one URL:`));
+  console.log(`  ${chalk.cyan(CONNECTOR_URL)}`);
+  console.log('');
+  console.log(chalk.bold('  Nothing to install (browser / OAuth):'));
+  for (const t of AI_TOOLS.filter((x) => x.transport === 'connector' && !x.requiresBinary)) {
+    console.log(`    ${chalk.green(t.id.padEnd(16))} ${t.label}`);
+  }
+  console.log('');
+  console.log(chalk.bold('  Needs the tool installed locally:'));
+  for (const t of AI_TOOLS.filter((x) => x.transport === 'stdio' || x.requiresBinary)) {
+    const mark = t.requiresBinary && !binaryExists(t.requiresBinary)
+      ? chalk.yellow(' (not installed)')
+      : '';
+    console.log(`    ${chalk.green(t.id.padEnd(16))} ${t.label}${mark}`);
+  }
+  console.log('');
+  console.log(chalk.dim(`  solid mcp connect <tool>     e.g. solid mcp connect gpt`));
+  console.log('');
+}
+
+mcpCommand
+  .command('connect [tool]')
+  .description(`Point an AI at this business (${toolIds().slice(0, 6).join(' | ')} | ...)`)
+  .option('--json', 'Emit the connection recipe as JSON')
+  .action(async (tool: string | undefined, opts: Record<string, unknown>) => {
+    if (!tool) {
+      if (isJsonOutput(opts)) {
+        process.stdout.write(JSON.stringify({ connector_url: CONNECTOR_URL, tools: AI_TOOLS }, null, 2) + '\n');
+        return;
+      }
+      printToolList();
+      return;
+    }
+
+    const found = findTool(tool);
+    if (!found) {
+      // ⛔ An unknown name must never dead-end either. The connector URL works
+      // for anything that speaks MCP, so the fallback is an ANSWER, not an error.
+      const msg = `No recipe for '${tool}'. Known: ${toolIds().join(', ')}`;
+      if (isJsonOutput(opts)) {
+        process.stdout.write(
+          JSON.stringify({ error: { code: 'VALIDATION_FAILED', status: 400, message: msg },
+                           connector_url: CONNECTOR_URL }, null, 2) + '\n',
+        );
+        process.exit(1);
+      }
+      console.log(chalk.yellow(`\n  ${msg}`));
+      console.log(chalk.dim('  If it speaks MCP, this URL is the whole integration:'));
+      console.log(`  ${chalk.cyan(CONNECTOR_URL)}\n`);
+      process.exit(1);
+    }
+
+    if (isJsonOutput(opts)) {
+      process.stdout.write(
+        JSON.stringify({
+          ...found,
+          connector_url: CONNECTOR_URL,
+          prerequisite_missing: found.requiresBinary ? !binaryExists(found.requiresBinary) : false,
+        }, null, 2) + '\n',
+      );
+      return;
+    }
+
+    printTool(found);
+  });
 
 // ---------------------------------------------------------------------------
 // solid mcp install <client>
