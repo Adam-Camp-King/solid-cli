@@ -155,6 +155,11 @@ export const aiCommand = new Command('ai')
   .option('--company <id>', 'Use a specific company for this session (overrides cached)')
   .option('--mode <mode>', 'Cap the AI to a role: customer | developer | agency | full (default: full)')
   .option('--sandbox', 'Safe-preview mode: every mutation is intercepted (dry-run). The AI sees what would happen without making changes.')
+  // ⛔ Opt-in ONLY, and never defaulted on. Launching an AI with write access to
+  // a company the operator did not choose is the failure this guards; the flag
+  // exists so a deliberate cross-company session is still possible, not so the
+  // check can be silenced by habit.
+  .option('--allow-tenant-mismatch', 'Launch even when the MCP credential points at a different company than this session')
   .action(async (options) => {
     // 1. Auth guard
     if (!config.isLoggedIn()) {
@@ -235,6 +240,45 @@ export const aiCommand = new Command('ai')
       : kind === 'gemini' ? 'Gemini'
       : kind === 'grok' ? 'Grok'
       : 'Codex';
+    // ⛔ 5b. THE CREDENTIAL MUST AGREE WITH THE SESSION.
+    //
+    // 2026-09-15: logged into company 61, typed `claude`, and the agent
+    // reported confidently on company 1 — because `solid switch` re-scopes the
+    // JWT in ~/.solid/config.json while the MCP server authenticates with a
+    // STATIC SOLID_API_KEY in ~/.claude.json, and the backend takes the tenant
+    // from the key record. Switching cannot move the agent.
+    //
+    // Not a leak — the key returns its own company's data. Worse in one way: a
+    // leak gets noticed, this yields confident, coherent answers about someone
+    // else's business. `solid ai` already loud-fails on a mismatched context
+    // MANIFEST; the credential is the one that decides what the agent can see.
+    const activeCompanyId = options.company ? parseInt(options.company as string, 10) : config.companyId;
+    if (kind === 'claude' || kind === 'vscode') {
+      const { checkMcpTenant } = await import('../lib/mcp-tenant-check');
+      const status = await checkMcpTenant(activeCompanyId, config.apiUrl);
+      if (status?.mismatch) {
+        console.log('');
+        console.error(chalk.red.bold('  ✗ The AI would act on a different company than your session.'));
+        console.error('');
+        console.error(`    ${chalk.dim('This session:')}      Company ${chalk.bold(String(status.sessionCompanyId))}`);
+        console.error(`    ${chalk.dim('MCP credential:')}    Company ${chalk.bold.red(String(status.keyCompanyId))}` +
+                      (status.keyCompanyName ? chalk.dim(` (${status.keyCompanyName})`) : ''));
+        console.error('');
+        console.error(chalk.dim(`    The key in ${status.configPath} is bound to its own company and`));
+        console.error(chalk.dim('    `solid switch` cannot move it. Launching would give the AI real'));
+        console.error(chalk.dim('    write access to the wrong business.'));
+        console.error('');
+        console.error(`    ${chalk.bold('Fix:')} re-run ${chalk.cyan(`solid mcp install --company ${status.sessionCompanyId}`)}`);
+        console.error(`    ${chalk.dim('Override (you accept the above):')} ${chalk.cyan('solid ai --allow-tenant-mismatch')}`);
+        console.error('');
+        if (!options.allowTenantMismatch) process.exit(1);
+        console.error(chalk.yellow('  ⚠ --allow-tenant-mismatch set — launching anyway.'));
+      } else if (status?.unresolved) {
+        // Could not tell. Say so; never report "cannot tell" as "matches".
+        console.error(chalk.yellow(`  ⚠ Could not verify the MCP credential's company (${status.unresolved}).`));
+      }
+    }
+
     console.log('');
     console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);
     if (mode !== 'full') {
