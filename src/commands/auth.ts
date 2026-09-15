@@ -334,18 +334,25 @@ authCommand
             // Networkless / permissions — arrival screen still renders.
           }
 
-          const renderArrival = (name: string, id: number, role?: string) => {
+          // ⛔ The AI credential must follow the login. `claude` reads a STATIC
+          // API key from ~/.claude.json and the backend takes the tenant from
+          // the key record, so without this a login lands the CLI on one
+          // company and leaves the agent confidently on another.
+          const renderArrival = async (name: string, id: number, role?: string) => {
+            const { syncMcpForCurrentCompany, describeMcpSync } = await import('../lib/mcp-sync');
+            const sync = describeMcpSync(await syncMcpForCurrentCompany());
             console.log(ui.loginSuccessScreen({
               email: status.data.user!.email,
               companyName: name,
               companyId: id,
               role,
             }));
+            if (sync) console.log(chalk.dim(`  AI: ${sync}`));
           };
 
           // If --company was passed, the token is already scoped — skip picker
           if (options.company) {
-            renderArrival(resolvedCompanyName, status.data.user.company_id, resolvedRole);
+            await renderArrival(resolvedCompanyName, status.data.user.company_id, resolvedRole);
             return;
           }
 
@@ -367,14 +374,14 @@ authCommand
               resolvedCompanyName = switchResponse.data.company.name;
               resolvedRole = companiesForPicker.find((c) => c.id === picked)?.role || resolvedRole;
             }
-            renderArrival(resolvedCompanyName, config.companyId!, resolvedRole);
+            await renderArrival(resolvedCompanyName, config.companyId!, resolvedRole);
             console.log(chalk.dim('  Switch later: solid switch'));
             console.log(chalk.dim('  Skip picker:  solid auth login --company <id>'));
             console.log('');
             return;
           }
 
-          renderArrival(resolvedCompanyName, config.companyId!, resolvedRole);
+          await renderArrival(resolvedCompanyName, config.companyId!, resolvedRole);
           return;
         } catch (err) {
           if (spinner) (spinner as ReturnType<typeof ora>).fail(chalk.red('Browser login failed'));
@@ -472,6 +479,17 @@ authCommand
             response.data.user.email,
             response.data.user.company_id,
           ));
+        }
+
+        // ⛔ Same reason as the browser path: `claude` authenticates with a
+        // STATIC key whose company comes from the key record, so a login that
+        // does not re-point it leaves the agent on the previous company.
+        // Placed after the picker so it syncs to the FINAL company, not the
+        // one the token arrived on.
+        {
+          const { syncMcpForCurrentCompany, describeMcpSync } = await import('../lib/mcp-sync');
+          const sync = describeMcpSync(await syncMcpForCurrentCompany());
+          if (sync) console.log(chalk.dim(`  AI: ${sync}`));
         }
 
         console.log('');

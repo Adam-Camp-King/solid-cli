@@ -126,9 +126,17 @@ export const switchCommand = new Command('switch')
       const expiresAt = new Date(Date.now() + switchResponse.data.expires_in * 1000);
       config.tokenExpiresAt = expiresAt;
 
+      // ⛔ The AI credential must follow the switch. `claude` reads a STATIC
+      // API key from ~/.claude.json and the backend takes the tenant from the
+      // key record — so without this, switching moved the CLI and left the
+      // agent on the old company, confidently.
+      const { syncMcpForCurrentCompany, describeMcpSync } = await import('../lib/mcp-sync');
+      const sync = describeMcpSync(await syncMcpForCurrentCompany());
+
       console.log('');
       console.log(chalk.dim(`  Company:  ${switchResponse.data.company.name} (${switchResponse.data.company.id})`));
       console.log(chalk.dim(`  Role:     ${switchResponse.data.role}`));
+      if (sync) console.log(chalk.dim(`  AI:       ${sync}`));
       console.log('');
     } catch (error) {
       const apiError = handleApiError(error);
