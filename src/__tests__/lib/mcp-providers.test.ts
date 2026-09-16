@@ -8,6 +8,7 @@
  * failed against the shipped code.
  */
 
+import { configPathForClient } from '../../lib/mcp-client-config';
 import {
   enumerateSolidProviders,
   parseClaudeMcpList,
@@ -187,11 +188,21 @@ describe('enumerateSolidProviders — cross-client name collisions', () => {
     return 'solid:\n  Scope: User config (available in all your projects)\n';
   };
 
+  // ⛔ DERIVE THE PATHS, NEVER SPELL THEM. The first cut hard-coded
+  // '/home/u/Library/Application Support/Claude/...' — the macOS location. It
+  // passed locally and failed on Linux CI, where configPathForClient('claude')
+  // returns ~/.config/Claude/..., so the Desktop entry was never found and the
+  // collision this test exists to catch could not occur. A test that only holds
+  // on the author's OS is the same defect as one that only holds on the
+  // author's dotfiles.
+  const DESKTOP = configPathForClient('claude', { homeDir: '/home/u' });
+  const CLAUDE_CODE = configPathForClient('vscode', { homeDir: '/home/u' });
+
   const FILES: Record<string, string> = {
-    '/home/u/Library/Application Support/Claude/claude_desktop_config.json': JSON.stringify({
+    [DESKTOP]: JSON.stringify({
       mcpServers: { solid: { command: 'npx', args: ['@solidnumber/mcp'], env: { SOLID_API_KEY: 'sk_desktop' } } },
     }),
-    '/home/u/.claude.json': JSON.stringify({
+    [CLAUDE_CODE]: JSON.stringify({
       mcpServers: { solid: { command: 'npx', args: ['-y', '@solidnumber/mcp'], env: { SOLID_API_URL: 'https://api.solidnumber.com' } } },
     }),
   };
@@ -217,7 +228,7 @@ describe('enumerateSolidProviders — cross-client name collisions', () => {
     const found = await enumerateSolidProviders(deps as any);
     expect(found).toHaveLength(2);
 
-    const claudeCode = found.find((p) => p.configPath === '/home/u/.claude.json')!;
+    const claudeCode = found.find((p) => p.configPath === CLAUDE_CODE)!;
     expect(claudeCode.companyId).toBeNull();
     expect(claudeCode.unresolved).toMatch(/NO SOLID_API_KEY|no SOLID_API_KEY/i);
 
