@@ -56,10 +56,21 @@ interface VerbRecord {
   dispatch_endpoint?: string | null;
   /** The canonical verb this one duplicates, when it is not canonical. */
   same_as?: string | null;
-  /** Atlas address: class digit then division digit, e.g. "52". */
+  /** Atlas address: two digits (class, division) or three in a curated class (class, domain, noun), e.g. "510". */
   coordinate?: string | null;
-  /** Human label for the division, e.g. "payment". */
+  /** The noun the verb belongs to, e.g. "invoice". */
   noun?: string | null;
+  /**
+   * What the verb acts on and WHOSE it is. Present only when a curated noun
+   * claims the verb; absent means "not curated yet", never "acts on nothing".
+   */
+  acts_on?: {
+    noun: string;
+    address: string;
+    domain: string;
+    party: string;
+    whose: string;
+  } | null;
 }
 
 interface VerbManifest {
@@ -411,6 +422,11 @@ verbsCommand
         verb: verb.name,
         transport,
         ...(twin ? { same_as: twin } : {}),
+        // ⛔ DIRECTION BEFORE ACTION. A well-formed call can still be the wrong
+        // call: `invoices_list` is valid and reads Solid#'s bills to the
+        // business, not the business's invoices. The rehearsal is where an agent
+        // should learn whose record it is about to touch.
+        ...(verb.acts_on ? { acts_on: verb.acts_on } : {}),
         missing_required: report.missing_required,
         type_errors: report.type_errors,
         unknown_fields: report.unknown_fields,

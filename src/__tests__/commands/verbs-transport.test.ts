@@ -241,6 +241,45 @@ describe('verbs invoke — the consent gate (VNP 1.3)', () => {
     expect(out.success).toBeUndefined();
   });
 
+  it('a dry run says whose record the verb acts on, when a noun claims it', async () => {
+    // A well-formed call can still be the wrong call: invoices_list reads
+    // Solid#'s bills to the business, not the business's own invoices.
+    const printed: string[] = [];
+    (console.log as jest.Mock).mockImplementation((v?: unknown) => {
+      printed.push(String(v));
+    });
+    const actsOn = {
+      noun: 'platform_invoice',
+      address: '581',
+      domain: 'Solid# accounts',
+      party: 'platform_tenant',
+      whose: "Solid#'s account with the business — not the business's customers",
+    };
+    mockGet.mockResolvedValue(
+      verb({ name: 'invoices_list', transport: 'dispatch', acts_on: actsOn }),
+    );
+    mockIsDryRun.mockReturnValue(true);
+
+    await invoke('invoices_list');
+
+    const out = JSON.parse(printed.join(''));
+    expect(out.acts_on).toEqual(actsOn);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('a dry run invents no direction for a verb no noun claims', async () => {
+    const printed: string[] = [];
+    (console.log as jest.Mock).mockImplementation((v?: unknown) => {
+      printed.push(String(v));
+    });
+    mockGet.mockResolvedValue(writeVerb());
+    mockIsDryRun.mockReturnValue(true);
+
+    await invoke('contact.create', ['-p', '{"name":"Probe"}']);
+
+    expect(JSON.parse(printed.join('')).acts_on).toBeUndefined();
+  });
+
   it('a dry run with a bad payload is invalid and exits 1', async () => {
     mockGet.mockResolvedValue(
       verb({
