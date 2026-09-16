@@ -273,8 +273,32 @@ export function loginSuccessScreen(args: {
   lines.push('');
 
   // 5. AI-agent nod — the whole point of this CLI.
-  lines.push(`  ${chalk.dim('Your token is cached at ~/.solid/config.json — any AI agent')}`);
-  lines.push(`  ${chalk.dim('running in this shell inherits it. Type')} ${chalk.cyan('claude')} ${chalk.dim('and go.')}`);
+  //
+  // ⛔ THIS BANNER USED TO STATE SOMETHING FALSE, ON THE SCREEN THAT MATTERS
+  // MOST, IMMEDIATELY BEFORE THE FAILURE IT DESCRIBES.
+  //
+  // It said: "Your token is cached at ~/.solid/config.json — any AI agent
+  // running in this shell inherits it. Type claude and go."
+  //
+  // An agent does NOT inherit it. `claude`, Claude Desktop and Cursor each read
+  // a SEPARATE, STATIC MCP key whose tenant lives in the key record on the
+  // backend — not the CLI session. Demonstrated 2026-09-15: signed in as
+  // adam@anglebuild.com (ANGL, company 61), typed `claude`, and the agent
+  // reported on Solid-dev (company 1) as adam@solidnumber.com — 60 contacts, 25
+  // deals — then offered to act on them. The key on that machine was minted in
+  // MAY and no login or switch had ever touched it.
+  //
+  // So the reassuring sentence was the bug's accomplice: it told the user the
+  // one thing that would stop them checking. `login`/`switch` re-mint the key
+  // now, but this line must never again ASSERT a binding it has not verified —
+  // a stale key, a second machine or a hand-edited client config all reproduce
+  // it, and the cost is an agent confidently writing to another tenant.
+  //
+  // It names where the AI credential lives and how to point it, and claims
+  // nothing about what any particular agent will read.
+  lines.push(`  ${chalk.dim('Your CLI token is cached at ~/.solid/config.json.')}`);
+  lines.push(`  ${chalk.dim('AI tools read a')} ${chalk.dim.italic('separate')} ${chalk.dim('key — point one at this company with')}`);
+  lines.push(`  ${chalk.cyan('solid mcp connect')} ${chalk.dim('· check it with')} ${chalk.cyan('solid mcp doctor')}${chalk.dim('.')}`);
   lines.push('');
 
   return lines.join('\n');

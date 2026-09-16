@@ -109,3 +109,50 @@ describe('describeMcpSync', () => {
     expect(msg).toContain('solid mcp install --company 61');
   });
 });
+
+
+/**
+ * ⛔ THE ENTRY WITH NO KEY AT ALL — the case this function used to skip.
+ *
+ * Measured on the reporting machine 2026-09-15, ~/.claude.json held:
+ *
+ *   "solid": { "command": "npx", "args": ["-y", "@solidnumber/mcp"],
+ *              "env": { "SOLID_API_URL": "https://api.solidnumber.com" } }
+ *
+ * No SOLID_API_KEY. The sync looked for targets with `readMcpApiKey`, which
+ * returns null without a key, found none, and returned
+ * `skipped: no Solid MCP server configured` — on a machine that plainly HAD one.
+ * So every login and every switch left that server authenticating as nobody,
+ * and reported success while doing it. A server that cannot authenticate is the
+ * case most in need of repair, and it was the one case we walked past.
+ */
+it('mints a key for a Solid server that has none, instead of reporting "skipped"', async () => {
+  withConfig({
+    mcpServers: {
+      solid: { command: 'npx', args: ['-y', '@solidnumber/mcp'], env: { SOLID_API_URL: 'https://api.solidnumber.com' } },
+    },
+  });
+  // No key to resolve, so fetch must never be needed to reach the right answer.
+  (global as any).fetch = jest.fn(() => { throw new Error('should not be called'); });
+  const createKey = jest.fn().mockResolvedValue('sk_minted_for_61');
+
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+
+  expect(r.status).toBe('updated');
+  expect(createKey).toHaveBeenCalledTimes(1);
+  expect(String(mockFs.writeFileSync.mock.calls[0][1])).toContain('sk_minted_for_61');
+});
+
+it('still leaves a correct, already-matching key alone', async () => {
+  // The 25-active-keys-per-company cap is real: re-minting on every login would
+  // exhaust it in a fortnight and leave orphaned credentials nobody can attribute.
+  withConfig();
+  (global as any).fetch = keyResolvesTo(61);
+  const createKey = jest.fn();
+
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+
+  expect(r.status).toBe('ok');
+  expect(createKey).not.toHaveBeenCalled();
+  expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+});

@@ -164,3 +164,46 @@ export async function checkMcpTenant(
   }
   return seen[0] ?? null;
 }
+
+
+/**
+ * Find a Solid MCP server entry whether or not it carries a credential.
+ *
+ * ⛔ WHY THIS IS SEPARATE FROM readMcpApiKey. That function returns null unless
+ * an entry has a SOLID_API_KEY, which is correct for "whose company is this
+ * key?" and wrong for "is there a server here that NEEDS a key?". The sync used
+ * the first for both, so on Adam's machine — where ~/.claude.json held the
+ * Solid server with only SOLID_API_URL — it found no target, reported
+ * "skipped: no Solid MCP server configured", and left the entry unauthenticated
+ * through every login and switch. A server that exists and cannot authenticate
+ * is the case most needing repair, and it was the one case we ignored.
+ */
+export function findSolidServerEntry(
+  client: McpClient,
+): { serverName: string; apiKey: string | null; configPath: string } | null {
+  let configPath: string;
+  try {
+    configPath = configPathForClient(client);
+  } catch {
+    return null;
+  }
+  if (!configPath || !fs.existsSync(configPath)) return null;
+
+  let parsed: { mcpServers?: Record<string, Serverish> };
+  try {
+    parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return null;
+  }
+
+  const servers = parsed.mcpServers || {};
+  let keyless: { serverName: string; apiKey: null; configPath: string } | null = null;
+  for (const [name, cfg] of Object.entries(servers)) {
+    if (!/solid/i.test(name)) continue;
+    const key = cfg?.env?.SOLID_API_KEY;
+    // Prefer a keyed entry; remember a keyless one in case that is all there is.
+    if (key && key.trim()) return { serverName: name, apiKey: key.trim(), configPath };
+    if (!keyless) keyless = { serverName: name, apiKey: null, configPath };
+  }
+  return keyless;
+}

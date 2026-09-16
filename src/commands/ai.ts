@@ -159,7 +159,7 @@ export const aiCommand = new Command('ai')
   // a company the operator did not choose is the failure this guards; the flag
   // exists so a deliberate cross-company session is still possible, not so the
   // check can be silenced by habit.
-  .option('--allow-tenant-mismatch', 'Launch even when the MCP credential points at a different company than this session')
+  .option('--allow-tenant-mismatch', 'Launch even when Solid# connections conflict or point at a different company than this session')
   .action(async (options) => {
     // 1. Auth guard
     if (!config.isLoggedIn()) {
@@ -240,47 +240,88 @@ export const aiCommand = new Command('ai')
       : kind === 'gemini' ? 'Gemini'
       : kind === 'grok' ? 'Grok'
       : 'Codex';
-    // ⛔ 5b. THE CREDENTIAL MUST AGREE WITH THE SESSION.
+    // ⛔ 5b. ONE CONNECTION, PROVEN, OR WE DO NOT LAUNCH.
     //
-    // 2026-09-15: logged into company 61, typed `claude`, and the agent
-    // reported confidently on company 1 — because `solid switch` re-scopes the
-    // JWT in ~/.solid/config.json while the MCP server authenticates with a
-    // STATIC SOLID_API_KEY in ~/.claude.json, and the backend takes the tenant
-    // from the key record. Switching cannot move the agent.
+    // The first version of this guard compared the local MCP key to the session
+    // and was right about a question that turned out to be the wrong one. On
+    // Adam's machine, 2026-09-15, `claude` loaded TWO Solid# providers:
     //
-    // Not a leak — the key returns its own company's data. Worse in one way: a
-    // leak gets noticed, this yields confident, coherent answers about someone
-    // else's business. `solid ai` already loud-fails on a mismatched context
-    // MANIFEST; the credential is the one that decides what the agent can see.
+    //   claude.ai Solid#   account connector, company 1 (Solid-dev)
+    //   solid              local stdio, no credential at all
+    //
+    // with the CLI signed in to company 61 (ANGL, a real client). The key check
+    // read local files, found nothing to compare, and stayed silent. The agent
+    // used the account connector and reported fluently on company 1 — correct
+    // answers, wrong business, no warning anywhere.
+    //
+    // ⛔ TWO ACTIVE PROVIDERS IS A REFUSAL, NOT A PREFERENCE. There is no
+    // authority in the protocol that says which one an agent picks, so a
+    // matching company on one of them proves nothing about what the agent will
+    // actually read. We stop and make the human leave exactly one.
     const activeCompanyId = options.company ? parseInt(options.company as string, 10) : config.companyId;
+    let tenantVerified = false;
+    let verifiedCompanyId: number | null = null;
+
     if (kind === 'claude' || kind === 'vscode') {
-      const { checkMcpTenant } = await import('../lib/mcp-tenant-check');
-      const status = await checkMcpTenant(activeCompanyId, config.apiUrl);
-      if (status?.mismatch) {
-        console.log('');
-        console.error(chalk.red.bold('  ✗ The AI would act on a different company than your session.'));
-        console.error('');
-        console.error(`    ${chalk.dim('This session:')}      Company ${chalk.bold(String(status.sessionCompanyId))}`);
-        console.error(`    ${chalk.dim('MCP credential:')}    Company ${chalk.bold.red(String(status.keyCompanyId))}` +
-                      (status.keyCompanyName ? chalk.dim(` (${status.keyCompanyName})`) : ''));
-        console.error('');
-        console.error(chalk.dim(`    The key in ${status.configPath} is bound to its own company and`));
-        console.error(chalk.dim('    `solid switch` cannot move it. Launching would give the AI real'));
-        console.error(chalk.dim('    write access to the wrong business.'));
-        console.error('');
-        console.error(`    ${chalk.bold('Fix:')} re-run ${chalk.cyan(`solid mcp install --company ${status.sessionCompanyId}`)}`);
-        console.error(`    ${chalk.dim('Override (you accept the above):')} ${chalk.cyan('solid ai --allow-tenant-mismatch')}`);
-        console.error('');
-        if (!options.allowTenantMismatch) process.exit(1);
-        console.error(chalk.yellow('  ⚠ --allow-tenant-mismatch set — launching anyway.'));
-      } else if (status?.unresolved) {
-        // Could not tell. Say so; never report "cannot tell" as "matches".
-        console.error(chalk.yellow(`  ⚠ Could not verify the MCP credential's company (${status.unresolved}).`));
+      const { enumerateSolidProviders, assessProviders, renderProviderVerdict } =
+        await import('../lib/mcp-providers');
+
+      let assessment;
+      try {
+        const providers = await enumerateSolidProviders({ apiUrl: config.apiUrl });
+        assessment = assessProviders(providers, activeCompanyId);
+      } catch (err) {
+        // ⛔ The guard must never become the outage. If enumeration itself
+        // breaks we say so and continue — but we do NOT claim verification.
+        console.error(chalk.yellow(`  ⚠ Could not check Solid# connections (${(err as Error).message}).`));
+        assessment = null;
+      }
+
+      if (assessment) {
+        tenantVerified = assessment.verdict === 'ok';
+        verifiedCompanyId = tenantVerified ? assessment.active[0].companyId : null;
+
+        if (assessment.verdict !== 'ok') {
+          console.log('');
+          for (const line of renderProviderVerdict(assessment)) console.error(line);
+          console.error('');
+
+          // ⛔ WHAT BLOCKS AND WHAT WARNS, AND WHY THE LINE IS HERE.
+          //
+          // conflict / mismatch  → BLOCK. Both mean the agent has real write
+          //   access to a business the operator did not choose. That is Adam's
+          //   client data; a wrong write there is not recoverable by apology.
+          //
+          // unverified / none    → WARN. The agent may simply have no Solid#
+          //   data, or a connector we cannot read. Refusing to start any AI at
+          //   all because we cannot see a server-side token would make this
+          //   command unusable on the exact setup it is meant to help.
+          const blocking = assessment.verdict === 'conflict' || assessment.verdict === 'mismatch';
+          if (blocking) {
+            console.error(`    ${chalk.dim('Override (you accept the above):')} ${chalk.cyan('solid ai --allow-tenant-mismatch')}`);
+            console.error('');
+            if (!options.allowTenantMismatch) process.exit(1);
+            console.error(chalk.yellow('  ⚠ --allow-tenant-mismatch set — launching anyway.'));
+            console.error('');
+          }
+        }
       }
     }
 
     console.log('');
-    console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`with Company ${options.company || config.companyId} context`)}`);
+    // ⛔ SAY WHAT WE PROVED, NOT WHAT WE SET. This line used to read "Launching
+    // <tool> with Company N context", which any reasonable person takes as "the
+    // AI is on company N". It never meant that — it described the CLI context
+    // files this command refreshes, while the agent's data came from a separate
+    // credential that could be, and was, a different company. That sentence is
+    // why the mismatch survived so long: it answered the question before the
+    // user could ask it, and answered it wrong.
+    if (tenantVerified) {
+      console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)} ${chalk.dim(`— Company ${verifiedCompanyId}, AI connection verified`)}`);
+    } else {
+      console.log(`  ${chalk.bold('Launching')} ${chalk.hex('#a5b4fc')(tool)}`);
+      console.log(`  ${chalk.dim(`CLI context: Company ${options.company || config.companyId}`)} ${chalk.yellow('· the AI\'s own company is NOT verified')}`);
+    }
     if (mode !== 'full') {
       console.log(`  ${chalk.dim('Mode:')} ${chalk.yellow(modeDescriptor(mode))}`);
     }

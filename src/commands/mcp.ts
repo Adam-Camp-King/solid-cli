@@ -21,7 +21,7 @@ import { spawn } from 'child_process';
 
 import { apiClient } from '../lib/api-client';
 import { config } from '../lib/config';
-import { isJsonOutput } from '../lib/json-output';
+import { isJsonOutput, mergeGlobalJson } from '../lib/json-output';
 import {
   McpClient,
   SUPPORTED_CLIENTS,
@@ -401,8 +401,22 @@ function clientLaunchName(client: McpClient): string {
 // ---------------------------------------------------------------------------
 mcpCommand
   .command('doctor')
-  .description('Diagnose MCP server health: API connectivity, auth, verb count, version alignment')
-  .action(async () => {
+  .description('Diagnose every Solid# connection an AI here can reach, and which company each one serves')
+  // ⛔ --json was documented in the examples block and accepted by the shell
+  // but never DEFINED, so `solid mcp doctor --json` printed the human report
+  // and exited 0. A script reading that got prose and no way to know. Seen on
+  // Adam's terminal 2026-09-15.
+  .option('--json', 'Machine-readable report (every connection, with its company)')
+  .action(async (rawOptions: { json?: boolean }, cmd?: Command) => {
+    // ⛔ THE SUBCOMMAND'S OWN opts() DOES NOT SEE --json, AND THAT IS NOT A
+    // TYPO. Declaring `.option('--json')` on `doctor` is necessary but not
+    // sufficient: `solid` declares a program-wide `--json` too, and commander
+    // binds the flag to the ROOT there — measured, `cmd.opts()` is `{}` while
+    // `program.opts()` is `{ json: true }`. Reading the local options alone is
+    // why `solid mcp doctor --json` printed prose. `mergeGlobalJson` is the
+    // house convention for exactly this and must be used by every subcommand
+    // that offers --json.
+    const options = mergeGlobalJson(rawOptions, cmd);
     const ora = (await import('ora')).default;
     const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
 
@@ -441,6 +455,61 @@ mcpCommand
       detail: verbCount > 0 ? `${verbCount} verbs on mcp_stdio surface` : 'No verbs returned',
     });
 
+    // ⛔ 3b. THE CENSUS: EVERY Solid# CONNECTION, AND WHOSE DATA IT SERVES.
+    //
+    // This replaces a check that asked "does the local key match my session?".
+    // That question was too small. On Adam's machine, 2026-09-15, TWO Solid#
+    // providers were live at once:
+    //
+    //   claude.ai Solid#   https://api.solidnumber.com/mcp/connector   company 1
+    //   solid              npx -y @solidnumber/mcp                     no credential
+    //
+    // while the CLI was signed in to company 61 (ANGL). The old check read
+    // local files only, found no key, returned null, and said nothing. The
+    // agent used the remote connector and reported confidently on company 1.
+    //
+    // ⛔ A DIAGNOSTIC MUST REPORT WHAT IT CANNOT SEE. `solid ai` tolerates
+    // "unknown" so a network blip never becomes an outage; the doctor has the
+    // opposite duty — unknown is printed as not-ok, with the reason, because
+    // the whole point of running it is to find out.
+    let assessment: import('../lib/mcp-providers').ProviderAssessment | null = null;
+    const { renderProviderVerdict } = await import('../lib/mcp-providers.js');
+    try {
+      const { enumerateSolidProviders, assessProviders } = await import('../lib/mcp-providers.js');
+      const providers = await enumerateSolidProviders({ apiUrl: config.apiUrl });
+      assessment = assessProviders(providers, config.companyId);
+
+      checks.push({
+        label: 'Solid# connections',
+        ok: assessment.verdict === 'ok',
+        detail: assessment.headline,
+      });
+
+      // One line per connection — the thing that was impossible to see before.
+      for (const pr of assessment.providers) {
+        const where =
+          pr.scope === 'account' ? 'account connector (claude.ai)'
+          : pr.configPath ? pr.configPath
+          : pr.scope;
+        const company =
+          pr.companyId !== null
+            ? `company ${pr.companyId}${pr.companyName ? ` (${pr.companyName})` : ''}`
+            : `company UNKNOWN — ${pr.unresolved}`;
+        checks.push({
+          label: `  ↳ ${pr.name}`,
+          ok: pr.companyId !== null && pr.companyId === config.companyId && pr.active,
+          detail: `${pr.active ? 'active' : 'inactive'} · ${where} · ${company}` +
+                  (pr.cliCanRepoint ? '' : ' · this CLI cannot re-point it'),
+        });
+      }
+    } catch (err) {
+      checks.push({
+        label: 'Solid# connections',
+        ok: false,
+        detail: `Could not enumerate: ${(err as Error).message}`,
+      });
+    }
+
     // 4. MCP package installed check
     let packageInstalled = false;
     try {
@@ -455,25 +524,63 @@ mcpCommand
     });
 
     // 5. Client config check
+    //
+    // ⛔ THIS USED TO BE A FALSE GREEN, AND IT REPORTED ONE ON THE VERY MACHINE
+    // THAT HAD THE BUG. It asked only `'solid' in servers` — does a key with
+    // that name exist. Adam's ~/.claude.json held:
+    //
+    //     "solid": { "command": "npx", "args": ["-y", "@solidnumber/mcp"],
+    //                "env": { "SOLID_API_URL": "https://api.solidnumber.com" } }
+    //
+    // No SOLID_API_KEY. That server authenticates as nobody — /auth/me returns
+    // 404 — and the doctor printed "✓ claude config: Solid# MCP wired" beside
+    // it. "An entry exists" is not "an AI can use it"; presence is not a
+    // credential. Now we require a resolvable credential to call it wired.
     for (const client of SUPPORTED_CLIENTS) {
       const cfgPath = configPathForClient(client);
       const exists = cfgPath && fs.existsSync(cfgPath);
-      let wired = false;
+      let entryName: string | null = null;
+      let hasKey = false;
       if (exists && cfgPath) {
         try {
           const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
           const servers = raw?.mcpServers || {};
-          wired = 'solidnumber' in servers || 'solid' in servers;
+          for (const [name, cfg] of Object.entries<any>(servers)) {
+            if (name !== 'solid' && name !== 'solidnumber' && !/\bsolid#?\b/i.test(name)) continue;
+            entryName = name;
+            hasKey = !!(cfg?.env?.SOLID_API_KEY && String(cfg.env.SOLID_API_KEY).trim());
+            if (hasKey) break;
+          }
         } catch { /* corrupt config */ }
       }
       checks.push({
         label: `${client} config`,
-        ok: wired,
-        detail: wired ? 'Solid# MCP wired' : exists ? 'Config exists, Solid# not wired' : 'No config file',
+        ok: !!entryName && hasKey,
+        detail: !entryName
+          ? (exists ? 'Config exists, Solid# not wired' : 'No config file')
+          : hasKey
+            ? `Solid# wired with a credential ("${entryName}")`
+            : `"${entryName}" is present but carries NO SOLID_API_KEY — it authenticates as nobody. Run \`solid mcp connect\`.`,
       });
     }
 
     // Print results
+    if (options.json) {
+      console.log(JSON.stringify({
+        sessionCompanyId: config.companyId ?? null,
+        verdict: assessment?.verdict ?? 'unknown',
+        headline: assessment?.headline ?? null,
+        providers: assessment?.providers ?? [],
+        checks,
+        passing: checks.filter(c => c.ok).length,
+        total: checks.length,
+      }, null, 2));
+      // ⛔ Non-zero on a tenant verdict so CI and scripts can gate on it. A
+      // doctor that always exits 0 cannot be used by anything but a human.
+      if (assessment && assessment.verdict !== 'ok') process.exitCode = 1;
+      return;
+    }
+
     console.log('');
     console.log(chalk.bold('  MCP Doctor'));
     console.log('');
@@ -484,6 +591,16 @@ mcpCommand
     const passing = checks.filter(c => c.ok).length;
     console.log('');
     console.log(chalk.dim(`  ${passing}/${checks.length} checks passing`));
+
+    // ⛔ THE VERDICT GETS ITS OWN BLOCK. Burying "two connections disagree"
+    // as one ✗ among eight lines is how it went unnoticed: the screenshot that
+    // reported this bug showed "5/8 checks passing" and the operator read it
+    // as fine.
+    if (assessment && assessment.verdict !== 'ok') {
+      console.log('');
+      for (const line of renderProviderVerdict(assessment)) console.log(line);
+      process.exitCode = 1;
+    }
     console.log('');
   });
 

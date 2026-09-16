@@ -26,7 +26,7 @@ import {
   serializeConfig,
   type McpClient,
 } from './mcp-client-config';
-import { readMcpApiKey, resolveKeyCompany } from './mcp-tenant-check';
+import { findSolidServerEntry, resolveKeyCompany } from './mcp-tenant-check';
 
 /** Clients whose config `claude` / the VS Code extension actually read. */
 const SYNC_CLIENTS: McpClient[] = ['vscode', 'claude'];
@@ -63,9 +63,13 @@ export async function syncMcpCredential(
   }
 
   // Which client configs actually have a Solid server to correct?
-  const targets: Array<{ client: McpClient; configPath: string; apiKey: string }> = [];
+  const targets: Array<{ client: McpClient; configPath: string; apiKey: string | null }> = [];
   for (const client of clients) {
-    const found = readMcpApiKey(client);
+    // ⛔ findSolidServerEntry, NOT readMcpApiKey. A Solid server with no
+    // SOLID_API_KEY is a target — it is the one that most needs a credential.
+    // Skipping it is how Adam's ~/.claude.json stayed unauthenticated across
+    // every login and switch while this function reported success.
+    const found = findSolidServerEntry(client);
     if (found) targets.push({ client, configPath: found.configPath, apiKey: found.apiKey });
   }
   if (targets.length === 0) {
@@ -76,6 +80,8 @@ export async function syncMcpCredential(
   const companyByKey = new Map<string, number | null>();
   const stale: typeof targets = [];
   for (const t of targets) {
+    // No key at all: unambiguously stale. Nothing to resolve, nothing to blip.
+    if (t.apiKey === null) { stale.push(t); continue; }
     if (!companyByKey.has(t.apiKey)) {
       const { companyId: keyCompany } = await resolveKeyCompany(t.apiKey, deps.apiUrl);
       companyByKey.set(t.apiKey, keyCompany);

@@ -21,6 +21,29 @@ jest.mock('child_process', () => ({
   execFileSync: jest.fn(() => Buffer.from('')),
 }));
 
+// ⛔ THE GATE MUST NOT READ THE DEVELOPER'S OWN MACHINE.
+//
+// `solid ai` now enumerates every Solid# MCP connection before launching and
+// refuses when two are active or one disagrees with the session. Without this
+// mock those functions read the REAL ~/.claude.json and Claude Desktop config
+// of whoever runs the suite — so this file, which only means to test option →
+// env wiring, started failing on a laptop that happened to have two connectors
+// configured, and would have passed on CI. A unit test whose result depends on
+// the author's dotfiles is not testing the thing it names.
+//
+// The gate's own behaviour is covered against fixtures in
+// src/__tests__/lib/mcp-providers.test.ts and ai-tenant-claim.test.ts.
+jest.mock('../../lib/mcp-providers', () => ({
+  enumerateSolidProviders: jest.fn(async () => [
+    { name: 'solid', scope: 'user', transport: 'stdio', target: '', active: true,
+      companyId: 1, cliCanRepoint: true },
+  ]),
+  assessProviders: jest.fn(() => ({
+    verdict: 'ok', providers: [], active: [{ companyId: 1 }], headline: 'one connection',
+  })),
+  renderProviderVerdict: jest.fn(() => []),
+}));
+
 jest.mock('fs', () => {
   const actual = jest.requireActual('fs') as typeof import('fs');
   return {
