@@ -102,7 +102,7 @@ verbsCommand
   // the address widens the scope, so an agent that knows 52 already knows how
   // to ask for its neighbourhood. A flag would be one more thing to learn for
   // no expressive gain.
-  .argument('[prefix]', 'Atlas coordinate prefix — 5 = money, 52 = payments')
+  .argument('[prefix]', 'Atlas coordinate prefix — 5 = money, 53 = taking payment')
   .option('--surface <name>', 'Filter to verbs on this surface (http|mcp_stdio|webmcp|ucp|cli|public)')
   .option('--shape <name>', 'Filter to verbs of this shape (preview|explain|aggregate|suggest|...)')
   // The backend has accepted ?tier= since Phase 8 and reports it back in
