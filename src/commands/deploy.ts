@@ -34,7 +34,7 @@ function statusBadge(status: string): string {
 }
 
 export const deployCommand = new Command('deploy')
-  .description('Create preview deployments with shareable URLs for client approval')
+  .description('Create PREVIEW snapshots with shareable URLs for client approval — does NOT publish (to go live: solid push, then solid publish)')
   .argument('[action]', 'Action: preview, list, promote, expire, get')
   .argument('[token]', 'Preview token (for promote/expire/get)')
   .option('-t, --title <title>', 'Name for this preview')
@@ -80,7 +80,7 @@ export const deployCommand = new Command('deploy')
           `Expires: ${formatDate(preview.expires_at)}`,
           preview.title ? `Title: ${preview.title}` : '',
           '',
-          chalk.dim('Share this URL with your client for approval.'),
+          chalk.dim('Share this URL with your client for approval. Nothing was published.'),
           chalk.dim('No login required — the link IS the access.'),
         ].filter(Boolean)));
         console.log('');
@@ -245,9 +245,23 @@ export const deployCommand = new Command('deploy')
     console.error(chalk.red(`Unknown action: ${action}. Use: preview, list, promote, expire, get`));
   });
 
+deployCommand.addHelpText('after', `
+\`solid deploy\` creates a PREVIEW: a snapshot of your current pages/KB behind a
+shareable, expiring URL. It does not publish anything and does not upload local
+files. The publish path is:
+
+  solid push                 upload local changes (drafts / unpublished pages)
+  solid publish <page_id>    make one page live
+  solid publish --all        make every pending draft and unpublished page live
+
+\`solid deploy promote <token>\` writes a preview snapshot's page layouts and KB
+content back over the current ones; it does not flip unpublished pages live.
+`);
+
 import { appendExamples as __ae_deploy } from '../lib/command-kit';
 __ae_deploy(deployCommand, [
-  { cmd: 'solid deploy',                   why: 'Preview deploy with shareable URL' },
-  { cmd: 'solid deploy --message "fix X"', why: 'Annotate deploy (shows in history)' },
-  { cmd: 'solid deploy --promote',         why: 'Promote preview → production' },
+  { cmd: 'solid deploy',                   why: 'Create a preview snapshot + shareable URL (does not publish)' },
+  { cmd: 'solid deploy list',              why: 'List previews' },
+  { cmd: 'solid deploy promote <token>',   why: 'Write a preview snapshot back over current content' },
+  { cmd: 'solid publish --all',            why: 'The actual go-live step' },
 ]);

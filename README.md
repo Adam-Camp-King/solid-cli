@@ -85,8 +85,11 @@ solid pull
 
 # Edit pages, KB, settings in VS Code / Cursor / any editor
 
-# Push changes to production
+# Upload changes (they land as drafts / unpublished pages)
 solid push
+
+# Make them live — publish is the step that goes live, not push or deploy
+solid publish <page_id>   # or: solid publish --all
 
 # Give your AI full context about this company
 solid context --claude    # Claude Code
@@ -120,7 +123,9 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid status` | Company dashboard |
 | `solid update` | Update the CLI — knows npm, Homebrew and scoop |
 | `solid pull` | Download pages, KB, settings as files |
-| `solid push` | Push local changes to production |
+| `solid push` | Upload local changes (drafts / unpublished pages) |
+| `solid publish <id>` / `--all` | Make pages live (pending drafts + never-published pages) |
+| `solid deploy` | Create a shareable preview snapshot — does NOT publish |
 | `solid diff` | Preview changes before pushing |
 | `solid serve` | Local preview server (localhost:4000) |
 | `solid open <page>` | Open page in web WYSIWYG builder |
@@ -288,7 +293,8 @@ JWT matches the path's company.
 3. solid context --claude              → Give your AI full company knowledge
 4. Edit files / solid import / vibe    → Make changes any way you want
 5. solid diff                          → Preview what will change
-6. solid push                          → Deploy to production
+6. solid push                          → Upload (drafts / unpublished)
+7. solid publish --all                 → Go live
 ```
 
 ### Agency Workflow (Sandbox Mode)
@@ -299,7 +305,8 @@ JWT matches the path's company.
 4. solid import promo.html --page "Ad" → Add ChatGPT landing page
 5. solid sandbox diff                  → Review all changes
 6. solid sandbox push                  → Promote to main files
-7. solid push                          → Deploy to production
+7. solid push                          → Upload (drafts / unpublished)
+8. solid publish --all                 → Go live
 ```
 
 ## File Formats

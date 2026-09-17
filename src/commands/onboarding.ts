@@ -14,6 +14,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { adoptSessionToken, AdoptResult } from '../lib/session-token';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -503,26 +504,69 @@ onboardingCommand
   });
 
 // ── Onboarding v2 (newer business-discover flow) ──────────────────────
+//
+// ⛔ NO LOGIN REQUIRED for discover / set-business / provision / session.
+// These are how someone WITHOUT an account signs up from the terminal; the
+// backend routes (solid-backend controllers/onboarding_v2.py) are public and
+// rate-limited (discover/set-business/session 30/min, provision 5/hour per IP).
+// `provision` returns an `auth_token`, which is stored as the CLI session the
+// same way `solid auth login --token` stores one (lib/session-token.ts).
+
+/**
+ * Pure: build the provision request body from `--data` JSON plus explicit
+ * flags (flags win). Returns the body or the list of missing required fields.
+ */
+export function buildProvisionBody(
+  data: string | undefined,
+  flags: Record<string, unknown>,
+): { body: Record<string, unknown>; missing: string[] } | { error: string } {
+  let body: Record<string, unknown> = {};
+  if (data) {
+    try {
+      const parsed = JSON.parse(data);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { error: '--data must be a JSON object' };
+      }
+      body = { ...parsed };
+    } catch (e) {
+      return { error: `--data is not valid JSON: ${(e as Error).message}` };
+    }
+  }
+  const map: Array<[string, string]> = [
+    ['session', 'session_id'], ['email', 'email'], ['businessName', 'business_name'],
+    ['password', 'password'], ['ownerName', 'owner_name'], ['industry', 'industry'],
+    ['zip', 'business_zip'], ['state', 'business_state'], ['city', 'business_city'], ['street', 'business_street'],
+  ];
+  for (const [flag, field] of map) {
+    const v = flags[flag];
+    if (typeof v === 'string' && v.trim() !== '') body[field] = v;
+  }
+  const missing = ['session_id', 'email', 'business_name'].filter(
+    (k) => typeof body[k] !== 'string' || String(body[k]).trim() === '',
+  );
+  return { body, missing };
+}
 
 onboardingCommand
   .command('discover')
-  .description('Industry discovery (v2 onboarding) — match a business to an industry template')
+  .description('Step 1 of terminal sign-up (no login needed): match a business to an industry template, get a session ID')
   .requiredOption('--message <text>', 'Business description or industry keyword (e.g. "plumber", "acme plumbing services")')
   .option('--session <id>', 'Existing session ID (resume a flow)')
   .option('--ref <code>', 'Partner referral code')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
-    requireAuth();
     const body: Record<string, unknown> = { message: opts.message };
     if (opts.session) body.session_id = opts.session;
     if (opts.ref) body.ref_code = opts.ref;
-    const spinner = ora('Discovering...').start();
+    const json = isJsonOutput(opts);
+    const spinner = ora({ text: 'Discovering...', isSilent: json }).start();
     try {
       const res = await apiClient.post('/api/v1/onboarding-v2/discover', body);
       const r = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
+      if (json) { spinner.stop(); console.log(JSON.stringify(r, null, 2)); return; }
       if (r.blocked) {
         spinner.warn(chalk.yellow(r.blocked_message || 'Discovery blocked'));
+        process.exitCode = 1;
         return;
       }
       spinner.succeed(chalk.green(r.matched ? 'Match found' : 'No direct match'));
@@ -535,55 +579,164 @@ onboardingCommand
         console.log('');
         console.log(chalk.bold('  Suggestions:'));
         for (const s of r.suggestions) {
-          console.log(`    ${typeof s === 'string' ? s : (s.name || JSON.stringify(s))}`);
+          console.log(`    ${typeof s === 'string' ? s : (s.label || s.name || JSON.stringify(s))}`);
         }
       }
+      console.log('');
+      console.log(chalk.dim(`  Next: solid onboarding set-business --session ${r.session_id} --name "<business name>"`));
     } catch (e) { fail(spinner, 'Discovery failed', e); }
   });
 
 onboardingCommand
   .command('set-business')
-  .description('Save a business name to a discovery session (Step 1b of v2)')
+  .description('Step 2 of terminal sign-up (no login needed): save the business name to a discovery session')
   .requiredOption('--name <name>', 'Business name')
-  .option('--session <id>', 'Existing session ID')
+  .option('--session <id>', 'Existing session ID (omit to start a new session)')
+  .option('--phone <phone>', 'Business phone')
+  .option('--sub-category <label>', 'Industry sub-category label (from discover suggestions)')
+  .option('--kb-sub-code <code>', 'Industry kb_sub_code (from discover suggestions)')
+  .option('--mcc <code>', 'MCC code (from discover suggestions)')
+  .option('--ref <code>', 'Partner referral code')
+  .option('--json', 'Output as JSON')
   .action(async (opts) => {
-    requireAuth();
     const body: Record<string, unknown> = { business_name: opts.name };
     if (opts.session) body.session_id = opts.session;
-    const spinner = ora('Saving business name...').start();
+    if (opts.phone) body.business_phone = opts.phone;
+    if (opts.subCategory) body.sub_category = opts.subCategory;
+    if (opts.kbSubCode !== undefined) {
+      const code = parseInt(String(opts.kbSubCode), 10);
+      if (Number.isNaN(code)) { console.error(chalk.red('--kb-sub-code must be a number')); process.exit(1); }
+      body.kb_sub_code = code;
+    }
+    if (opts.mcc) body.mcc_code = opts.mcc;
+    if (opts.ref) body.ref_code = opts.ref;
+    const json = isJsonOutput(opts);
+    const spinner = ora({ text: 'Saving business name...', isSilent: json }).start();
     try {
       const res = await apiClient.post('/api/v1/onboarding-v2/set-business', body);
-      spinner.succeed(chalk.green('Saved'));
-      console.log(JSON.stringify(res.data, null, 2));
+      spinner.stop();
+      const r = res.data as Record<string, any>;
+      if (json) { console.log(JSON.stringify(r, null, 2)); return; }
+      console.log(chalk.green('  Saved'));
+      console.log(`  ${chalk.bold('Session:')} ${r.session_id}   ${chalk.dim(`state: ${r.state}`)}`);
+      console.log('');
+      console.log(chalk.dim(`  Next: solid onboarding provision --session ${r.session_id} --email <you@example.com> --business-name "${opts.name}" --password <min 8 chars>`));
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
 onboardingCommand
   .command('provision')
-  .description('Provision a new tenant from discovery output (v2)')
-  .requiredOption('--data <json>', 'JSON payload from `discover`')
+  .description('Step 3 of terminal sign-up (no login needed): create the account + company and log this CLI in as it')
+  .option('--session <id>', 'Session ID from discover / set-business (required)')
+  .option('--email <email>', 'Owner email (required)')
+  .option('--business-name <name>', 'Business name (required)')
+  .option('--password <password>', 'Account password, min 8 chars (strongly recommended — without it the backend sets a random one)')
+  .option('--owner-name <name>', 'Owner full name')
+  .option('--industry <name>', 'Industry keyword (used only if the session has no industry match)')
+  .option('--zip <zip>', 'Business ZIP (decides which card-fee programs are legal where you trade)')
+  .option('--state <st>', 'Business state (2 letters)')
+  .option('--city <city>', 'Business city')
+  .option('--street <street>', 'Business street address')
+  .option('--data <json>', 'Full request body as JSON (fields: session_id, email, business_name, password, …); flags override it')
+  .option('--no-login', 'Do not store the returned token as this CLI\'s session (prints it instead)')
+  .option('--json', 'Output as JSON (the token is redacted when it was stored)')
   .action(async (opts) => {
-    requireAuth();
-    const spinner = ora('Provisioning tenant...').start();
+    const built = buildProvisionBody(opts.data, opts);
+    if ('error' in built) { console.error(chalk.red(built.error)); process.exit(1); }
+    if (built.missing.length > 0) {
+      console.error(chalk.red(`Missing required: ${built.missing.join(', ')}`));
+      console.error(chalk.dim('  Use --session, --email, --business-name (or put them in --data).'));
+      process.exit(1);
+    }
+    const json = isJsonOutput(opts);
+    if (!built.body.password && !json) {
+      console.error(chalk.yellow('  No --password given: the backend will set a random password you will not see.'));
+      console.error(chalk.yellow('  This CLI session will work, but to log in elsewhere you will need a password reset.'));
+    }
+    const spinner = ora({ text: 'Provisioning tenant...', isSilent: json }).start();
+    let r: Record<string, any>;
     try {
-      const body = JSON.parse(opts.data);
-      const res = await apiClient.post('/api/v1/onboarding-v2/provision', body);
-      const r = res.data as Record<string, any>;
-      spinner.succeed(chalk.green(`Tenant provisioned: ${r.company_id || r.id}`));
+      const res = await apiClient.post('/api/v1/onboarding-v2/provision', built.body);
+      r = res.data as Record<string, any>;
     } catch (e) { fail(spinner, 'Provision failed', e); }
+
+    // The backend answers business-rule refusals (duplicate email, duplicate
+    // business name, blocked industry, internal failure) as HTTP 200 with
+    // success:false — that is a failure, and must exit non-zero.
+    if (!r.success) {
+      spinner.stop();
+      if (json) {
+        console.log(JSON.stringify({ ...r, auth_token: undefined }, null, 2));
+      } else {
+        console.error(chalk.red(`  Provision refused: ${r.message || 'unknown reason'}`));
+      }
+      process.exit(1);
+    }
+
+    const token: string | undefined = r.auth_token || undefined;
+    let adopt: AdoptResult | null = null;
+    const previousCompany = config.isLoggedIn() ? config.companyId : undefined;
+    if (token && opts.login !== false) {
+      adopt = await adoptSessionToken(token, {
+        companyId: r.company_id,
+        userId: r.user_id,
+        email: typeof built.body.email === 'string' ? built.body.email : undefined,
+      });
+    }
+    spinner.stop();
+
+    if (json) {
+      const out: Record<string, unknown> = { ...r };
+      if (adopt) {
+        out.auth_token = '[stored as the CLI session]';
+        out.session = {
+          stored: true,
+          confirmed: adopt.confirmed,
+          ...(adopt.confirmed ? {} : { reason: adopt.reason }),
+          previous_company_id: previousCompany ?? null,
+        };
+      } else {
+        out.session = { stored: false, reason: token ? 'no_login_flag' : 'backend_returned_no_token' };
+      }
+      console.log(JSON.stringify(out, null, 2));
+      return;
+    }
+
+    console.log(chalk.green(`  ✓ ${r.message || 'Account created'}`));
+    console.log(`  ${chalk.bold('Company ID:')} ${r.company_id}`);
+    console.log(`  ${chalk.bold('User ID:')}    ${r.user_id}`);
+    if (r.dashboard_url) console.log(`  ${chalk.bold('Dashboard:')}  https://app.solidnumber.com${r.dashboard_url}`);
+    console.log('');
+    if (adopt) {
+      console.log(chalk.green(`  ✓ Logged this CLI in as company ${r.company_id}.`));
+      if (previousCompany && previousCompany !== r.company_id) {
+        console.log(chalk.yellow(`    (Replaced the previous session for company ${previousCompany} — \`solid auth login\` to go back.)`));
+      }
+      if (!adopt.confirmed) {
+        console.log(adopt.reason === 'env_credential_overrides'
+          ? chalk.yellow('    SOLID_API_KEY / SOLID_TOKEN is set and outranks the stored session — unset it to act as the new account.')
+          : chalk.yellow('    Stored, but /auth/me could not confirm it yet. Check with: solid auth status'));
+      }
+      console.log(chalk.dim('    The token has no refresh token; when it expires run `solid auth login`.'));
+    } else if (token) {
+      console.log(chalk.yellow('  --no-login: token NOT stored. Use it with: solid auth login --token <token>'));
+      console.log(`  ${token}`);
+    } else {
+      console.log(chalk.yellow('  The backend returned no auth token. Log in with: solid auth login'));
+    }
   });
 
 onboardingCommand
   .command('session')
-  .description('Get the current onboarding v2 session')
+  .description('Get an onboarding v2 session (no login needed)')
+  .requiredOption('--session <id>', 'Session ID from discover / set-business')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
-    requireAuth();
-    const spinner = ora('Loading session...').start();
+    const json = isJsonOutput(opts);
+    const spinner = ora({ text: 'Loading session...', isSilent: json }).start();
     try {
-      const res = await apiClient.get('/api/v1/onboarding-v2/session');
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
-      spinner.succeed(chalk.green('Session'));
+      const res = await apiClient.get('/api/v1/onboarding-v2/session', { params: { session_id: opts.session } });
+      spinner.stop();
       console.log(JSON.stringify(res.data, null, 2));
     } catch (e) { fail(spinner, 'Failed', e); }
   });
@@ -592,6 +745,7 @@ import { appendExamples as __ae_onb, fail } from '../lib/command-kit';
 __ae_onb(onboardingCommand, [
   { cmd: 'solid onboarding status',                                   why: 'Onboarding progress per company' },
   { cmd: 'solid onboarding health',                                   why: 'Onboarding service health' },
-  { cmd: 'solid onboarding payment',                 why: 'Link Google/Microsoft/etc.' },
+  { cmd: 'solid onboarding discover --message "plumber"',              why: 'Sign up with no account: step 1' },
+  { cmd: 'solid onboarding provision --session <id> --email <e> --business-name <n> --password <p>', why: 'Create the account + log the CLI in' },
   { cmd: 'solid onboarding address-create --line1 ... --city ...',    why: 'Seed a company address' },
 ]);

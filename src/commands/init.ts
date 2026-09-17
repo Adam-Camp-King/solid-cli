@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';
 import { ui } from '../lib/ui';
+import { buildTenantManifest, protectedRootReason, writeTenantManifest } from '../lib/tenant-guard';
 
 const APP_TYPES: Record<string, { name: string; description: string; files: Record<string, string> }> = {
   basic: {
@@ -333,14 +334,20 @@ five rules; they are the same rules the Solid# connector runs by.
 
 **Call \`start_here\` before you build. Call \`end_session\` when you finish.**
 
-## Deploy
+## Publish — how content goes live
 
-Your build deploys back to THIS company's own slot (keyed by company_id ${cid}) — never to a
-shared or wrong place:
+This directory is bound to company_id ${cid} by \`.solid/manifest.json\` (written by
+\`solid init\` / \`solid pull\` for the company you are logged in as). The CLI refuses to push
+from a directory bound to a different company.
 
 \`\`\`bash
-solid deploy
+solid push                 # upload pages/*.json, kb/*.md, solid.config.json — lands as drafts / unpublished pages
+solid publish <page_id>    # make one page live (paywall + publish checks run here)
+solid publish --all        # make every pending draft AND every never-published page live
 \`\`\`
+
+\`solid deploy\` does NOT publish: it creates a shareable **preview** snapshot for client approval.
+Page block shapes: \`solid schema pages\`.
 
 ## Resources
 - CLI: \`npm i -g @solidnumber/cli\`
@@ -394,6 +401,43 @@ export function buildStarterFiles(ctx: StarterContext): Record<string, string> {
   files['.gitignore'] = ['node_modules/', 'dist/', '.env', '.env.local', '.solid/token', '*.log', ''].join('\n');
 
   return files;
+}
+
+export type ManifestBinding =
+  | { bind: true; companyId: number }
+  | { bind: false; reason: 'not_logged_in' | 'no_session_company' | 'company_mismatch' | 'protected_root'; detail: string };
+
+/**
+ * Should `solid init` bind the new directory to a tenant (write
+ * `.solid/manifest.json`)? Only to the company the CLI is AUTHENTICATED as —
+ * the same binding `solid pull` makes. A `--company` that differs from the
+ * session is still stamped into `.solid/config.json` / CLAUDE.md, but gets no
+ * manifest: writing one would bind the directory to a tenant this login cannot
+ * push to, and `requireTenantManifest` would refuse anyway. Pure → tested.
+ */
+export function decideManifestBinding(input: {
+  loggedIn: boolean;
+  sessionCompanyId: number | null | undefined;
+  stampCompanyId: number | null;
+  protectedRoot: boolean;
+}): ManifestBinding {
+  if (input.protectedRoot) {
+    return { bind: false, reason: 'protected_root', detail: 'target directory is a protected root (home or the Solid# platform monorepo)' };
+  }
+  if (!input.loggedIn) {
+    return { bind: false, reason: 'not_logged_in', detail: 'not logged in — run `solid auth login`, then `solid pull` inside the project to bind it' };
+  }
+  if (input.sessionCompanyId == null) {
+    return { bind: false, reason: 'no_session_company', detail: 'logged in but no active company — run `solid switch`, then `solid pull` inside the project' };
+  }
+  if (input.stampCompanyId != null && input.stampCompanyId !== input.sessionCompanyId) {
+    return {
+      bind: false,
+      reason: 'company_mismatch',
+      detail: `--company ${input.stampCompanyId} is not the company you are logged in as (${input.sessionCompanyId}) — run \`solid switch ${input.stampCompanyId}\`, then \`solid pull\` inside the project`,
+    };
+  }
+  return { bind: true, companyId: input.sessionCompanyId };
 }
 
 export const initCommand = new Command('init')
@@ -463,6 +507,27 @@ export const initCommand = new Command('init')
       fs.writeFileSync(filePath, content);
     }
 
+    // Tenant binding — `.solid/manifest.json`, the file `solid push` requires.
+    // Same writer as `solid pull`, bound only to the AUTHENTICATED company.
+    const binding = decideManifestBinding({
+      loggedIn: config.isLoggedIn(),
+      sessionCompanyId: config.isLoggedIn() ? config.companyId : undefined,
+      stampCompanyId: companyId,
+      protectedRoot: protectedRootReason(projectDir) !== null,
+    });
+    if (binding.bind) {
+      let companyName = '';
+      try {
+        const { apiClient } = await import('../lib/api-client');
+        const infoRes = await apiClient.companyInfo();
+        companyName = String(((infoRes.data as Record<string, any>)?.company?.name) ?? '');
+      } catch {
+        // Name is cosmetic (shown in push prompts); the binding is company_id.
+      }
+      writeTenantManifest(projectDir, buildTenantManifest(binding.companyId, companyName, config.apiUrl));
+      files['.solid/manifest.json'] = ''; // listed in the scaffold summary below
+    }
+
     // The client's OWN git — their source, their repo, never ours. --no-git opts out.
     let gitInitialized = false;
     if (options.git !== false) {
@@ -484,6 +549,9 @@ export const initCommand = new Command('init')
     console.log(`  ${chalk.bold('Project:')}    ${name}`);
     console.log(`  ${chalk.bold('Type:')}       ${appType.name}`);
     console.log(`  ${chalk.bold('Company:')}    ${companyId != null ? companyId : chalk.yellow('unset — add it to .solid/config.json')}`);
+    console.log(`  ${chalk.bold('Bound:')}      ${binding.bind
+      ? chalk.green(`yes — .solid/manifest.json → company ${binding.companyId} (solid push works here)`)
+      : chalk.yellow(`no — ${binding.detail}`)}`);
     console.log(`  ${chalk.bold('Path:')}       ${projectDir}`);
     console.log('');
 
@@ -501,6 +569,7 @@ export const initCommand = new Command('init')
     console.log(`  ${chalk.cyan('npm install')}`);
     console.log(`  ${chalk.cyan('cp .env.example .env')}  ${chalk.dim('← add your scoped token')}`);
     console.log(`  ${chalk.dim('Open in Claude Code — CLAUDE.md carries the operating rules; call start_here first.')}`);
+    console.log(`  ${chalk.dim('Publish content: solid push → solid publish <page_id> (or solid publish --all). `solid deploy` only makes a preview.')}`);
     console.log('');
   });
 

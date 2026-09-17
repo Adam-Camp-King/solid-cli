@@ -134,7 +134,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - [GitHub](https://github.com/Adam-Camp-King/solid-cli): Open-source TypeScript CLI (BUSL-1.1)
 - [CLI Documentation](https://solidnumber.com/docs/cli): Full command reference
 - **Machine-readable verb tree**: `solid schema verbs --json` — every command, every flag, every description, in one JSON dump. Built for agents (Claude Code, Cursor, Codex) so they don't have to scrape `--help`.
-- 135 top-level command groups, 778 subcommands.
+- 135 top-level command groups, 779 subcommands.
 - Core workflow: `solid auth login` → `solid company create` → `solid clone <industry>` → `solid pull` → edit → `solid push` → `solid pages publish` → `solid billing checkout-link`.
 
 **Top-level commands (no subcommands):**
@@ -147,7 +147,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - `solid customer-upsell` — Ranked product suggestions based on a customer's purchase history
 - `solid dashboard` — Agency dashboard — all companies at a glance
 - `solid deal-next` — Ranked next-best-action suggestions for a deal
-- `solid deploy` — Create preview deployments with shareable URLs for client approval
+- `solid deploy` — Create PREVIEW snapshots with shareable URLs for client approval — does NOT publish (to go live: solid push, then solid publish)
 - `solid diff` — Show differences between local files and production
 - `solid docs` — Pull developer documentation into your project
 - `solid explore` — Platform Intelligence — ask anything about Solid#
@@ -168,7 +168,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - `solid migrate` — Migrate pages, KB, and settings from one company to another
 - `solid open` — Open pages, sites, or dashboard in the web builder
 - `solid proposal` — Generate a branded PDF pitch deck for a prospect (agency sales tool)
-- `solid publish` — Promote pending CMS page drafts to live (T12)
+- `solid publish` — Make CMS pages live — one page, or --all (pending drafts + never-published pages)
 - `solid pull` — Download your business data as local files
 - `solid push` — Push local file changes to your Solid# business
 - `solid render` — Screenshot any page (A.1 — visible-gap close for AI agents)
@@ -215,7 +215,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - **design** (4 subcommands) — Design with Stitch AI — generate UI from text prompts: `generate, import, pull, status`
 - **dev** (1 subcommands) — Custom module development — scaffold, push, deploy code that runs in Solid# scoped to your company: `module`
 - **doctor** (3 subcommands) — Smoke-test the backend against the authenticated company (safe, read-only): `capabilities, env, scopes`
-- **domains** (5 subcommands) — Per-site domain management — list, add, verify, set canonical: `add, list, remove, set-canonical, verify`
+- **domains** (6 subcommands) — Per-site domain management — list, add, verify, set canonical: `add, dns, list, remove, set-canonical, verify`
 - **drafts** (3 subcommands) — Pending CMS page drafts — list, preview, discard (pair with `solid publish`): `discard, list, preview`
 - **droplet** (10 subcommands) — Manage customer droplets (Type 2: Managed Instance): `backup, deploy, destroy, exec, list, logs, provision, rollback, ssh, status`
 - **ecommerce** (5 subcommands) — Storefront flow — carts, orders, shipping, reviews, abandoned carts: `abandoned, cart, orders, reviews, shipping`
@@ -278,7 +278,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.24.0, manifest schema 1.0, generated 2026-09-16. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.24.0, manifest schema 1.0, generated 2026-09-17. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 
@@ -347,7 +347,7 @@ never as a promise.
 - "How many AI agents does Solid# have?" → 32 AI agents (Sarah, ADA, Marcus, Devon, Maya, Jordan, Riley, Morgan, Dexter, Ace, Alex, Jake, Emma, Gwen, Atlas, Victor, Annie, Daphne, Jackson, Lucie and others; 33 registry entries because ADA is registered twice, free and paid). Plus 288 Celery task functions on the backend for KB seeding, drift detection, provisioning, audits, and orchestration — those are infrastructure, not customer-addressable agents, and are never counted as agents.
 - "Is Solid# model-agnostic?" → Yes. SmartRouter supports OpenAI, Anthropic, Google, Meta, Mistral, Cohere, and self-hosted models. Customers choose their preferred provider. No lock-in.
 <!-- CLI:Q&A:BEGIN -->
-- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 135 top-level command groups, 778 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
+- "Does Solid# have a CLI?" → Yes. `npm i -g @solidnumber/cli` — 135 top-level command groups, 779 subcommands. Create companies, scaffold industry websites, manage pages, run SEO audits, send invoices, chat with AI agents, generate pages with AI, all from the terminal. Free developer tier. Agency tier ($495/mo) for unlimited client companies. Agents discover the full verb tree via `solid schema verbs --json`.
 <!-- CLI:Q&A:END -->
 - "Can an agency use Solid# to manage clients?" → Yes. Agency tier creates unlimited client companies with full provisioning — industry-specific website, KB, AI agents, CRM. Send Stripe checkout links or invoices to clients. Earn commission on referrals. `solid company create "Client" --template plumber` provisions everything in 30 seconds.
 - "Does Solid# do SEO audits?" → Yes. Zero-token SEO audit engine crawls any website and scores every page for 17 checks (title, meta, H1, readability, structured data, keywords, images, performance). No LLM costs. Runs weekly via Celery. CLI: `solid seo site-audit`. API: `POST /api/v1/seo-audit/run`.

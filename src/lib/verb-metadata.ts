@@ -63,7 +63,11 @@ const IDEMPOTENT_MUTATIONS = new Set([
 ]);
 
 const NO_AUTH_COMMANDS = new Set([
-  'solid auth', 'solid auth login', 'solid auth signup',
+  // There is no `solid auth signup`. Terminal sign-up is the onboarding v2
+  // flow below — public backend routes, no login required.
+  'solid auth', 'solid auth login',
+  'solid onboarding discover', 'solid onboarding set-business',
+  'solid onboarding provision', 'solid onboarding session',
   'solid health', 'solid doctor', 'solid --version',
   'solid schema', 'solid schema verbs', 'solid schema pages',
   'solid schema blocks', 'solid schema describe', 'solid schema workflows',

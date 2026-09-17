@@ -3,15 +3,16 @@
  * (Claude Code, Cursor, Codex) can generate valid content without reading
  * the frontend component source.
  *
- *   solid schema pages                          → list all 27 block types
+ *   solid schema pages                          → list every block type (live)
  *   solid schema pages --block hero             → details for one block
  *   solid schema pages --block hero --json      → raw JSON for programmatic use
  *   solid schema pages --json                   → full schema as JSON
  *   solid schema pages --category "Social Proof"
  *
- * Data source: static file at src/data/cms-blocks.json, kept in sync with
- * Owners-Manual/71-Agent-Native-CLI/05-BLOCK-SCHEMA.md. When a backend
- * schema endpoint lands, this command can be retargeted to fetch live.
+ * Data source: `schema pages` fetches GET /api/v1/cms/pages/schema live
+ * (lib/block-schema-source.ts). src/data/cms-blocks.json is the offline
+ * fallback, labeled stale wherever it is used, and the source of prop types
+ * / examples for `schema blocks`.
  */
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -21,27 +22,35 @@ import { isJsonOutput, printJson } from '../lib/json-output';
 import { getProgram } from '../lib/program-registry';
 import { buildVerbManifest } from '../lib/verb-manifest';
 import { CLI_VERSION } from '../lib/api-client';
-
-type BlockDef = {
-  type: string;
-  component: string;
-  category: string;
-  aliases?: string[];
-  props?: Record<string, string>;
-  enums?: Record<string, string[]>;
-  notes?: string;
-  example?: unknown;
-};
-
-type SchemaDoc = {
-  _meta: { version: string; source: string; note: string; extracted_from: string };
-  envelope: { sections: string; notes: string[] };
-  blocks: BlockDef[];
-};
+import { config } from '../lib/config';
+import type { BlockDef, SchemaDoc } from '../lib/block-types';
+import {
+  defaultSchemaFetcher,
+  loadBundledSchema,
+  resolveBlockSchema,
+  ResolvedSchema,
+  SchemaSourceInfo,
+} from '../lib/block-schema-source';
 
 function loadSchema(): SchemaDoc {
-  const file = path.join(__dirname, '..', 'data', 'cms-blocks.json');
-  return JSON.parse(fs.readFileSync(file, 'utf-8')) as SchemaDoc;
+  return loadBundledSchema();
+}
+
+async function resolveForCommand(opts: { offline?: boolean }): Promise<ResolvedSchema> {
+  const token = process.env.SOLID_API_KEY || process.env.SOLID_TOKEN || config.accessToken;
+  return resolveBlockSchema({
+    offline: Boolean(opts.offline),
+    fetcher: defaultSchemaFetcher(config.apiUrl, token),
+  });
+}
+
+function printSourceLine(source: SchemaSourceInfo): void {
+  if (source.kind === 'live') {
+    console.log(chalk.dim(`  source: live — ${config.apiUrl}${source.endpoint}`));
+  } else {
+    console.log(chalk.yellow(`  source: OFFLINE FALLBACK — bundled snapshot${source.bundled_synced_at ? ` synced ${source.bundled_synced_at}` : ''}; may be STALE`));
+    if (source.fallback_reason) console.log(chalk.yellow(`          (${source.fallback_reason})`));
+  }
 }
 
 function printBlock(block: BlockDef): void {
@@ -49,6 +58,9 @@ function printBlock(block: BlockDef): void {
   console.log('');
   console.log(`${chalk.bold.cyan(block.type)}${aliases}`);
   console.log(`  ${chalk.dim('component:')} ${block.component}   ${chalk.dim('category:')} ${block.category}`);
+  if (block.required && block.required.length > 0) {
+    console.log(`  ${chalk.dim('required:')} ${block.required.join(', ')}`);
+  }
   if (block.props && Object.keys(block.props).length > 0) {
     console.log(`  ${chalk.dim('props:')}`);
     for (const [name, type] of Object.entries(block.props)) {
@@ -105,12 +117,15 @@ schemaCommand
 
 schemaCommand
   .command('pages')
-  .description('Show the page layout_json block schema (27 block types)')
+  .description('Show the page layout_json block schema — fetched live from the backend, bundled copy only as a labeled offline fallback')
   .option('--block <type>', 'Show details for a single block type (e.g., hero)')
   .option('--category <name>', 'Filter blocks by category (e.g., "Social Proof")')
-  .option('--json', 'Output as JSON for programmatic consumption')
-  .action((opts) => {
-    const schema = loadSchema();
+  .option('--offline', 'Skip the live fetch and use the bundled (possibly stale) snapshot')
+  .option('--json', 'Output as JSON for programmatic consumption (includes _source: live|bundled)')
+  .action(async (opts) => {
+    const resolved = await resolveForCommand(opts);
+    const schema = resolved.schema;
+    const source = resolved.source;
 
     // --block hero → one block
     if (opts.block) {
@@ -124,9 +139,10 @@ schemaCommand
         process.exit(1);
       }
       if (isJsonOutput(opts)) {
-        console.log(JSON.stringify(block, null, 2));
+        console.log(JSON.stringify({ ...block, _source: source }, null, 2));
         return;
       }
+      printSourceLine(source);
       printBlock(block);
       return;
     }
@@ -146,7 +162,7 @@ schemaCommand
 
     // --json → full schema
     if (isJsonOutput(opts)) {
-      printJson({ ...schema, blocks });
+      printJson({ ...schema, blocks, _source: source });
       return;
     }
 
@@ -154,7 +170,8 @@ schemaCommand
     console.log('');
     console.log(chalk.bold('Page layout_json envelope'));
     console.log(chalk.dim(`  Top-level:  { "sections": [ { "type": string, ...props } ] }`));
-    console.log(chalk.dim(`  Schema v${schema._meta.version}   source: ${schema._meta.source}`));
+    console.log(chalk.dim(`  Schema v${schema._meta.version}`));
+    printSourceLine(source);
     console.log('');
 
     // Group by category

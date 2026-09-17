@@ -456,7 +456,8 @@ export const pushCommand = new Command('push')
         `${chalk.dim('Company:')} ${manifest.company_name}`,
         `${chalk.dim('ID:')}      ${companyId}`,
         '',
-        chalk.dim('Changes are live immediately.'),
+        chalk.dim('New pages are created unpublished; edits to live pages land as drafts.'),
+        chalk.dim('Go live: solid publish <page_id>  or  solid publish --all'),
       ]));
     } else {
       console.log(ui.errorBox(`${pushed} pushed, ${errors} failed`, [

@@ -4,6 +4,7 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput, printJson } from '../lib/json-output';
+import { hasDnsInstructions, renderDnsInstructions, renderVerifyDetails } from '../lib/dns-instructions';
 
 export const domainsCommand = new Command('domains')
   .description('Per-site domain management — list, add, verify, set canonical')
@@ -12,11 +13,12 @@ Examples:
   $ solid domains list                            # every site + every address
   $ solid domains add acme.com                    # attach to primary site
   $ solid domains add shop.acme.com --site shop   # attach to specific site
+  $ solid domains dns <id>                        # the DNS records still required
   $ solid domains verify <id>                     # re-check DNS (canonical
                                                   # flips to this domain
                                                   # automatically when verified)
   $ solid domains set-canonical <site> <address>  # force canonical override
-  $ solid domains remove <id> --yes
+  $ solid domains remove <id>
 
 Canonical: exactly one address per site is the URL customers see. Non-
 canonical addresses 301-redirect to canonical. The solidnumber.com
@@ -104,13 +106,15 @@ domainsCommand.command('list').alias('ls').description('List every site + every 
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
-domainsCommand.command('add <domain>').description('Attach a custom domain to a site (defaults to primary)')
+domainsCommand.command('add <domain>').description('Attach a custom domain to a site (defaults to primary) and print the DNS records the backend requires')
   .option('--site <slug>', 'Site slug to attach domain to (defaults to primary)')
   .option('--type <type>', 'Domain type: website, landing, survey', 'website')
+  .option('--json', 'JSON output (the backend response, including dns_instructions, verbatim)')
   .action(async (domain, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
-    const spinner = ora(`Resolving target site...`).start();
+    const json = isJsonOutput(options);
+    const spinner = ora({ text: `Resolving target site...`, isSilent: json }).start();
     try {
       // Resolve site_id from --site slug (or leave undefined → backend defaults to primary)
       let siteId: number | undefined;
@@ -130,21 +134,59 @@ domainsCommand.command('add <domain>').description('Attach a custom domain to a 
       });
       spinner.stop();
       const d = res.data as Record<string, any>;
+
+      if (json) {
+        printJson(d);
+        return;
+      }
+
+      // Records come from the backend (models/domain.py::dns_instructions_for):
+      // apex → A @ + TXT _solid-verify; subdomain → CNAME + TXT. Never guess.
+      const dnsLines = hasDnsInstructions(d.dns_instructions)
+        ? renderDnsInstructions(d.dns_instructions)
+        : [chalk.yellow('The backend returned no DNS instructions for this domain.'),
+           chalk.yellow(`Run \`solid domains dns ${d.id ?? '<id>'}\` or check CMS Settings → Domains.`)];
       console.log('');
       console.log(ui.successBox('Domain Attached', [
-        `${chalk.dim('Domain:')} ${domain}`,
+        `${chalk.dim('Domain:')} ${d.domain || domain}`,
+        `${chalk.dim('ID:')}     ${d.id ?? '(unknown)'}`,
         `${chalk.dim('Site:')}   ${options.site || 'primary (default)'}`,
         '',
-        chalk.dim('Add this CNAME record at your DNS provider:'),
-        `  ${chalk.bold('Type:')}   CNAME`,
-        `  ${chalk.bold('Name:')}   ${domain}`,
-        `  ${chalk.bold('Target:')} ${d.dns_target || d.cname_target || 'proxy.solidnumber.com'}`,
+        ...dnsLines,
         '',
-        chalk.dim('Then verify: solid domains verify ' + (d.id || '<id>')),
+        chalk.dim('Then verify: solid domains verify ' + (d.id ?? '<id>')),
         chalk.dim('Canonical flips to this domain automatically on verify.'),
       ]));
       console.log('');
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
+  });
+
+domainsCommand.command('dns <id>').description('Show the DNS records an unverified custom domain still needs (from the backend)')
+  .option('--json', 'JSON output')
+  .action(async (id, options) => {
+    if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
+    const domainId = parseInt(id, 10);
+    if (isNaN(domainId)) { console.error(chalk.red('Invalid domain ID.')); process.exit(1); }
+    try {
+      const res = await apiClient.get('/api/v1/domains/custom');
+      const rows = (Array.isArray(res.data) ? res.data : []) as Record<string, any>[];
+      const row = rows.find((r) => r.id === domainId);
+      if (!row) { console.error(chalk.red(`Domain #${domainId} not found.`)); process.exit(1); }
+      if (isJsonOutput(options)) {
+        printJson({ id: row.id, domain: row.domain, is_verified: row.is_verified, dns_instructions: row.dns_instructions ?? null });
+        return;
+      }
+      console.log('');
+      if (row.is_verified) {
+        console.log(chalk.green(`  ✓ ${row.domain} is verified — no DNS records pending.`));
+      } else if (hasDnsInstructions(row.dns_instructions)) {
+        console.log(chalk.bold(`  ${row.domain}`));
+        for (const l of renderDnsInstructions(row.dns_instructions)) console.log(`  ${l}`);
+      } else {
+        console.log(chalk.yellow(`  The backend returned no DNS instructions for ${row.domain}.`));
+      }
+      console.log('');
+    } catch (e) { console.error(handleApiError(e).message); process.exit(1); }
   });
 
 domainsCommand.command('set-canonical <site> <address>')
@@ -196,22 +238,47 @@ domainsCommand.command('remove <id>').description('Remove a custom domain by ID'
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
-domainsCommand.command('verify <id>').description('Verify DNS for a custom domain')
-  .action(async (id) => {
+domainsCommand.command('verify <id>').description('Verify DNS for a custom domain (prints every check the backend ran)')
+  .option('--json', 'JSON output (the backend verify response verbatim)')
+  .action(async (id, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
     const domainId = parseInt(id, 10);
     if (isNaN(domainId)) { console.error(chalk.red('Invalid domain ID.')); process.exit(1); }
-    const spinner = ora(`Verifying domain #${domainId}...`).start();
+    const json = isJsonOutput(options);
+    const spinner = ora({ text: `Verifying domain #${domainId}...`, isSilent: json }).start();
     try {
       const res = await apiClient.post(`/api/v1/domains/custom/${domainId}/verify`);
       spinner.stop();
       const d = res.data as Record<string, any>;
-      if (d.verified) {
-        console.log(chalk.green(`  ✓ Domain verified and active`));
-      } else {
-        console.log(chalk.yellow(`  ○ DNS not yet propagated. Check your CNAME record.`));
+      if (json) {
+        printJson(d);
+        if (!d.verified) process.exitCode = 1;
+        return;
       }
+      if (d.verified) {
+        console.log(chalk.green(`  ✓ ${d.message || 'Domain verified and active'}`));
+        if (d.ssl_status) console.log(chalk.dim(`    SSL: ${d.ssl_status}`));
+        return;
+      }
+      console.log(chalk.yellow(`  ○ ${d.message || 'DNS verification failed.'}`));
+      const detailLines = renderVerifyDetails(d.details);
+      if (detailLines.length > 0) {
+        console.log('');
+        console.log(chalk.bold('  What the backend checked:'));
+        for (const l of detailLines) console.log(`    ${l}`);
+      }
+      // Re-show the records this domain needs, from the backend — best-effort.
+      try {
+        const list = await apiClient.get('/api/v1/domains/custom');
+        const row = (Array.isArray(list.data) ? list.data : []).find((r: any) => r.id === domainId);
+        if (row && hasDnsInstructions(row.dns_instructions)) {
+          console.log('');
+          for (const l of renderDnsInstructions(row.dns_instructions)) console.log(`  ${l}`);
+        }
+      } catch { /* records are a convenience; the verify result above stands */ }
+      console.log('');
+      process.exitCode = 1;
     } catch (e) { spinner.fail(chalk.red('Failed')); console.error(handleApiError(e).message); process.exit(1); }
   });
 
@@ -219,6 +286,7 @@ import { appendExamples as __appendExamplesDomains } from '../lib/command-kit';
 __appendExamplesDomains(domainsCommand, [
   { cmd: 'solid domains list', why: 'All attached domains + status' },
   { cmd: 'solid domains add acme.com', why: 'Attach a custom domain' },
-  { cmd: 'solid domains verify acme.com', why: 'Re-check DNS + re-issue cert' },
-  { cmd: 'solid domains remove acme.com --yes', why: 'Detach' },
+  { cmd: 'solid domains dns <id>', why: 'DNS records the domain still needs (from the backend)' },
+  { cmd: 'solid domains verify <id>', why: 'Re-check DNS; prints every check that failed' },
+  { cmd: 'solid domains remove <id>', why: 'Detach' },
 ]);

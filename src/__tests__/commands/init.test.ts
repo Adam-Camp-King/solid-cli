@@ -83,3 +83,50 @@ describe('starter kit — buildStarterFiles', () => {
     expect(renderStarterClaudeMd(ctx({ companyId: 76 }))).toContain('company_id 76');
   });
 });
+
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { decideManifestBinding } from '../../commands/init';
+import { buildTenantManifest, checkTenantManifest, writeTenantManifest } from '../../lib/tenant-guard';
+
+describe('solid init — tenant binding (.solid/manifest.json)', () => {
+  const base = { loggedIn: true, sessionCompanyId: 61, stampCompanyId: 61, protectedRoot: false };
+
+  it('binds to the logged-in company', () => {
+    expect(decideManifestBinding(base)).toEqual({ bind: true, companyId: 61 });
+    expect(decideManifestBinding({ ...base, stampCompanyId: null })).toEqual({ bind: true, companyId: 61 });
+  });
+
+  it('never binds to a --company the session is not authenticated as', () => {
+    const r = decideManifestBinding({ ...base, stampCompanyId: 76 });
+    expect(r.bind).toBe(false);
+    expect(r).toMatchObject({ reason: 'company_mismatch' });
+  });
+
+  it('does not bind when logged out, without a company, or in a protected root', () => {
+    expect(decideManifestBinding({ ...base, loggedIn: false })).toMatchObject({ bind: false, reason: 'not_logged_in' });
+    expect(decideManifestBinding({ ...base, sessionCompanyId: undefined })).toMatchObject({ bind: false, reason: 'no_session_company' });
+    expect(decideManifestBinding({ ...base, protectedRoot: true })).toMatchObject({ bind: false, reason: 'protected_root' });
+  });
+
+  it('the shared writer produces a manifest the push guard accepts — and still refuses another company', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'solid-init-bind-'));
+    try {
+      writeTenantManifest(dir, buildTenantManifest(61, 'Acme', 'https://api.solidnumber.com'));
+      const ok = checkTenantManifest(dir, 61);
+      expect(ok.ok).toBe(true);
+      const other = checkTenantManifest(dir, 62);
+      expect(other).toMatchObject({ ok: false, failure: { kind: 'mismatch', manifestCompanyId: 61 } });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the starter CLAUDE.md names the real publish path, not `solid deploy`', () => {
+    const md = buildStarterFiles(ctx())['CLAUDE.md'];
+    expect(md).toContain('solid push');
+    expect(md).toContain('solid publish');
+    expect(md).toMatch(/solid deploy.*does NOT publish/);
+  });
+});

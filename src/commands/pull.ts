@@ -20,7 +20,7 @@ import * as path from 'path';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
-import { refuseProtectedRoot, PullManifest } from '../lib/tenant-guard';
+import { refuseProtectedRoot, PullManifest, buildTenantManifest, writeTenantManifest } from '../lib/tenant-guard';
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -138,16 +138,7 @@ export const pullCommand = new Command('pull')
       }
     }
 
-    const manifest: PullManifest = {
-      company_id: companyId,
-      company_name: '',
-      pulled_at: new Date().toISOString(),
-      api_url: config.apiUrl,
-      pages: {},
-      kb: {},
-      services: {},
-      products: {},
-    };
+    const manifest: PullManifest = buildTenantManifest(companyId, '', config.apiUrl);
 
     let totalFiles = 0;
 
@@ -375,8 +366,7 @@ export const pullCommand = new Command('pull')
     }
 
     // ── Write manifest ───────────────────────────────────────────────
-    ensureDir(path.join(baseDir, '.solid'));
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    writeTenantManifest(baseDir, manifest);
 
     // ── Save offline cache if requested ─────────────────────────────
     if (options.cache) {

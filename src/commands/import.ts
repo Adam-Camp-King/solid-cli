@@ -443,7 +443,7 @@ export const importCommand = new Command('import')
   .option('--type <type>', 'Page type: website, landing, blog', 'website')
   .option('--stdin', 'Read HTML from stdin (pipe)')
   .option('--clipboard', 'Read HTML from system clipboard')
-  .option('--publish', 'Mark page as published')
+  .option('--publish', 'DEPRECATED — has no effect. import only writes a local file; go live with `solid push` then `solid publish <page_id>`')
   .option('--ai', 'Use Claude AI for smarter block classification (requires ANTHROPIC_API_KEY)')
   .option('--dir <path>', 'Working directory', process.cwd())
   .action(async (file, options) => {
@@ -497,6 +497,12 @@ export const importCommand = new Command('import')
       process.exit(1);
     }
 
+    if (options.publish) {
+      console.error(chalk.yellow('--publish has no effect and will be removed: `solid import` only writes pages/<slug>.json locally.'));
+      console.error(chalk.yellow('  To go live: solid push   (creates the page, unpublished)'));
+      console.error(chalk.yellow('              solid publish <page_id>   or   solid publish --all'));
+    }
+
     const title = options.page;
     const slug = options.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -539,7 +545,10 @@ export const importCommand = new Command('import')
       title,
       slug,
       page_type: options.type,
-      is_published: options.publish || false,
+      // Always false: the backend creates pages unpublished regardless of this
+      // field, so writing `true` here only made the file lie. Going live is
+      // `solid push` then `solid publish`.
+      is_published: false,
       is_landing_page: options.type === 'landing',
       meta_title: title,
       meta_description: '',
@@ -565,7 +574,8 @@ export const importCommand = new Command('import')
     console.log(chalk.dim('Next steps:'));
     console.log(chalk.dim(`  solid serve            Preview locally`));
     console.log(chalk.dim(`  solid open ${slug}      Edit in web builder`));
-    console.log(chalk.dim(`  solid push             Push to production`));
+    console.log(chalk.dim(`  solid push             Upload (creates the page unpublished)`));
+    console.log(chalk.dim(`  solid publish --all    Make it live`));
   });
 
 importCommand.addHelpText('after', `

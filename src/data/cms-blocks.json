@@ -1,9 +1,10 @@
 {
   "_meta": {
-    "version": "1.0.0",
-    "source": "Owners-Manual/71-Agent-Native-CLI/05-BLOCK-SCHEMA.md",
-    "extracted_from": "solid-frontend/src/components/cms/blocks/*.tsx interfaces",
-    "note": "Kept in sync manually. When Stitch lands or blocks change, update this file alongside the doc. Future: move to a backend-served /api/v1/cms/schema endpoint."
+    "version": "1.1.0",
+    "source": "solid-backend/schemas/block_schema.py (served live at GET /api/v1/cms/pages/schema)",
+    "extracted_from": "block types, required/optional props and aliases: solid-backend/schemas/block_schema.py; component names, categories, prop types, enums and examples: solid-frontend/src/components/cms/blocks/*.tsx",
+    "synced_at": "2026-09-17",
+    "note": "OFFLINE FALLBACK. `solid schema pages` fetches the live schema first and only uses this file when the API is unreachable — output says so. Re-sync from block_schema.py when block types change."
   },
   "envelope": {
     "sections": "array of block objects",
@@ -12,7 +13,11 @@
       "Each section must have `type: string` matching a canonical block type or alias.",
       "Props can be flat on the section (recommended) or nested under `config` / `props`.",
       "`id` is optional but recommended for stable diffs.",
-      "`SECTION_TYPE_MAP` in solid-frontend/src/components/cms/PageRenderer.tsx resolves kebab-case / snake_case / PascalCase / aliases into the 27 registry components."
+      "`SECTION_TYPE_MAP` in solid-frontend/src/components/cms/PageRenderer.tsx resolves kebab-case / snake_case / PascalCase / aliases into the registry components."
+    ],
+    "universal_optional_props": [
+      "mcp_tools",
+      "motion"
     ]
   },
   "blocks": [
@@ -20,6 +25,7 @@
       "type": "hero",
       "component": "Hero",
       "category": "Headers",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -45,6 +51,11 @@
       "type": "hero-image",
       "component": "HeroImage",
       "category": "Headers",
+      "aliases": [
+        "hero_image",
+        "heroimage"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -58,6 +69,11 @@
       "type": "hero-split",
       "component": "HeroSplit",
       "category": "Headers",
+      "aliases": [
+        "hero_split",
+        "herosplit"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -70,6 +86,12 @@
       "type": "text",
       "component": "TextBlock",
       "category": "Content",
+      "aliases": [
+        "text-block",
+        "text_block",
+        "textblock"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "content": "string (HTML/markdown-ish, backend sanitizes)",
@@ -82,6 +104,7 @@
       "type": "accordion",
       "component": "Accordion",
       "category": "Content",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -93,6 +116,12 @@
       "type": "process-steps",
       "component": "ProcessSteps",
       "category": "Content",
+      "aliases": [
+        "process",
+        "process_steps",
+        "processsteps"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -103,6 +132,12 @@
       "type": "blog-preview",
       "component": "BlogPreview",
       "category": "Content",
+      "aliases": [
+        "blog",
+        "blog_preview",
+        "blogpreview"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -115,6 +150,12 @@
       "type": "features",
       "component": "FeaturesGrid",
       "category": "Features & Pricing",
+      "aliases": [
+        "features-grid",
+        "features_grid",
+        "featuresgrid"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -123,15 +164,32 @@
         "backgroundColor": "string"
       },
       "enums": {
-        "icon": ["Zap", "Shield", "Star", "Rocket", "Users", "BarChart", "Lock", "Globe"]
+        "icon": [
+          "Zap",
+          "Shield",
+          "Star",
+          "Rocket",
+          "Users",
+          "BarChart",
+          "Lock",
+          "Globe"
+        ]
       },
       "example": {
         "id": "features-1",
         "type": "features",
         "title": "Why us",
         "features": [
-          { "icon": "Zap", "title": "Fast", "description": "60-minute response." },
-          { "icon": "Shield", "title": "Safe", "description": "Bonded and insured." }
+          {
+            "icon": "Zap",
+            "title": "Fast",
+            "description": "60-minute response."
+          },
+          {
+            "icon": "Shield",
+            "title": "Safe",
+            "description": "Bonded and insured."
+          }
         ],
         "columns": 2
       }
@@ -140,6 +198,12 @@
       "type": "pricing",
       "component": "PricingCards",
       "category": "Features & Pricing",
+      "aliases": [
+        "pricing-cards",
+        "pricing_cards",
+        "pricingcards"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -150,6 +214,7 @@
       "type": "cta",
       "component": "CTA",
       "category": "Calls to Action",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -166,6 +231,7 @@
       "type": "countdown",
       "component": "Countdown",
       "category": "Calls to Action",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -178,6 +244,7 @@
       "type": "testimonials",
       "component": "Testimonials",
       "category": "Social Proof",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -189,19 +256,29 @@
       "type": "stats",
       "component": "Stats",
       "category": "Social Proof",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
         "stats": "Stat[] — { value, label, icon }"
       },
       "enums": {
-        "icon": ["trending", "users", "globe", "zap"]
+        "icon": [
+          "trending",
+          "users",
+          "globe",
+          "zap"
+        ]
       }
     },
     {
       "type": "team",
       "component": "Team",
       "category": "Social Proof",
+      "aliases": [
+        "staff"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -212,6 +289,14 @@
       "type": "logo-cloud",
       "component": "LogoCloud",
       "category": "Social Proof",
+      "aliases": [
+        "clients",
+        "logo_cloud",
+        "logocloud",
+        "logos",
+        "partners"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "logos": "Logo[] — { id, name, src }"
@@ -221,6 +306,12 @@
       "type": "google-reviews",
       "component": "GoogleReviews",
       "category": "Social Proof",
+      "aliases": [
+        "google_reviews",
+        "googlereviews",
+        "reviews"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -233,6 +324,10 @@
       "type": "gallery",
       "component": "Gallery",
       "category": "Media",
+      "aliases": [
+        "portfolio"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -245,7 +340,14 @@
       "type": "video-embed",
       "component": "VideoEmbed",
       "category": "Media",
-      "aliases": ["video"],
+      "aliases": [
+        "video",
+        "video_embed",
+        "videoembed",
+        "vimeo",
+        "youtube"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -259,6 +361,11 @@
       "type": "before-after",
       "component": "BeforeAfter",
       "category": "Media",
+      "aliases": [
+        "before_after",
+        "beforeafter"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -269,12 +376,22 @@
       "type": "contact",
       "component": "ContactForm",
       "category": "Forms & Widgets",
+      "aliases": [
+        "contact-form",
+        "contact_form",
+        "contactform",
+        "form"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
         "email": "string",
         "phone": "string",
-        "address": "string"
+        "address": "string",
+        "fields": "unknown — accepted by the backend validator; the frontend block does not read it",
+        "submit_text": "unknown — accepted by the backend validator; the frontend block does not read it",
+        "post_url": "unknown — accepted by the backend validator; the frontend block does not read it"
       },
       "notes": "Pulls missing contact fields from company context."
     },
@@ -282,10 +399,19 @@
       "type": "booking",
       "component": "BookingWidget",
       "category": "Forms & Widgets",
+      "aliases": [
+        "appointments",
+        "booking_widget",
+        "bookingwidget",
+        "schedule"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
-        "services": "string[]"
+        "services": "string[]",
+        "calendar_url": "unknown — accepted by the backend validator; the frontend block does not read it",
+        "slot_duration": "unknown — accepted by the backend validator; the frontend block does not read it"
       },
       "notes": "Pulls missing services from company context."
     },
@@ -293,18 +419,31 @@
       "type": "chat-widget",
       "component": "ChatWidgetBlock",
       "category": "Forms & Widgets",
-      "aliases": ["chat_widget"],
+      "aliases": [
+        "chat",
+        "chat_widget",
+        "chatwidget",
+        "chatwidgetblock"
+      ],
+      "required": [],
       "props": {
         "chat_id": "string",
         "position": "\"bottom-right\" | \"bottom-left\"",
         "greeting": "string",
-        "primaryColor": "string"
+        "primaryColor": "string",
+        "agent_id": "unknown — accepted by the backend validator; the frontend block does not read it"
       }
     },
     {
       "type": "business-hours",
       "component": "BusinessHours",
       "category": "Business Info",
+      "aliases": [
+        "business_hours",
+        "businesshours",
+        "hours"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -316,6 +455,16 @@
       "type": "products",
       "component": "ProductCatalog",
       "category": "Business Info",
+      "aliases": [
+        "catalog",
+        "menu",
+        "product-catalog",
+        "product_catalog",
+        "productcatalog",
+        "service-menu",
+        "service_menu"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -323,7 +472,8 @@
         "featured_only": "boolean",
         "columns": "2 | 3 | 4",
         "show_prices": "boolean",
-        "layout": "\"grid\" | \"list\""
+        "layout": "\"grid\" | \"list\"",
+        "product_ids": "unknown — accepted by the backend validator; the frontend block does not read it"
       },
       "notes": "Pulls products from company context."
     },
@@ -331,6 +481,13 @@
       "type": "service-area",
       "component": "ServiceArea",
       "category": "Business Info",
+      "aliases": [
+        "areas",
+        "coverage",
+        "service_area",
+        "servicearea"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -342,6 +499,14 @@
       "type": "map-embed",
       "component": "MapEmbed",
       "category": "Business Info",
+      "aliases": [
+        "directions",
+        "location",
+        "map",
+        "map_embed",
+        "mapembed"
+      ],
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string"
@@ -352,6 +517,7 @@
       "type": "faq",
       "component": "FAQ",
       "category": "FAQ",
+      "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
@@ -362,10 +528,34 @@
       "type": "divider",
       "component": "Divider",
       "category": "Layout",
+      "aliases": [
+        "separator",
+        "spacer"
+      ],
+      "required": [],
       "props": {
         "style": "\"line\" | \"dots\" | \"gradient\" | \"space\"",
         "spacing": "\"small\" | \"medium\" | \"large\""
       }
+    },
+    {
+      "type": "raw_html",
+      "component": "RawHtml",
+      "category": "Escape Hatch",
+      "aliases": [
+        "html",
+        "raw-html",
+        "rawhtml"
+      ],
+      "required": [
+        "html"
+      ],
+      "props": {
+        "html": "string (sanitized with DOMPurify at render)",
+        "tag": "\"div\" | \"section\" | \"article\" | \"main\" | \"aside\"",
+        "className": "string"
+      },
+      "notes": "Escape hatch for imports (Nest/Ant). Use only when no native block fits the source markup. `html` is required."
     }
   ]
 }

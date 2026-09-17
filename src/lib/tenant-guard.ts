@@ -27,6 +27,35 @@ export interface PullManifest {
 }
 
 /**
+ * The ONE manifest shape + writer. `solid pull` and `solid init` both bind a
+ * directory to a tenant through these, so an `init`-scaffolded project passes
+ * `requireTenantManifest` exactly like a pulled one. Binding is always to the
+ * company the CLI is authenticated as — callers pass `config.companyId`, never
+ * a user-typed id — so the guard's company check keeps its meaning.
+ */
+export function buildTenantManifest(companyId: number, companyName: string, apiUrl: string): PullManifest {
+  return {
+    company_id: companyId,
+    company_name: companyName,
+    pulled_at: new Date().toISOString(),
+    api_url: apiUrl,
+    pages: {},
+    kb: {},
+    services: {},
+    products: {},
+  };
+}
+
+/** Write `.solid/manifest.json` under `baseDir`. Returns the manifest path. */
+export function writeTenantManifest(baseDir: string, manifest: PullManifest): string {
+  const dir = path.join(baseDir, '.solid');
+  fs.mkdirSync(dir, { recursive: true });
+  const manifestPath = path.join(dir, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+  return manifestPath;
+}
+
+/**
  * Why a directory is refused as a tenant-write target.
  *
  * - `home`           — $HOME itself. ~/.claude/ is loaded by every
@@ -183,8 +212,8 @@ export function requireTenantManifest(baseDir: string, companyId: number): PullM
   } else if (result.failure.kind === 'missing') {
     console.error(chalk.red('Not a Solid# tenant working directory.'));
     console.error(chalk.dim(`  No .solid/manifest.json in ${baseDir}`));
-    console.error(chalk.dim('  Run `solid pull` in an empty directory to create one,'));
-    console.error(chalk.dim('  or `cd` into an existing tenant project.'));
+    console.error(chalk.dim('  Run `solid pull` (or `solid init <name>` while logged in) in an empty directory'));
+    console.error(chalk.dim('  to create one, or `cd` into an existing tenant project.'));
   } else {
     const f = result.failure;
     console.error(chalk.red(`Directory belongs to company ${f.manifestCompanyId} (${f.manifestCompanyName}).`));

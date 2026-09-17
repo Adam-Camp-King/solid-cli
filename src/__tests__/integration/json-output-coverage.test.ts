@@ -41,7 +41,6 @@ const NO_JSON_BY_DESIGN: Record<string, string> = {
   'visual.ts': 'opens a visual editor',
   'clone.ts': 'copies a tenant into a directory; the filesystem is the output',
   'import.ts': 'converts local files in place; the filesystem is the output',
-  'publish.ts': 'thin wrapper that delegates to commands which emit their own JSON',
   'push.ts': 'syncs local files upward; progress is inherently a stream',
   'pull.ts': 'writes files to disk; the filesystem is the output',
   'export.ts': 'writes an export file; the file is the output',
