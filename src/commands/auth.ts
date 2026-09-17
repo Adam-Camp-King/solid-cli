@@ -258,6 +258,18 @@ authCommand
     try {
       // API key login (for scripts/CI)
       if (options.token) {
+        // ⛔ A token login REPLACES the account. This used to overwrite only
+        // access_token and leave the PREVIOUS account's refresh_token,
+        // token_expires_at and cached company list in place. Because
+        // token_expires_at still described the OLD session, the proactive
+        // refresh in api-client (`shouldRefresh` → POST /auth/refresh with
+        // config.refreshToken) fires on the next command and overwrites
+        // access_token with a fresh token FOR THE OLD ACCOUNT — silently
+        // flipping the CLI back to the account the operator just left, with a
+        // stale company list to match. Clear the whole previous session first.
+        config.refreshToken = undefined;
+        config.tokenExpiresAt = undefined;
+        config.companies = undefined;
         config.accessToken = options.token;
         // Verify the key works
         const spinner = ora('Verifying API key...').start();
