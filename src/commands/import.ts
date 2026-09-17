@@ -6,8 +6,19 @@
  *
  * solid import landing.html --page "Summer Sale"
  * solid import --clipboard --page "Promo"
- * solid import --url https://example.com/page --page "Competitor Reference"
  * cat snippet.html | solid import --stdin --page "Quick Page"
+ *
+ * ⛔ THIS IS NOT THE WAY TO CLONE A WEBSITE, and its name says otherwise, which
+ * is the whole problem. It converts ONE local HTML file to blocks on this
+ * machine — no backend call, no import record, no rollback, and the page's own
+ * CSS, fonts and motion are gone. Bringing across a site a business already
+ * owns is `solid nest <url|file|folder>`: preview -> build -> place -> publish,
+ * with a fidelity score and `solid ant rollback` behind it.
+ *
+ * The docblock above used to advertise `--url`, which has never existed as an
+ * option: someone following it landed on "Provide an HTML file, --stdin, or
+ * --clipboard" and no mention of nest. That line is gone and a URL argument now
+ * points at the right command instead of dead-ending.
  */
 
 import { Command } from 'commander';
@@ -449,6 +460,18 @@ export const importCommand = new Command('import')
   .action(async (file, options) => {
     let html = '';
 
+    // A URL is never a local file. Whoever typed one wants the clone door.
+    if (file && /^https?:\/\//i.test(file)) {
+      console.error(chalk.yellow(`${file} is a website, not a local HTML file.`));
+      console.log('');
+      console.log(`  ${chalk.bold('solid nest ' + file)}   ${chalk.dim('← clone it into Solid#')}`);
+      console.log(chalk.dim('    fetches the site, previews what it will build, then'));
+      console.log(chalk.dim('    builds it, places it and scores it against the original.'));
+      console.log('');
+      console.log(chalk.dim('  solid import converts one local HTML file to blocks, offline.'));
+      process.exit(1);
+    }
+
     // Read HTML from source
     if (options.stdin) {
       // Read from stdin
@@ -484,6 +507,9 @@ export const importCommand = new Command('import')
       console.log(chalk.dim('  solid import landing.html --page "Summer Sale"'));
       console.log(chalk.dim('  solid import --clipboard --page "Promo"'));
       console.log(chalk.dim('  cat page.html | solid import --stdin --page "Quick"'));
+      console.log('');
+      console.log(chalk.dim('  Bringing across a whole site you already have?'));
+      console.log(`  ${chalk.bold('solid nest <url | file | folder>')}  ${chalk.dim('← the clone door')}`);
       process.exit(1);
     }
 
@@ -573,6 +599,11 @@ Examples:
   $ solid import --page "Home" --slug home < home.html      # Pipe HTML from stdin
   $ solid import --page "Home" --clipboard                  # Read HTML from clipboard
   $ solid import --page "Home" --ai                         # Use Claude for block classification
+
+Cloning a website you ALREADY have? This is not that command:
+  $ solid nest https://showerpros.com        # fetch, preview, build, place
+  $ solid nest ./site/index.html             # the same flow from a file
+  solid import is offline and local: one HTML file -> blocks, no CSS, no rollback.
 
 For domain-specific bulk imports, prefer:
   solid crm contacts import ./leads.csv
