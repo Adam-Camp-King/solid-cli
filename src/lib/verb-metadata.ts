@@ -63,11 +63,10 @@ const IDEMPOTENT_MUTATIONS = new Set([
 ]);
 
 const NO_AUTH_COMMANDS = new Set([
-  // There is no `solid auth signup`. Terminal sign-up is the onboarding v2
-  // flow below — public backend routes, no login required.
+  // There is no CLI signup verb — not `solid auth signup` (which never
+  // existed) and not an onboarding one. Accounts are created on the web;
+  // `solid onboarding provision` refuses and says so. Owner decision 2026-09-17.
   'solid auth', 'solid auth login',
-  'solid onboarding discover', 'solid onboarding set-business',
-  'solid onboarding provision', 'solid onboarding session',
   'solid health', 'solid doctor', 'solid --version',
   'solid schema', 'solid schema verbs', 'solid schema pages',
   'solid schema blocks', 'solid schema describe', 'solid schema workflows',

@@ -13,8 +13,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient } from '../lib/api-client';
-import { isJsonOutput } from '../lib/json-output';
-import { adoptSessionToken, AdoptResult } from '../lib/session-token';
+import { isJsonOutput, printJson } from '../lib/json-output';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -121,8 +120,11 @@ emailCmd
     const spinner = ora(`Verifying ownership of ${domain}...`).start();
     try {
       const res = await apiClient.post('/api/v1/setup-wizard/email/domain/verify-ownership', { domain });
-      spinner.succeed(chalk.green('Ownership verification result'));
+      const refusal = backendRefusal(res.data);
+      if (refusal) spinner.fail(chalk.red(refusal));
+      else spinner.succeed(chalk.green('Ownership verification result'));
       console.log(JSON.stringify(res.data, null, 2));
+      if (refusal) process.exit(1);
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
@@ -134,8 +136,11 @@ emailCmd
     const spinner = ora(`Verifying ${domain}...`).start();
     try {
       const res = await apiClient.post('/api/v1/setup-wizard/email/domain/verify', { domain });
-      spinner.succeed(chalk.green('Verify result'));
+      const refusal = backendRefusal(res.data);
+      if (refusal) spinner.fail(chalk.red(refusal));
+      else spinner.succeed(chalk.green('Verify result'));
       console.log(JSON.stringify(res.data, null, 2));
+      if (refusal) process.exit(1);
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
@@ -503,14 +508,34 @@ onboardingCommand
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
-// ── Onboarding v2 (newer business-discover flow) ──────────────────────
+// ── Onboarding v2 (business-discover flow) ────────────────────────────
 //
-// ⛔ NO LOGIN REQUIRED for discover / set-business / provision / session.
-// These are how someone WITHOUT an account signs up from the terminal; the
-// backend routes (solid-backend controllers/onboarding_v2.py) are public and
-// rate-limited (discover/set-business/session 30/min, provision 5/hour per IP).
-// `provision` returns an `auth_token`, which is stored as the CLI session the
-// same way `solid auth login --token` stores one (lib/session-token.ts).
+// ⛔ ACCOUNTS ARE NOT CREATED FROM THE TERMINAL. Owner decision, 2026-09-17.
+// The backend's onboarding-v2 routes are public, but this CLI does not expose a
+// signup path: `provision` refuses and points at the web entry point, and every
+// other verb here requires a login and acts on the company you are logged in
+// as. Self-serve signup on the web is closed too — solidnumber.com/start lands
+// on the contact form (solid-public/src/app/start/page.tsx).
+
+/** Where accounts actually get created. The CLI never creates one. */
+export const SIGNUP_URL = 'https://solidnumber.com/start';
+
+/**
+ * A 200 whose body says `success: false` is a FAILURE. The setup-wizard
+ * endpoints answer business-rule refusals that way (e.g.
+ * `POST /email/domain/verify-ownership` when the TXT record is missing —
+ * solid-backend controllers/setup_wizard.py:1029-1072), so a command that just
+ * printed the body exited 0 on a refusal and a script read it as success.
+ */
+export function backendRefusal(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const b = body as Record<string, unknown>;
+  if (b.success === false) {
+    const msg = [b.message, b.detail, b.error].find((v) => typeof v === 'string' && v.trim() !== '');
+    return (msg as string) || 'The backend refused the request';
+  }
+  return null;
+}
 
 /**
  * Pure: build the provision request body from `--data` JSON plus explicit
@@ -549,12 +574,13 @@ export function buildProvisionBody(
 
 onboardingCommand
   .command('discover')
-  .description('Step 1 of terminal sign-up (no login needed): match a business to an industry template, get a session ID')
+  .description('Industry discovery (v2 onboarding) — match a business to an industry template')
   .requiredOption('--message <text>', 'Business description or industry keyword (e.g. "plumber", "acme plumbing services")')
   .option('--session <id>', 'Existing session ID (resume a flow)')
   .option('--ref <code>', 'Partner referral code')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
+    requireAuth();
     const body: Record<string, unknown> = { message: opts.message };
     if (opts.session) body.session_id = opts.session;
     if (opts.ref) body.ref_code = opts.ref;
@@ -589,7 +615,7 @@ onboardingCommand
 
 onboardingCommand
   .command('set-business')
-  .description('Step 2 of terminal sign-up (no login needed): save the business name to a discovery session')
+  .description('Save a business name to a discovery session (Step 1b of v2)')
   .requiredOption('--name <name>', 'Business name')
   .option('--session <id>', 'Existing session ID (omit to start a new session)')
   .option('--phone <phone>', 'Business phone')
@@ -599,6 +625,7 @@ onboardingCommand
   .option('--ref <code>', 'Partner referral code')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
+    requireAuth();
     const body: Record<string, unknown> = { business_name: opts.name };
     if (opts.session) body.session_id = opts.session;
     if (opts.phone) body.business_phone = opts.phone;
@@ -620,118 +647,60 @@ onboardingCommand
       console.log(chalk.green('  Saved'));
       console.log(`  ${chalk.bold('Session:')} ${r.session_id}   ${chalk.dim(`state: ${r.state}`)}`);
       console.log('');
-      console.log(chalk.dim(`  Next: solid onboarding provision --session ${r.session_id} --email <you@example.com> --business-name "${opts.name}" --password <min 8 chars>`));
+      console.log(chalk.dim('  Accounts are created on the web, not here: ' + SIGNUP_URL));
     } catch (e) { fail(spinner, 'Failed', e); }
   });
 
 onboardingCommand
   .command('provision')
-  .description('Step 3 of terminal sign-up (no login needed): create the account + company and log this CLI in as it')
-  .option('--session <id>', 'Session ID from discover / set-business (required)')
-  .option('--email <email>', 'Owner email (required)')
-  .option('--business-name <name>', 'Business name (required)')
-  .option('--password <password>', 'Account password, min 8 chars (strongly recommended — without it the backend sets a random one)')
-  .option('--owner-name <name>', 'Owner full name')
-  .option('--industry <name>', 'Industry keyword (used only if the session has no industry match)')
-  .option('--zip <zip>', 'Business ZIP (decides which card-fee programs are legal where you trade)')
-  .option('--state <st>', 'Business state (2 letters)')
-  .option('--city <city>', 'Business city')
-  .option('--street <street>', 'Business street address')
-  .option('--data <json>', 'Full request body as JSON (fields: session_id, email, business_name, password, …); flags override it')
-  .option('--no-login', 'Do not store the returned token as this CLI\'s session (prints it instead)')
-  .option('--json', 'Output as JSON (the token is redacted when it was stored)')
+  .description('⛔ Not available: accounts are not created from the terminal — start at ' + SIGNUP_URL)
+  .option('--session <id>', 'Session ID (accepted so scripts get this message, not "unknown option")')
+  .option('--email <email>', 'Owner email (accepted, unused)')
+  .option('--business-name <name>', 'Business name (accepted, unused)')
+  .option('--password <password>', 'Password (accepted, unused)')
+  .option('--owner-name <name>', 'Owner full name (accepted, unused)')
+  .option('--industry <name>', 'Industry keyword (accepted, unused)')
+  .option('--zip <zip>', 'Business ZIP (accepted, unused)')
+  .option('--state <st>', 'Business state (accepted, unused)')
+  .option('--city <city>', 'Business city (accepted, unused)')
+  .option('--street <street>', 'Business street (accepted, unused)')
+  .option('--data <json>', 'Request body as JSON (accepted, unused)')
+  .option('--json', 'Output the refusal as JSON')
   .action(async (opts) => {
+    // Owner decision 2026-09-17: no terminal account creation. This verb used
+    // to POST the backend's onboarding-v2 provision route and log the CLI in as
+    // the new company. It now refuses — deterministically, with the same shape
+    // every time, so an agent gets an answer instead of half-creating a business.
     const built = buildProvisionBody(opts.data, opts);
-    if ('error' in built) { console.error(chalk.red(built.error)); process.exit(1); }
-    if (built.missing.length > 0) {
-      console.error(chalk.red(`Missing required: ${built.missing.join(', ')}`));
-      console.error(chalk.dim('  Use --session, --email, --business-name (or put them in --data).'));
-      process.exit(1);
-    }
-    const json = isJsonOutput(opts);
-    if (!built.body.password && !json) {
-      console.error(chalk.yellow('  No --password given: the backend will set a random password you will not see.'));
-      console.error(chalk.yellow('  This CLI session will work, but to log in elsewhere you will need a password reset.'));
-    }
-    const spinner = ora({ text: 'Provisioning tenant...', isSilent: json }).start();
-    let r: Record<string, any>;
-    try {
-      const res = await apiClient.post('/api/v1/onboarding-v2/provision', built.body);
-      r = res.data as Record<string, any>;
-    } catch (e) { fail(spinner, 'Provision failed', e); }
-
-    // The backend answers business-rule refusals (duplicate email, duplicate
-    // business name, blocked industry, internal failure) as HTTP 200 with
-    // success:false — that is a failure, and must exit non-zero.
-    if (!r.success) {
-      spinner.stop();
-      if (json) {
-        console.log(JSON.stringify({ ...r, auth_token: undefined }, null, 2));
-      } else {
-        console.error(chalk.red(`  Provision refused: ${r.message || 'unknown reason'}`));
-      }
-      process.exit(1);
-    }
-
-    const token: string | undefined = r.auth_token || undefined;
-    let adopt: AdoptResult | null = null;
-    const previousCompany = config.isLoggedIn() ? config.companyId : undefined;
-    if (token && opts.login !== false) {
-      adopt = await adoptSessionToken(token, {
-        companyId: r.company_id,
-        userId: r.user_id,
-        email: typeof built.body.email === 'string' ? built.body.email : undefined,
+    const supplied = 'error' in built ? [] : Object.keys(built.body).sort();
+    if (isJsonOutput(opts)) {
+      printJson({
+        error: {
+          code: 'UNSUPPORTED',
+          message: 'Account creation is not available from the CLI. Start at ' + SIGNUP_URL,
+          signup_url: SIGNUP_URL,
+          supplied_fields: supplied,
+        },
       });
+      process.exit(1);
     }
-    spinner.stop();
-
-    if (json) {
-      const out: Record<string, unknown> = { ...r };
-      if (adopt) {
-        out.auth_token = '[stored as the CLI session]';
-        out.session = {
-          stored: true,
-          confirmed: adopt.confirmed,
-          ...(adopt.confirmed ? {} : { reason: adopt.reason }),
-          previous_company_id: previousCompany ?? null,
-        };
-      } else {
-        out.session = { stored: false, reason: token ? 'no_login_flag' : 'backend_returned_no_token' };
-      }
-      console.log(JSON.stringify(out, null, 2));
-      return;
+    console.error(chalk.red('  Account creation is not available from the CLI.'));
+    console.error(chalk.dim(`  Start here: ${SIGNUP_URL}`));
+    console.error(chalk.dim('  (Self-serve signup is currently closed — that page routes to the contact form.)'));
+    if (supplied.length > 0) {
+      console.error(chalk.dim(`  Details you passed (${supplied.join(', ')}) were NOT sent anywhere.`));
     }
-
-    console.log(chalk.green(`  ✓ ${r.message || 'Account created'}`));
-    console.log(`  ${chalk.bold('Company ID:')} ${r.company_id}`);
-    console.log(`  ${chalk.bold('User ID:')}    ${r.user_id}`);
-    if (r.dashboard_url) console.log(`  ${chalk.bold('Dashboard:')}  https://app.solidnumber.com${r.dashboard_url}`);
-    console.log('');
-    if (adopt) {
-      console.log(chalk.green(`  ✓ Logged this CLI in as company ${r.company_id}.`));
-      if (previousCompany && previousCompany !== r.company_id) {
-        console.log(chalk.yellow(`    (Replaced the previous session for company ${previousCompany} — \`solid auth login\` to go back.)`));
-      }
-      if (!adopt.confirmed) {
-        console.log(adopt.reason === 'env_credential_overrides'
-          ? chalk.yellow('    SOLID_API_KEY / SOLID_TOKEN is set and outranks the stored session — unset it to act as the new account.')
-          : chalk.yellow('    Stored, but /auth/me could not confirm it yet. Check with: solid auth status'));
-      }
-      console.log(chalk.dim('    The token has no refresh token; when it expires run `solid auth login`.'));
-    } else if (token) {
-      console.log(chalk.yellow('  --no-login: token NOT stored. Use it with: solid auth login --token <token>'));
-      console.log(`  ${token}`);
-    } else {
-      console.log(chalk.yellow('  The backend returned no auth token. Log in with: solid auth login'));
-    }
+    console.error(chalk.dim('  Already have a company? `solid auth login`, then use the other onboarding verbs.'));
+    process.exit(1);
   });
 
 onboardingCommand
   .command('session')
-  .description('Get an onboarding v2 session (no login needed)')
+  .description('Get an onboarding v2 session')
   .requiredOption('--session <id>', 'Session ID from discover / set-business')
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
+    requireAuth();
     const json = isJsonOutput(opts);
     const spinner = ora({ text: 'Loading session...', isSilent: json }).start();
     try {
@@ -745,7 +714,6 @@ import { appendExamples as __ae_onb, fail } from '../lib/command-kit';
 __ae_onb(onboardingCommand, [
   { cmd: 'solid onboarding status',                                   why: 'Onboarding progress per company' },
   { cmd: 'solid onboarding health',                                   why: 'Onboarding service health' },
-  { cmd: 'solid onboarding discover --message "plumber"',              why: 'Sign up with no account: step 1' },
-  { cmd: 'solid onboarding provision --session <id> --email <e> --business-name <n> --password <p>', why: 'Create the account + log the CLI in' },
+  { cmd: 'solid onboarding discover --message "plumber"',              why: 'Match a business to an industry template' },
   { cmd: 'solid onboarding address-create --line1 ... --city ...',    why: 'Seed a company address' },
 ]);
