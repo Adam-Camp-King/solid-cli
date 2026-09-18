@@ -156,3 +156,62 @@ it('still leaves a correct, already-matching key alone', async () => {
   expect(createKey).not.toHaveBeenCalled();
   expect(mockFs.writeFileSync).not.toHaveBeenCalled();
 });
+
+// ── the machine that has no door at all ──────────────────────────────────
+//
+// ⛔⛔ 2026-09-17. Everything above repairs a server that already exists. On a
+// machine that never had one — no source checkout, no ~/.claude.json entry —
+// login, switch and `solid ai` all reported success and left the agent with no
+// Solid door whatsoever, while an account-level claude.ai connector authorized
+// from Claude Desktop (a DIFFERENT company) quietly answered instead. The login
+// was real; the pairing step did not exist.
+
+it('⛔ creates a Solid server when the machine has none and provisioning is asked for', async () => {
+  mockFs.existsSync.mockReturnValue(false as never);
+  mockFs.writeFileSync.mockImplementation(() => undefined);
+  mockFs.mkdirSync.mockImplementation(() => undefined as never);
+  const createKey = jest.fn().mockResolvedValue('sk_new_for_61');
+
+  const r = await syncMcpCredential(
+    61, { apiUrl: 'https://x', createKey }, ['vscode'], { provisionInto: 'vscode' },
+  );
+
+  expect(r.status).toBe('created');
+  expect(r.companyId).toBe(61);
+  expect(createKey).toHaveBeenCalledTimes(1);
+  const written = String(mockFs.writeFileSync.mock.calls[0][1]);
+  expect(written).toContain('sk_new_for_61');
+  expect(written).toContain('"SOLID_COMPANY_ID": "61"');
+});
+
+it('skips only when the caller did not ask to provision', async () => {
+  // ⛔ THIS TEST USED TO SAY "login must not create doors silently" AND THAT WAS
+  // WRONG — Adam, 2026-09-17: "this cant be what users do". Logging in IS the
+  // pairing. A customer will never run a setup wizard, edit ~/.claude.json, or
+  // reconnect a connector in a settings page. Login and switch now pass
+  // provisionInto; this only covers callers that genuinely just want a check.
+  mockFs.existsSync.mockReturnValue(false as never);
+  const createKey = jest.fn();
+
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+
+  expect(r.status).toBe('skipped');
+  expect(createKey).not.toHaveBeenCalled();
+  expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+});
+
+it('⛔ refuses to overwrite a config it cannot parse — it is full of their other servers', async () => {
+  mockFs.existsSync.mockReturnValue(true as never);
+  mockFs.readFileSync.mockReturnValue('{ this is not json' as never);
+  mockFs.writeFileSync.mockImplementation(() => undefined);
+  // findSolidServerEntry finds nothing in an unparseable file, so we reach the
+  // provisioner — which must bail rather than clobber.
+  const createKey = jest.fn().mockResolvedValue('sk_new_for_61');
+
+  const r = await syncMcpCredential(
+    61, { apiUrl: 'https://x', createKey }, ['vscode'], { provisionInto: 'vscode' },
+  );
+
+  expect(r.status).toBe('failed');
+  expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+});

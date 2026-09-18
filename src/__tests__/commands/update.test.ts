@@ -59,16 +59,40 @@ describe('detectInstaller', () => {
     expect(out.command).toEqual(['brew', 'upgrade', 'solidnumber/tap/cli']);
   });
 
+  it('⛔ brew upgrade does not auto-tap, so brew carries a tap preflight', () => {
+    // `brew upgrade user/repo/formula` fails outright on a machine that has not
+    // tapped — "This command requires the tap solidnumber/tap". Only `brew
+    // install` auto-taps. Without this the update command dead-ends there.
+    const out = detectInstaller('/opt/homebrew/Cellar/cli/2.24.0/libexec/dist/index.js');
+    expect(out.preflight).toEqual(['brew', 'tap', 'solidnumber/tap']);
+  });
+
+  it('recognises the brew formula payload inside the keg (libexec/node_modules)', () => {
+    const out = detectInstaller(
+      '/opt/homebrew/Cellar/cli/2.24.0/libexec/lib/node_modules/@solidnumber/cli/dist/index.js',
+    );
+    expect(out.installer).toBe('brew');
+  });
+
   it('recognises scoop', () => {
     const out = detectInstaller('C:\\Users\\x\\scoop\\apps\\solid\\current\\solid.exe');
     expect(out.installer).toBe('scoop');
     expect(out.command).toEqual(['scoop', 'update', 'solid']);
   });
 
-  it('⛔ a brew payload also lives in node_modules — brew must still win', () => {
-    // Getting this backwards prints `npm install -g` to a Homebrew user, which
-    // quietly installs a SECOND copy instead of upgrading the one they have.
+  it('⛔ a Homebrew PREFIX is not a Homebrew INSTALL — npm-under-brew-node is npm', () => {
+    // Real failure, Adam's iMac 2026-09-17. `npm i -g` under a brew-installed
+    // node lands in /opt/homebrew/lib/node_modules — no Cellar anywhere. Calling
+    // that brew printed `brew upgrade solidnumber/tap/cli` to a machine that had
+    // never tapped, and the update dead-ended on "requires the tap". The real
+    // formula payload lives under Cellar/<ver>/libexec, which /cellar/ catches.
     const out = detectInstaller('/opt/homebrew/lib/node_modules/@solidnumber/cli/dist/index.js');
+    expect(out.installer).toBe('npm');
+    expect(out.command).toEqual(['npm', 'install', '-g', `${PACKAGE_NAME}@latest`]);
+  });
+
+  it('a linuxbrew keg is still brew', () => {
+    const out = detectInstaller('/home/linuxbrew/.linuxbrew/Cellar/cli/2.24.0/libexec/dist/index.js');
     expect(out.installer).toBe('brew');
   });
 

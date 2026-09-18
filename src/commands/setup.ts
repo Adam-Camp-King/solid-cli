@@ -83,15 +83,36 @@ function getInstallTokenTimeoutMs(): number {
   return n;
 }
 
-const EDITORS: Array<{ binary: string; clientFlag: string; pretty: string }> = [
-  { binary: 'claude', clientFlag: 'claude', pretty: 'Claude Code' },
-  { binary: 'cursor', clientFlag: 'cursor', pretty: 'Cursor' },
-  { binary: 'windsurf', clientFlag: 'windsurf', pretty: 'Windsurf' },
+/**
+ * Editor binary → the MCP client config we write for it.
+ *
+ * ⛔⛔ `claude` (Claude Code, the terminal) maps to 'vscode', which is
+ * ~/.claude.json — the user-scope file the `claude` CLI actually loads. It must
+ * NEVER map to 'claude', which is Claude DESKTOP's claude_desktop_config.json, a
+ * file the terminal never opens. That one-word mapping cost an evening on
+ * 2026-09-17: setup detected the binary, printed "✓ Claude Code", wrote the
+ * company-61 key into Claude Desktop's config, and left the terminal with no
+ * Solid door — so an account-level claude.ai connector bound to company 1
+ * answered instead, confidently, with write access.
+ *
+ * Exported so a test can assert WHERE THE BYTES GO
+ * (src/__tests__/commands/setup-writes-the-file-the-tool-reads.test.ts). Every
+ * other setup test asserts what setup PRINTS, which is exactly why all of them
+ * passed through the bug.
+ */
+export const EDITORS: Array<{ binary: string; clientFlag: string; step: string; pretty: string }> = [
+  // `step` is what the report calls this, and it follows the EDITOR; `clientFlag`
+  // is which config file we write, and it follows the FILE THE TOOL READS. They
+  // are the same word for Cursor and Windsurf and deliberately differ for
+  // Claude Code, whose config is ~/.claude.json ('vscode').
+  { binary: 'claude', clientFlag: 'vscode', step: 'claude', pretty: 'Claude Code' },
+  { binary: 'cursor', clientFlag: 'cursor', step: 'cursor', pretty: 'Cursor' },
+  { binary: 'windsurf', clientFlag: 'windsurf', step: 'windsurf', pretty: 'Windsurf' },
   // The Claude Code VS Code extension runs inside VS Code's own runtime,
   // so it works on older macOS where the native `claude` binary can't
   // launch (needs 13+). Detecting `code` gives those machines a working
   // path instead of a dead end.
-  { binary: 'code', clientFlag: 'vscode', pretty: 'VS Code (Claude Code extension)' },
+  { binary: 'code', clientFlag: 'vscode', step: 'vscode', pretty: 'VS Code (Claude Code extension)' },
 ];
 
 // Resolve an editor to a launchable binary. VS Code needs special handling:
@@ -354,7 +375,7 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
       present.push(editor);
     } else {
       results.push({
-        step: `mcp.${editor.clientFlag}`,
+        step: `mcp.${editor.step}`,
         status: 'warn',
         detail: `${pf.reason} ${pf.hint || ''}`.trim(),
       });
@@ -369,7 +390,7 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
     // is "let your AI see your business" in their words.
     const ok = await confirm(`Connect ${editor.pretty} to your business data?`, true, !!opts.yes);
     if (!ok) {
-      results.push({ step: `mcp.${editor.clientFlag}`, status: 'skipped', detail: 'user declined' });
+      results.push({ step: `mcp.${editor.step}`, status: 'skipped', detail: 'user declined' });
       continue;
     }
     const args = ['mcp', 'install', editor.clientFlag];
@@ -385,7 +406,7 @@ async function stepEditorsMcp(opts: SetupOptions): Promise<StepResult[]> {
       else if (!ext.installed) detail += ` (install the Claude Code extension in VS Code manually${ext.detail ? ` — ${ext.detail}` : ''})`;
     }
     results.push({
-      step: `mcp.${editor.clientFlag}`,
+      step: `mcp.${editor.step}`,
       status: r.ok ? 'done' : 'failed',
       detail,
     });

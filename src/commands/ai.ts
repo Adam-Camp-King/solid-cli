@@ -277,6 +277,32 @@ export const aiCommand = new Command('ai')
         assessment = null;
       }
 
+      // ⛔⛔ 'none' USED TO BE A SHRUG. It is the one verdict we can actually fix.
+      //
+      // 2026-09-17: on a machine that had never had a Solid server configured,
+      // every command in this CLI verified, warned, and launched an agent with
+      // NO door at all — while an account-level claude.ai connector authorized
+      // from Claude Desktop, bound to a different company, quietly answered
+      // instead. The CLI had no way to hand a company to an LLM; it could only
+      // grade one that was already there. So: when there is nothing, make the
+      // thing, then re-assess and let the verdict speak for itself.
+      if (assessment && assessment.verdict === 'none' && activeCompanyId) {
+        const { syncMcpForCurrentCompany } = await import('../lib/mcp-sync');
+        const made = await syncMcpForCurrentCompany({ provisionInto: 'vscode' });
+        if (made.status === 'created') {
+          console.log(chalk.green(`  ✔ Connected this machine's AI to Company ${made.companyId}`));
+          console.log(chalk.dim(`    wrote ${made.written.join(', ')}`));
+          try {
+            const providers = await enumerateSolidProviders({ apiUrl: config.apiUrl });
+            assessment = assessProviders(providers, activeCompanyId);
+          } catch {
+            // Re-check failed — fall through and report unverified, never claim.
+          }
+        } else if (made.status === 'failed') {
+          console.error(chalk.yellow(`  ⚠ Could not connect this machine's AI (${made.reason ?? 'unknown'}).`));
+        }
+      }
+
       if (assessment) {
         tenantVerified = assessment.verdict === 'ok';
         verifiedCompanyId = tenantVerified ? assessment.active[0].companyId : null;

@@ -131,7 +131,7 @@ export const switchCommand = new Command('switch')
       // key record — so without this, switching moved the CLI and left the
       // agent on the old company, confidently.
       const { syncMcpForCurrentCompany, describeMcpSync } = await import('../lib/mcp-sync');
-      const sync = describeMcpSync(await syncMcpForCurrentCompany());
+      const sync = describeMcpSync(await syncMcpForCurrentCompany({ provisionInto: 'vscode' }));
 
       console.log('');
       console.log(chalk.dim(`  Company:  ${switchResponse.data.company.name} (${switchResponse.data.company.id})`));

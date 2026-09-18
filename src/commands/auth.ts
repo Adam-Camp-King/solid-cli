@@ -340,7 +340,7 @@ authCommand
           // company and leaves the agent confidently on another.
           const renderArrival = async (name: string, id: number, role?: string) => {
             const { syncMcpForCurrentCompany, describeMcpSync } = await import('../lib/mcp-sync');
-            const sync = describeMcpSync(await syncMcpForCurrentCompany());
+            const sync = describeMcpSync(await syncMcpForCurrentCompany({ provisionInto: 'vscode' }));
             console.log(ui.loginSuccessScreen({
               email: status.data.user!.email,
               companyName: name,
@@ -488,7 +488,7 @@ authCommand
         // one the token arrived on.
         {
           const { syncMcpForCurrentCompany, describeMcpSync } = await import('../lib/mcp-sync');
-          const sync = describeMcpSync(await syncMcpForCurrentCompany());
+          const sync = describeMcpSync(await syncMcpForCurrentCompany({ provisionInto: 'vscode' }));
           if (sync) console.log(chalk.dim(`  AI: ${sync}`));
         }
 

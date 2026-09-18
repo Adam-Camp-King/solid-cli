@@ -42,6 +42,14 @@ export interface InstallInfo {
   installer: Installer;
   /** argv to run, or null when we cannot tell — then we say so rather than guess. */
   command: string[] | null;
+  /**
+   * Run before `command`, when the upgrade needs something in place first.
+   * Homebrew's is `brew tap solidnumber/tap`: `brew upgrade user/repo/formula`
+   * does NOT auto-tap (only `brew install` does), so on a machine whose tap has
+   * gone missing the upgrade dies with "requires the tap solidnumber/tap".
+   * Tapping is idempotent and cheap, so we just do it every time.
+   */
+  preflight?: string[];
 }
 
 export interface OtherCopy {
@@ -55,9 +63,22 @@ export function detectInstaller(path: string | null): InstallInfo {
   const p = path.replace(/\\/g, '/').toLowerCase();
 
   // Homebrew before npm: a brew formula's payload also lives in a node_modules
-  // directory, so the npm check would swallow it and print the wrong command.
-  if (p.includes('/cellar/') || p.includes('/homebrew/') || p.includes('/linuxbrew/')) {
-    return { installer: 'brew', command: ['brew', 'upgrade', 'solidnumber/tap/cli'] };
+  // directory (the formula installs into the keg's libexec), so the npm check
+  // would swallow it and print the wrong command.
+  //
+  // ⛔ THE TEST IS /Cellar/, NEVER /homebrew/. A Homebrew PREFIX is not a
+  // Homebrew INSTALL: `npm i -g` under a brew-installed node lands in
+  // /opt/homebrew/lib/node_modules/@solidnumber/cli — an npm global that merely
+  // lives inside the brew tree. Calling that brew sent `brew upgrade
+  // solidnumber/tap/cli` to a machine that had never tapped, which is exactly
+  // the error Adam hit on the iMac 2026-09-17. install.sh has always matched
+  // */Cellar/* — this is the same rule, finally spelled the same way.
+  if (p.includes('/cellar/')) {
+    return {
+      installer: 'brew',
+      command: ['brew', 'upgrade', 'solidnumber/tap/cli'],
+      preflight: ['brew', 'tap', 'solidnumber/tap'],
+    };
   }
   if (p.includes('/scoop/') || p.includes('scoop/apps/')) {
     return { installer: 'scoop', command: ['scoop', 'update', 'solid'] };
@@ -141,7 +162,7 @@ export const updateCommand = new Command('update')
   .option('--json', 'Emit JSON')
   .action(async (opts) => {
     const me = selfPath();
-    const { installer, command } = detectInstaller(me);
+    const { installer, command, preflight } = detectInstaller(me);
     const latest = await latestVersion();
     const others = otherCopiesOnPath(me);
     const behind = latest ? isNewer(CLI_VERSION, latest) : false;
@@ -155,6 +176,7 @@ export const updateCommand = new Command('update')
             up_to_date: latest ? !behind : null,
             installer,
             command: command ? command.join(' ') : null,
+            preflight: preflight ? preflight.join(' ') : null,
             other_copies: others,
             ran: false,
           },
@@ -194,13 +216,27 @@ export const updateCommand = new Command('update')
 
     if (!command) {
       console.log(chalk.yellow(`Cannot tell how this copy was installed (${me ?? 'unknown path'}).`));
-      console.log(`Run whichever fits:\n  npm install -g ${PACKAGE_NAME}@latest\n  brew upgrade solidnumber/tap/cli\n  scoop update solid`);
+      console.log(
+        `Run whichever fits:\n  npm install -g ${PACKAGE_NAME}@latest\n  brew tap solidnumber/tap && brew upgrade solidnumber/tap/cli\n  scoop update solid`,
+      );
       return;
     }
 
+    const steps = preflight ? [preflight, command] : [command];
+    const recipe = steps.map((s) => s.join(' ')).join(' && ');
+
     if (opts.check) {
-      console.log(`Would run: ${chalk.cyan(command.join(' '))}`);
+      console.log(`Would run: ${chalk.cyan(recipe)}`);
       return;
+    }
+
+    // The preflight is plumbing, not news — run it quietly and only speak up if
+    // it fails, and even then keep going: the upgrade may not have needed it.
+    if (preflight) {
+      const tapped = spawnSync(preflight[0], preflight.slice(1), { stdio: 'ignore' });
+      if (tapped.status !== 0) {
+        console.log(chalk.yellow(`(${preflight.join(' ')} did not succeed — trying the upgrade anyway)`));
+      }
     }
 
     console.log(`Running ${chalk.cyan(command.join(' '))} …\n`);
@@ -210,6 +246,6 @@ export const updateCommand = new Command('update')
       return;
     }
     console.log(chalk.red(`\nThat did not finish (exit ${result.status ?? 'unknown'}).`));
-    console.log(`Run it yourself: ${command.join(' ')}`);
+    console.log(`Run it yourself: ${recipe}`);
     process.exitCode = 1;
   });

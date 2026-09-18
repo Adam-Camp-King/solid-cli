@@ -18,6 +18,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 
 import {
   configPathForClient,
@@ -32,8 +33,11 @@ import { findSolidServerEntry, resolveKeyCompany } from './mcp-tenant-check';
 const SYNC_CLIENTS: McpClient[] = ['vscode', 'claude'];
 
 export interface McpSyncResult {
-  /** 'ok' — already correct. 'updated' — rewritten. 'skipped' — nothing to do. */
-  status: 'ok' | 'updated' | 'skipped' | 'failed';
+  /**
+   * 'ok' — already correct. 'updated' — rewritten. 'created' — there was no
+   * Solid server at all and we wrote one. 'skipped' — nothing to do.
+   */
+  status: 'ok' | 'updated' | 'created' | 'skipped' | 'failed';
   companyId: number;
   /** Config files rewritten. */
   written: string[];
@@ -47,6 +51,28 @@ export interface SyncDeps {
   apiUrl: string;
 }
 
+export interface SyncOptions {
+  /**
+   * Write a Solid server into this client's config when the machine has NONE.
+   *
+   * ⛔⛔ WITHOUT THIS THE CLI CANNOT PAIR AN AGENT TO A COMPANY AT ALL — 2026-09-17.
+   * Everything below repairs a server that already exists. On a machine that
+   * has never had one (Adam's iMac: no source checkout, no ~/.claude.json
+   * entry), login, switch and `solid ai` all reported success and left the
+   * agent with no Solid door whatsoever. The only door was an account-level
+   * claude.ai connector authorized months earlier from Claude Desktop, bound to
+   * a DIFFERENT company, invisible to every local check — so the agent answered
+   * confidently about company 1 while the terminal was authenticated as
+   * company 61. The login was real (users.last_login_at proves it); the pairing
+   * step simply did not exist.
+   *
+   * 'vscode' is ~/.claude.json — the user-scope config the `claude` CLI loads.
+   * ⛔ NOT 'claude', which is Claude Desktop's config and is read by a program
+   * the terminal never launches.
+   */
+  provisionInto?: McpClient;
+}
+
 /**
  * ⛔ NOT a silent re-mint on every call. We only touch the config when the key
  * present resolves to a DIFFERENT company (or there is none). Re-minting every
@@ -57,6 +83,7 @@ export async function syncMcpCredential(
   companyId: number | undefined,
   deps: SyncDeps,
   clients: McpClient[] = SYNC_CLIENTS,
+  options: SyncOptions = {},
 ): Promise<McpSyncResult> {
   if (!companyId) {
     return { status: 'skipped', companyId: 0, written: [], reason: 'no company in session' };
@@ -73,7 +100,10 @@ export async function syncMcpCredential(
     if (found) targets.push({ client, configPath: found.configPath, apiKey: found.apiKey });
   }
   if (targets.length === 0) {
-    return { status: 'skipped', companyId, written: [], reason: 'no Solid MCP server configured' };
+    if (!options.provisionInto) {
+      return { status: 'skipped', companyId, written: [], reason: 'no Solid MCP server configured' };
+    }
+    return provisionServer(companyId, deps, options.provisionInto);
   }
 
   // Resolve each key ONCE; identical keys across clients are the common case.
@@ -128,13 +158,72 @@ export async function syncMcpCredential(
 }
 
 /**
+ * No Solid server anywhere — write one, keyed to the current company.
+ *
+ * Creating the file when it is absent is the point: a machine that has never
+ * run an agent has no ~/.claude.json, and refusing to create one is what left
+ * the CLI with no way to hand a company to an LLM.
+ */
+async function provisionServer(
+  companyId: number,
+  deps: SyncDeps,
+  client: McpClient,
+): Promise<McpSyncResult> {
+  let key: string;
+  try {
+    key = await deps.createKey(`solid ai (company ${companyId})`, ['kb:read', 'pages:read']);
+  } catch (e) {
+    return {
+      status: 'failed',
+      companyId,
+      written: [],
+      reason: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  try {
+    const configPath = configPathForClient(client);
+    let existing: unknown = {};
+    if (fs.existsSync(configPath)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      } catch {
+        // ⛔ A config we cannot parse is NOT ours to rewrite — it is very likely
+        // full of the user's other servers. Bail rather than clobber it.
+        return {
+          status: 'failed',
+          companyId,
+          written: [],
+          reason: `${configPath} is not valid JSON — not overwriting it`,
+        };
+      }
+    } else {
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    }
+    const entry = buildServerEntry({ apiKey: key, apiUrl: deps.apiUrl, companyId });
+    fs.writeFileSync(configPath, serializeConfig(mergeIntoConfig(existing as never, entry)));
+    return { status: 'created', companyId, written: [configPath] };
+  } catch (e) {
+    return {
+      status: 'failed',
+      companyId,
+      written: [],
+      reason: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+
+/**
  * Convenience wrapper: sync using the live CLI session.
  *
  * Callers are `solid auth login` and `solid switch` — the two moments the
  * session's company can change. Never throws: a failure here must not fail a
  * login, and `solid ai` still refuses to launch on a mismatch.
  */
-export async function syncMcpForCurrentCompany(): Promise<McpSyncResult> {
+export async function syncMcpForCurrentCompany(
+  options: SyncOptions = {},
+): Promise<McpSyncResult> {
   try {
     const { config } = await import('./config');
     const { apiClient } = await import('./api-client');
@@ -144,7 +233,7 @@ export async function syncMcpForCurrentCompany(): Promise<McpSyncResult> {
         const res = await apiClient.apiKeyCreate(name, scopes);
         return res.data.key;
       },
-    });
+    }, SYNC_CLIENTS, options);
   } catch (e) {
     return {
       status: 'failed',
@@ -157,6 +246,12 @@ export async function syncMcpForCurrentCompany(): Promise<McpSyncResult> {
 
 /** One dim line for the terminal, or null when there is nothing worth saying. */
 export function describeMcpSync(r: McpSyncResult): string | null {
+  if (r.status === 'created') {
+    // ⛔ SAY IT. This is the moment the user's AI became usable, and it is the
+    // one thing they came here for. Silence is what made the old behaviour
+    // indistinguishable from the broken one.
+    return `Your AI is now connected to company ${r.companyId}`;
+  }
   if (r.status === 'updated') {
     return `AI credential re-pointed to company ${r.companyId} (${r.written.length} config${r.written.length === 1 ? '' : 's'})`;
   }
