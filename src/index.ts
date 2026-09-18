@@ -38,6 +38,7 @@ activateQueueModeIfRequested(process.argv);
 // T11.3 — program-level --json flag that cascades to subcommands which
 // don't explicitly declare their own --json option.
 import { activateProgramJsonIfRequested, isNonTty, printJson } from './lib/json-output';
+import { isStale, noticeFor, readCache, refreshCache } from './lib/update-notice';
 activateProgramJsonIfRequested(process.argv);
 
 // AI-first I/O — soft warn when a non-TTY caller (agent / MCP / CI) is
@@ -172,31 +173,45 @@ import { doctorCommand } from './commands/doctor';
 import { updateCommand } from './commands/update';
 import { graphCommand } from './commands/graph';
 import { ui } from './lib/ui';
-import { importESM } from './lib/esm-import';
 
-// Check for updates (non-blocking, best-effort). update-notifier v7 is
-// ESM-only, so load it through importESM (see lib/esm-import) rather than a
-// static import that tsc would lower to require() — that throws
-// ERR_REQUIRE_ESM on Node < 20.19 and would crash every command at startup.
-void (async () => {
-  try {
-    const { default: updateNotifier } =
-      await importESM<typeof import('update-notifier')>('update-notifier');
-    updateNotifier({ pkg, updateCheckInterval: 1000 * 60 * 60 * 4 }).notify({
-      // NOT {updateCommand}. That token is update-notifier's own, and it
-      // resolves to a hardcoded `npm i -g @solidnumber/cli` (see
-      // update-notifier.js:139) — it has no idea Homebrew or scoop exist.
-      // For anyone who installed from solidnumber/tap that instruction is
-      // wrong in the worst way: it installs a SECOND copy under npm instead
-      // of upgrading the one they have, leaving two `solid` binaries on PATH
-      // at different versions. `solid update` detects the install method and
-      // upgrades in place, which is the whole reason it exists.
-      message: `Update available: {currentVersion} → {latestVersion}\nRun ${chalk.cyan('solid update')} to update`,
-    });
-  } catch {
-    // Update check is non-essential — never let it break the CLI.
+// Tell the operator when a newer CLI exists.
+//
+// ⛔ THIS USED TO CALL update-notifier, AND IT NEVER PRINTED A SINGLE NOTICE.
+// Measured 2026-09-17 on a fresh machine: four runs of 2.23.0 under a real TTY
+// while 2.24.0 was on npm, no notice, and the cache it left explains it —
+// { "optOut": false, "lastUpdateCheck": ... } with no `update` key. It records
+// the ATTEMPT in the parent and delegates the lookup to a detached child that
+// does not survive a short-lived CLI, so the result is never stored while the
+// timestamp is, and the interval then suppresses retries for four hours. A
+// check permanently "recently done" and permanently empty.
+//
+// A client on 2.23.0 therefore could not learn that a fix existed. 2.23.0 is
+// the version that promises "any AI agent running in this shell inherits it —
+// type claude and go", which is untrue: nothing inherits that token, so their
+// agent never reaches their company. Every client hit that, and the CLI's own
+// `solid update --json` knew it was behind the whole time.
+//
+// See lib/update-notice: the stored value is the ANSWER, never the attempt, so
+// a failed check cannot silence the next run; the read is a synchronous file
+// read before any command, so it costs no latency and cannot be lost to
+// process exit; and the refresh only ever helps later runs.
+// ⛔ SYNCHRONOUS ON PURPOSE. A first attempt at this fix wrapped the read in
+// `await import('./lib/update-notice')` and printed nothing — commander's
+// --version handler calls process.exit() before a dynamic import resolves, so
+// the notice lost the same race that killed update-notifier. The read is a
+// static import and a synchronous file read, which is why it cannot be lost.
+// Only the refresh is deferred, and it only ever helps a later run.
+try {
+  const cached = readCache();
+  // pkg.version, never a hardcoded literal — the version lives in package.json.
+  const notice = noticeFor(pkg.version, cached);
+  if (notice && !isNonTty()) {
+    process.stderr.write(`\n${chalk.yellow(notice)}\n\n`);
   }
-})();
+  if (isStale(cached)) void refreshCache();
+} catch {
+  // Never let the update check break a command.
+}
 
 const program = new Command();
 

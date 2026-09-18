@@ -5,7 +5,7 @@
  * `await import('pkg')` into `require('pkg')`. For ESM-only packages (ora-style
  * `"type": "module"` with no `require` export condition) that `require()` throws
  * `ERR_REQUIRE_ESM` on Node < 20.19 — which is exactly what broke `solid audit`
- * (lighthouse) and the startup update check (update-notifier) on older Node.
+ * (lighthouse) on older Node.
  *
  * Routing the dynamic import through a `Function` hides it from the TypeScript
  * CommonJS transform, so a *real* ESM `import()` survives to runtime. Importing
