@@ -650,11 +650,14 @@ export function rankVerbs(
  * exists to remove, and buries three genuinely different verbs that would
  * have been more useful.
  *
- * Prefers `same_as` when the manifest carries it. It does not yet in
- * production — the field is committed but undeployed — so this falls back to
- * the same rule the pairs were counted with: two names are the same operation
- * when they match after dots become underscores. The fallback is not a guess;
- * it is the definition.
+ * Groups by `same_as` when the manifest carries it, and otherwise by the rule
+ * the flat pairs were counted with: two names are the same operation when they
+ * match after dots become underscores.
+ *
+ * The survivor is the half WITHOUT `same_as`. Both halves can be dotted
+ * (contact.create is an alias of crm.contacts.create), so "the dotted one"
+ * alone kept whichever happened to score higher — often the alias the manifest
+ * had just told us not to use. Dotted-over-flat is only the tiebreak now.
  */
 function collapseDuplicates(matches: VerbMatch[]): VerbMatch[] {
   const bestByOperation = new Map<string, VerbMatch>();
@@ -668,10 +671,10 @@ function collapseDuplicates(matches: VerbMatch[]): VerbMatch[] {
       order.push(key);
       continue;
     }
-    // The dotted name is canonical: it is the one with a real REST route.
-    const heldIsCanonical = held.name.includes('.');
-    const mineIsCanonical = m.name.includes('.');
-    if (mineIsCanonical && !heldIsCanonical) bestByOperation.set(key, m);
+    // Declared canonical (no same_as) wins; among equals, the dotted name —
+    // it is the one with a real REST route.
+    const rank = (x: VerbMatch) => (x.canonicalOf ? 0 : 2) + (x.name.includes('.') ? 1 : 0);
+    if (rank(m) > rank(held)) bestByOperation.set(key, m);
   }
 
   return order.map((k) => bestByOperation.get(k) as VerbMatch);

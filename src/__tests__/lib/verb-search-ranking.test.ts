@@ -222,3 +222,18 @@ describe('an apostrophe joins a word, it does not split one', () => {
     expect(analyse(normalise("Dana can't make Tuesday")).translated).toMatch(/reschedule/);
   });
 });
+
+describe('a declared alias never wins its pair', () => {
+  // contact.create is an alias of crm.contacts.create (same_as). Both are
+  // dotted, so "keep the dotted one" could not choose — the alias scored higher
+  // on "create a contact" and was the name `find` handed the agent.
+  const corpus = [
+    { ...V('contact.create', 'Create a contact.'), same_as: 'crm.contacts.create' },
+    V('crm.contacts.create', 'Create a new contact in the CRM.'),
+  ];
+
+  it('returns the canonical half, once', () => {
+    const names = rankVerbs('create a contact', corpus).map((m) => m.name);
+    expect(names).toEqual(['crm.contacts.create']);
+  });
+});
