@@ -1,14 +1,26 @@
 /**
  * `solid today` — the daily brief.
  *
- * One command that answers "what's going on and what should I do" — revenue,
- * pipeline, urgent work, and recommended actions — instead of stitching
- * together dashboard / sales / tasks / predictions by hand. The operator's
- * first command of the day.
+ * ⛔ THIS COMMAND DOES NOT COMPUTE A BRIEF. It renders the platform's one
+ * brief (`GET /api/v1/dashboard/brief`), the same payload the web Daily Brief
+ * page reads, whose "what needs you" list comes from `services/needs_you.py`
+ * — the same list the phone's Home shows.
  *
- * Data is assembled from existing REST endpoints (best-effort, degrades
- * gracefully if one is unavailable). The shaping logic is the pure
- * `buildBrief()` so it can be unit-tested without the network.
+ * ⛔ WHY (2026-09-23). It used to stitch four endpoints together itself
+ * (/crm/dashboard/summary, /crm/tasks, /predictions/targets) and guess at
+ * field names — `net_revenue`, `pipeline_value`, `open_deals`. None of those
+ * keys exists at the top level of /crm/dashboard/summary: revenue lives at
+ * `overview.revenue.revenue` and pipeline at `insights.pipeline`. So every
+ * number came back **null**, with no reason, forever. Worse, the pipeline
+ * payload it ignored was already carrying `available: false` and a sentence
+ * explaining itself — the platform knew why and the brief threw it away.
+ *
+ * It also reported the raw pending-task total as "urgent": 785 of them, every
+ * sample reading "CALLBACK REQUEST: Chat Visitor". Those are now one grouped
+ * item with a count, decided once in `services/needs_you.py`, so the phone,
+ * the web page and this command agree.
+ *
+ * The shaping is the pure `buildBrief()` so it can be unit-tested offline.
  */
 
 import { Command } from 'commander';
@@ -21,126 +33,179 @@ import { isJsonOutput } from '../lib/json-output';
 
 type AnyRec = Record<string, any>;
 
+/**
+ * A number the platform either measured or could not.
+ *
+ * ⛔ `available: false` means NOT MEASURED — never render it as 0. `value: 0`
+ * with `available: true` means measured and empty, which is a fact. A reader
+ * that cannot tell those apart reports a false zero, and a false zero is worse
+ * than a null.
+ */
+export interface Metric {
+  value: number | null;
+  available: boolean;
+  /** Plain words: why it is missing, or why it is zero. */
+  reason: string | null;
+}
+
+export interface NeedsYouItem {
+  title: string;
+  kicker: string | null;
+  priority: string;
+  /** How many rows this one item stands for (a grouped backlog), else null. */
+  count: number | null;
+}
+
 export interface Brief {
   companyName: string | null;
-  revenue: { net: number | null; orders: number | null; aov: number | null };
-  pipeline: { total: number | null; openDeals: number | null };
-  urgent: { taskCount: number; samples: string[] };
+  date: string | null;
+  summary: string | null;
+  revenue: Metric & { change: number | null; period: string | null };
+  pipeline: Metric & { openDeals: number | null };
+  tasks: { open: Metric; overdue: number | null; completed: number | null };
+  needsYou: { items: NeedsYouItem[]; grouped: number };
   actions: string[];
 }
 
-/** Pick the first present, finite number from a list of candidate values. */
-function num(...candidates: unknown[]): number | null {
-  for (const c of candidates) {
-    const n = typeof c === 'string' ? Number(c) : (c as number);
-    if (typeof n === 'number' && Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
-function asArray(v: unknown): AnyRec[] {
-  if (Array.isArray(v)) return v as AnyRec[];
-  if (v && typeof v === 'object') {
-    const o = v as AnyRec;
-    if (Array.isArray(o.tasks)) return o.tasks;
-    if (Array.isArray(o.items)) return o.items;
-    if (Array.isArray(o.results)) return o.results;
-    if (Array.isArray(o.targets)) return o.targets;
-  }
-  return [];
+/** A finite number, or null. Never coerces absent/garbage to 0. */
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'string' ? Number(v) : (v as number);
+  return typeof n === 'number' && Number.isFinite(n) ? n : null;
 }
 
 /**
- * Pure: turn the (possibly partial) API payloads into a brief model.
- * Every field degrades to null/empty rather than throwing, so a missing
- * endpoint never breaks the brief.
+ * Read one `keyMetrics` entry. `available` is trusted when the server sends it;
+ * an older server that does not gets the honest fallback — a present number is
+ * measured, an absent one is unknown with no reason we can invent.
  */
-export function buildBrief(parts: {
-  company?: AnyRec | null;
-  summary?: AnyRec | null;
-  tasks?: unknown;
-  targets?: unknown;
-}): Brief {
+function metric(m: AnyRec | null | undefined, key = 'value'): Metric {
+  const value = num(m?.[key]);
+  const available = typeof m?.available === 'boolean' ? m.available : value !== null;
+  return {
+    value: available ? value : null,
+    available,
+    reason: (m?.reason ?? null) as string | null,
+  };
+}
+
+function asArray(v: unknown): AnyRec[] {
+  return Array.isArray(v) ? (v as AnyRec[]) : [];
+}
+
+/**
+ * Pure: the brief payload (plus the company record, for its name) as the
+ * model this command renders. Every field degrades to null/empty rather than
+ * throwing, so a partial payload never breaks the brief.
+ */
+export function buildBrief(parts: { company?: AnyRec | null; brief?: AnyRec | null }): Brief {
   const company = parts.company || {};
-  const s = parts.summary || {};
-
-  const revenue = {
-    net: num(s.net_revenue, s.revenue, s.total_revenue, s.revenue_30_days, s.revenue?.net),
-    orders: num(s.orders, s.order_count, s.total_orders, s.revenue?.orders),
-    aov: num(s.average_order_value, s.aov, s.avg_order_value),
-  };
-  const pipeline = {
-    total: num(s.pipeline_value, s.total_pipeline, s.pipeline?.total, s.pipeline_total),
-    openDeals: num(s.open_deals, s.open_deals_count, s.deals_open, s.pipeline?.open_deals),
-  };
-
-  const taskList = asArray(parts.tasks);
-  const urgent = {
-    taskCount: num(
-      (parts.tasks as AnyRec)?.total,
-      (parts.tasks as AnyRec)?.count,
-      taskList.length,
-    ) ?? taskList.length,
-    samples: taskList
-      .slice(0, 3)
-      .map((t) => String(t.title || t.name || t.description || 'Untitled task').slice(0, 80)),
-  };
-
-  // Recommended actions: prefer server-suggested targets, else derive from state.
-  const targetList = asArray(parts.targets);
-  const actions: string[] = targetList
-    .slice(0, 5)
-    .map((t) => String(t.title || t.recommendation || t.action || '').trim())
-    .filter(Boolean);
-
-  if (actions.length === 0) {
-    if (urgent.taskCount > 0) actions.push(`Clear ${urgent.taskCount} pending task(s)`);
-    if ((pipeline.openDeals ?? 0) > 0) actions.push(`Follow up on ${pipeline.openDeals} open deal(s)`);
-    if (actions.length === 0) actions.push('No urgent items — good time to prospect or publish content');
+  const b = parts.brief || {};
+  const km = (b.keyMetrics || {}) as AnyRec;
+  // The brief itself did not come back. Say that once, on every number, rather
+  // than four bare nulls that look like "you have no revenue".
+  if (!parts.brief) {
+    const dead: AnyRec = { value: null, available: false, reason: 'The daily brief could not be read from the server.' };
+    km.revenue = km.revenue || dead;
+    km.pipeline = km.pipeline || dead;
+    km.tasks = km.tasks || dead;
   }
 
+  const revenue = { ...metric(km.revenue), change: num(km.revenue?.change), period: (km.revenue?.period ?? null) as string | null };
+  const pipeline = { ...metric(km.pipeline), openDeals: num(km.pipeline?.openDeals) };
+  const tasks = {
+    open: metric(km.tasks),
+    overdue: num(km.tasks?.overdue),
+    completed: num(km.tasks?.completed),
+  };
+
+  const items: NeedsYouItem[] = asArray(b.priorities)
+    .map((p) => ({
+      title: String(p.title || '').trim(),
+      kicker: (p.subtitle ?? null) || null,
+      priority: String(p.priority || 'medium'),
+      count: num(p.count),
+    }))
+    .filter((i) => i.title.length > 0);
+
+  // The rows the grouped items stand for — so "1 item" never hides 785 rows.
+  const grouped = items.reduce((sum, i) => sum + (i.count && i.count > 1 ? i.count : 0), 0);
+
+  const actions: string[] = asArray(b.recommendations).map((r) => String(r).trim()).filter(Boolean);
+
   return {
-    companyName: company.name ?? null,
+    companyName: (company.name ?? null) as string | null,
+    date: (b.date ?? null) as string | null,
+    summary: (b.summary ?? null) as string | null,
     revenue,
     pipeline,
-    urgent,
+    tasks,
+    needsYou: { items, grouped },
     actions,
   };
 }
 
-function money(n: number | null): string {
-  if (n === null) return chalk.dim('—');
-  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+function money(m: Metric): string {
+  if (m.value === null) return chalk.dim('—');
+  return '$' + m.value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function count(v: number | null): string {
+  return v === null ? chalk.dim('—') : String(v);
+}
+
+/** The reason line under a number. This is the whole point: never a bare null. */
+function why(m: { available: boolean; reason: string | null }): void {
+  if (m.reason) console.log(chalk.dim('    ' + (m.available ? '' : 'not measured — ') + m.reason));
+  else if (!m.available) console.log(chalk.dim('    not measured, and the server gave no reason'));
 }
 
 function render(brief: Brief): void {
   console.log('');
-  console.log(ui.header(`Daily Brief${brief.companyName ? ' — ' + brief.companyName : ''}`));
+  console.log(ui.header(`Daily Brief${brief.companyName ? ' — ' + brief.companyName : ''}${brief.date ? ' · ' + brief.date : ''}`));
+  if (brief.summary) {
+    console.log('');
+    console.log('  ' + brief.summary);
+  }
 
   console.log('');
   console.log(chalk.bold('Revenue'));
-  console.log('  ' + ui.label('Net (recent)', money(brief.revenue.net)));
-  if (brief.revenue.orders !== null) console.log('  ' + ui.label('Orders', String(brief.revenue.orders)));
-  if (brief.revenue.aov !== null) console.log('  ' + ui.label('Avg order', money(brief.revenue.aov)));
+  console.log('  ' + ui.label(brief.revenue.period || 'Recent', money(brief.revenue)));
+  why(brief.revenue);
 
   console.log('');
   console.log(chalk.bold('Pipeline'));
-  console.log('  ' + ui.label('Open pipeline', money(brief.pipeline.total)));
-  console.log('  ' + ui.label('Open deals', brief.pipeline.openDeals !== null ? String(brief.pipeline.openDeals) : chalk.dim('—')));
+  console.log('  ' + ui.label('Open pipeline', money(brief.pipeline)));
+  console.log('  ' + ui.label('Open deals', count(brief.pipeline.openDeals)));
+  why(brief.pipeline);
 
   console.log('');
-  console.log(chalk.bold('Urgent work'));
-  console.log('  ' + ui.label('Pending tasks', String(brief.urgent.taskCount)));
-  for (const s of brief.urgent.samples) console.log(chalk.dim('    • ' + s));
+  console.log(chalk.bold('Open tasks'));
+  console.log('  ' + ui.label('On the books', count(brief.tasks.open.value)));
+  console.log('  ' + ui.label('Overdue', count(brief.tasks.overdue)));
+  why(brief.tasks.open);
 
   console.log('');
-  console.log(chalk.bold('Recommended actions'));
-  brief.actions.forEach((a, i) => console.log(`  ${chalk.cyan(String(i + 1) + '.')} ${a}`));
+  console.log(chalk.bold('Needs you'));
+  if (brief.needsYou.items.length === 0) {
+    console.log(chalk.dim('    nothing is waiting on you'));
+  }
+  for (const i of brief.needsYou.items) {
+    const tag = i.count && i.count > 1 ? chalk.dim(` (${i.count} rows, grouped)`) : '';
+    console.log(`    • ${i.title}${tag}`);
+    if (i.kicker) console.log(chalk.dim(`      ${i.kicker} · ${i.priority}`));
+  }
+
+  if (brief.actions.length) {
+    console.log('');
+    console.log(chalk.bold('Recommended actions'));
+    brief.actions.forEach((a, i) => console.log(`  ${chalk.cyan(String(i + 1) + '.')} ${a}`));
+  }
   console.log('');
 }
 
 export const todayCommand = new Command('today')
-  .description('Your daily brief: revenue, pipeline, urgent work, recommended actions')
+  .description('Your daily brief: revenue, pipeline, what needs you, recommended actions')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
@@ -150,11 +215,9 @@ export const todayCommand = new Command('today')
 
     const spinner = ora('Building your brief...').start();
     try {
-      const [companyRes, summaryRes, tasksRes, targetsRes] = await Promise.allSettled([
+      const [companyRes, briefRes] = await Promise.allSettled([
         apiClient.companyInfo(),
-        apiClient.get('/api/v1/crm/dashboard/summary'),
-        apiClient.get('/api/v1/crm/tasks', { params: { status: 'pending', limit: 50 } }),
-        apiClient.get('/api/v1/predictions/targets'),
+        apiClient.get('/api/v1/dashboard/brief'),
       ]);
       spinner.stop();
 
@@ -163,9 +226,7 @@ export const todayCommand = new Command('today')
 
       const brief = buildBrief({
         company: (pick(companyRes) as AnyRec)?.company ?? pick(companyRes),
-        summary: pick(summaryRes),
-        tasks: pick(tasksRes),
-        targets: pick(targetsRes),
+        brief: pick(briefRes),
       });
 
       if (isJsonOutput(options)) {

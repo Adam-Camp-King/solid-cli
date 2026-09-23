@@ -35,6 +35,15 @@ export interface SuggestOptions {
   max?: number;
   /** Max edit distance considered a match. Default scales with input length. */
   threshold?: number;
+  /**
+   * The namespace the caller was ALREADY inside when the command failed,
+   * space-joined and without the binary name: `verbs`, `crm contacts`.
+   *
+   * When set, `suggestPath` only ever proposes commands from that namespace
+   * (or from one of its ancestors, never the root). See the note on
+   * `suggestPath` for why crossing namespaces is not a safe correction.
+   */
+  group?: string;
 }
 
 /**
@@ -117,26 +126,16 @@ export function flattenCommandTree(
 }
 
 /**
- * "Did you mean?" over full command paths rather than a single level.
- *
- * A path is a candidate when the typed token matches ANY of its segments, so
- * `contacts` finds `crm contacts` without the user knowing the namespace. A
- * leaf whose LAST segment matches outranks one that merely contains it
- * somewhere — `contacts` should reach `crm contacts` before `crm contacts
- * import`.
+ * Rank paths against a typed token. `skip` is how many leading segments of
+ * each path are namespace the caller already typed correctly — they are not
+ * candidates for the match (inside `crm`, typing `crm` must not score every
+ * path in the group).
  */
-export function suggestPath(
-  typed: string,
-  paths: string[],
-  opts: SuggestOptions = {},
-): string[] {
-  const max = opts.max ?? 3;
-  const needle = typed.toLowerCase();
-  if (!needle) return [];
-
+function rankPaths(needle: string, paths: string[], max: number, skip = 0): string[] {
   const scored: Array<{ path: string; rank: number }> = [];
   for (const path of paths) {
-    const segs = path.toLowerCase().split(' ');
+    const segs = path.toLowerCase().split(' ').slice(skip);
+    if (!segs.length) continue;
     const last = segs[segs.length - 1];
 
     let rank = Infinity;
@@ -154,4 +153,49 @@ export function suggestPath(
 
   scored.sort((a, b) => a.rank - b.rank || a.path.length - b.path.length);
   return scored.slice(0, max).map((s) => s.path);
+}
+
+/**
+ * "Did you mean?" over full command paths rather than a single level.
+ *
+ * A path is a candidate when the typed token matches ANY of its segments, so
+ * `contacts` finds `crm contacts` without the user knowing the namespace. A
+ * leaf whose LAST segment matches outranks one that merely contains it
+ * somewhere — `contacts` should reach `crm contacts` before `crm contacts
+ * import`.
+ *
+ * ⛔ `opts.group` — a correction MUST NOT cross namespaces.
+ *
+ * `solid verbs call` used to be answered with `solid call`, because string
+ * distance found an exact leaf `call` at the top level and nothing in `verbs`
+ * scored at all. But `solid call` is phone routing: an unrelated command, in
+ * an unrelated namespace, that does something. A confidently wrong suggestion
+ * is worse than none — an agent driving the CLI will run it.
+ *
+ * So when the caller was already inside a group, candidates come from that
+ * group, then from its ancestors (`crm contacts` → `crm`), and never from the
+ * root. Nothing in the namespace resembles what they typed ⇒ return nothing,
+ * and let the caller print the group's real subcommands instead of guessing.
+ */
+export function suggestPath(
+  typed: string,
+  paths: string[],
+  opts: SuggestOptions = {},
+): string[] {
+  const max = opts.max ?? 3;
+  const needle = typed.toLowerCase();
+  if (!needle) return [];
+
+  const group = (opts.group ?? '').trim().toLowerCase();
+  if (!group) return rankPaths(needle, paths, max);
+
+  // Inside a namespace: this group first, then each ancestor. Never the root.
+  const segs = group.split(/\s+/);
+  for (let depth = segs.length; depth > 0; depth--) {
+    const prefix = segs.slice(0, depth).join(' ') + ' ';
+    const scoped = paths.filter((p) => p.toLowerCase().startsWith(prefix));
+    const hit = rankPaths(needle, scoped, max, depth);
+    if (hit.length) return hit;
+  }
+  return [];
 }

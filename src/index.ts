@@ -773,18 +773,35 @@ import { flattenCommandTree, suggestPath } from './lib/suggest';
  * Now: suggestions come from the flattened command tree, and in JSON mode the
  * failure is a normal error envelope on stdout with `did_you_mean` and `fix`,
  * the same shape every API error uses.
+ *
+ * ⛔ And a correction never leaves the namespace the caller was in. `solid
+ * verbs call` was answered with `solid call` — phone routing, an unrelated
+ * command that does something, offered as the fix for a verbs typo. When the
+ * group holds nothing that resembles what they typed we say so and print the
+ * group's real subcommands; guessing across namespaces is worse than silence,
+ * because an agent will run the guess.
  */
 function attachUnknownCommandHandler(cmd: Command, displayPath: string): void {
   cmd.on('command:*', (operands: string[]) => {
     const unknown = operands[0];
     const fullCmd = `${displayPath} ${unknown}`.trim();
 
-    // Search the WHOLE tree, not this level. `contacts` has to be able to
-    // reach `crm contacts`.
-    const allPaths = flattenCommandTree(program).map((p) => `solid ${p}`);
-    const suggestions = suggestPath(unknown, flattenCommandTree(program)).map(
+    // The namespace already typed correctly ('' at the root, 'verbs',
+    // 'crm contacts'). At the root the whole tree is fair game — that is how
+    // `solid contacts` reaches `crm contacts`. Inside a group it is not.
+    const group = displayPath.replace(/^solid\b/, '').trim();
+    const suggestions = suggestPath(unknown, flattenCommandTree(program), { group }).map(
       (p) => `solid ${p}`,
     );
+
+    // What this group actually accepts — the honest answer when nothing in it
+    // is close. Direct children only, and the same `accepts` key the
+    // unknown-option envelope uses. Empty at the root, where "everything" is
+    // not an answer and `solid --help` already is.
+    const depth = displayPath.split(/\s+/).length;
+    const accepts = group
+      ? flattenCommandTree(cmd, displayPath).filter((p) => p.split(' ').length === depth + 1)
+      : [];
 
     try {
       emitTelemetry('unknown_command', { command: fullCmd, extra: { suggestions } });
@@ -805,13 +822,13 @@ function attachUnknownCommandHandler(cmd: Command, displayPath: string): void {
             retryable: false,
             did_you_mean: suggestions,
             fix: suggestions[0] ?? `${displayPath} --help`,
+            accepts,
           },
         }) + '\n',
       );
       process.exit(1);
     }
 
-    void allPaths;
     const line = (s: string) => process.stderr.write(s + '\n');
     line('');
     line(`  ${chalk.red('✗')} Unknown command: ${chalk.bold(fullCmd)}`);
@@ -821,6 +838,17 @@ function attachUnknownCommandHandler(cmd: Command, displayPath: string): void {
     } else if (suggestions.length > 1) {
       line(`  ${chalk.dim('Did you mean one of these?')}`);
       for (const s of suggestions) line(`    ${chalk.cyan(s)}`);
+    } else if (accepts.length) {
+      // Nothing in this namespace is close. List what is here rather than
+      // point at a similar-looking command from somewhere else.
+      const shown = accepts.slice(0, 12);
+      line(`  ${chalk.bold(displayPath)} ${chalk.dim('accepts:')}`);
+      for (const s of shown) line(`    ${chalk.cyan(s)}`);
+      if (accepts.length > shown.length) {
+        line(`    ${chalk.dim(`+${accepts.length - shown.length} more`)}`);
+      }
+      line('');
+      line(`  ${chalk.dim('Run')} ${chalk.cyan(`${displayPath} --help`)} ${chalk.dim('for details.')}`);
     } else {
       line(`  ${chalk.dim('Run')} ${chalk.cyan(`${displayPath} --help`)} ${chalk.dim('to see all subcommands.')}`);
     }

@@ -269,4 +269,38 @@ describe('CLI Smoke Tests', () => {
     const output = run('--version');
     expect(output.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
+
+  // ===========================================================================
+  // "Did you mean?" must not cross namespaces — the real binary, end to end.
+  //
+  // `solid verbs call` was answered with `solid call`: phone routing, another
+  // namespace, and a command that acts. An agent takes a suggestion literally.
+  // ===========================================================================
+
+  it('solid verbs call never suggests solid call, and names the real verbs subcommands', () => {
+    const result = runSafe('verbs call --json');
+    expect(result.exitCode).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.error.code).toBe('UNKNOWN_COMMAND');
+    expect(parsed.error.did_you_mean).not.toContain('solid call');
+    expect(parsed.error.did_you_mean).not.toContain('solid call simulate');
+    // No same-namespace match ⇒ list the group instead of guessing.
+    expect(parsed.error.did_you_mean).toEqual([]);
+    expect(parsed.error.accepts).toContain('solid verbs invoke');
+    expect(parsed.error.fix).toBe('solid verbs --help');
+  });
+
+  it('an unknown subcommand is still corrected INSIDE its own namespace', () => {
+    const result = runSafe('kb serach --json');
+    expect(result.exitCode).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.error.did_you_mean).toContain('solid kb search');
+  });
+
+  it('the root still searches the whole tree — solid contacts finds crm contacts', () => {
+    const result = runSafe('contacts --json');
+    expect(result.exitCode).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.error.did_you_mean).toContain('solid crm contacts');
+  });
 });

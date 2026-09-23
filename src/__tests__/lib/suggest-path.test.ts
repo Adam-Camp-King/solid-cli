@@ -20,6 +20,9 @@ const TREE = node('solid', [
   node('context', []),
   node('verbs', [node('list'), node('describe'), node('invoke')]),
   node('find', []),
+  // Phone routing. Effectful, and the exact leaf `call` that used to be
+  // offered as the fix for `solid verbs call`.
+  node('call', [node('simulate')]),
 ]);
 
 describe('flattenCommandTree', () => {
@@ -66,5 +69,65 @@ describe('suggestPath', () => {
 
   it('respects max', () => {
     expect(suggestPath('c', paths, { max: 2 }).length).toBeLessThanOrEqual(2);
+  });
+});
+
+/**
+ * A correction must not cross namespaces.
+ *
+ * `solid verbs call` was answered with `solid call` — phone routing, a
+ * different namespace, and something that acts. String distance found an exact
+ * leaf `call` at the top level; nothing under `verbs` scored at all. For an
+ * agent driving the CLI a confidently wrong suggestion is worse than none,
+ * because it will run it.
+ */
+describe('suggestPath — namespace awareness', () => {
+  const paths = flattenCommandTree(TREE);
+
+  it('never offers the top-level `call` for `solid verbs call`', () => {
+    const out = suggestPath('call', paths, { group: 'verbs' });
+    expect(out).not.toContain('call');
+    expect(out).not.toContain('call simulate');
+    // Nothing under `verbs` resembles "call" — say nothing, let the caller
+    // print the group's real subcommands.
+    expect(out).toEqual([]);
+  });
+
+  it('without a group the same input still reaches `call` — root is unrestricted', () => {
+    // Proves the guard is the group, not a blanket ban: `solid call` typed at
+    // the root is a legitimate match, and `solid contacts` must keep working.
+    expect(suggestPath('call', paths)).toContain('call');
+    expect(suggestPath('contacts', paths)[0]).toBe('crm contacts');
+  });
+
+  it('corrects a typo INSIDE the group it was typed in', () => {
+    expect(suggestPath('invok', paths, { group: 'verbs' })).toEqual(['verbs invoke']);
+    expect(suggestPath('contcts', paths, { group: 'crm' })).toContain('crm contacts');
+  });
+
+  it('`solid crm contexts` does not escape to the top-level `context`', () => {
+    const out = suggestPath('contexts', paths, { group: 'crm' });
+    expect(out).not.toContain('context');
+    expect(out).toContain('crm contacts');
+  });
+
+  it('`solid verbs deals` does not escape to `crm deals`', () => {
+    expect(suggestPath('deals', paths, { group: 'verbs' })).toEqual([]);
+  });
+
+  it('falls back to an ancestor group, never to the root', () => {
+    // Typed under `crm contacts`; `deals` lives one level up, still in `crm`.
+    expect(suggestPath('deals', paths, { group: 'crm contacts' })).toContain('crm deals');
+    // But `call` is not in `crm` at any depth, so it is not an answer.
+    expect(suggestPath('call', paths, { group: 'crm contacts' })).toEqual([]);
+  });
+
+  it('does not match the group segments the caller already typed', () => {
+    // `solid crm crm` must not score every path in the namespace.
+    expect(suggestPath('crm', paths, { group: 'crm' })).toEqual([]);
+  });
+
+  it('an empty group behaves exactly like no group', () => {
+    expect(suggestPath('contacts', paths, { group: '' })).toEqual(suggestPath('contacts', paths));
   });
 });
