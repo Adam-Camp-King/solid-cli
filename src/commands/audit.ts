@@ -9,8 +9,8 @@ import { isJsonOutput } from '../lib/json-output';
 export const auditCommand = new Command('audit')
   .description('Activity log — who changed what, when')
   .option('--limit <n>', 'Number of entries', '20')
-  .option('--user <email>', 'Filter by user email')
-  .option('--action <type>', 'Filter by action (create, update, delete)')
+  .option('--user <id>', 'Filter by user id')
+  .option('--action <type>', 'Filter by event type (e.g. auth.login, auth.login_failed)')
   .option('--by-key <id>', 'T11 — filter to one API key (what did Claude do?)')
   .option('--since <duration>', 'T11 — relative window: 15m, 1h, 24h, 7d')
   .option('--method <verb>', 'T11 — filter by HTTP method: GET/POST/PUT/PATCH/DELETE')
@@ -71,24 +71,35 @@ export const auditCommand = new Command('audit')
 
     const spinner = ora('Loading audit log...').start();
     try {
+      // The route takes user_id and event_type. This sent user_email and
+      // action_type, which it ignored — so every filter silently returned
+      // the unfiltered log.
       const params: Record<string, unknown> = { limit: options.limit };
-      if (options.user) params.user_email = options.user;
-      if (options.action) params.action_type = options.action;
+      if (options.user) {
+        if (!/^\d+$/.test(String(options.user))) {
+          spinner.fail(chalk.red('--user takes a numeric user id.'));
+          process.exit(1);
+        }
+        params.user_id = Number(options.user);
+      }
+      if (options.action) params.event_type = options.action;
       const res = await apiClient.get('/api/v1/security/audit/logs', { params });
       spinner.stop();
       if (isJsonOutput(options)) { console.log(JSON.stringify(res.data, null, 2)); return; }
-      const entries = (res.data as Record<string, any>).entries || (res.data as Record<string, any>).logs || (res.data as Record<string, any>).items || [];
+      const data = res.data as Record<string, any>;
+      const entries = data.logs || data.entries || data.items || [];
+      const scope = data.scoped_to?.company_id;
       console.log('');
-      console.log(ui.header(`Audit Log (${entries.length})`));
-      if (entries.length === 0) { console.log(chalk.dim('  No activity recorded yet.')); }
+      console.log(ui.header(`Audit Log (${entries.length}${data.total != null ? ` of ${data.total}` : ''})${scope ? ` — company ${scope}` : ''}`));
+      if (entries.length === 0) { console.log(chalk.dim(`  ${data.empty_means || 'No activity recorded yet.'}`)); }
       else {
+        // Field names the backend actually returns (services/audit_service.py).
         for (const entry of entries) {
-          const action = entry.action || entry.action_type || '';
-          const color = action === 'delete' ? chalk.red : action === 'create' ? chalk.green : chalk.yellow;
-          const user = entry.user_email || entry.user || '';
-          const entity = entry.entity_type || entry.resource || '';
-          const time = entry.created_at || entry.timestamp || '';
-          console.log(`  ${chalk.dim(time)}  ${color(action.padEnd(8))}  ${entity}  ${chalk.dim(user)}`);
+          const event = String(entry.event_type || entry.action || '');
+          const color = /fail|denied|lock/.test(event) ? chalk.red : /delete/.test(event) ? chalk.yellow : chalk.green;
+          const who = entry.user_id != null ? `user ${entry.user_id}` : '';
+          const where = [entry.channel, entry.ip_address].filter(Boolean).join(' · ');
+          console.log(`  ${chalk.dim(entry.timestamp || entry.created_at || '')}  ${color(event.padEnd(22))}  ${chalk.dim(who)}  ${chalk.cyan(where)}`);
         }
       }
       console.log('');
@@ -106,11 +117,21 @@ auditCommand.command('export').description('Export audit logs (CSV)')
     const ora = (await import('ora')).default;
     const spinner = ora('Exporting...').start();
     try {
-      const params: Record<string, unknown> = {};
-      if (options.from) params.from_date = options.from;
-      if (options.to) params.to_date = options.to;
-      const res = await apiClient.get('/api/v1/security/audit/export', { params });
-      const body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+      // The export returns the file in `content` (it used to return a
+      // download_url for a route that never existed). This wrote the whole
+      // JSON envelope to the file instead of the CSV.
+      if (options.from || options.to) {
+        spinner.warn(chalk.yellow('--from/--to are not supported by the server export yet — exporting the newest events instead.'));
+        spinner.start('Exporting...');
+      }
+      const res = await apiClient.get('/api/v1/security/audit/export', { params: { format: 'csv' } });
+      const data = res.data as Record<string, any>;
+      const body = typeof res.data === 'string' ? res.data
+        : typeof data.content === 'string' ? data.content : JSON.stringify(res.data);
+      if (data && data.truncated) {
+        spinner.warn(chalk.yellow(`Export capped at ${data.record_count} of ${data.total_matching} events.`));
+        spinner.start('Writing...');
+      }
       if (options.output) {
         (await import('fs')).writeFileSync(options.output, body);
         spinner.succeed(chalk.green(`Saved to ${options.output}`));
