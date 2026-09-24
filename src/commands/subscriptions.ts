@@ -1,9 +1,9 @@
 /**
- * Subscriptions — client-facing subscription product management.
- * Wraps controllers/subscriptions.py at /api/v1/subscriptions/*.
+ * Subscriptions — wraps controllers/subscriptions.py at /api/v1/subscriptions/*.
  *
- * NOTE: these are subscriptions THIS COMPANY sells, not their Solid# plan.
- * For the Solid# plan use `solid billing`.
+ * ⚠️ That controller is Solid#'s OWN billing of this company (BillingCustomer
+ * keyed by tenant_id), not subscriptions this company sells. `list` is
+ * honest about that; see the note above it.
  */
 
 import { Command } from 'commander';
@@ -24,40 +24,42 @@ export const subscriptionsCommand = new Command('subscriptions')
   .alias('subs')
   .description('Recurring subscription products you sell to YOUR customers');
 
-{
-  const { withListFlags } = require('../lib/command-kit') as typeof import('../lib/command-kit');
-  const listCmd = subscriptionsCommand.command('list').alias('ls').description('List active subscriptions for a customer (or all)');
-  withListFlags(listCmd, '50');
-  listCmd.option('--customer <id>', 'Filter by customer ID');
-  listCmd.option('--status <status>', 'Filter by status (active, cancelled, past_due)');
-  listCmd.action(async (opts: { customer?: string; status?: string } & import('../lib/command-kit').ListFlags) => {
+/**
+ * ⛔ GET /api/v1/subscriptions takes NO query parameters and returns ONE
+ * object: this company's own Solid# plan (tier, status, period end) — not a
+ * list of subscriptions the company sells. The old `list` sent page_size /
+ * offset / customer_id / status, which the route never declared and silently
+ * dropped, then looked for an array that is never there and printed "No
+ * subscriptions found" for every tenant. Those flags are gone; this prints
+ * what the route actually returns, and says what it is.
+ */
+subscriptionsCommand
+  .command('list').alias('ls')
+  .description('Show this company\'s Solid# plan subscription (the route returns one plan, not a list)')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
     requireAuth();
-    const { runListCommand } = await import('../lib/command-kit');
-    await runListCommand(opts, {
-      spinnerText: 'Loading subscriptions...',
-      errorText: 'Failed to load subscriptions',
-      fetch: async (offset, limit) => {
-        const params: Record<string, unknown> = { page_size: limit, offset };
-        if (opts.customer) params.customer_id = parseInt(opts.customer, 10);
-        if (opts.status) params.status = opts.status;
-        return (await apiClient.get('/api/v1/subscriptions', { params })).data;
-      },
-      extract: (page) => {
-        const d = page as Record<string, unknown>;
-        return ((d.subscriptions || d.items || []) as Array<Record<string, unknown>>);
-      },
-      render: (items) => {
-        if (!items.length) { console.log(chalk.dim('  No subscriptions found.')); return; }
-        console.log('');
-        for (const sub of items) {
-          const status = sub.status === 'active' ? chalk.green('active') : chalk.yellow(String(sub.status || '?'));
-          console.log(`  #${sub.id}  ${sub.customer_name || sub.customer_id || '—'}  ${status}  ${sub.plan_name || sub.plan_slug || '—'}`);
-        }
-        console.log('');
-      },
-    });
+    const s = ora({ text: 'Loading subscription...', stream: process.stderr }).start();
+    try {
+      const res = await apiClient.get('/api/v1/subscriptions');
+      s.stop();
+      const d = (res.data || {}) as Record<string, unknown>;
+      if (isJsonOutput(opts)) { console.log(JSON.stringify(d, null, 2)); return; }
+      console.log('');
+      console.log(`  ${chalk.bold('Solid# plan')}  company ${d.company_id ?? '—'}`);
+      console.log(`  ${chalk.dim('tier:')}    ${d.tier ?? '—'}`);
+      console.log(`  ${chalk.dim('status:')}  ${d.status ?? '—'}`);
+      if (d.billing_account === false) {
+        console.log(`  ${chalk.dim(String(d.summary || 'No billing account.'))}`);
+      } else {
+        if (d.current_period_end && d.current_period_end !== 'None') console.log(`  ${chalk.dim('renews:')}  ${d.current_period_end}`);
+        if (d.cancel_at_period_end) console.log(`  ${chalk.yellow('cancels at period end')}`);
+      }
+      console.log('');
+      console.log(chalk.dim('  Plan changes and invoices: solid billing'));
+      console.log('');
+    } catch (e) { fail(s, 'Failed to load subscription', e); }
   });
-}
 
 subscriptionsCommand
   .command('get <id>')
@@ -158,8 +160,7 @@ subscriptionsCommand
 
 import { appendExamples as __appendExamplesSubs, fail } from '../lib/command-kit';
 __appendExamplesSubs(subscriptionsCommand, [
-  { cmd: 'solid subs list', why: 'All recurring products YOU sell' },
-  { cmd: 'solid subs create --name Gold --price 29.99 --interval month', why: 'Create a plan' },
+  { cmd: 'solid subs list', why: 'This company\'s Solid# plan: tier, status, renewal' },
   { cmd: 'solid subs upgrade --customer <id> --plan <plan-id>', why: 'Enroll a customer' },
   { cmd: 'solid subs cancel --customer <id> --yes', why: 'Cancel at period end' },
 ]);
