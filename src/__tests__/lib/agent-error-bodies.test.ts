@@ -247,6 +247,20 @@ describe('page public URL', () => {
     expect(resolveSiteRef('nope', sites).error).toMatch(/7=main/);
     expect(primarySite(sites)?.id).toBe(7);
     expect(primarySite([{ id: 1, site_type: 'landing' }, { id: 2, site_type: 'landing' }])).toBeUndefined();
+    // Several company sites: never guess, even when one is marked live.
+    expect(
+      primarySite([
+        { id: 1, site_type: 'company', is_live: false },
+        { id: 2, site_type: 'company', is_live: true },
+      ]),
+    ).toBeUndefined();
+    // A deleted duplicate does not make it ambiguous.
+    expect(
+      primarySite([
+        { id: 1, site_type: 'company', deleted_at: '2026-01-01' },
+        { id: 2, site_type: 'company' },
+      ])?.id,
+    ).toBe(2);
     expect(siteCanonicalOrigin({ addresses: [{ is_canonical: true, is_active: true, url: 'https://a.b/' }] })).toBe('https://a.b');
   });
 });

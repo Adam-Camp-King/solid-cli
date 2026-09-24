@@ -34,16 +34,20 @@ export function siteCanonicalOrigin(site: SiteRow | undefined | null): string | 
 }
 
 /**
- * The company's primary site: the one with site_type "company" (what the
- * backend's own generators attach pages to), else the only site there is.
- * Undefined when that is ambiguous — guessing between two sites would attach
+ * The company's primary site: the ONE site with site_type "company" (what
+ * the backend's own generators attach pages to), else the only site there is.
+ * Undefined when that is ambiguous (several company sites, or several sites
+ * and none of them "company") — guessing between two sites would attach
  * a page to the wrong one.
  */
 export function primarySite(sites: SiteRow[]): SiteRow | undefined {
   const live = sites.filter((s) => s && !s.deleted_at);
   const company = live.filter((s) => s.site_type === 'company');
   if (company.length === 1) return company[0];
-  if (company.length > 1) return company.find((s) => s.is_live) ?? company[0];
+  // Two or more company sites: any pick (first, or the "live" one) is a guess,
+  // and a wrong guess attaches the page to a site that 404s it. Make the
+  // caller pass --site.
+  if (company.length > 1) return undefined;
   if (live.length === 1) return live[0];
   return undefined;
 }
