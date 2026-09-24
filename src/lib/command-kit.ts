@@ -591,6 +591,37 @@ export function emitErrorAndExit(error: unknown): never {
   throw new Error('unreachable');
 }
 
+/** The fields of a handled API error that decide "a human must approve this". */
+export interface ApprovalErrorLike {
+  code?: string;
+  status?: number;
+  approval_url?: string;
+  preview_id?: string;
+}
+
+/**
+ * Human-readable lines for a write the server parked for the owner's approval
+ * (R3 — e.g. a permanent delete), or null when the error is something else.
+ *
+ * The generic failure path prints "Failed to …" first, which reads as "it
+ * broke, try again". It did not break: nothing happened yet, and retrying
+ * mints another proposal. Say that, and put the link first.
+ */
+export function approvalRequiredLines(action: string, err: ApprovalErrorLike): string[] | null {
+  const isApproval =
+    err.code === 'APPROVAL_REQUIRED' || (err.status === 409 && Boolean(err.approval_url));
+  if (!isApproval) return null;
+  const lines = [`${action} needs a human's approval — nothing has been changed yet.`];
+  if (err.approval_url) {
+    lines.push(`A person with owner access must open and approve: ${err.approval_url}`);
+  } else {
+    lines.push('A person with owner access must approve it in the dashboard (the server returned no link).');
+  }
+  if (err.preview_id) lines.push(`preview_id: ${err.preview_id}`);
+  lines.push('After it is approved, re-run the same command unchanged. Do not retry before then.');
+  return lines;
+}
+
 /**
  * Minimal structural type for "something spinner-shaped". Accepts a real
  * `ora` instance, a `SpinnerLike`, or a test double — without dragging

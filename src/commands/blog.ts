@@ -219,7 +219,18 @@ blogCommand
       await apiClient.delete(`/api/v1/cms/blog/posts/${id}`);
       spinner.succeed(chalk.green(`Blog post #${id} deleted`));
     } catch (error) {
-      fail(spinner, 'Failed to delete blog post', error);
+      // Permanent blog delete is R3: the server answers 409 with an
+      // approval_url instead of deleting. That is not a failure to report as
+      // one — the owner has to approve it.
+      const { approvalRequiredLines, emitErrorAndExit } = await import('../lib/command-kit');
+      const lines = approvalRequiredLines(`Deleting blog post #${id}`, handleApiError(error));
+      if (!lines) fail(spinner, 'Failed to delete blog post', error);
+      spinner.stop();
+      // --json: the envelope already carries code APPROVAL_REQUIRED, approval_url and next.
+      if (isJsonOutput()) emitErrorAndExit(error);
+      process.stderr.write(chalk.yellow(`  ${lines[0]}`) + '\n');
+      for (const line of lines.slice(1)) process.stderr.write(`  ${line}` + '\n');
+      process.exit(1);
     }
   });
 
