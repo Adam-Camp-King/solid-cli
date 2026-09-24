@@ -55,12 +55,14 @@ interface VerbRecord {
    * in which case we fall back to http_endpoint (the old behaviour).
    *
    *   "http"     a real REST route at /api/v1/agent/<ns>/<verb>
-   *   "dispatch" no REST route — reachable via POST /api/v1/agent/cli-dispatch
+   *   "dispatch" no REST route — reachable via POST /api/v1/ada/cli-dispatch
    *   "mcp"      reachable only over an MCP connection
    */
   transport?: 'http' | 'dispatch' | 'mcp';
   /** Where a dispatch-transport verb is actually invoked. */
   dispatch_endpoint?: string | null;
+  /** HTTP method for an http-transport verb (null for other transports). */
+  http_method?: string | null;
   /** The canonical verb this one duplicates, when it is not canonical. */
   same_as?: string | null;
   /** Atlas address: two digits (class, division) or three in a curated class (class, domain, noun), e.g. "510". */
@@ -90,20 +92,21 @@ interface VerbManifest {
   etag?: string;
 }
 
-// Verbs that go through GET instead of POST. The Phase 5 verb-index
-// endpoint doesn't expose method yet (input_schema only); this lookup
-// is the small explicit set of GET endpoints in agent_verbs.py.
-const GET_VERBS = new Set([
-  'agent.manifest',
-  'ucp.recommendations',
-  'agent.reliability.scoreboard',
-  'agent.reliability.needs_attention',
-  'agent.telemetry.status',
-  'ucp.receipts.get',
-  'transaction.get',
-  'agent.macros.list',
-  'audit.export',
-]);
+/**
+ * The HTTP method for an http-transport verb, read from the manifest.
+ *
+ * ⛔ This used to be a hardcoded set of nine "GET verbs". Every one of them is
+ * advertised at /api/v1/agent/<ns>/<verb>, which is the generic POST dispatch
+ * route, so all nine answered 405. The manifest publishes `http_method`
+ * per verb; read it, and default to POST (the registry's own default) when an
+ * older backend omits it.
+ */
+export function httpMethodOf(verb: { http_method?: string | null }): 'GET' | 'POST' {
+  return String(verb.http_method || 'POST').toUpperCase() === 'GET' ? 'GET' : 'POST';
+}
+
+/** Where dispatch-transport verbs go when the manifest does not say. ada.py mounts at /api/v1/ada. */
+export const DEFAULT_DISPATCH_ENDPOINT = '/api/v1/ada/cli-dispatch';
 
 export const verbsCommand = new Command('verbs')
   // ⛔ NO COUNT IN THIS STRING. It said "169 agent-attraction verbs" against a
@@ -463,7 +466,7 @@ verbsCommand
       const report = validatePayload(payload, verb.input_schema as JsonSchema);
       const url =
         transport === 'dispatch'
-          ? (verb.dispatch_endpoint || '/api/v1/agent/cli-dispatch')
+          ? (verb.dispatch_endpoint || DEFAULT_DISPATCH_ENDPOINT)
           : (verb.http_endpoint || '(unknown — see transport)');
       const body =
         transport === 'dispatch'
@@ -488,7 +491,7 @@ verbsCommand
         // is the same dead end as the server's bare "Fix the request": the only
         // move left is to guess. value_errors names the field AND why.
         value_errors: report.value_errors,
-        would: { method: 'POST', url, body },
+        would: { method: transport === 'dispatch' ? 'POST' : httpMethodOf(verb), url, body },
         ...(report.valid ? {} : { fix: fixFor(verb.name, report) }),
       });
 
@@ -525,13 +528,13 @@ verbsCommand
         // ADA's registry first. `confirm` is a sibling of `args`, not a member
         // of it — putting it inside args would reach the verb as an argument
         // it never declared.
-        res = await apiClient.post(verb.dispatch_endpoint || '/api/v1/agent/cli-dispatch', {
+        res = await apiClient.post(verb.dispatch_endpoint || DEFAULT_DISPATCH_ENDPOINT, {
           verb: verb.name,
           args: payload,
           confirm: isWrite ? true : undefined,
         });
       } else {
-        const method = GET_VERBS.has(verb.name) ? 'GET' : 'POST';
+        const method = httpMethodOf(verb);
         res = method === 'GET'
           ? await apiClient.get(verb.http_endpoint as string, { params: body })
           : await apiClient.post(verb.http_endpoint as string, body);

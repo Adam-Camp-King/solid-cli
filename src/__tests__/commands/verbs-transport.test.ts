@@ -5,7 +5,7 @@
  * and for 272 of 845 that route has never existed — the agent-verb router ends
  * in a catch-all needing two path segments, so a flat snake_case name matched
  * nothing and 404'd. Those verbs were never broken: they live in ADA's registry
- * and answer on `POST /api/v1/agent/cli-dispatch`. But a 404 reads as "this
+ * and answer on `POST /api/v1/ada/cli-dispatch`. But a 404 reads as "this
  * does not exist", which is how a third of the registry got written off as
  * phantom.
  *
@@ -105,7 +105,7 @@ describe('verbs invoke — transport routing', () => {
       verb({
         name: 'ai_employees_list',
         transport: 'dispatch',
-        dispatch_endpoint: '/api/v1/agent/cli-dispatch',
+        dispatch_endpoint: '/api/v1/ada/cli-dispatch',
         http_endpoint: null,
       }),
     );
@@ -114,7 +114,7 @@ describe('verbs invoke — transport routing', () => {
 
     expect(mockPost).toHaveBeenCalledTimes(1);
     const [url, body] = mockPost.mock.calls[0] as [string, any];
-    expect(url).toBe('/api/v1/agent/cli-dispatch');
+    expect(url).toBe('/api/v1/ada/cli-dispatch');
     expect(body.verb).toBe('ai_employees_list');
     expect(body.args).toEqual({});
   });
@@ -132,6 +132,33 @@ describe('verbs invoke — transport routing', () => {
 
     const [url] = mockPost.mock.calls[0] as [string, any];
     expect(url).toBe('/api/v1/agent/advocacy/next-step');
+  });
+
+  it('uses the manifest http_method — agent.manifest is a POST route, not GET', async () => {
+    // A hardcoded "GET verbs" set sent nine verbs as GET to the generic POST
+    // route at /api/v1/agent/<ns>/<verb>, and every one answered 405.
+    mockGet.mockResolvedValue(
+      verb({ name: 'agent.manifest', transport: 'http', http_method: 'POST',
+             http_endpoint: '/api/v1/agent/agent/manifest' }),
+    );
+    await invoke('agent.manifest');
+    expect(mockGet).toHaveBeenCalledTimes(1); // only the manifest lookup
+    expect((mockPost.mock.calls[0] as [string])[0]).toBe('/api/v1/agent/agent/manifest');
+  });
+
+  it('sends GET when the manifest says GET', async () => {
+    mockGet
+      .mockResolvedValueOnce(verb({ name: 'x.read', transport: 'http', http_method: 'GET', http_endpoint: '/api/v1/agent/x/read' }))
+      .mockResolvedValueOnce({ data: { ok: true } });
+    await invoke('x.read');
+    expect(mockPost).not.toHaveBeenCalled();
+    expect((mockGet.mock.calls[1] as [string])[0]).toBe('/api/v1/agent/x/read');
+  });
+
+  it('a dispatch verb with no dispatch_endpoint falls back to /api/v1/ada/cli-dispatch', async () => {
+    mockGet.mockResolvedValue(verb({ name: 'ai_employees_list', transport: 'dispatch', dispatch_endpoint: null }));
+    await invoke('ai_employees_list');
+    expect((mockPost.mock.calls[0] as [string])[0]).toBe('/api/v1/ada/cli-dispatch');
   });
 
   it('keeps working against a backend that does not send transport yet', async () => {
@@ -154,7 +181,7 @@ describe('verbs invoke — transport routing', () => {
         name: 'sms_send',
         side_effects: 'write',
         transport: 'dispatch',
-        dispatch_endpoint: '/api/v1/agent/cli-dispatch',
+        dispatch_endpoint: '/api/v1/ada/cli-dispatch',
       }),
     );
 
