@@ -7,7 +7,7 @@
  *   solid ucp manifest                        → tenant's signed UCP profile
  *   solid ucp capabilities                    → list exposed UCP capabilities
  *   solid ucp consent list                    → list active UCP consent grants
- *   solid ucp consent grant <cap> --scope X   → grant consent for a capability
+ *   solid ucp consent grant <cap>             → grant consent for one capability
  *   solid ucp consent revoke <id>             → revoke a grant
  *
  * UCP is intentionally symmetric with `solid webmcp` so an operator
@@ -26,7 +26,29 @@ import { isJsonOutput, printJson } from '../lib/json-output';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const UCP_SCOPES = ['once', 'session', 'permanent'] as const;
+/**
+ * Path for a capability id. Ids contain slashes (`core/availability`) and the
+ * backend route is `{capability_id:path}`, so encode each segment, not the
+ * whole id.
+ */
+export function capabilityPath(id: string): string {
+  return id.split('/').map(encodeURIComponent).join('/');
+}
+
+/** capabilities[] from a business profile, wherever the envelope carries it. */
+export function capabilitiesOf(profile: unknown): Array<Record<string, unknown>> {
+  const p = (profile && typeof profile === 'object' ? profile : {}) as Record<string, any>;
+  const caps = p.ucp?.capabilities ?? p.capabilities;
+  return Array.isArray(caps) ? caps : [];
+}
+
+function statusOf(e: unknown): number | undefined {
+  return (e as { response?: { status?: number } })?.response?.status;
+}
+
+function detailOf(e: unknown): any {
+  return (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+}
 
 function requireLogin(): void {
   if (!config.isLoggedIn()) {
@@ -100,18 +122,33 @@ ucpCommand
     const wantJson = isJsonOutput(options);
     const spinner = wantJson ? null : ora('Fetching UCP capabilities…').start();
     try {
-      const { data } = await apiClient.get(`/co/${companyId}/ucp/capabilities`);
+      // ⛔ There is no GET /co/{id}/ucp/capabilities (it 404'd). The tenant's
+      // capabilities[] is published in its signed business profile.
+      const { data } = await apiClient.get(`/co/${companyId}/.well-known/ucp`);
       if (spinner) spinner.stop();
+      const caps = capabilitiesOf(data);
       if (wantJson) {
-        console.log(JSON.stringify(data, null, 2));
+        console.log(JSON.stringify({ company_id: companyId, capabilities: caps }, null, 2));
         return;
       }
       console.log('');
       console.log(chalk.bold(`UCP capabilities — company ${chalk.cyan(String(companyId))}`));
-      console.log(JSON.stringify(data, null, 2));
+      if (!caps.length) {
+        console.log(chalk.dim('  UCP is enabled, but no capabilities are granted yet. Grant one: solid ucp consent grant <capability>'));
+      }
+      for (const c of caps) {
+        const ep = Array.isArray(c.endpoint) ? chalk.dim(`  ${(c.endpoint as string[]).join(' · ')}`) : '';
+        console.log(`  ${chalk.cyan(String(c.id))}  ${chalk.dim(String(c.role ?? ''))}${ep}`);
+      }
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
+      if (statusOf(e) === 404) {
+        const msg = `UCP is not enabled for company ${companyId}. The business owner turns it on (rung 1 of the consent ladder) — see: solid ucp consent list`;
+        if (wantJson) printJson({ error: { code: 'UCP_NOT_ENABLED', status: 404, message: msg, fix: 'solid ucp consent list' } });
+        else console.error(chalk.yellow(msg));
+        process.exit(1);
+      }
       { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
@@ -150,33 +187,45 @@ ucpConsentCommand
 
 ucpConsentCommand
   .command('grant <capability>')
-  .description('Grant consent for a UCP capability (owner-only)')
-  .requiredOption('--scope <scope>', `One of: ${UCP_SCOPES.join(', ')}`)
+  .description('Grant consent for one UCP capability (owner-only). UCP must be on for the business and the capability\'s role enabled first.')
+  .option('--scope <scope>', 'DEPRECATED — ignored. The capability grant has no scope; the backend picks the role.')
   .option('--json', 'Output as JSON')
   .action(async (capability: string, options) => {
     requireLogin();
-    if (!(UCP_SCOPES as readonly string[]).includes(options.scope)) {
-      console.error(chalk.red(`Unknown --scope: ${options.scope}. Expected: ${UCP_SCOPES.join(', ')}`));
-      process.exit(2);
+    if (options.scope !== undefined) {
+      process.stderr.write(chalk.yellow('  ⚠ --scope is deprecated and ignored: a capability grant takes no scope.\n'));
     }
     const wantJson = isJsonOutput(options);
     const spinner = wantJson ? null : ora('Granting UCP consent…').start();
     try {
-      const { data } = await apiClient.post('/api/v1/ucp/consent/grant', {
-        capability,
-        scope: options.scope,
-      });
+      // ⛔ Was POST /api/v1/ucp/consent/grant with {capability, scope}. That
+      // route's body is {scope_type, role, capability_id, ...}, so every call
+      // 422'd. This is the one-capability route the dashboard uses.
+      const { data } = await apiClient.post(`/api/v1/ucp/consent/capability/${capabilityPath(capability)}`, {});
       if (spinner) spinner.stop();
       if (wantJson) {
         console.log(JSON.stringify(data, null, 2));
         return;
       }
       console.log('');
-      console.log(chalk.green(`✓ Granted ${chalk.cyan(capability)} (${options.scope})`));
+      console.log(chalk.green(`✓ Granted ${chalk.cyan(capability)}`));
       console.log(chalk.dim(JSON.stringify(data, null, 2)));
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();
+      const d = detailOf(e);
+      if (statusOf(e) === 409 && d && d.error === 'ladder_prerequisite') {
+        const msg = String(d.message || 'A consent-ladder prerequisite is off.');
+        if (wantJson) printJson({ error: { code: 'LADDER_PREREQUISITE', status: 409, message: msg, needs: d.needs, role: d.role, fix: 'solid ucp consent list' } });
+        else console.error(chalk.yellow(`  ${msg}  (ladder: solid ucp consent list)`));
+        process.exit(1);
+      }
+      if (statusOf(e) === 404 && d && d.error === 'unknown_capability') {
+        const msg = `Unknown UCP capability: ${capability}`;
+        if (wantJson) printJson({ error: { code: 'NOT_FOUND', status: 404, message: msg } });
+        else console.error(chalk.red(msg));
+        process.exit(1);
+      }
       { const apiErr = handleApiError(e); console.error(chalk.red(apiErr.message)); process.exit(1); }
     }
   });
@@ -190,7 +239,8 @@ ucpConsentCommand
     const wantJson = isJsonOutput(options);
     const spinner = wantJson ? null : ora('Revoking…').start();
     try {
-      await apiClient.delete(`/api/v1/ucp/consent/grant/${encodeURIComponent(grantId)}`);
+      // Empty JSON body: older backends 422'd a DELETE with no body.
+      await apiClient.delete(`/api/v1/ucp/consent/grant/${encodeURIComponent(grantId)}`, { data: {} });
       if (spinner) spinner.stop();
       if (wantJson) {
         printJson({ revoked: grantId });

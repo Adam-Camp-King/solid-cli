@@ -734,10 +734,11 @@ class ApiClient {
 
   async delete<T = unknown>(
     url: string,
-    options?: { params?: Record<string, unknown>; idempotencyKey?: string },
+    options?: { params?: Record<string, unknown>; idempotencyKey?: string; data?: unknown },
   ): Promise<ApiResponse<T>> {
     const response = await this.client.delete(url, {
       params: options?.params,
+      ...(options?.data !== undefined ? { data: options.data } : {}),
       ...idempotencyConfig(options),
     });
     return { data: response.data, status: response.status, success: true };
