@@ -2,6 +2,21 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.6] — 2026-09-24
+
+**`solid verbs list` takes the Atlas addresses the backend now uses, and a retired
+address tells you where it went.**
+
+Class 5 is curated with three-digit addresses (`530` taking payment, `531`
+refunds), and `verbs list` accepted only one or two digits, so a real address was
+refused as malformed. It now accepts a class, a noun or a curated address (1–3
+digits). An address the backend has retired used to return an empty list, which
+reads exactly like "nothing lives here". It now returns the standard error envelope
+(`410 address_retired`) with the replacement addresses in `did_you_mean` and a
+`fix` you can run; when there are several candidates, `fix` is `solid map`, because
+the CLI will not pick one for you. The examples in `verbs`, `map` and `context`
+use the three-digit addresses.
+
 ## [Unreleased]
 
 **`solid apply` grows a memory: a lockfile, three-way drift, recorded pre-images

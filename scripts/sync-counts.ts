@@ -12,7 +12,7 @@
  *
  * The numbers are measurable. The CLI measures itself:
  *   version  → package.json
- *   commands → the command index (bare `solid` on a non-TTY) = program.commands
+ *   commands → the commander tree's top-level entries
  *   verbs    → `solid schema verbs --include-hidden --json`
  *
  * So they are generated here, never typed. `generate-llms.ts` already proved
@@ -32,7 +32,6 @@
 import { execSync } from "child_process";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { countCommands } from "../src/lib/command-count";
 
 const ROOT = join(__dirname, "..", "..");        // the monorepo root
 const CLI = join(__dirname, "..");
@@ -53,7 +52,10 @@ function measure(): Counts {
   const manifest = JSON.parse(
     execSync(`node "${dist}" schema verbs --include-hidden --json`, { encoding: "utf8", env, maxBuffer: 64 * 1024 * 1024 }),
   );
-  return { version, commands: countCommands(dist, env), verbs: Number(manifest.count) };
+  const help = execSync(`node "${dist}" --help`, { encoding: "utf8", env });
+  const commandsBlock = help.slice(help.indexOf("Commands:"));
+  const commands = commandsBlock.split("\n").filter((l) => /^ {2}[a-z]/.test(l)).length;
+  return { version, commands, verbs: Number(manifest.count) };
 }
 
 /**
@@ -291,5 +293,4 @@ function reportHumanOwned(unowned: string[]): void {
   if (unowned.length > 15) console.log(`    …and ${unowned.length - 15} more`);
 }
 
-// Run only as a script, so the counting helpers can be imported by a test.
-if (require.main === module) main();
+main();
