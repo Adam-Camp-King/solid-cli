@@ -14,12 +14,13 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
 import { fail } from '../lib/command-kit';
+import { fetchSites, primarySite, publicUrlForPage, resolvePublicUrl, resolveSiteRef } from '../lib/page-url';
 
 export const pagesCommand = new Command('pages')
   .description('Website page management');
@@ -80,8 +81,9 @@ pagesCommand
       // replicas turn over independently — during one session two of them served
       // different versions of the same page for several minutes, and a change
       // that had worked was diagnosed as broken. Say which of the two happened.
-      const page = (await apiClient.get(`/api/v1/cms/pages/${parseInt(id, 10)}`)).data as Record<string, any>;
-      const liveUrl = await publicUrlFor(page);
+      const where = await resolvePublicUrl(parseInt(id, 10));
+      const page = where.page || {};
+      const liveUrl = where.url;
       let served: boolean | null = null;
 
       if (options.wait && liveUrl) {
@@ -91,7 +93,16 @@ pagesCommand
 
       if (isJsonOutput(options)) {
         spinner.stop();
-        console.log(JSON.stringify({ page_id: Number(id), published: true, url: liveUrl, serving: served }, null, 2));
+        console.log(JSON.stringify({
+          page_id: Number(id),
+          published: true,
+          url: liveUrl,
+          ...(where.url_basis ? { url_basis: where.url_basis } : {}),
+          ...(where.url_unavailable_reason ? { url_unavailable_reason: where.url_unavailable_reason } : {}),
+          site_id: where.site_id ?? page.site_id ?? null,
+          // null = not checked (pass --wait to poll the live URL).
+          serving: served,
+        }, null, 2));
         return;
       }
 
@@ -103,6 +114,8 @@ pagesCommand
         console.log(chalk.dim(`  ${liveUrl}`));
       } else if (liveUrl) {
         console.log(chalk.dim(`  ${liveUrl} — may take a moment to turn over. Add --wait to block until it does.`));
+      } else if (where.url_unavailable_reason) {
+        console.log(chalk.yellow(`  No public URL: ${where.url_unavailable_reason}`));
       }
     } catch (error) {
       fail(spinner, 'Failed to publish page', error);
@@ -184,6 +197,8 @@ pagesCommand
   .option('--type <type>', 'Page type (home, about, services, contact, blog, landing)', 'website')
   .option('--publish', 'Publish immediately')
   .option('--layout-json <file>', 'Path to a JSON file containing layout_json (e.g., {"sections": [...]})')
+  .option('--site <id|slug>', "Site to attach the page to (default: the company's primary site). See: solid site list")
+  .option('--json', 'Output the created page as JSON')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -221,7 +236,47 @@ pagesCommand
       }
     }
 
+    const json = isJsonOutput(options);
     const spinner = ora(`Creating page "${options.title}"...`).start();
+
+    // ⛔ A PAGE WITH NO SITE IS SERVED NOWHERE BY SLUG. The public renderer
+    // looks /<slug> up with the host's site_id, so a page created with
+    // site_id null 404s on every host and is only reachable at /p/<slug>.
+    // The backend does not default it (POST /cms/pages stores what it is
+    // sent), so the CLI resolves --site, or the primary site, and sends it.
+    let siteId: number | undefined;
+    let siteNote: string | undefined;
+    let sites: Array<Record<string, any>> = [];
+    try {
+      sites = await fetchSites();
+    } catch (e) {
+      if (options.site && !/^\d+$/.test(String(options.site))) {
+        fail(spinner, 'Could not list sites to resolve --site', e);
+      }
+      siteNote = `site list unavailable: ${(e as Error).message}`;
+    }
+    if (options.site) {
+      if (/^\d+$/.test(String(options.site)) && !sites.length) {
+        siteId = parseInt(String(options.site), 10);
+      } else {
+        const r = resolveSiteRef(String(options.site), sites);
+        if (!r.site) {
+          spinner.stop();
+          const { emitErrorAndExit } = await import('../lib/command-kit');
+          emitErrorAndExit(Object.assign(new Error(r.error), {
+            isAxiosError: true,
+            response: { status: 404, data: { detail: r.error, reason: 'site_not_found' } },
+          }));
+        }
+        siteId = Number(r.site!.id);
+      }
+    } else if (sites.length) {
+      const primary = primarySite(sites);
+      if (primary) siteId = Number(primary.id);
+      else siteNote = `no single primary site among ${sites.length} sites — pass --site <id|slug>; page left unattached (reachable only at /p/<slug>)`;
+    } else if (!siteNote) {
+      siteNote = 'company has no sites — page left unattached';
+    }
 
     try {
       const payload: Record<string, unknown> = {
@@ -230,6 +285,7 @@ pagesCommand
         page_type: options.type,
         is_published: options.publish || false,
       };
+      if (siteId !== undefined) payload.site_id = siteId;
       if (layoutJson !== undefined) {
         payload.layout_json = layoutJson;
       }
@@ -237,13 +293,47 @@ pagesCommand
 
       const data = response.data as Record<string, any>;
       const page = data.page || data;
+
+      // POST /cms/pages always stores is_published=false, whatever it is sent,
+      // so --publish silently did nothing. Publish explicitly (paywall and
+      // guardrails run there) and report what actually happened.
+      let publishError: string | undefined;
+      if (options.publish && page.id && !page.is_published) {
+        try {
+          await apiClient.pagesPublish(Number(page.id));
+          page.is_published = true;
+        } catch (e) {
+          publishError = handleApiError(e).message;
+          // Asked to publish and it did not happen: not a success.
+          process.exitCode = 1;
+        }
+      }
+
+      if (json) {
+        spinner.stop();
+        const where = publicUrlForPage(page, sites);
+        console.log(JSON.stringify({
+          ...page,
+          ...(siteNote ? { site_note: siteNote } : {}),
+          ...(publishError ? { publish_error: publishError } : {}),
+          // Where it is (or will be, once published) served.
+          public_url: where.url,
+          ...(where.url_unavailable_reason ? { url_unavailable_reason: where.url_unavailable_reason } : {}),
+          next: page.is_published ? undefined : `solid publish ${page.id}`,
+        }, null, 2));
+        return;
+      }
+
       spinner.succeed(chalk.green(`Page created: ${page.title || options.title}`));
+      if (page.site_id) console.log(chalk.dim(`  Site: ${page.site_id}`));
+      if (siteNote) console.log(chalk.yellow(`  ${siteNote}`));
+      if (publishError) console.log(chalk.red(`  Created, but publish failed: ${publishError}`));
 
       console.log('');
       console.log(`  ${chalk.dim('ID:')}   ${page.id}`);
       console.log(`  ${chalk.dim('Slug:')} /${page.slug || options.slug}`);
       console.log('');
-      if (!options.publish) {
+      if (!page.is_published) {
         console.log(chalk.dim('  Publish: ') + chalk.cyan(`solid pages publish ${page.id}`));
       }
       console.log(chalk.dim('  Edit in browser: ') + chalk.cyan(`/dashboard/cms/builder/${page.id}`));
@@ -371,7 +461,7 @@ pagesCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Generating page with AI...').start();
 
     try {
@@ -547,34 +637,6 @@ Examples:
 Versioning: every publish creates a snapshot. See: solid history pages <slug>
 and solid rollback pages <slug> --version <n>.
 `);
-
-/**
- * Public URL for a page, or null when its site has no resolvable host.
- *
- * The host lives on the SITE, not on the page and not in the public context:
- * each site carries `canonical_host` and an `addresses[]` whose canonical entry
- * holds the URL. A page with no site_id has no address to serve from.
- */
-async function publicUrlFor(page: Record<string, any>): Promise<string | null> {
-  try {
-    if (!page.site_id) return null;
-    const res = (await apiClient.get('/api/v1/sites')).data as Record<string, any>;
-    const sites: Array<Record<string, any>> = res.sites ?? res.items ?? [];
-    const site = sites.find((x) => x.id === page.site_id);
-    if (!site) return null;
-
-    const canonical =
-      (site.addresses ?? []).find((a: Record<string, any>) => a.is_canonical && a.is_active)?.url ??
-      (site.canonical_host ? `https://${site.canonical_host}` : null);
-    if (!canonical) return null;
-
-    const origin = String(canonical).replace(/\/$/, '');
-    const slug = String(page.slug ?? '');
-    return slug === 'home' || slug === '' ? origin : `${origin}/${slug}`;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Poll the live URL until it serves this version.

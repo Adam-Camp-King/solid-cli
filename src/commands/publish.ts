@@ -21,12 +21,13 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { fail, requireCompanyContext } from '../lib/command-kit';
 import { isJsonOutput, printJson } from '../lib/json-output';
+import { resolvePublicUrl } from '../lib/page-url';
 
 function requireAuth(): void {
   if (!config.isLoggedIn()) {
@@ -163,7 +164,7 @@ export const publishCommand = new Command('publish')
   .option('--json', 'JSON output (per-page results with --all)')
   .action(async (pageId: string | undefined, opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
 
     if (opts.all && pageId) {
       console.error(chalk.red('Pass EITHER a <page_id> OR --all, not both.'));
@@ -211,10 +212,30 @@ export const publishCommand = new Command('publish')
     const spinner = ora({ text: `Publishing page ${id}...`, isSilent: json }).start();
     try {
       const res = await apiClient.post(`/api/v1/cms/pages/${id}/publish`, {});
+      // The publish response has no address, and `url: null` read as "not
+      // live" when the page was being served. Compute it from the page's
+      // site (or /p/<slug> on the primary site for an unattached page), and
+      // when that is impossible say why instead of returning a bare null.
+      const where = await resolvePublicUrl(id);
       spinner.stop();
-      if (json) { printJson(res.data); return; }
+      const body = (res.data && typeof res.data === 'object' ? res.data : {}) as Record<string, unknown>;
+      if (json) {
+        printJson({
+          ...body,
+          page_id: id,
+          published: true,
+          url: (typeof body.url === 'string' && body.url) ? body.url : where.url,
+          ...(where.url_basis ? { url_basis: where.url_basis } : {}),
+          ...(where.url_unavailable_reason && !(typeof body.url === 'string' && body.url)
+            ? { url_unavailable_reason: where.url_unavailable_reason } : {}),
+          site_id: where.site_id ?? null,
+        });
+        return;
+      }
       console.log(chalk.green(`  Page ${id} published`));
       console.log(chalk.dim(`  Pending draft (if any) was promoted to live.`));
+      if (where.url) console.log(chalk.dim(`  ${where.url}`));
+      else if (where.url_unavailable_reason) console.log(chalk.yellow(`  No public URL: ${where.url_unavailable_reason}`));
     } catch (error) { fail(spinner, 'Publish failed', error); }
   });
 
