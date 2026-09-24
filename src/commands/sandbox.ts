@@ -9,6 +9,13 @@
  * solid sandbox diff                → Compare sandbox vs production
  * solid sandbox push                → Promote sandbox → production
  * solid sandbox reset               → Discard sandbox, back to production state
+ *
+ * Server-side (sandbox.* verbs — shared with HTTP-verb and MCP agents):
+ * solid sandbox fork                → Stage page/asset changes on the server
+ * solid sandbox preview             → Preview links for staged pages
+ * solid sandbox promote             → Staged changes go live
+ * solid sandbox exit                → Discard staged changes
+ * `status` and `diff` report the server sandbox too.
  */
 
 import { Command } from 'commander';
@@ -20,6 +27,25 @@ import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput, printJson } from '../lib/json-output';
+import { getResolvedApiUrl } from '../lib/api-client';
+import {
+  VerbClient, SandboxStatus, sandboxStatus, sandboxFork, sandboxDiff, sandboxPromote, sandboxExit,
+  scopeFromFlag, pageChanges, diffLines, absoluteUrl, NO_SANDBOX_MESSAGE,
+} from '../lib/sandbox-verbs';
+
+/** The company's server-side sandbox, or null when it cannot be read. */
+async function serverSandbox(): Promise<(SandboxStatus & { changes?: number; lines?: string[] }) | null> {
+  if (!config.isLoggedIn()) return null;
+  try {
+    const client = apiClient as unknown as VerbClient;
+    const st = await sandboxStatus(client);
+    if (!st.active) return st;
+    const d = await sandboxDiff(client);
+    return { ...st, changes: d.changes.length, lines: diffLines(d) };
+  } catch {
+    return null;
+  }
+}
 
 const SANDBOX_DIR = '.sandbox';
 const SANDBOX_META = '.sandbox/meta.json';
@@ -129,10 +155,20 @@ sandboxCommand
     const dir = options.dir;
     const metaPath = path.join(dir, SANDBOX_META);
 
+    const server = await serverSandbox();
+    const serverLine = (): void => {
+      if (!server?.active) return;
+      console.log(`  ${chalk.bold('Server sandbox active')} ${chalk.dim(`since ${server.created_at || '?'}`)} — ${server.changes ?? 0} staged change(s)`);
+      for (const l of (server.lines || []).slice(0, 20)) console.log(`    ${l}`);
+      console.log(chalk.dim('  solid sandbox promote | solid sandbox exit'));
+      console.log('');
+    };
+
     if (!fs.existsSync(metaPath)) {
       // An agent needs "no sandbox" as a value, not as prose it has to parse.
-      if (isJsonOutput(options)) { printJson({ active: false, changes: null }); return; }
-      console.log(chalk.dim('No active sandbox. Run `solid sandbox create` to start one.'));
+      if (isJsonOutput(options)) { printJson({ active: Boolean(server?.active), changes: null, local: null, server }); return; }
+      if (server?.active) { console.log(''); serverLine(); return; }
+      console.log(chalk.dim('No active sandbox. `solid sandbox fork` stages server changes; `solid sandbox create` forks local files.'));
       return;
     }
 
@@ -191,6 +227,7 @@ sandboxCommand
           kb_added: kbNew,
           total: pagesChanged + pagesNew + kbChanged + kbNew,
         },
+        server,
       });
       return;
     }
@@ -210,22 +247,53 @@ sandboxCommand
       console.log(chalk.dim('  solid sandbox push   Promote these changes to production'));
     }
     console.log('');
+    serverLine();
   });
 
 // ── Diff ────────────────────────────────────────────────────────────
 
 sandboxCommand
   .command('diff')
-  .description('Compare sandbox files to original (pre-fork) state')
+  .description('Show what the sandbox changed: server-side staged pages/assets, and local .sandbox/ files')
   .option('--dir <path>', 'Working directory', process.cwd())
+  .option('--json', 'Machine-readable output (server-side sandbox)')
   .action(async (options) => {
     const dir = options.dir;
     const sandboxPath = path.join(dir, SANDBOX_DIR);
+    const hasLocal = fs.existsSync(path.join(sandboxPath, 'meta.json'));
 
-    if (!fs.existsSync(path.join(sandboxPath, 'meta.json'))) {
-      console.error(chalk.red('No active sandbox.'));
-      process.exit(1);
+    // Server-side sandbox first — it is what fork/promote/exit act on.
+    let serverDiff: Awaited<ReturnType<typeof sandboxDiff>> | null = null;
+    if (config.isLoggedIn()) {
+      try {
+        serverDiff = await sandboxDiff(apiClient as unknown as VerbClient);
+      } catch (error) {
+        if (!hasLocal) {
+          if (isJsonOutput(options)) printJson({ ok: false, error: handleApiError(error).message });
+          else console.error(chalk.red(handleApiError(error).message));
+          process.exit(1);
+        }
+      }
     }
+    const serverActive = Boolean(serverDiff && serverDiff.status !== 'no_sandbox');
+    if (isJsonOutput(options)) {
+      printJson({ active: serverActive || hasLocal, server: serverActive ? serverDiff : null, local_sandbox: hasLocal });
+      return;
+    }
+    if (serverActive && serverDiff) {
+      const lines = diffLines(serverDiff);
+      console.log(chalk.bold(`Server sandbox — ${lines.length} staged change(s)`));
+      for (const l of lines) console.log(l.startsWith('+') ? chalk.green(l) : chalk.yellow(l));
+      if (hasLocal) console.log('');
+    }
+    if (!hasLocal) {
+      if (!serverActive) {
+        console.error(chalk.red('No active sandbox.'));
+        process.exit(1);
+      }
+      return;
+    }
+    console.log(chalk.bold('Local .sandbox/ files'));
 
     // Compare sandbox pages to original pages
     const sandboxPages = path.join(sandboxPath, 'pages');
@@ -351,136 +419,168 @@ sandboxCommand
     console.log(chalk.green('Sandbox discarded. Main files unchanged.'));
   });
 
-// ── Fork (server-side sandbox) ─────────────────────────────────────
+// ── Server-side sandbox (fork / preview / promote / exit) ──────────────
+//
+// ⛔ These used to call /api/v1/sandbox/{status,enabled,publish,exit}, which
+// resolve the tenant from the Host header and 404 "No tenant found for this
+// domain" through api.solidnumber.com — for every company. They now use the
+// sandbox.* agent verbs (src/lib/sandbox-verbs.ts), the same sandbox HTTP-verb
+// and MCP agents use. While it is active, page and asset writes from ANY
+// transport are staged in it: new pages stay unpublished, edits to existing
+// pages land as drafts, publishes wait for promote.
+
+function requireLogin(): void {
+  if (!config.isLoggedIn()) {
+    console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+    process.exit(1);
+  }
+}
+
+function serverFail(spinner: { fail: (m: string) => void } | null, label: string, error: unknown, json: boolean): never {
+  const msg = handleApiError(error).message;
+  if (json) {
+    printJson({ ok: false, error: msg });
+  } else {
+    spinner?.fail(chalk.red(label));
+    console.error(msg);
+  }
+  process.exit(1);
+}
 
 sandboxCommand
   .command('fork')
-  .description('Create a server-side sandbox (isolated copy for safe editing)')
+  .description('Start a server-side sandbox: page/asset changes from any tool are staged until promote or exit')
   .option('--scope <scope>', 'Sandbox scope: pages, data, or all (default: all)', 'all')
+  .option('--json', 'Machine-readable output')
   .action(async (opts: any) => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
+    requireLogin();
+    const json = isJsonOutput(opts);
+    let scope: Record<string, boolean> | null;
+    try {
+      scope = scopeFromFlag(opts.scope);
+    } catch (e) {
+      if (json) printJson({ ok: false, error: (e as Error).message });
+      else console.error(chalk.red((e as Error).message));
       process.exit(1);
     }
-
-    const ora = (await import('../lib/spinner')).default;
-    const spinner = ora('Forking company into sandbox...').start();
-
+    const spinner = json ? null : ora('Forking company into sandbox...').start();
     try {
-      // Check if sandbox is already enabled
-      const statusRes = await apiClient.get('/api/v1/sandbox/status');
-      const status = statusRes.data as Record<string, any>;
-
-      if (status.sandbox_active || status.is_sandbox) {
-        spinner.warn(chalk.yellow('Sandbox already active'));
+      const res = await sandboxFork(apiClient as unknown as VerbClient, scope) as Record<string, any>;
+      if (json) { printJson({ ok: true, ...res }); return; }
+      if (res.status === 'already_active') {
+        spinner?.warn(chalk.yellow('Sandbox already active'));
         console.log(chalk.dim('  Run `solid sandbox promote` to push changes, or `solid sandbox exit` to discard.'));
         return;
       }
-
-      // Enable sandbox mode
-      await apiClient.post('/api/v1/sandbox/enabled', { enabled: true });
-      spinner.succeed(chalk.green('Sandbox forked'));
+      spinner?.succeed(chalk.green('Sandbox forked'));
       console.log('');
-      console.log(chalk.dim('  All changes are now isolated. Production is untouched.'));
-      console.log(chalk.dim('  solid sandbox preview    Shareable preview URL'));
+      console.log(chalk.dim('  Page and asset changes are now staged. The live site is untouched.'));
       console.log(chalk.dim('  solid sandbox diff       See what changed'));
+      console.log(chalk.dim('  solid sandbox preview    Preview links for changed pages'));
       console.log(chalk.dim('  solid sandbox promote    Push to production'));
       console.log(chalk.dim('  solid sandbox exit       Discard all changes'));
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to fork'));
-      console.error(handleApiError(error).message);
-      process.exit(1);
+      serverFail(spinner, 'Failed to fork', error, json);
     }
   });
-
-// ── Preview (shareable URL) ────────────────────────────────────────
 
 sandboxCommand
   .command('preview')
-  .description('Get a shareable preview URL for the sandbox')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    const ora = (await import('../lib/spinner')).default;
-    const spinner = ora('Generating preview...').start();
-
+  .description('Preview links for the pages changed in the active server-side sandbox')
+  .option('--ttl <hours>', 'Link lifetime in hours (1-168)', '24')
+  .option('--json', 'Machine-readable output')
+  .action(async (opts: any) => {
+    requireLogin();
+    const json = isJsonOutput(opts);
+    const spinner = json ? null : ora('Generating preview...').start();
     try {
-      const res = await apiClient.previewCreate({ title: 'Sandbox Preview' });
-      const data = res.data as Record<string, any>;
-      const url = data.url || data.preview_url;
-
-      spinner.succeed(chalk.green('Preview ready'));
+      const client = apiClient as unknown as VerbClient;
+      const status = await sandboxStatus(client);
+      if (!status.active) {
+        // ⛔ This used to print a URL anyway. No sandbox = nothing to preview.
+        if (json) printJson({ ok: false, active: false, error: NO_SANDBOX_MESSAGE });
+        else { spinner?.fail(chalk.red('No active sandbox')); console.error(NO_SANDBOX_MESSAGE); }
+        process.exit(1);
+      }
+      const pages = pageChanges(await sandboxDiff(client));
+      const ttl = Math.min(168, Math.max(1, parseInt(opts.ttl, 10) || 24));
+      const base = getResolvedApiUrl();
+      const links: Array<Record<string, unknown>> = [];
+      for (const p of pages) {
+        const r = (await apiClient.post(`/api/v1/cms/pages/${p.entity_id}/preview-link?ttl_hours=${ttl}`)).data as Record<string, any>;
+        links.push({
+          page_id: p.entity_id, slug: p.slug ?? null, change: p.change ?? null,
+          url: absoluteUrl(base, String(r.preview_url || '')), expires_at: r.expires_at ?? null,
+        });
+      }
+      if (json) { printJson({ ok: true, active: true, previews: links }); return; }
+      if (!links.length) {
+        spinner?.warn(chalk.yellow('Sandbox active, but no page changes yet'));
+        return;
+      }
+      spinner?.succeed(chalk.green(`${links.length} preview link(s)`));
       console.log('');
-      console.log(`  ${chalk.bold('URL:')} ${chalk.cyan(url)}`);
-      if (data.expires_at) {
-        console.log(`  ${chalk.dim('Expires:')} ${new Date(data.expires_at).toLocaleString()}`);
+      for (const l of links) {
+        console.log(`  ${chalk.bold(`#${l.page_id}`)} ${l.slug ? `/${l.slug}` : ''} ${chalk.dim(`(${l.change})`)}`);
+        console.log(`    ${chalk.cyan(String(l.url))}`);
       }
       console.log('');
-      console.log(chalk.dim('  Share with your client for approval.'));
-      console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to create preview'));
-      console.error(handleApiError(error).message);
-      process.exit(1);
+      serverFail(spinner, 'Failed to create preview', error, json);
     }
   });
-
-// ── Promote (server-side publish) ──────────────────────────────────
 
 sandboxCommand
   .command('promote')
-  .description('Push sandbox changes to production')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    const ora = (await import('../lib/spinner')).default;
-    const spinner = ora('Promoting sandbox to production...').start();
-
+  .description('Push the server-side sandbox to production')
+  .option('--json', 'Machine-readable output')
+  .action(async (opts: any) => {
+    requireLogin();
+    const json = isJsonOutput(opts);
+    const spinner = json ? null : ora('Promoting sandbox to production...').start();
     try {
-      const res = await apiClient.post('/api/v1/sandbox/publish');
-      const data = res.data as Record<string, any>;
-      spinner.succeed(chalk.green('Sandbox promoted to production'));
-      if (data.changes_published) {
-        console.log(chalk.dim(`  ${data.changes_published} changes published`));
+      const res = await sandboxPromote(apiClient as unknown as VerbClient) as Record<string, any>;
+      if (res.status === 'no_sandbox') {
+        if (json) printJson({ ok: false, ...res, error: 'No active sandbox to promote.' });
+        else { spinner?.fail(chalk.red('No active sandbox to promote')); }
+        process.exit(1);
+      }
+      if (json) { printJson({ ok: true, ...res }); return; }
+      spinner?.succeed(chalk.green('Sandbox promoted to production'));
+      if (res.summary) console.log(chalk.dim(`  ${res.summary}`));
+      for (const f of res.pages_failed || []) {
+        console.log(chalk.yellow(`  page #${f.page_id} not published: ${typeof f.error === 'string' ? f.error : JSON.stringify(f.error)}`));
       }
       console.log('');
     } catch (error) {
-      spinner.fail(chalk.red('Failed to promote'));
-      console.error(handleApiError(error).message);
-      process.exit(1);
+      serverFail(spinner, 'Failed to promote', error, json);
     }
   });
-
-// ── Exit (discard server-side sandbox) ─────────────────────────────
 
 sandboxCommand
   .command('exit')
-  .description('Discard server-side sandbox (rollback all changes)')
-  .action(async () => {
-    if (!config.isLoggedIn()) {
-      console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
-      process.exit(1);
-    }
-
-    const ora = (await import('../lib/spinner')).default;
-    const spinner = ora('Exiting sandbox...').start();
-
+  .description('Discard the server-side sandbox (delete sandbox-only pages/assets, revert staged edits)')
+  .option('--json', 'Machine-readable output')
+  .action(async (opts: any) => {
+    requireLogin();
+    const json = isJsonOutput(opts);
+    const spinner = json ? null : ora('Exiting sandbox...').start();
     try {
-      await apiClient.post('/api/v1/sandbox/exit');
-      spinner.succeed(chalk.green('Sandbox discarded. Back to production.'));
+      const res = await sandboxExit(apiClient as unknown as VerbClient) as Record<string, any>;
+      if (res.status === 'no_sandbox') {
+        if (json) printJson({ ok: false, ...res, error: 'No active sandbox to exit.' });
+        else { spinner?.fail(chalk.red('No active sandbox to exit')); }
+        process.exit(1);
+      }
+      if (json) { printJson({ ok: true, ...res }); return; }
+      spinner?.succeed(chalk.green('Sandbox discarded. Back to production.'));
+      if (res.summary) console.log(chalk.dim(`  ${res.summary}`));
     } catch (error) {
-      spinner.fail(chalk.red('Failed'));
-      console.error(handleApiError(error).message);
-      process.exit(1);
+      serverFail(spinner, 'Failed', error, json);
     }
   });
+
 
 import { appendExamples as __ae_sandbox } from '../lib/command-kit';
 __ae_sandbox(sandboxCommand, [

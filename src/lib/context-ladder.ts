@@ -84,3 +84,17 @@ export function writeLadder(
     shelfCount: shelfPaths.length,
   };
 }
+
+/**
+ * What the Claude Code SessionStart hook (`solid install` →
+ * `solid context --claude --raw --if-tenant`) prints. Hook stdout is handed to
+ * the model as session context, so it carries the business's pinned notes
+ * directly — they arrive even if Claude Code read CLAUDE.md before the hook
+ * rewrote it — and nothing decorative (no boxes, no colour).
+ */
+export function hookSessionText(pinnedMarkdown: string | null | undefined, spinePath: string): string {
+  const out: string[] = [];
+  if (pinnedMarkdown && pinnedMarkdown.trim()) out.push(pinnedMarkdown.trim(), '');
+  out.push(`Solid# context refreshed: ${spinePath} — run \`solid notes context\` for all work notes.`);
+  return out.join('\n') + '\n';
+}

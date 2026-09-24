@@ -15,7 +15,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { writeLadder, slugForDdc } from '../lib/context-ladder';
+import { writeLadder, slugForDdc, hookSessionText } from '../lib/context-ladder';
 
 function makeTmpdir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'solid-ladder-test-'));
@@ -165,5 +165,22 @@ describe('writeLadder', () => {
     expect(r.shelfCount).toBe(0);
     expect(r.shelfPaths).toEqual([]);
     expect(fs.existsSync(r.spinePath)).toBe(true);
+  });
+});
+
+
+describe('hookSessionText (SessionStart hook stdout)', () => {
+  test('carries the pinned notes block first, then one plain line', () => {
+    const block = '## Pinned instructions from this business (read first)\n\n<business-pinned-notes>\nSTART HERE\n</business-pinned-notes>\n';
+    const out = hookSessionText(block, '/t/.claude/CLAUDE.md');
+    expect(out.startsWith('## Pinned instructions from this business')).toBe(true);
+    expect(out).toContain('START HERE');
+    expect(out.trim().endsWith('for all work notes.')).toBe(true);
+    // No ANSI colour / box drawing in hook output.
+    expect(out).not.toMatch(/\u001b\[|[╭╮╰╯│]/);
+  });
+
+  test('no pinned notes → just the refresh line', () => {
+    expect(hookSessionText(undefined, 'p').split('\n').filter(Boolean)).toHaveLength(1);
   });
 });

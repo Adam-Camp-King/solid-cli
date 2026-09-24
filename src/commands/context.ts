@@ -98,6 +98,9 @@ interface ToolManifestResponse {
 
 interface SpineResponse {
   content: string;
+  /** The business's pinned notes block (also inside `content`). Backend ≥ 2026-09-23. */
+  pinned_notes_markdown?: string;
+  pinned_notes_count?: number;
   bytes: number;
   schema: string;
   format: string;
@@ -146,7 +149,7 @@ async function fetchShelves(): Promise<ShelvesResponse> {
 
 // Pure helpers live in lib/context-ladder so they're testable without
 // pulling in ora/chalk (ESM-only). See SPRINT-CONTEXT-LIBRARY-DDC.
-import { writeLadder, LadderWriteResult } from '../lib/context-ladder';
+import { writeLadder, LadderWriteResult, hookSessionText } from '../lib/context-ladder';
 
 async function fetchContext(format: 'markdown' | 'json', minimal: boolean, section?: ContextSection): Promise<string | ContextResponse | SectionResponse> {
   const params: Record<string, string> = { format, minimal: String(minimal) };
@@ -546,6 +549,13 @@ export const contextCommand = new Command('context')
           jsonLdPath = path.join(writeRes.libraryDir, '..', 'solid-context.jsonld');
           fs.writeFileSync(jsonLdPath, jsonLdDoc);
           jsonLdBytes = Buffer.byteLength(jsonLdDoc, 'utf-8');
+        }
+        // Hook mode (`solid install` wires `--raw --if-tenant`): stdout becomes
+        // session context, so print the pinned notes, not a decorated box.
+        if (options.ifTenant || process.argv.includes('--raw')) {
+          spinner?.stop();
+          process.stdout.write(hookSessionText(spineRes.pinned_notes_markdown, writeRes.spinePath));
+          return;
         }
         spinner?.succeed(chalk.green('AI context library ready'));
         printLadderNextSteps(
