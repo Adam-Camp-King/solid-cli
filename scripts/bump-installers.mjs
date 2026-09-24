@@ -27,12 +27,17 @@ async function registryVersion() {
 // The bump jobs read npm; wait until the registry serves this version or they
 // will re-read the old one and report "already current".
 let seen = null;
-for (let i = 0; i < 24 && seen !== version; i++) {
+// npm took >2 minutes to serve 2.24.8, so a 2-minute wait bumped both channels
+// to the OLD version. Wait up to 10 minutes, and if npm still is not serving it,
+// do not bump at all — say so and give the command.
+for (let i = 0; i < 120 && seen !== version; i++) {
   seen = await registryVersion();
   if (seen !== version) await new Promise((r) => setTimeout(r, 5000));
 }
 if (seen !== version) {
-  console.warn(`[bump-installers] npm still serves ${seen ?? 'nothing'} for ${name}, not ${version}.`);
+  console.warn(`[bump-installers] npm still serves ${seen ?? 'nothing'} for ${name}, not ${version} — NOT bumping (it would re-read the old version).`);
+  for (const repo of REPOS) console.warn(`  When npm serves ${version}: gh workflow run "${WORKFLOW}" --repo ${repo}`);
+  process.exit(0);
 }
 
 for (const repo of REPOS) {
