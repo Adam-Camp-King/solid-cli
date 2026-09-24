@@ -1702,15 +1702,7 @@ class ApiClient {
 
 export const apiClient = new ApiClient();
 
-// Redact Bearer tokens + common secret-looking strings from any message the
-// CLI might print. Belt-and-suspenders — tokens should never end up in error
-// strings in the first place, but if they do, we don't leak them to logs.
-function redactSecrets(s: string): string {
-  return s
-    .replace(/Bearer\s+[A-Za-z0-9._\-=]{6,}/g, 'Bearer ***')
-    .replace(/(sk_|pk_|rk_|pat_|tok_)[A-Za-z0-9_\-]{6,}/g, '$1***')
-    .replace(/(password|secret|apikey|api_key|token)=([^&\s]+)/gi, '$1=***');
-}
+// redactSecrets lives in error-codes.ts so the JSON envelope uses the same rules.
 
 // Flatten a FastAPI 422 detail array into "field: reason; field: reason".
 function flattenValidation(detail: unknown): string {
@@ -1732,7 +1724,7 @@ function flattenValidation(detail: unknown): string {
 }
 
 // Sprint 1 T1.1 — pure structured classifier + envelope.
-import { classifyError, extractServerError, type ClassifiedError } from './error-codes';
+import { classifyError, extractServerError, redactSecrets, type ClassifiedError } from './error-codes';
 
 /**
  * Detect an error that the backend delivered with HTTP 200.

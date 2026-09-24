@@ -14,6 +14,54 @@
  * The enum is closed so TypeScript can exhaustive-switch on it.
  */
 
+/**
+ * Redact Bearer tokens + common secret-looking strings from anything the CLI
+ * might print or put in a JSON envelope. Belt-and-suspenders — tokens should
+ * never end up in error strings in the first place.
+ */
+export function redactSecrets(s: string): string {
+  return s
+    .replace(/Bearer\s+[A-Za-z0-9._\-=]{6,}/g, 'Bearer ***')
+    .replace(/(sk_|pk_|rk_|pat_|tok_)[A-Za-z0-9_\-]{6,}/g, '$1***')
+    .replace(/(password|secret|apikey|api_key|token)=([^&\s]+)/gi, '$1=***');
+}
+
+/** Keys whose value is a secret whatever it looks like. */
+const SECRET_KEY = /^(authorization|password|passwd|secret|client_secret|api[_-]?key|x-api-key|token|access_token|refresh_token)$/i;
+
+/**
+ * Make a server `detail` safe to hand back to the caller.
+ *
+ * FastAPI 422 items are `{loc, msg, type, input, ctx}` — `input` echoes the
+ * request value that failed (an API key, a card number, a whole body) and
+ * `ctx` can carry it again. Both are dropped from every array item; every
+ * remaining string goes through redactSecrets, and secret-named keys are
+ * masked outright. Returns a new value; never mutates the server body.
+ */
+export function sanitizeErrorDetail(detail: unknown, depth = 0): unknown {
+  if (depth > 8) return '[truncated]';
+  if (typeof detail === 'string') return redactSecrets(detail);
+  if (Array.isArray(detail)) {
+    return detail.map((item) => {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const { input: _input, ctx: _ctx, ...rest } = item as Record<string, unknown>;
+        void _input;
+        void _ctx;
+        return sanitizeErrorDetail(rest, depth + 1);
+      }
+      return sanitizeErrorDetail(item, depth + 1);
+    });
+  }
+  if (detail && typeof detail === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(detail as Record<string, unknown>)) {
+      out[k] = SECRET_KEY.test(k) && v != null && v !== '' ? '***' : sanitizeErrorDetail(v, depth + 1);
+    }
+    return out;
+  }
+  return detail;
+}
+
 /** Fixed vocabulary of error codes the CLI can surface. */
 export type ErrorCode =
   | 'AUTH_REQUIRED'
@@ -386,7 +434,7 @@ function extractEnvelopeExtras(
 function withServerFields(c: ClassifiedError, f: ServerErrorFields): ClassifiedError {
   const out: ClassifiedError = { ...c };
   if (f.reason && !out.reason) out.reason = f.reason;
-  if (f.detail !== undefined && out.detail === undefined) out.detail = f.detail;
+  if (f.detail !== undefined && out.detail === undefined) out.detail = sanitizeErrorDetail(f.detail);
   if (f.approval_url && !out.approval_url) out.approval_url = f.approval_url;
   if (f.preview_id && !out.preview_id) out.preview_id = f.preview_id;
   return out;
@@ -531,7 +579,7 @@ export function toErrorEnvelope(
   if (classified.docs_url) envelope.docs_url = classified.docs_url;
   if (classified.request_id) envelope.request_id = classified.request_id;
   if (classified.reason) envelope.reason = classified.reason;
-  if (classified.detail !== undefined) envelope.detail = classified.detail;
+  if (classified.detail !== undefined) envelope.detail = sanitizeErrorDetail(classified.detail);
   if (classified.approval_url) envelope.approval_url = classified.approval_url;
   if (classified.preview_id) envelope.preview_id = classified.preview_id;
   if (classified.next) envelope.next = classified.next;
