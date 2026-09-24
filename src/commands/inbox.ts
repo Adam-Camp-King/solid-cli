@@ -40,6 +40,22 @@ function formatDate(dateStr: string | null): string {
   return chalk.dim(d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 }
 
+/**
+ * `inbox` and its subcommands both declare --limit. Commander binds a
+ * parent's option wherever it appears in argv, so `solid inbox list --limit 5`
+ * handed 5 to `inbox` and `list` ran with its default of 20. (Positional
+ * options would fix it only if the ROOT program enabled them too, which would
+ * stop every global flag working after a subcommand.) Read the value the user
+ * actually typed, wherever commander bound it.
+ */
+export function typedLimit(cmd: Command): number {
+  for (let c: Command | null = cmd; c; c = c.parent) {
+    const src = c.getOptionValueSource('limit');
+    if (src === 'cli' || src === 'env') return parseInt(String(c.opts().limit), 10);
+  }
+  return parseInt(String(cmd.opts().limit ?? '20'), 10);
+}
+
 // ── Main Command ─────────────────────────────────────────────────────
 
 export const inboxCommand = new Command('inbox')
@@ -47,15 +63,13 @@ export const inboxCommand = new Command('inbox')
   .option('--limit <n>', 'Number of messages to show', '20')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const known = ['stats', 'send', 'email', 'campaigns'];
-    const cmdIdx = process.argv.indexOf('inbox');
-    const afterInbox = cmdIdx >= 0 ? process.argv.slice(cmdIdx + 1).filter(a => !a.startsWith('-')) : [];
-    const unknownSub = afterInbox.find(a => !known.includes(a));
-    if (unknownSub) {
-      process.stderr.write(chalk.red(`\n  ✗ Unknown command: solid inbox ${unknownSub}\n\n`));
-      process.stderr.write(chalk.dim(`  Run solid inbox --help to see all subcommands.\n\n`));
-      process.exit(1);
-    }
+    // ⛔ No hand-rolled unknown-subcommand check here (removed 2.24.8). It
+    // re-read process.argv after "inbox" and dropped anything starting with
+    // "-" — which drops the FLAG and keeps its VALUE, so `solid inbox --limit 5`
+    // died with "Unknown command: solid inbox 5". The same bug was removed from
+    // audit.ts in 2.24.5. `inbox` declares no arguments, so the root program's
+    // allowExcessArguments(false) walk and the command:* handler in index.ts
+    // already reject a real typo, after options have been bound.
     requireAuth();
     const spinner = ora('Loading inbox...').start();
 
@@ -99,11 +113,11 @@ inboxCommand
   .description('List inbox messages')
   .option('--limit <n>', 'Number of messages', '20')
   .option('--json', 'Output as JSON')
-  .action(async (options: any) => {
+  .action(async (options: any, cmd: Command) => {
     requireAuth();
     const spinner = ora('Loading inbox...').start();
     try {
-      const response = await apiClient.get('/api/v1/communications/inbox', { params: { limit: parseInt(options.limit) } });
+      const response = await apiClient.get('/api/v1/communications/inbox', { params: { limit: typedLimit(cmd) } });
       if (isJsonOutput(options)) { spinner.stop(); console.log(JSON.stringify(response.data, null, 2)); return; }
       const data = response.data as Record<string, any>;
       const messages = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
@@ -239,12 +253,12 @@ emailCmd
   .option('--direction <dir>', 'Filter: inbound or outbound')
   .option('--limit <n>', 'Number of emails', '20')
   .option('--json', 'Output as JSON')
-  .action(async (options) => {
+  .action(async (options, cmd: Command) => {
     requireAuth();
     const spinner = ora('Loading emails...').start();
 
     try {
-      const params: Record<string, any> = { page: 1, page_size: parseInt(options.limit) };
+      const params: Record<string, any> = { page: 1, page_size: typedLimit(cmd) };
       if (options.direction) params.direction = options.direction;
 
       const response = await apiClient.get('/api/v1/crm/emails', { params });
