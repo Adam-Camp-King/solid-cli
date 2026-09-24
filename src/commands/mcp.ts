@@ -412,7 +412,8 @@ mcpCommand
   // and exited 0. A script reading that got prose and no way to know. Seen on
   // Adam's terminal 2026-09-15.
   .option('--json', 'Machine-readable report (every connection, with its company)')
-  .action(async (rawOptions: { json?: boolean }, cmd?: Command) => {
+  .option('--fix', 'Leave exactly one Solid# connection: remove local duplicates (each file backed up first)')
+  .action(async (rawOptions: { json?: boolean; fix?: boolean }, cmd?: Command) => {
     // ⛔ THE SUBCOMMAND'S OWN opts() DOES NOT SEE --json, AND THAT IS NOT A
     // TYPO. Declaring `.option('--json')` on `doctor` is necessary but not
     // sufficient: `solid` declares a program-wide `--json` too, and commander
@@ -569,6 +570,26 @@ mcpCommand
       });
     }
 
+    // --fix: act on the verdict instead of only describing it.
+    let fixReport: Record<string, unknown> | null = null;
+    if (rawOptions.fix && assessment && assessment.verdict !== 'ok' && assessment.verdict !== 'none') {
+      const { planDoctorFix, applyDoctorFix } = await import('../lib/mcp-providers.js');
+      const { isDryRun } = await import('../lib/dry-run');
+      const plan = planDoctorFix(assessment);
+      const dry = isDryRun();
+      const removed = dry ? [] : applyDoctorFix(plan);
+      fixReport = {
+        dryRun: dry,
+        keep: plan.keep ? { name: plan.keep.name, client: plan.keep.client, configPath: plan.keep.configPath } : null,
+        removed: dry ? plan.remove.map((r) => ({ name: r.name, configPath: r.configPath })) : removed,
+        manual: plan.manual.map((m) => m.step),
+        next: plan.needsConnect && plan.keep
+          ? `solid mcp connect ${plan.keep.client ?? ''}`.trim()
+          : null,
+        conflictRemains: plan.conflictRemains,
+      };
+    }
+
     // Print results
     if (options.json) {
       console.log(JSON.stringify({
@@ -579,6 +600,7 @@ mcpCommand
         checks,
         passing: checks.filter(c => c.ok).length,
         total: checks.length,
+        ...(fixReport && { fix: fixReport }),
       }, null, 2));
       // ⛔ Non-zero on a tenant verdict so CI and scripts can gate on it. A
       // doctor that always exits 0 cannot be used by anything but a human.
@@ -606,6 +628,25 @@ mcpCommand
       for (const line of renderProviderVerdict(assessment)) console.log(line);
       process.exitCode = 1;
     }
+    if (fixReport) {
+      const f = fixReport as {
+        dryRun: boolean; keep: { name: string; configPath?: string } | null;
+        removed: Array<{ name: string; configPath?: string; backup?: string }>;
+        manual: string[]; next: string | null; conflictRemains: boolean;
+      };
+      console.log('');
+      console.log(chalk.bold(f.dryRun ? '  Fix (dry run — nothing written)' : '  Fix'));
+      if (f.keep) console.log(`    ${chalk.green('keep')}    ${f.keep.name} ${chalk.dim(f.keep.configPath || '')}`);
+      for (const r of f.removed) {
+        console.log(`    ${chalk.red(f.dryRun ? 'would remove' : 'removed')} ${r.name} ${chalk.dim(r.configPath || '')}`
+          + (r.backup ? chalk.dim(`  (backup: ${r.backup})`) : ''));
+      }
+      for (const m of f.manual) console.log(`    ${chalk.yellow('you')}     ${m}`);
+      if (f.next) console.log(`    ${chalk.cyan('next')}    ${f.next}   ${chalk.dim('— puts the kept connection on this session')}`);
+      if (f.conflictRemains) {
+        console.log(chalk.yellow('    ⚠ More than one connection will still be live until the step(s) marked "you" are done.'));
+      }
+    }
     console.log('');
   });
 
@@ -618,4 +659,5 @@ __ae_mcp(mcpCommand, [
   { cmd: 'solid mcp tools --json',              why: 'Machine-readable tool manifest' },
   { cmd: 'solid mcp serve',                      why: 'Launch the stdio server directly' },
   { cmd: 'solid mcp doctor',                     why: 'Check MCP server health and client wiring' },
+  { cmd: 'solid mcp doctor --fix',               why: 'Leave exactly one Solid# connection (local duplicates removed, files backed up)' },
 ]);

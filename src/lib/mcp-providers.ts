@@ -40,7 +40,9 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import { promisify } from 'util';
 
-import { configPathForClient, SUPPORTED_CLIENTS, type McpClient } from './mcp-client-config';
+import {
+  configPathForClient, removeFromConfig, serializeConfig, SUPPORTED_CLIENTS, type McpClient,
+} from './mcp-client-config';
 import { resolveKeyCompany } from './mcp-tenant-check';
 
 const execFileAsync = promisify(execFile);
@@ -529,4 +531,90 @@ export function renderProviderVerdict(a: ProviderAssessment): string[] {
 
   L.push(chalk.green(`  ✓ ${a.headline}`));
   return L;
+}
+
+// ---------------------------------------------------------------------------
+// `solid mcp doctor --fix` — leave exactly one Solid# connection.
+// ---------------------------------------------------------------------------
+
+export interface DoctorFixPlan {
+  /** The local entry that stays. null when there is no local entry to keep. */
+  keep: SolidProvider | null;
+  /** Local duplicates this CLI will remove from their config files. */
+  remove: SolidProvider[];
+  /** Connections no CLI can change, each with the step a person must take. */
+  manual: Array<{ provider: SolidProvider; step: string }>;
+  /** True when `solid mcp connect` must still run to put the kept entry on this session. */
+  needsConnect: boolean;
+  /** True when the conflict will REMAIN after the fix (an account connector is live). */
+  conflictRemains: boolean;
+}
+
+/**
+ * PURE. What `--fix` would do.
+ *
+ * ⛔ NEVER THE ACCOUNT CONNECTOR. The claude.ai connector's company was fixed
+ * when it was approved in the browser; nothing on this machine can move or
+ * remove it, so it is always a named manual step — and when it is live the plan
+ * says the conflict REMAINS rather than claiming a fix it did not make.
+ * Keeps the local entry already on this session's company, else the first.
+ */
+export function planDoctorFix(a: ProviderAssessment): DoctorFixPlan {
+  const locals = a.active.filter((p) => p.scope !== 'account' && p.configPath);
+  const unremovable = a.active.filter((p) => p.scope !== 'account' && !p.configPath);
+  const accounts = a.active.filter((p) => p.scope === 'account');
+
+  const keep =
+    locals.find((p) => a.sessionCompanyId && p.companyId === a.sessionCompanyId) ?? locals[0] ?? null;
+  const remove = locals.filter((p) => p !== keep);
+  const manual = [
+    ...accounts.map((provider) => ({
+      provider,
+      step: `Turn off "${provider.name}" in claude.ai → Settings → Connectors (its company was fixed when you approved it; no CLI can move it).`,
+    })),
+    ...unremovable.map((provider) => ({
+      provider,
+      step: `Remove "${provider.name}" (${provider.scope} scope): claude mcp remove ${provider.name} -s ${provider.scope}`,
+    })),
+  ];
+  const needsConnect = !!keep && !(a.sessionCompanyId && keep.companyId === a.sessionCompanyId);
+  const remaining = (keep ? 1 : 0) + manual.length;
+  return { keep, remove, manual, needsConnect, conflictRemains: remaining > 1 };
+}
+
+export interface ApplyFixDeps {
+  readFileSync?: (p: string) => string;
+  writeFileSync?: (p: string, data: string) => void;
+  now?: () => Date;
+}
+
+/**
+ * Remove each duplicate from its own config file, backing the file up first.
+ * Returns what was done, per file. Never touches `keep` or an account connector.
+ */
+export function applyDoctorFix(
+  plan: DoctorFixPlan,
+  deps: ApplyFixDeps = {},
+): Array<{ configPath: string; name: string; backup: string }> {
+  const read = deps.readFileSync ?? ((p: string) => fs.readFileSync(p, 'utf8'));
+  const write = deps.writeFileSync ?? ((p: string, d: string) => fs.writeFileSync(p, d, 'utf8'));
+  const stamp = (deps.now ? deps.now() : new Date()).toISOString().replace(/[:.]/g, '-');
+  const done: Array<{ configPath: string; name: string; backup: string }> = [];
+  const backedUp = new Set<string>();
+
+  for (const p of plan.remove) {
+    if (!p.configPath) continue;
+    const original = read(p.configPath);
+    const backup = `${p.configPath}.bak-${stamp}`;
+    // ONE backup per file, of the file as it was BEFORE this run — a second
+    // duplicate in the same file must not overwrite it with a half-edited copy.
+    if (!backedUp.has(p.configPath)) {
+      write(backup, original);
+      backedUp.add(p.configPath);
+    }
+    const next = removeFromConfig(JSON.parse(original), p.name);
+    write(p.configPath, serializeConfig(next));
+    done.push({ configPath: p.configPath, name: p.name, backup });
+  }
+  return done;
 }
