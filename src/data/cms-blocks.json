@@ -366,15 +366,15 @@
       "props": {
         "title": "string",
         "subtitle": "string",
-        "videoUrl": "string (YouTube/Vimeo URL, or a direct .mp4/.webm file URL)",
+        "videoUrl": "string (YouTube/Vimeo URL, or a direct .mp4/.webm/.mov/.m4v file URL)",
         "thumbnailUrl": "string",
         "aspectRatio": "\"16:9\" | \"4:3\" | \"1:1\"",
         "autoplay": "boolean (browsers only autoplay muted video)",
-        "muted": "boolean (direct files; required for autoplay)",
+        "muted": "boolean (direct files; default true when autoplay — browsers only autoplay muted video)",
         "loop": "boolean (direct files)",
-        "playsInline": "boolean (direct files; required for inline autoplay on iOS)",
-        "controls": "boolean (direct files)",
-        "posterUrl": "string (url, direct files; shown before playback)"
+        "playsInline": "boolean (direct files; default true — required for inline autoplay on iOS)",
+        "controls": "boolean (direct files; default !autoplay)",
+        "posterUrl": "string (url, direct files; shown before playback; falls back to thumbnailUrl)"
       },
       "example": {
         "id": "video-1",
