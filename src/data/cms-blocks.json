@@ -36,7 +36,9 @@
         "backgroundColor": "string (hex or CSS var)",
         "textColor": "string",
         "buttonColor": "string",
-        "alignment": "\"left\" | \"center\" | \"right\""
+        "alignment": "\"left\" | \"center\" | \"right\"",
+        "backgroundVideo": "string (url, direct .mp4/.webm — plays muted, looping, inline behind the content)",
+        "backgroundVideoPoster": "string (url, image shown until the video plays)"
       },
       "example": {
         "id": "hero-1",
@@ -62,7 +64,18 @@
         "primaryCTA": "string",
         "secondaryCTA": "string",
         "backgroundImage": "string (url)",
-        "showVideoButton": "boolean"
+        "showVideoButton": "boolean",
+        "backgroundVideo": "string (url, direct .mp4/.webm — plays muted, looping, inline behind the content)",
+        "backgroundVideoPoster": "string (url, image shown until the video plays)"
+      },
+      "example": {
+        "id": "hero-image-1",
+        "type": "hero-image",
+        "title": "Built to Move",
+        "subtitle": "See the work in motion",
+        "backgroundImage": "https://cdn.example.com/hero-fallback.jpg",
+        "backgroundVideo": "https://cdn.example.com/hero-loop.mp4",
+        "backgroundVideoPoster": "https://cdn.example.com/hero-poster.jpg"
       }
     },
     {
@@ -79,7 +92,9 @@
         "subtitle": "string",
         "features": "string[]",
         "primaryCTA": "string",
-        "imageUrl": "string"
+        "imageUrl": "string",
+        "backgroundVideo": "string (url, direct .mp4/.webm — plays muted, looping, inline behind the content)",
+        "backgroundVideoPoster": "string (url, image shown until the video plays)"
       }
     },
     {
@@ -351,10 +366,27 @@
       "props": {
         "title": "string",
         "subtitle": "string",
-        "videoUrl": "string (YouTube/Vimeo auto-parsed)",
+        "videoUrl": "string (YouTube/Vimeo URL, or a direct .mp4/.webm/.mov/.m4v file URL)",
         "thumbnailUrl": "string",
         "aspectRatio": "\"16:9\" | \"4:3\" | \"1:1\"",
-        "autoplay": "boolean"
+        "autoplay": "boolean (browsers only autoplay muted video)",
+        "muted": "boolean (direct files; default true when autoplay — browsers only autoplay muted video)",
+        "loop": "boolean (direct files)",
+        "playsInline": "boolean (direct files; default true — required for inline autoplay on iOS)",
+        "controls": "boolean (direct files; default !autoplay)",
+        "posterUrl": "string (url, direct files; shown before playback; falls back to thumbnailUrl)"
+      },
+      "example": {
+        "id": "video-1",
+        "type": "video-embed",
+        "title": "Our Process",
+        "videoUrl": "https://cdn.example.com/process.mp4",
+        "autoplay": true,
+        "muted": true,
+        "loop": true,
+        "playsInline": true,
+        "controls": false,
+        "posterUrl": "https://cdn.example.com/process-poster.jpg"
       }
     },
     {
