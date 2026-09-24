@@ -369,7 +369,7 @@ export const serveCommand = new Command('serve')
     if (options.preview) {
       const { config: cfg } = await import('../lib/config');
       const { apiClient: api, handleApiError: handleErr } = await import('../lib/api-client');
-      const ora = (await import('ora')).default;
+      const ora = (await import('../lib/spinner')).default;
 
       if (!cfg.isLoggedIn()) {
         console.error(chalk.red('Not logged in. Run: solid auth login'));

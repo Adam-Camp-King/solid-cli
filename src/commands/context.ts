@@ -22,7 +22,7 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -358,7 +358,7 @@ export const contextCommand = new Command('context')
       console.error(chalk.red('Not logged in. Run `solid auth login` or export SOLID_API_KEY.'));
       process.exit(1);
     }
-    if (!config.companyId) {
+    if (!(await (await import('../lib/command-kit')).ensureCompanyContext())) {
       console.error(chalk.red('No company selected. Run `solid auth login` first.'));
       process.exit(1);
     }

@@ -49,7 +49,7 @@ accountingCommand.command('status').description('Each connected accounting syste
   .option('--json', 'JSON output')
   .action(async (options) => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get('/api/v1/accounting/sync/status');
@@ -73,7 +73,7 @@ accountingCommand.command('sync').description('Send what is waiting to the conne
   .option('--json', 'JSON output')
   .action(async (options) => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Starting sync...').start();
     try {
       const connection = await connectionFor(options.connectionId);
@@ -95,7 +95,7 @@ accountingCommand.command('history').description('What was sent, and how each la
   .option('--json', 'JSON output')
   .action(async (options) => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading...').start();
     try {
       const connection = await connectionFor(options.connectionId);

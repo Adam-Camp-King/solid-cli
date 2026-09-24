@@ -12,7 +12,7 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -363,7 +363,7 @@ sandboxCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Forking company into sandbox...').start();
 
     try {
@@ -405,7 +405,7 @@ sandboxCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Generating preview...').start();
 
     try {
@@ -440,7 +440,7 @@ sandboxCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Promoting sandbox to production...').start();
 
     try {
@@ -469,7 +469,7 @@ sandboxCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Exiting sandbox...').start();
 
     try {

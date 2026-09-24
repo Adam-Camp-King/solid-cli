@@ -14,7 +14,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, type TenantGateDecision, failApi } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';

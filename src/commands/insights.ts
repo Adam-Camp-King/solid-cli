@@ -143,7 +143,7 @@ insightsCommand
   .option('--json', 'Output as JSON')
   .action(async (options: { days: string; json?: boolean }) => {
     const chalk = (await import('chalk')).default;
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Building the master report...').start();
     try {
       const res = await apiClient.get('/api/v1/communications/insights/summary', {

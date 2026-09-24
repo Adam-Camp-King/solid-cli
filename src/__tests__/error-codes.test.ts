@@ -337,6 +337,7 @@ describe('ERROR_CODES vocabulary', () => {
       'NETWORK_ERROR',
       'TIMEOUT',
       'DRY_RUN_BLOCKED',
+      'APPROVAL_REQUIRED',
     ];
     for (const c of expected) {
       expect(ERROR_CODES).toContain(c);

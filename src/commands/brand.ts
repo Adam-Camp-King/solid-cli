@@ -6,7 +6,7 @@
 
 import { Command } from 'commander';
 import inquirer from 'inquirer';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
@@ -229,7 +229,7 @@ brandCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const updates: string[] = [];
 
     // Handle domain — POST /api/v1/domains/custom is the single canonical

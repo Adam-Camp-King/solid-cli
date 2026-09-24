@@ -123,7 +123,7 @@ async function askPlatform(
   _platformDocs: string,
 ): Promise<string> {
   const axios = (await import('axios')).default;
-  const ora = (await import('ora')).default;
+  const ora = (await import('../lib/spinner')).default;
 
   const lastMessage = messages[messages.length - 1]?.content || '';
   const history = messages.slice(0, -1);

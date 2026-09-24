@@ -297,7 +297,7 @@ export const graphCommand = new Command('graph')
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache',
         };
-        const tok = config.accessToken;
+        const tok = config.effectiveToken;
         if (tok) headers['Authorization'] = `Bearer ${tok}`;
 
         const res = await fetch(url, { headers });

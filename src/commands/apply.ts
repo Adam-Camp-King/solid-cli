@@ -185,7 +185,7 @@ export const applyCommand = new Command('apply')
       return;
     }
 
-    requireCompanyContext();
+    await requireCompanyContext();
 
     if (!file) {
       console.error(chalk.red('Missing manifest file. Usage: solid apply <file> (or "-" for stdin).'));
@@ -298,7 +298,7 @@ applyCommand
   .option('--json', 'Machine-readable report')
   .action(async (file: string, options: { failOnAny?: boolean; json?: boolean }) => {
     const json = isJsonOutput(options);
-    requireCompanyContext();
+    await requireCompanyContext();
     const resources = readManifest(file);
     const lockPath = lockPathFor(path.resolve(file));
     let lock: ApplyLock | null = null;
@@ -345,7 +345,7 @@ applyCommand
   .option('--json', 'Machine-readable result')
   .action(async (file: string, options: { run?: string; dryRun?: boolean; yes?: boolean; json?: boolean }) => {
     const json = isJsonOutput(options);
-    requireCompanyContext();
+    await requireCompanyContext();
     const lockState = lockFor(file, true, json)!;
     if (!lockState.lock || lockState.lock.runs.length === 0) {
       const msg = `No runs recorded in ${path.relative(process.cwd(), lockState.path)} — nothing to roll back.`;
@@ -452,7 +452,7 @@ applyCommand
   .option('--json', 'Emit JSON instead of YAML')
   .action(async (file: string | undefined, options: { kinds?: string; json?: boolean }) => {
     const json = isJsonOutput(options);
-    requireCompanyContext();
+    await requireCompanyContext();
     const kinds = options.kinds ? options.kinds.split(',').map((k) => k.trim()).filter(Boolean) : knownKinds();
     const unknown = kinds.filter((k) => !reconcilerFor(k));
     if (unknown.length) {

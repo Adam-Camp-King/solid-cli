@@ -163,6 +163,13 @@ interface ApiError {
   feature?: string;
   upgrade_to?: string;
   request_id?: string;
+  // What the server itself said — passed through verbatim so an agent can act
+  // on it (approval link, machine reason) instead of reading "Request failed".
+  reason?: string;
+  detail?: unknown;
+  approval_url?: string;
+  preview_id?: string;
+  next?: string;
 }
 
 // Global override for per-invocation auth. Set by `--token <val>` on the
@@ -172,6 +179,11 @@ let overrideToken: string | null = null;
 
 export function setOverrideToken(token: string | null): void {
   overrideToken = token;
+  // Mirror onto config so every `config.isLoggedIn()` guard (there are ~200)
+  // sees the flag exactly as it sees SOLID_TOKEN. Before this, `--token X
+  // whoami` worked but `--token X site list` said "Not logged in".
+  // Optional call: some embedders/tests substitute a minimal config object.
+  config.setFlagToken?.(token);
 }
 
 export function hasOverrideToken(): boolean {
@@ -431,6 +443,8 @@ class ApiClient {
           );
           throw Object.assign(new Error(bodyError.message), {
             isAxiosError: true,
+            // The untouched 200 body, for extractServerError/classifyError.
+            __solid_body: response.data,
             config: response.config,
             request: response.request,
             response: {
@@ -438,7 +452,15 @@ class ApiClient {
               statusText: notFound ? 'Not Found' : 'Bad Request',
               headers: response.headers,
               config: response.config,
-              data: { detail: bodyError.message },
+              // Keep the whole body: reason, approval_url, preview_id and
+              // structured detail live in it. `detail` is set to the extracted
+              // message so older readers of `.detail` still get prose.
+              data: {
+                ...(response.data && typeof response.data === 'object' && !Array.isArray(response.data)
+                  ? (response.data as Record<string, unknown>)
+                  : {}),
+                detail: bodyError.message,
+              },
             },
             toJSON: () => ({ message: bodyError?.message }),
           });
@@ -1710,7 +1732,7 @@ function flattenValidation(detail: unknown): string {
 }
 
 // Sprint 1 T1.1 — pure structured classifier + envelope.
-import { classifyError, type ClassifiedError } from './error-codes';
+import { classifyError, extractServerError, type ClassifiedError } from './error-codes';
 
 /**
  * Detect an error that the backend delivered with HTTP 200.
@@ -1767,15 +1789,26 @@ export function detectErrorBody(data: unknown): { message: string; code?: string
   // `forms get` returns {ok:true, result:{status:'error', summary}}, while
   // `invoices get` returns {ok:true, result:{error:'invoice_not_found'}}.
   // Probe the envelope first, then one level into `result`.
-  const outer = probe(d);
-  if (outer) return outer;
-
+  let found = probe(d);
   const r = d.result;
-  if (r && typeof r === 'object' && !Array.isArray(r)) {
-    return probe(r as Record<string, unknown>);
+  if (!found && r && typeof r === 'object' && !Array.isArray(r)) {
+    found = probe(r as Record<string, unknown>);
   }
+  if (!found) return null;
 
-  return null;
+  // The probe only reads string fields, so `{ok:false, error:{reason,message}}`
+  // used to come out as "Request failed". Prefer what the server actually said.
+  const server = extractServerError(d);
+  const detailStr = typeof server.detail === 'string' ? server.detail : undefined;
+  const better = server.message || detailStr || server.reason;
+  if (better && (found.message === 'Request failed' || found.message === found.code)) {
+    found.message = better;
+  }
+  // An error-shaped message and a reason that differs: keep both in the prose.
+  if (server.reason && server.message && server.reason !== found.code && !found.message.includes(server.reason)) {
+    found.message = `${server.reason}: ${found.message}`;
+  }
+  return found;
 }
 
 /** True when the caller opted out of 200-with-error-body detection. */
@@ -1809,15 +1842,25 @@ export function handleApiError(error: unknown): ApiError {
 
   // Extract the server's own message first — most actionable.
   const d = axiosError.response?.data;
+  // A 200-with-error-body failure carries the original body separately (its
+  // synthetic `.data.detail` is flattened to prose for legacy readers).
+  const originalBody = (axiosError as unknown as { __solid_body?: unknown }).__solid_body ?? d;
+  const server = extractServerError(originalBody);
   const rawDetail = d?.detail ?? d?.message ?? d?.error ?? '';
   let serverMessage =
     typeof rawDetail === 'string'
       ? rawDetail
       : Array.isArray(rawDetail)
         ? flattenValidation(rawDetail)
-        : rawDetail && typeof rawDetail === 'object'
-          ? JSON.stringify(rawDetail)
-          : '';
+        : server.message
+          // Object-shaped detail/error: use its message, and name the reason
+          // when it adds something ("custom_code_rejected: ...").
+          ? (server.reason && !server.message.includes(server.reason)
+            ? `${server.reason}: ${server.message}`
+            : server.message)
+          : rawDetail && typeof rawDetail === 'object'
+            ? JSON.stringify(rawDetail)
+            : '';
 
   serverMessage = redactSecrets(serverMessage);
 
@@ -1917,7 +1960,7 @@ export function handleApiError(error: unknown): ApiError {
     (axiosError.response?.headers?.['X-Request-ID'] as string | undefined);
   const classified = classifyError({
     status,
-    data: axiosError.response?.data,
+    data: originalBody,
     networkErrorCode: axiosError.code,
     requestId,
   });
@@ -1963,5 +2006,10 @@ function enrichApiError(err: ApiError, c: ClassifiedError): ApiError {
   if (c.feature) err.feature = c.feature;
   if (c.upgrade_to) err.upgrade_to = c.upgrade_to;
   if (c.request_id) err.request_id = c.request_id;
+  if (c.reason) err.reason = c.reason;
+  if (c.detail !== undefined) err.detail = c.detail;
+  if (c.approval_url) err.approval_url = c.approval_url;
+  if (c.preview_id) err.preview_id = c.preview_id;
+  if (c.next) err.next = c.next;
   return err;
 }

@@ -312,7 +312,12 @@ mcpCommand
     const env: NodeJS.ProcessEnv = { ...process.env };
     // Priority: explicit flag > existing env > session-cached token
     if (typeof opts.apiUrl === 'string' && opts.apiUrl) env.SOLID_API_URL = opts.apiUrl;
-    if (!env.SOLID_API_KEY && config.accessToken) env.SOLID_API_KEY = config.accessToken;
+    // Same precedence as every other command: --token, SOLID_API_KEY,
+    // SOLID_TOKEN, cached session. The server reads SOLID_API_KEY, so a
+    // --token or SOLID_TOKEN-only caller used to launch an unauthenticated
+    // server. Spawned env only — nothing is written to disk.
+    if (config.flagToken) env.SOLID_API_KEY = config.flagToken;
+    if (!env.SOLID_API_KEY && config.effectiveToken) env.SOLID_API_KEY = config.effectiveToken;
     if (opts.company !== undefined && opts.company !== null && opts.company !== '') {
       env.SOLID_COMPANY_ID = String(opts.company);
     }
@@ -417,7 +422,7 @@ mcpCommand
     // house convention for exactly this and must be used by every subcommand
     // that offers --json.
     const options = mergeGlobalJson(rawOptions, cmd);
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
 
     // 1. Auth check

@@ -49,7 +49,7 @@ export const notificationsCommand = new Command('notifications')
 notificationsCommand.command('read-all').description('Mark all as read')
   .action(async () => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Marking all as read...').start();
     try {
       await apiClient.post('/api/v1/notifications/read-all');

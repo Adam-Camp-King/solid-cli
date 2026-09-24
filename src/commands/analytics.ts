@@ -50,7 +50,7 @@ analyticsCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora({ text: 'Loading analytics...', stream: process.stderr }).start();
 
     try {
@@ -97,7 +97,7 @@ analyticsCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading MCP traffic...').start();
 
     try {

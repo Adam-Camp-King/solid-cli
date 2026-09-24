@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { ui } from '../lib/ui';
@@ -50,7 +50,7 @@ export const deployCommand = new Command('deploy')
       console.error(chalk.red('Not logged in. Run: solid auth login'));
       return;
     }
-    requireCompanyContext();
+    await requireCompanyContext();
 
     // Default action = preview (create a new one)
     if (!action || action === 'preview' || action === 'create') {

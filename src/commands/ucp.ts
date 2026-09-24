@@ -18,7 +18,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput, printJson } from '../lib/json-output';

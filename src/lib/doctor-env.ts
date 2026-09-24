@@ -48,6 +48,7 @@ export interface DoctorEnvDeps {
     isLoggedIn(): boolean;
     readonly companyId: number | undefined;
     readonly accessToken: string | undefined;
+    readonly flagToken?: string | null;
     readonly tokenExpiresAt: Date | undefined;
   };
   apiGet: (p: string) => Promise<{ status: number }>;
@@ -70,6 +71,7 @@ function readJsonIfPresent(p: string): unknown {
 
 export function checkAuth(deps: DoctorEnvDeps): CheckResult {
   const source =
+    deps.config.flagToken ? '--token flag' :
     process.env.SOLID_API_KEY ? 'SOLID_API_KEY env' :
     process.env.SOLID_TOKEN ? 'SOLID_TOKEN env' :
     deps.config.accessToken ? 'cached access_token' :
@@ -94,7 +96,7 @@ export function checkAuth(deps: DoctorEnvDeps): CheckResult {
 }
 
 export function checkToken(deps: DoctorEnvDeps): CheckResult {
-  if (process.env.SOLID_API_KEY || process.env.SOLID_TOKEN) {
+  if (deps.config.flagToken || process.env.SOLID_API_KEY || process.env.SOLID_TOKEN) {
     return {
       name: 'token',
       label: 'token freshness',

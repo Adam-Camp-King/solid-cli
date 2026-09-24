@@ -364,6 +364,7 @@ doctorCommand
         isLoggedIn: () => config.isLoggedIn(),
         get companyId() { return config.companyId; },
         get accessToken() { return config.accessToken; },
+        get flagToken() { return config.flagToken; },
         get tokenExpiresAt() { return config.tokenExpiresAt; },
       },
       async (p: string) => {

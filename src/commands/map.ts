@@ -17,7 +17,7 @@
  */
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 
 import { apiClient } from '../lib/api-client';
 import { config } from '../lib/config';

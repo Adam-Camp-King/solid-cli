@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { config } from '../lib/config';

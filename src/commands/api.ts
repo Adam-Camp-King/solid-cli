@@ -219,7 +219,7 @@ apiCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora(`${method.toUpperCase()} ${path}`).start();
 
     try {

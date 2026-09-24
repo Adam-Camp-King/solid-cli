@@ -98,7 +98,7 @@ demoCommand
     // email. No-ops if already captured, telemetry off, or non-TTY.
     await captureEmailForDemo(template);
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const originalCompanyId = config.companyId;
     const startTime = Date.now();
 
@@ -252,7 +252,7 @@ demoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora(`Converting company ${companyId} to ${options.tier}...`).start();
 
     try {
@@ -338,7 +338,7 @@ demoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora(`Deleting company ${companyId}...`).start();
 
     try {
@@ -395,7 +395,7 @@ async function createGuestDemo(
   name: string,
   options: { expires?: string; open?: boolean },
 ): Promise<void> {
-  const ora = (await import('ora')).default;
+  const ora = (await import('../lib/spinner')).default;
   const startTime = Date.now();
 
   // Guest default is 24h unless user explicitly overrode --expires.

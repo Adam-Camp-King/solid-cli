@@ -28,6 +28,10 @@ jest.mock('../lib/config', () => ({
     companies: [],
     isLoggedIn: jest.fn(() => true),
     logout: jest.fn(),
+    flagToken: null,
+    effectiveToken: 'test_token_do_not_use_in_production',
+    setFlagToken: jest.fn(),
+    setDerivedCompanyId: jest.fn(),
   },
 }));
 
