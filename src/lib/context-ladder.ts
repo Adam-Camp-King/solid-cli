@@ -85,6 +85,63 @@ export function writeLadder(
   };
 }
 
+/** The spine fields that locate the owner's pinned-notes block. */
+export interface SpinePinnedFields {
+  content?: string;
+  /** Exact heading line of the block inside `content` (backend ≥ 2026-09-23 late). */
+  pinned_notes_heading?: string;
+  /** Tag wrapping the notes, e.g. "business-pinned-notes". */
+  pinned_notes_tag?: string;
+  /** Older backends also sent the block on its own. Fallback only. */
+  pinned_notes_markdown?: string;
+}
+
+const DEFAULT_PINNED_TAG = 'business-pinned-notes';
+
+/**
+ * The pinned-notes block, taken ONCE — from `content` when it is there.
+ *
+ * The backend puts the block inside the spine `content`. An older backend also
+ * sent it separately as `pinned_notes_markdown`; printing both put the largest
+ * thing in the spine into the session twice. So: slice it out of `content`
+ * (heading line → closing tag, plus the overflow title list up to the next
+ * `## ` heading) and use `pinned_notes_markdown` only when `content` does not
+ * carry it. Empty string when there are no pinned notes.
+ */
+export function pinnedNotesFromSpine(spine: SpinePinnedFields | null | undefined): string {
+  if (!spine) return '';
+  const tag = spine.pinned_notes_tag || DEFAULT_PINNED_TAG;
+  const content = spine.content || '';
+  const lines = content.split('\n');
+  const heading = spine.pinned_notes_heading?.trim();
+  let start = heading ? lines.findIndex((l) => l.trim() === heading) : -1;
+  if (start < 0) {
+    // No heading field (or it moved): find the heading above the opening tag.
+    const open = lines.findIndex((l) => l.trim().startsWith(`<${tag}`));
+    if (open >= 0) {
+      start = open;
+      for (let i = open - 1; i >= 0; i--) {
+        if (lines[i].startsWith('## ')) { start = i; break; }
+      }
+    }
+  }
+  if (start >= 0) {
+    const hasClose = lines.slice(start).some((l) => l.trim() === `</${tag}>`);
+    let closed = !hasClose;
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) {
+      if (!closed) {
+        if (lines[i].trim() === `</${tag}>`) closed = true;
+        continue; // a "## " inside a note body is not the end of the block
+      }
+      if (lines[i].startsWith('## ') || lines[i].startsWith('# ')) { end = i; break; }
+    }
+    const block = lines.slice(start, end).join('\n').trim();
+    if (block) return block;
+  }
+  return (spine.pinned_notes_markdown || '').trim();
+}
+
 /**
  * What the Claude Code SessionStart hook (`solid install` →
  * `solid context --claude --raw --if-tenant`) prints. Hook stdout is handed to
