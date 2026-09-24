@@ -2,6 +2,30 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.8] — 2026-09-24
+
+**Flags reach the commands they belong to, a missing-scope error tells you the
+real fix, and `solid mcp install` writes a key that doesn't expire.**
+
+- `solid inbox --limit 5` — was read as a subcommand named `5`. Fixed, and
+  `inbox list --limit` / `inbox email list --limit` now reach the route instead
+  of running with the default 20.
+- Missing scope — the backend's structured 403 is now `SCOPE_MISSING` with the
+  scope it needs, not "check your tier". `solid keys rotate --add-scope <scope>`
+  exists now, and rotate creates the new key BEFORE revoking the old one.
+- `solid subscriptions list` — sends no filters the route ignores; shows the one
+  plan it returns.
+- `solid verbs invoke` — uses each verb's HTTP method from the manifest (9 verbs
+  drew 405 before).
+- `solid ucp consent grant|revoke` and `solid ucp capabilities` — call routes that
+  exist; a tenant without UCP gets a plain "not enabled".
+- `solid mcp install` — writes an `sk_` key for this company (reused when still
+  valid) and `@solidnumber/mcp@latest`, never an expiring login token.
+  `solid mcp doctor` names each connection's company and the exact repair command.
+- Releases now start the Homebrew and scoop bumps the moment npm serves the
+  version, so `install.sh` on a brew or scoop machine gets the new release
+  within minutes instead of the next 4-hour cron.
+
 ## [2.24.7] — 2026-09-24
 
 **`solid nest <folder>` imports the whole site a designer handed over; `solid mcp
