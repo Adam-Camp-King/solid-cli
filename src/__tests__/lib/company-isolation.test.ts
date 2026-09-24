@@ -71,7 +71,8 @@ describe('Company Isolation — Security Critical', () => {
         path.join(__dirname, '..', '..', 'lib', 'config.ts'),
         'utf-8',
       );
-      const logoutBlock = configSrc.match(/logout\(\)[\s\S]*?^\s*\}/m);
+      // Anchored on the DEFINITION — `this.logout()` is also called elsewhere.
+      const logoutBlock = configSrc.match(/^\s*logout\(\): void \{[\s\S]*?^\s*\}/m);
       expect(logoutBlock).not.toBeNull();
       const body = logoutBlock![0];
       expect(body).toContain('delete this.data.access_token');

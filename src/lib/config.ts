@@ -262,6 +262,25 @@ class ConfigManager {
     return true;
   }
 
+  /** Every stored credential and the identity it belongs to, for set-aside-and-restore. */
+  snapshotAuth(): Partial<SolidConfig> {
+    const d = this.data;
+    return {
+      access_token: d.access_token, refresh_token: d.refresh_token,
+      token_expires_at: d.token_expires_at, user_id: d.user_id, user_email: d.user_email,
+      company_id: d.company_id, companies: d.companies,
+    };
+  }
+
+  restoreAuth(snapshot: Partial<SolidConfig>): void {
+    this.logout();
+    const defined = Object.fromEntries(
+      Object.entries(snapshot).filter(([, value]) => value !== undefined),
+    ) as Partial<SolidConfig>;
+    this.data = { ...this.data, ...defined };
+    this.save();
+  }
+
   logout(): void {
     delete this.data.access_token;
     delete this.data.refresh_token;

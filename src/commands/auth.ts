@@ -258,25 +258,34 @@ authCommand
     try {
       // API key login (for scripts/CI)
       if (options.token) {
+        // ⛔ SET THE OLD SESSION ASIDE BEFORE VERIFYING. Previously only the
+        // access token was replaced: the previous account's refresh token,
+        // expiry and cached companies stayed. A key that failed verification
+        // got a 401, the auto-refresh used the OLD refresh token, and the
+        // check "succeeded" as the previous account; a good key later
+        // refreshed back into it. Now the old session is cleared first and
+        // restored only if the key is bad, so a typo never logs you out.
+        const previous = config.snapshotAuth();
+        config.logout();
         config.accessToken = options.token;
-        // Verify the key works
         const spinner = ora('Verifying API key...').start();
+        let ok = false;
         try {
           const status = await apiClient.authStatus();
           if (status.data.authenticated && status.data.user) {
             config.userId = status.data.user.id;
             config.userEmail = status.data.user.email;
             config.companyId = status.data.user.company_id;
+            ok = true;
             spinner.succeed(chalk.green('Authenticated via API key'));
             console.log(chalk.dim(`  Company ID: ${status.data.user.company_id}`));
-          } else {
-            spinner.fail(chalk.red('Invalid API key'));
-            config.accessToken = undefined;
-            process.exit(1);
           }
         } catch {
-          spinner.fail(chalk.red('Invalid API key'));
-          config.accessToken = undefined;
+          ok = false;
+        }
+        if (!ok) {
+          spinner.fail(chalk.red('Invalid API key — your previous login is unchanged'));
+          config.restoreAuth(previous);
           process.exit(1);
         }
         return;
