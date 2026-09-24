@@ -2,6 +2,27 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.7] — 2026-09-24
+
+**`solid nest <folder>` imports the whole site a designer handed over; `solid mcp
+doctor --fix` leaves exactly one Solid# connection; `auth login --token` no longer
+drifts back to the previous account.**
+
+- `solid nest <folder>` — a folder used to be sent to the server as if its PATH
+  were the site's HTML. It now reads the folder (relative paths kept, text as text,
+  images and fonts as binary; hidden, VCS and `node_modules` items skipped and
+  listed), imports every page as the site with the links between them kept, and
+  builds each one. `--entry <file>` names the home page; `--single` imports only it.
+  A folder named like a domain (`showerpros.com`) is still a folder.
+- `solid mcp doctor --fix` — removes the local duplicate Solid# connections that
+  made "which company is the AI on?" unanswerable, backing each config file up
+  first. The claude.ai connector is never touched — it is named as a step for you,
+  and the report says plainly when a conflict remains. `--dry-run` shows the plan.
+- `solid auth login --token` — the previous account's refresh token and cached
+  companies are set aside before the key is verified and restored only if it is
+  bad, so a typo never logs you out and a good key never refreshes back into the
+  old account.
+
 ## [2.24.6] — 2026-09-24
 
 **`solid verbs list` takes the Atlas addresses the backend now uses, and a retired
