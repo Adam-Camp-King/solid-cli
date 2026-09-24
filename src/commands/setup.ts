@@ -307,41 +307,10 @@ async function stepAuth(opts: SetupOptions): Promise<StepResult> {
     : { step: 'auth', status: 'failed', detail: r.detail };
 }
 
-const MCP_KEY_NAME = 'mcp-server (auto-provisioned by solid setup)';
-const MCP_KEY_FILE = path.join(os.homedir(), '.solid', 'mcp-key');
-
-function readMcpKey(): string | null {
-  try {
-    if (!fs.existsSync(MCP_KEY_FILE)) return null;
-    const key = fs.readFileSync(MCP_KEY_FILE, 'utf-8').trim();
-    return key.startsWith('sk_') ? key : null;
-  } catch { return null; }
-}
-
-function writeMcpKey(key: string): void {
-  try {
-    const dir = path.dirname(MCP_KEY_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(MCP_KEY_FILE, key, { mode: 0o600 });
-  } catch { /* best-effort */ }
-}
-
 async function getOrCreateMcpApiKey(): Promise<string | null> {
-  const cached = readMcpKey();
-  if (cached) return cached;
-
-  try {
-    const listRes = await apiClient.apiKeyList();
-    const allScopes = listRes.data.available_scopes || [];
-    if (allScopes.length === 0) return null;
-
-    const createRes = await apiClient.apiKeyCreate(MCP_KEY_NAME, allScopes);
-    const key = createRes.data.key;
-    if (key) writeMcpKey(key);
-    return key || null;
-  } catch {
-    return null;
-  }
+  const { getOrCreateMcpApiKey: shared } = await import('../lib/mcp-key');
+  const got = await shared(apiClient as unknown as import('../lib/mcp-key').KeyApi);
+  return got ? got.key : null;
 }
 
 // One preflight per binary per wizard run — both the MCP step and the

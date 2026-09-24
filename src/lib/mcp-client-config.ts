@@ -111,8 +111,14 @@ export interface BuildEntryInput {
   companyId?: number | string;
 }
 
-/** Default package that ships the stdio MCP server. */
-export const DEFAULT_MCP_PACKAGE = '@solidnumber/mcp';
+/**
+ * Default package that ships the stdio MCP server.
+ *
+ * `@latest`, deliberately: with a bare name, `npx -y` reuses whatever version
+ * sits in its cache, so a client config written once keeps launching the
+ * server from the day it was installed. The tag makes npx re-resolve.
+ */
+export const DEFAULT_MCP_PACKAGE = '@solidnumber/mcp@latest';
 
 /**
  * Build the `mcpServers.solid` entry. Pure — no I/O, no env reads.

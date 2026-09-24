@@ -423,6 +423,42 @@ export function assessProviders(
 }
 
 /**
+ * The command that re-points ONE provider at this session's company, or null
+ * when no CLI command can (an account connector lives on claude.ai).
+ *
+ * ⛔ `solid mcp connect` is not it: it prints connection recipes and writes
+ * nothing. `solid mcp install <client>` rewrites that client's entry with a
+ * key for the session's company — the Claude Code user config is `vscode`
+ * (~/.claude.json).
+ */
+export function repointCommand(p: SolidProvider): string | null {
+  if (p.scope === 'account' || !p.cliCanRepoint) return null;
+  return p.client ? `solid mcp install ${p.client}` : 'solid mcp connect';
+}
+
+/**
+ * Every runnable command that moves this verdict toward `ok`, in order.
+ * Shared by the human renderer and `mcp doctor --json` so both say the same.
+ */
+export function verdictFixCommands(a: ProviderAssessment): string[] {
+  const cmds: string[] = [];
+  const add = (c: string | null) => { if (c && !cmds.includes(c)) cmds.push(c); };
+  if (a.verdict === 'conflict') {
+    const locals = a.active.filter((p) => p.scope !== 'account');
+    if (locals.length > 1) add('solid mcp doctor --fix');
+    // Every local entry not proven on this session's company gets re-pointed.
+    for (const l of locals) {
+      if (l.companyId === null || (a.sessionCompanyId && l.companyId !== a.sessionCompanyId)) add(repointCommand(l));
+    }
+  } else if (a.verdict === 'mismatch' || a.verdict === 'unverified') {
+    add(repointCommand(a.active[0]));
+  } else if (a.verdict === 'none') {
+    add('solid mcp connect');
+  }
+  return cmds;
+}
+
+/**
  * Render a verdict as operator-readable lines.
  *
  * ⛔ EVERY BRANCH ENDS IN A COMMAND OR A SETTING THE READER CAN ACT ON. The
@@ -446,7 +482,10 @@ export function renderProviderVerdict(a: ProviderAssessment): string[] {
       p.scope === 'account'
         ? chalk.dim('account connector — lives on claude.ai, not on this machine')
         : chalk.dim(`${p.client ? `${p.client}: ` : ''}${p.configPath || p.scope}`);
-    L.push(`    ${p.active ? chalk.green('●') : chalk.dim('○')} ${chalk.bold(p.name)}  →  ${who}`);
+    const off = a.sessionCompanyId && p.companyId !== null && p.companyId !== a.sessionCompanyId
+      ? chalk.red.bold(`  ≠ this session (company ${a.sessionCompanyId})`)
+      : '';
+    L.push(`    ${p.active ? chalk.green('●') : chalk.dim('○')} ${chalk.bold(p.name)}  →  ${who}${off}`);
     L.push(`      ${where}`);
     if (p.unresolved) L.push(`      ${chalk.dim(p.unresolved)}`);
   };
@@ -457,6 +496,7 @@ export function renderProviderVerdict(a: ProviderAssessment): string[] {
     // evidence, on the screen whose entire job is to be believed.
     L.push(chalk.red.bold(`  ✗ ${a.active.length} Solid# connections are active. Nothing decides which one the AI uses.`));
     L.push('');
+    if (a.sessionCompanyId) L.push(`    ${chalk.dim('This CLI session:')} ${chalk.bold(`company ${a.sessionCompanyId}`)}`);
     for (const p of a.active) describe(p);
     L.push('');
     L.push(chalk.dim('    Measured 2026-09-15: with both live, the agent used the account'));
@@ -476,10 +516,15 @@ export function renderProviderVerdict(a: ProviderAssessment): string[] {
       const where = l.client ? `${l.client} (${l.configPath})` : l.name;
       L.push(`      ${chalk.dim('•')} ${chalk.bold(l.name)} in ${chalk.dim(where)}`);
     }
-    if (locals.length) {
-      L.push(`        ${chalk.dim('Keep ONE and point it at this session:')} ${chalk.cyan('solid mcp connect')}`);
-      if (locals.length > 1) {
-        L.push(`        ${chalk.dim('Remove the others:')} ${chalk.cyan('claude mcp remove <name> -s user')} ${chalk.dim('or edit the file.')}`);
+    const cmds = verdictFixCommands(a);
+    if (cmds.length) {
+      L.push('');
+      L.push(`    ${chalk.bold('Run:')}`);
+      for (const c of cmds) {
+        const why = c === 'solid mcp doctor --fix'
+          ? 'keeps one local entry, removes the rest (files backed up)'
+          : c.startsWith('solid mcp install ') ? `re-points that entry at company ${a.sessionCompanyId ?? 'of this session'}` : '';
+        L.push(`      ${chalk.cyan(c)}${why ? chalk.dim(`   — ${why}`) : ''}`);
       }
     }
     return L;
@@ -494,8 +539,9 @@ export function renderProviderVerdict(a: ProviderAssessment): string[] {
     L.push('');
     for (const q of a.active) describe(q);
     L.push('');
-    L.push(p.cliCanRepoint
-      ? `    ${chalk.bold('Fix:')} ${chalk.cyan('solid mcp connect')}`
+    const cmd = repointCommand(p);
+    L.push(cmd
+      ? `    ${chalk.bold('Fix:')} ${chalk.cyan(cmd)}${chalk.dim(`   — rewrites ${p.configPath || p.name} with a key for company ${a.sessionCompanyId}`)}`
       : `    ${chalk.bold('Fix:')} re-authorize it in ${chalk.cyan('claude.ai → Settings → Connectors')} — this CLI cannot move it.`);
     return L;
   }
@@ -517,7 +563,7 @@ export function renderProviderVerdict(a: ProviderAssessment): string[] {
       L.push(`    ${chalk.bold('To control it here:')} turn it off in ${chalk.cyan('claude.ai → Settings → Connectors')},`);
       L.push(`                        ${chalk.dim('then run')} ${chalk.cyan('solid mcp connect')}`);
     } else {
-      L.push(`    ${chalk.bold('Fix:')} ${chalk.cyan('solid mcp connect')}`);
+      L.push(`    ${chalk.bold('Fix:')} ${chalk.cyan(repointCommand(p) ?? 'solid mcp connect')}`);
     }
     return L;
   }

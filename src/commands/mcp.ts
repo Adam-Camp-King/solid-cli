@@ -232,11 +232,41 @@ mcpCommand
     if (opts.uninstall) {
       nextConfig = removeFromConfig(existing);
     } else {
-      const apiKey =
+      // ⛔ Never the session token. It used to fall through to
+      // config.accessToken, which expires; the client then 401s long after
+      // "Installed". Order: --api-key > an sk_ SOLID_API_KEY > the company's
+      // MCP key (reused if still active on THIS company, else minted — the
+      // same key `solid setup` provisions). The session token is the last
+      // resort, and says so.
+      const { isDryRun } = await import('../lib/dry-run');
+      const previewing = Boolean(opts.preview) || isDryRun();
+      let apiKey: string | undefined =
         (typeof opts.apiKey === 'string' && opts.apiKey) ||
-        process.env.SOLID_API_KEY ||
-        config.accessToken ||
+        (process.env.SOLID_API_KEY && process.env.SOLID_API_KEY.startsWith('sk_') ? process.env.SOLID_API_KEY : undefined) ||
         undefined;
+      if (!apiKey && config.isLoggedIn()) {
+        if (previewing) {
+          // A preview mints nothing.
+          const { readMcpKey, defaultMcpKeyFile } = await import('../lib/mcp-key');
+          apiKey = readMcpKey(defaultMcpKeyFile()) ?? '<sk_ key minted on install>';
+        } else {
+          const { getOrCreateMcpApiKey } = await import('../lib/mcp-key');
+          const got = await getOrCreateMcpApiKey(apiClient as unknown as import('../lib/mcp-key').KeyApi);
+          if (got) {
+            apiKey = got.key;
+            if (got.source === 'minted' && !isJsonOutput(opts)) {
+              console.error(chalk.dim('  Minted a long-lived sk_ key for the MCP server (see: solid keys list).'));
+            }
+          }
+        }
+      }
+      if (!apiKey && (process.env.SOLID_API_KEY || config.accessToken)) {
+        apiKey = process.env.SOLID_API_KEY || config.accessToken || undefined;
+        process.stderr.write(chalk.yellow(
+          '  ⚠ Could not get an sk_ API key; writing your session token, which EXPIRES.\n' +
+          '    Re-run with a key when it does: solid mcp install ' + client + ' --api-key sk_...\n',
+        ));
+      }
       const apiUrl =
         (typeof opts.apiUrl === 'string' && opts.apiUrl) ||
         process.env.SOLID_API_URL ||
@@ -479,7 +509,7 @@ mcpCommand
     // opposite duty — unknown is printed as not-ok, with the reason, because
     // the whole point of running it is to find out.
     let assessment: import('../lib/mcp-providers').ProviderAssessment | null = null;
-    const { renderProviderVerdict } = await import('../lib/mcp-providers.js');
+    const { renderProviderVerdict, verdictFixCommands } = await import('../lib/mcp-providers.js');
     try {
       const { enumerateSolidProviders, assessProviders } = await import('../lib/mcp-providers.js');
       const providers = await enumerateSolidProviders({ apiUrl: config.apiUrl });
@@ -596,6 +626,8 @@ mcpCommand
         sessionCompanyId: config.companyId ?? null,
         verdict: assessment?.verdict ?? 'unknown',
         headline: assessment?.headline ?? null,
+        // The exact commands that move the verdict toward ok (empty when ok).
+        fix_commands: assessment ? verdictFixCommands(assessment) : [],
         providers: assessment?.providers ?? [],
         checks,
         passing: checks.filter(c => c.ok).length,

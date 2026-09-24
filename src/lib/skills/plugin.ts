@@ -137,7 +137,7 @@ export interface BuildMcpInput {
 }
 
 /** Default package that ships the stdio MCP server. Mirrors mcp-client-config. */
-export const DEFAULT_MCP_PACKAGE = '@solidnumber/mcp';
+export const DEFAULT_MCP_PACKAGE = '@solidnumber/mcp@latest';
 
 /**
  * Build `mcp.json`. Pure.
