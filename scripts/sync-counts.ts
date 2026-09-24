@@ -33,8 +33,17 @@ import { execSync } from "child_process";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 
-const ROOT = join(__dirname, "..", "..");        // the monorepo root
+const ROOT = join(__dirname, "..", "..");        // the monorepo root, when there is one
 const CLI = join(__dirname, "..");
+
+/**
+ * solid-cli is also checked out on its own (it is a public repo). Then the
+ * directory above it is not the monorepo, and a CLAUDE.md or README sitting
+ * there belongs to someone else — never read or rewrite it. Only surfaces
+ * inside solid-cli/ are checked in that case, and the run says so.
+ */
+const IN_MONOREPO =
+  existsSync(join(ROOT, "Owners-Manual")) && existsSync(join(ROOT, "solid-cli", "package.json"));
 
 interface Counts {
   version: string;
@@ -65,7 +74,16 @@ function measure(): Counts {
  * Owners-Manual/45-Developer-CLI/VERSION-BUMP-CHECKLIST.md — that file is the
  * human inventory; this array is the executable one.
  */
-const SURFACES = [
+/**
+ * A surface is a whole file, or a file where only lines matching `lines` are
+ * claims about NOW. The Owners-Manual index mixes a "Current published
+ * version" line with dated release notes ("`@solidnumber/cli@2.12.0`
+ * (published 2026-06-11) is unchanged…") that the version pattern would
+ * otherwise stamp forward into fiction.
+ */
+type Surface = string | { path: string; lines: RegExp };
+
+const SURFACES: Surface[] = [
   "solid-public/public/llms.txt",
   "solid-public/public/llms-full.txt",
   "solid-public/public/solidnumber-llms.txt",
@@ -94,6 +112,10 @@ const SURFACES = [
   "solid-public/src/app/robots.txt/marketing-robots.ts",
   "solid-cli/README.md",
   "CLAUDE.md",
+  // Added 2.24.8 — both sat at 2.20.0 through four releases because nothing
+  // scanned them.
+  { path: "Owners-Manual/45-Developer-CLI/00-INDEX.md", lines: /Current published version/ },
+  { path: "Owners-Manual/45-Developer-CLI/02-COMMANDS.md", lines: /Current published version/ },
 ];
 
 /**
@@ -169,6 +191,9 @@ function rewrite(text: string, c: Counts): string {
     //    only some of those are the CLI. Those stay reported, not rewritten.
     .replace(/(@solidnumber\/cli@)\d+\.\d+\.\d+(?!\+)/g, `$1${c.version}`)
     .replace(/(@solidnumber\/cli )\d+\.\d+\.\d+/g, `$1${c.version}`)
+    // The parent CLAUDE.md heading: "### Public CLI — @solidnumber/cli (v2.20.0)".
+    // Missed by every pattern above, so it froze at 2.20.0.
+    .replace(/(@solidnumber\/cli \(v)\d+\.\d+\.\d+(?=\))/g, `$1${c.version}`)
     .replace(/((?:CLI-Version|Current version):\s*)\d+\.\d+\.\d+/g, `$1${c.version}`)
     .replace(/(["']?cli:version["']?\s*:\s*["'])\d+\.\d+\.\d+(?=["'])/g, `$1${c.version}`);
     // ⛔ `softwareVersion` is DELIBERATELY NOT STAMPED, and this comment exists
@@ -234,13 +259,22 @@ function main() {
   const stale: string[] = [];
   const unowned: string[] = [];
 
-  for (const rel of SURFACES) {
+  if (!IN_MONOREPO) {
+    console.log("  (solid-cli checked out alone — only surfaces inside solid-cli/ are checked)");
+  }
+  for (const surface of SURFACES) {
+    const rel = typeof surface === "string" ? surface : surface.path;
+    const only = typeof surface === "string" ? null : surface.lines;
     if (EXCLUDED.some((x) => rel.includes(x))) continue;
-    const path = join(ROOT, rel);
+    if (!IN_MONOREPO && !rel.startsWith("solid-cli/")) continue;
+    const path = IN_MONOREPO ? join(ROOT, rel) : join(CLI, rel.slice("solid-cli/".length));
     if (!existsSync(path)) continue;              // a surface may not exist yet
     const before = readFileSync(path, "utf8");
-    const after = rewrite(before, c);
-    for (const u of needsAHuman(after, c)) unowned.push(`${rel}: ${u}`);
+    const after = only
+      ? before.split("\n").map((l) => (only.test(l) ? rewrite(l, c) : l)).join("\n")
+      : rewrite(before, c);
+    const scanned = only ? after.split("\n").filter((l) => only.test(l)).join("\n") : after;
+    for (const u of needsAHuman(scanned, c)) unowned.push(`${rel}: ${u}`);
     if (before === after) continue;
     stale.push(rel);
     if (!check) writeFileSync(path, after);
