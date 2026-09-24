@@ -14,6 +14,54 @@
  * The enum is closed so TypeScript can exhaustive-switch on it.
  */
 
+/**
+ * Redact Bearer tokens + common secret-looking strings from anything the CLI
+ * might print or put in a JSON envelope. Belt-and-suspenders — tokens should
+ * never end up in error strings in the first place.
+ */
+export function redactSecrets(s: string): string {
+  return s
+    .replace(/Bearer\s+[A-Za-z0-9._\-=]{6,}/g, 'Bearer ***')
+    .replace(/(sk_|pk_|rk_|pat_|tok_)[A-Za-z0-9_\-]{6,}/g, '$1***')
+    .replace(/(password|secret|apikey|api_key|token)=([^&\s]+)/gi, '$1=***');
+}
+
+/** Keys whose value is a secret whatever it looks like. */
+const SECRET_KEY = /^(authorization|password|passwd|secret|client_secret|api[_-]?key|x-api-key|token|access_token|refresh_token)$/i;
+
+/**
+ * Make a server `detail` safe to hand back to the caller.
+ *
+ * FastAPI 422 items are `{loc, msg, type, input, ctx}` — `input` echoes the
+ * request value that failed (an API key, a card number, a whole body) and
+ * `ctx` can carry it again. Both are dropped from every array item; every
+ * remaining string goes through redactSecrets, and secret-named keys are
+ * masked outright. Returns a new value; never mutates the server body.
+ */
+export function sanitizeErrorDetail(detail: unknown, depth = 0): unknown {
+  if (depth > 8) return '[truncated]';
+  if (typeof detail === 'string') return redactSecrets(detail);
+  if (Array.isArray(detail)) {
+    return detail.map((item) => {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const { input: _input, ctx: _ctx, ...rest } = item as Record<string, unknown>;
+        void _input;
+        void _ctx;
+        return sanitizeErrorDetail(rest, depth + 1);
+      }
+      return sanitizeErrorDetail(item, depth + 1);
+    });
+  }
+  if (detail && typeof detail === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(detail as Record<string, unknown>)) {
+      out[k] = SECRET_KEY.test(k) && v != null && v !== '' ? '***' : sanitizeErrorDetail(v, depth + 1);
+    }
+    return out;
+  }
+  return detail;
+}
+
 /** Fixed vocabulary of error codes the CLI can surface. */
 export type ErrorCode =
   | 'AUTH_REQUIRED'
@@ -28,7 +76,8 @@ export type ErrorCode =
   | 'SERVER_ERROR'
   | 'NETWORK_ERROR'
   | 'TIMEOUT'
-  | 'DRY_RUN_BLOCKED';
+  | 'DRY_RUN_BLOCKED'
+  | 'APPROVAL_REQUIRED';
 
 export const ERROR_CODES: ErrorCode[] = [
   'AUTH_REQUIRED',
@@ -44,6 +93,7 @@ export const ERROR_CODES: ErrorCode[] = [
   'NETWORK_ERROR',
   'TIMEOUT',
   'DRY_RUN_BLOCKED',
+  'APPROVAL_REQUIRED',
 ];
 
 /** Extra structured details paired with the code. */
@@ -61,7 +111,123 @@ export interface ClassifiedError {
   upgrade_to?: string;
   /** X-Request-ID echoed back for cross-service correlation. */
   request_id?: string;
+  /** Server's machine-readable reason (`error.reason`, `result.error`, ...). */
+  reason?: string;
+  /** Server's structured detail when it is not a plain string (FastAPI object detail). */
+  detail?: unknown;
+  /** Link a human must open to approve the action (APPROVAL_REQUIRED). */
+  approval_url?: string;
+  /** Server-side proposal/preview id paired with approval_url. */
+  preview_id?: string;
+  /** What the caller should do next, in words (not a command). */
+  next?: string;
 }
+
+/**
+ * Everything the server said about a failure, pulled out of whichever shape
+ * it used. The backend has at least four:
+ *
+ *   FastAPI          {"detail": "text" | {...} | [{loc,msg,type}]}
+ *   verb envelope    {"ok":false,"verb":"x","error":{"reason","message","approval_url"},"preview_id"}
+ *   verb result      {"ok":false,"result":{"status":"ERROR","error":"unsupported_media_type","detail":"..."}}
+ *   plain            {"error":"code","message":"text"} / {"status":"error","summary":"text"}
+ *
+ * Before this existed the CLI read `detail ?? message ?? error` as a string,
+ * so an object-shaped `error` became "Request failed" and the approval link
+ * the server had just minted never reached the agent. Pure.
+ */
+export interface ServerErrorFields {
+  message?: string;
+  reason?: string;
+  code?: string;
+  detail?: unknown;
+  approval_url?: string;
+  preview_id?: string;
+}
+
+export function extractServerError(data: unknown): ServerErrorFields {
+  const out: ServerErrorFields = {};
+  if (typeof data === 'string') {
+    if (data.trim()) out.message = data.trim().slice(0, 500);
+    return out;
+  }
+  const body = asRecord(data);
+  const layers: Record<string, unknown>[] = [body];
+  const result = asRecord(body.result);
+  if (Object.keys(result).length) layers.push(result);
+
+  const take = (key: keyof ServerErrorFields, v: string | undefined): void => {
+    if (v && out[key] === undefined) (out as Record<string, unknown>)[key] = v;
+  };
+
+  for (const layer of layers) {
+    const err = layer.error;
+    if (err && typeof err === 'object' && !Array.isArray(err)) {
+      const e = err as Record<string, unknown>;
+      take('reason', pickString(e, 'reason'));
+      take('code', pickString(e, 'code'));
+      take('message', pickString(e, 'message') ?? pickString(e, 'detail'));
+      take('approval_url', pickString(e, 'approval_url'));
+      take('preview_id', pickString(e, 'preview_id'));
+      if (out.detail === undefined && e.detail !== undefined && typeof e.detail !== 'string') out.detail = e.detail;
+    } else if (typeof err === 'string' && err.trim()) {
+      // A bare `error` string is a code ("invoice_not_found"), not prose.
+      take('reason', err);
+    }
+
+    const det = layer.detail;
+    if (typeof det === 'string' && det.trim()) {
+      take('message', det);
+    } else if (Array.isArray(det)) {
+      if (out.detail === undefined) out.detail = det;
+    } else if (det && typeof det === 'object') {
+      const d = det as Record<string, unknown>;
+      take('reason', pickString(d, 'reason') ?? pickString(d, 'error'));
+      take('code', pickString(d, 'code'));
+      take('message', pickString(d, 'message') ?? pickString(d, 'detail') ?? pickString(d, 'msg'));
+      take('approval_url', pickString(d, 'approval_url'));
+      take('preview_id', pickString(d, 'preview_id'));
+      if (out.detail === undefined) out.detail = det;
+    }
+
+    take('message', pickString(layer, 'message') ?? pickString(layer, 'summary'));
+    take('reason', pickString(layer, 'reason'));
+    take('approval_url', pickString(layer, 'approval_url'));
+    take('preview_id', pickString(layer, 'preview_id'));
+  }
+  return out;
+}
+
+/** True when the server reported "a human must approve this first". */
+export function isApprovalRequired(f: ServerErrorFields): boolean {
+  return /^approval[_ -]?required$/i.test(f.reason || '') ||
+    /^approval[_ -]?required$/i.test(f.code || '');
+}
+
+/**
+ * True only for a 422 that is about missing/invalid INPUT FIELDS — a FastAPI
+ * validation array, or an explicit missing-field marker. A custom 422 such as
+ * `custom_code_rejected` is a policy refusal: pointing the caller at the verb's
+ * input schema sends it to fix fields that were never the problem.
+ */
+export function isFieldValidationError(data: unknown): boolean {
+  const body = asRecord(data);
+  const probe = (o: Record<string, unknown>): boolean => {
+    if (Array.isArray(o.detail) && o.detail.length > 0) {
+      return o.detail.some((d) => {
+        const r = asRecord(d);
+        return Array.isArray(r.loc) || /missing|required/i.test(String(r.type ?? r.msg ?? ''));
+      });
+    }
+    if (Array.isArray(o.missing_required) && o.missing_required.length) return true;
+    if (Array.isArray(o.errors) && o.errors.length) return true;
+    return false;
+  };
+  return probe(body) || probe(asRecord(body.result));
+}
+
+export const APPROVAL_NEXT =
+  'Share approval_url with the business owner. Once they approve it, re-run the same command unchanged. Do not retry before then.';
 
 export interface ClassifyInput {
   /** HTTP status; 0 when there was no response (network / timeout). */
@@ -104,12 +270,27 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
   const serverCode = pickString(body, 'code');
   const serverError = asRecord(body.error);
   const errEnvCode = pickString(serverError, 'code');
+  const server = extractServerError(data);
+
+  // A write that needs the owner's sign-off. Whatever HTTP status carried it
+  // (200 ok:false, 403, 409, 202), the caller's move is the same: hand the link
+  // to a human and wait. Checked first so no status branch can hide it.
+  if (isApprovalRequired(server)) {
+    return withRequestId(
+      withServerFields({
+        code: 'APPROVAL_REQUIRED',
+        hint: 'The business owner must approve this action.',
+        next: APPROVAL_NEXT,
+      }, server),
+      requestId,
+    );
+  }
 
   // Prefer the server's own `error.code` when it matches our vocabulary
   // (backend middleware like MCPRateLimitMiddleware uses RATE_LIMITED).
   const preferred = (errEnvCode || serverCode) as ErrorCode | undefined;
   if (preferred && ERROR_CODES.includes(preferred)) {
-    return withRequestId({ code: preferred, ...extractEnvelopeExtras(serverError, body) }, requestId);
+    return withRequestId(withServerFields({ code: preferred, ...extractEnvelopeExtras(serverError, body) }, server), requestId);
   }
 
   // No HTTP response → network layer
@@ -126,18 +307,27 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
     );
   }
 
+  return withRequestId(withServerFields(classifyByStatus(status, body, serverCode, data, server), server), requestId);
+}
+
+function classifyByStatus(
+  status: number,
+  body: Record<string, unknown>,
+  serverCode: string | undefined,
+  data: unknown,
+  server: ServerErrorFields,
+): ClassifiedError {
   switch (true) {
     case status === 401:
-      return withRequestId(
-        { code: 'AUTH_REQUIRED', hint: 'Run: solid auth login (or set SOLID_TOKEN)' },
-        requestId,
+      return (
+        { code: 'AUTH_REQUIRED', hint: 'Run: solid auth login (or set SOLID_TOKEN)' }
       );
 
     case status === 403: {
       // FEATURE_GATED signal comes as `data.code === 'FEATURE_GATED'` at the
       // top level today.
       if (serverCode === 'FEATURE_GATED') {
-        return withRequestId(
+        return (
           {
             code: 'FEATURE_GATED',
             feature: pickString(body, 'feature'),
@@ -145,66 +335,66 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
             // `solid upgrade` does not exist. `solid billing` is the group
             // that does, and `status` shows the current plan.
             hint: 'Run: solid whoami --features  ·  Upgrade: solid billing status',
-          },
-          requestId,
+          }
         );
       }
       // Scope-missing: extract from prose `detail: "Missing scope: X"`.
       const detailStr = pickString(body, 'detail') ?? pickString(body, 'message');
       const scope = extractScopeFromDetail(detailStr);
       if (scope) {
-        return withRequestId(
+        return (
           {
             code: 'SCOPE_MISSING',
             scope,
             hint: `Rotate your key with scope ${scope}: solid keys rotate --add-scope ${scope}`,
-          },
-          requestId,
+          }
         );
       }
-      return withRequestId(
+      return (
         {
           code: 'FORBIDDEN',
           hint: 'Check your tier: solid whoami --features',
-        },
-        requestId,
+        }
       );
     }
 
     case status === 404:
-      return withRequestId({ code: 'NOT_FOUND' }, requestId);
+      return ({ code: 'NOT_FOUND' });
 
     case status === 409:
-      return withRequestId({ code: 'CONFLICT' }, requestId);
+      return ({ code: 'CONFLICT' });
 
     case status === 422:
-      return withRequestId(
+      return (
         {
           code: 'VALIDATION_FAILED',
           // Was "Run with --help to see required flags". The verb path takes
           // JSON through -p, not flags, so --help shows nothing relevant.
-          // `verbs describe` prints the input_schema, which is the answer.
-          hint: 'Required fields: solid verbs describe <verb>',
-        },
-        requestId,
+          // `verbs describe` prints the input_schema, which is the answer —
+          // but ONLY when fields are the problem. A policy 422
+          // (custom_code_rejected) is not fixed by reading the schema.
+          // A named non-field reason (custom_code_rejected, ...) is a policy
+          // refusal; anything else — a FastAPI field array, a bare 422, a
+          // "field required" string — is about the input shape.
+          hint: isFieldValidationError(data) || !server.reason
+            ? 'Required fields: solid verbs describe <verb>'
+            : 'The server rejected the request content — see reason/message. Retrying unchanged will fail the same way.',
+        }
       );
 
     case status === 408:
-      return withRequestId(
-        { code: 'TIMEOUT', hint: 'Try --timeout=60, or run: solid health' },
-        requestId,
+      return (
+        { code: 'TIMEOUT', hint: 'Try --timeout=60, or run: solid health' }
       );
 
     case status === 429:
-      return withRequestId(
-        { code: 'RATE_LIMITED', hint: 'Slow down or run with --timeout=60' },
-        requestId,
+      return (
+        { code: 'RATE_LIMITED', hint: 'Slow down or run with --timeout=60' }
       );
 
     case status >= 500 && status < 600:
-      return withRequestId(
-        { code: 'SERVER_ERROR', hint: 'Try again, or run: solid health' },
-        requestId,
+      return (
+        { code: 'SERVER_ERROR', hint: 'Try again, or run: solid health' }
       );
 
     // Every remaining 4xx — 400, 405, 410, 415 and the rest — is the caller's
@@ -214,16 +404,15 @@ export function classifyError(input: ClassifyInput): ClassifiedError {
     // `--surface bogusXYZ` was an infinite loop, not an error. 408 and 429 are
     // handled above because a plain retry genuinely can fix those two.
     case status >= 400 && status < 500:
-      return withRequestId(
+      return (
         {
           code: 'BAD_REQUEST',
           hint: 'Fix the request — retrying it unchanged will fail the same way.',
-        },
-        requestId,
+        }
       );
 
     default:
-      return withRequestId({ code: 'SERVER_ERROR' }, requestId);
+      return ({ code: 'SERVER_ERROR' });
   }
 }
 
@@ -238,6 +427,16 @@ function extractEnvelopeExtras(
   if (feature) out.feature = feature;
   const upgrade = pickString(serverError, 'upgrade_to') ?? pickString(body, 'upgrade_to');
   if (upgrade) out.upgrade_to = upgrade;
+  return out;
+}
+
+/** Copy what the server said onto the classification without overriding it. */
+function withServerFields(c: ClassifiedError, f: ServerErrorFields): ClassifiedError {
+  const out: ClassifiedError = { ...c };
+  if (f.reason && !out.reason) out.reason = f.reason;
+  if (f.detail !== undefined && out.detail === undefined) out.detail = sanitizeErrorDetail(f.detail);
+  if (f.approval_url && !out.approval_url) out.approval_url = f.approval_url;
+  if (f.preview_id && !out.preview_id) out.preview_id = f.preview_id;
   return out;
 }
 
@@ -265,6 +464,14 @@ export interface ErrorEnvelope {
     hint?: string;
     docs_url?: string;
     request_id?: string;
+    /** Server's machine-readable reason, verbatim. */
+    reason?: string;
+    /** Server's structured detail (FastAPI object/array detail), verbatim. */
+    detail?: unknown;
+    approval_url?: string;
+    preview_id?: string;
+    /** What to do next, in words. Present for APPROVAL_REQUIRED. */
+    next?: string;
   };
 }
 
@@ -313,6 +520,7 @@ export function fixForCode(c: ClassifiedError): string | undefined {
     case 'CONFLICT':
     case 'RATE_LIMITED':
     case 'DRY_RUN_BLOCKED':
+    case 'APPROVAL_REQUIRED':
       return undefined;
     default: {
       const _exhaustive: never = c.code;
@@ -338,6 +546,9 @@ export function isRetryable(code: ErrorCode): boolean {
     case 'CONFLICT':
     case 'BAD_REQUEST':
     case 'DRY_RUN_BLOCKED':
+    // Retrying before a human approves returns the same refusal (and may mint
+    // another proposal). Not retryable; `next` says what unblocks it.
+    case 'APPROVAL_REQUIRED':
       return false;
     default: {
       // Exhaustive check — TypeScript flags missing cases.
@@ -367,6 +578,11 @@ export function toErrorEnvelope(
   if (classified.hint) envelope.hint = classified.hint;
   if (classified.docs_url) envelope.docs_url = classified.docs_url;
   if (classified.request_id) envelope.request_id = classified.request_id;
+  if (classified.reason) envelope.reason = classified.reason;
+  if (classified.detail !== undefined) envelope.detail = sanitizeErrorDetail(classified.detail);
+  if (classified.approval_url) envelope.approval_url = classified.approval_url;
+  if (classified.preview_id) envelope.preview_id = classified.preview_id;
+  if (classified.next) envelope.next = classified.next;
   return { error: envelope };
 }
 

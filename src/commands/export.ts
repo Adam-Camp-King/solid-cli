@@ -15,10 +15,10 @@ export const exportCommand = new Command('export')
   .option('--contacts-only', 'Only export CRM contacts')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const companyId = config.companyId;
+    const companyId = await (await import('../lib/command-kit')).ensureCompanyContext();
     if (!companyId) { console.error(chalk.red('No company selected.')); process.exit(1); }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const baseDir = path.resolve(options.dir);
     const ts = new Date().toISOString().split('T')[0];
     const exportDir = path.join(baseDir, `solid-export-${companyId}-${ts}`);

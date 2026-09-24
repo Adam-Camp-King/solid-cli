@@ -31,13 +31,13 @@ llmsCommand
       process.exit(1);
     }
 
-    const companyId = config.companyId;
+    const companyId = await (await import('../lib/command-kit')).ensureCompanyContext();
     if (!companyId) {
       console.error(chalk.red('No company selected.'));
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Fetching llms.txt...').start();
 
     try {
@@ -102,13 +102,13 @@ llmsCommand
       process.exit(1);
     }
 
-    const companyId = config.companyId;
+    const companyId = await (await import('../lib/command-kit')).ensureCompanyContext();
     if (!companyId) {
       console.error(chalk.red('No company selected.'));
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Checking AI discoverability...').start();
 
     try {

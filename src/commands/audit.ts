@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import { config } from '../lib/config';
 import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { ui } from '../lib/ui';
@@ -32,7 +32,7 @@ export const auditCommand = new Command('audit')
     // an `accepts` list. Re-deriving argv beside a parser that already knows the
     // answer is what created the bug — don't put it back.
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
 
     // ── T11.6 — by-key mode: hit the per-key audit endpoint ────────────
     if (options.byKey) {
@@ -119,7 +119,7 @@ auditCommand.command('export').description('Export audit logs (CSV)')
   .option('-o, --output <path>', 'Save to file')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Exporting...').start();
     try {
       // The export returns the file in `content` (it used to return a
@@ -151,7 +151,7 @@ auditCommand.command('suspicious <userId>').description('Suspicious activity for
   .option('--json', 'JSON output')
   .action(async (userId, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/security/audit/suspicious/${userId}`);
@@ -164,7 +164,7 @@ auditCommand.command('suspicious <userId>').description('Suspicious activity for
 auditCommand.command('compliance-report').description('Compliance summary report')
   .action(async () => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get('/api/v1/security/compliance/report');
@@ -177,7 +177,7 @@ auditCommand.command('gdpr-export').description('Trigger GDPR data export for a 
   .requiredOption('--user <id>', 'User ID')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Initiating GDPR export...').start();
     try {
       const res = await apiClient.post('/api/v1/security/gdpr/export', { user_id: parseInt(options.user, 10) });
@@ -190,7 +190,7 @@ auditCommand.command('gdpr-delete').description('Trigger GDPR data deletion (rig
   .requiredOption('--user <id>', 'User ID')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Initiating GDPR deletion...').start();
     try {
       await apiClient.post('/api/v1/security/gdpr/delete', { user_id: parseInt(options.user, 10) });
@@ -201,7 +201,7 @@ auditCommand.command('gdpr-delete').description('Trigger GDPR data deletion (rig
 auditCommand.command('gdpr-consent <userId>').description('Get a user\'s GDPR consent record')
   .action(async (userId) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading consent...').start();
     try {
       const res = await apiClient.get(`/api/v1/security/gdpr/consent/${userId}`);
@@ -216,7 +216,7 @@ auditCommand.command('gdpr-consent-set').description('Record a GDPR consent deci
   .requiredOption('--granted <bool>', 'true|false')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Recording...').start();
     try {
       await apiClient.post('/api/v1/security/gdpr/consent', {
@@ -255,7 +255,7 @@ function makeQualityAudit(name: 'a11y' | 'perf' | 'mobile', categoryDescription:
     .option('--keep-raw', 'Include the full Lighthouse JSON in --json output (large)')
     .option('--json', 'Emit JSON for programmatic consumption')
     .action(async (slug: string, opts: { url?: string; threshold: string; keepRaw?: boolean; json?: boolean }) => {
-      const ora = (await import('ora')).default;
+      const ora = (await import('../lib/spinner')).default;
       const { runLighthouse } = await import('../lib/lighthouse-runner');
       const { buildRenderUrl } = await import('../lib/render-utils');
 

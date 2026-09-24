@@ -45,7 +45,7 @@ export function addWebhookListenCommand(webhooksCommand: Command): void {
       console.log('');
 
       // Register a temporary webhook endpoint on the backend
-      const ora = (await import('ora')).default;
+      const ora = (await import('../lib/spinner')).default;
       const spinner = ora('Registering listener...').start();
 
       try {

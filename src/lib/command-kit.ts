@@ -74,7 +74,7 @@ export function __setSpinnerFactoryForTest(fn: SpinnerFactory | null): void {
 
 async function buildSpinner(text: string): Promise<SpinnerLike> {
   if (spinnerFactory) return spinnerFactory(text);
-  const ora = (await import('ora')).default;
+  const ora = (await import('./spinner')).default;
   // CRITICAL: write to stderr, NOT stdout — otherwise spinner chars leak
   // into `solid X --json | jq` and break every scripting use case.
   return ora({ text, stream: process.stderr }).start() as unknown as SpinnerLike;
@@ -101,14 +101,44 @@ export function requireAuth(): void {
  * right after `requireAuth()` in every command that does
  * POST / PUT / PATCH / DELETE.
  */
-export function requireCompanyContext(): void {
-  if (!config.companyId) {
-    console.error(
-      chalk.red('Error: No company selected. Run `solid switch` to select a company.'),
-    );
-    // eslint-disable-next-line no-process-exit
-    process.exit(1);
+export async function requireCompanyContext(): Promise<void> {
+  if (await ensureCompanyContext()) return;
+  console.error(
+    chalk.red('Error: No company selected. Run `solid switch` to select a company.'),
+  );
+  // eslint-disable-next-line no-process-exit
+  process.exit(1);
+}
+
+/**
+ * Resolve the company for this invocation, returning its id or undefined.
+ *
+ * A token-only caller (`--token X` or SOLID_TOKEN with no saved config) has a
+ * company — the one the token was issued for — but nothing on disk says so, so
+ * `solid publish 300` used to die with "No company selected. Run `solid
+ * switch`", a command that needs an interactive login. Ask the token instead:
+ * /auth/me names its company. The answer is kept in memory for this process
+ * only (never written to the saved session).
+ */
+export async function ensureCompanyContext(): Promise<number | undefined> {
+  if (config.companyId) return config.companyId;
+  if (!config.isLoggedIn()) return undefined;
+  try {
+    // Lazy: keeps this module loadable without the axios client in tests.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { apiClient } = require('./api-client') as typeof import('./api-client');
+    const me = await apiClient.authStatus();
+    const user = (me.data?.user || {}) as Record<string, unknown>;
+    const raw = user.company_id ?? (user.company as Record<string, unknown> | undefined)?.id;
+    const id = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+    if (Number.isFinite(id) && id > 0) {
+      config.setDerivedCompanyId(id);
+      return id;
+    }
+  } catch {
+    // fall through — caller reports "No company selected"
   }
+  return undefined;
 }
 
 /** Returns true when any caller in the process explicitly asked for quiet mode. */
@@ -528,6 +558,11 @@ export function emitErrorAndExit(error: unknown): never {
         feature: apiError.feature,
         upgrade_to: apiError.upgrade_to,
         request_id: apiError.request_id,
+        reason: apiError.reason,
+        detail: apiError.detail,
+        approval_url: apiError.approval_url,
+        preview_id: apiError.preview_id,
+        next: apiError.next,
       },
       apiError.status,
       apiError.message,
@@ -546,11 +581,45 @@ export function emitErrorAndExit(error: unknown): never {
     // these and nothing else did; now every prose failure carries them.
     if (apiError.hint) process.stderr.write(chalk.dim(`  ${apiError.hint}`) + '\n');
     if (apiError.docs_url) process.stderr.write(chalk.dim(`  see: ${apiError.docs_url}`) + '\n');
+    if (apiError.approval_url) process.stderr.write(`  approval_url: ${apiError.approval_url}` + '\n');
+    if (apiError.preview_id) process.stderr.write(chalk.dim(`  preview_id: ${apiError.preview_id}`) + '\n');
+    if (apiError.next) process.stderr.write(chalk.dim(`  next: ${apiError.next}`) + '\n');
   }
   // eslint-disable-next-line no-process-exit
   process.exit(1);
   // Unreachable; declared `never` return.
   throw new Error('unreachable');
+}
+
+/** The fields of a handled API error that decide "a human must approve this". */
+export interface ApprovalErrorLike {
+  code?: string;
+  status?: number;
+  approval_url?: string;
+  preview_id?: string;
+}
+
+/**
+ * Human-readable lines for a write the server parked for the owner's approval
+ * (R3 — e.g. a permanent delete), or null when the error is something else.
+ *
+ * The generic failure path prints "Failed to …" first, which reads as "it
+ * broke, try again". It did not break: nothing happened yet, and retrying
+ * mints another proposal. Say that, and put the link first.
+ */
+export function approvalRequiredLines(action: string, err: ApprovalErrorLike): string[] | null {
+  const isApproval =
+    err.code === 'APPROVAL_REQUIRED' || (err.status === 409 && Boolean(err.approval_url));
+  if (!isApproval) return null;
+  const lines = [`${action} needs a human's approval — nothing has been changed yet.`];
+  if (err.approval_url) {
+    lines.push(`A person with owner access must open and approve: ${err.approval_url}`);
+  } else {
+    lines.push('A person with owner access must approve it in the dashboard (the server returned no link).');
+  }
+  if (err.preview_id) lines.push(`preview_id: ${err.preview_id}`);
+  lines.push('After it is approved, re-run the same command unchanged. Do not retry before then.');
+  return lines;
 }
 
 /**

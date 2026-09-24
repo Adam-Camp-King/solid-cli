@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
@@ -197,7 +197,7 @@ ordersCommand
   .option('--json', 'Per-row result JSON plus summary')
   .action(async (file: string, opts: { map?: string; preview?: boolean; stopOnError?: boolean; concurrency: string; from?: string; json?: boolean }) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const fs = await import('fs');
     const path = await import('path');
     const abs = path.resolve(file);
@@ -263,7 +263,7 @@ ordersCommand
   .option('--interval <sec>', 'Re-scan interval for new files', '5')
   .action(async (dir: string, opts: { map?: string; preview?: boolean; move?: boolean; interval: string }) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const { isDryRun } = await import('../lib/dry-run');
     const isPreview = Boolean(opts.preview) || isDryRun();
     const fs = await import('fs');
@@ -399,7 +399,7 @@ ordersCommand
   .option('--location <id>', 'Location ID')
   .action(async (opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const spinner = ora('Creating order...').start();
     try {
       let payload: Record<string, unknown> = {};
@@ -425,7 +425,7 @@ ordersCommand
   .description('Confirm a pending order')
   .action(async (id) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const spinner = ora(`Confirming order ${id}...`).start();
     try {
       await apiClient.post(`/api/v1/orders/${id}/confirm`);
@@ -438,7 +438,7 @@ ordersCommand
   .description('Cancel an order')
   .action(async (id) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const spinner = ora(`Cancelling order ${id}...`).start();
     try {
       await apiClient.post(`/api/v1/orders/${id}/cancel`);
@@ -453,7 +453,7 @@ ordersCommand
   .option('--reason <text>', 'Reason for refund')
   .action(async (id, opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const body: Record<string, unknown> = {};
     if (opts.amount) body.amount = parseFloat(opts.amount);
     if (opts.reason) body.reason = opts.reason;
@@ -470,7 +470,7 @@ ordersCommand
   .option('--location <id>', 'Location to allocate from')
   .action(async (id, opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const body: Record<string, unknown> = {};
     if (opts.location) body.location_id = parseInt(opts.location, 10);
     const spinner = ora(`Allocating order ${id}...`).start();
@@ -485,7 +485,7 @@ ordersCommand
   .description('Mark an order fulfilled')
   .action(async (id) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const spinner = ora(`Fulfilling order ${id}...`).start();
     try {
       await apiClient.post(`/api/v1/orders/${id}/fulfill`);
@@ -501,7 +501,7 @@ ordersCommand
   .option('--customer-email <email>')
   .action(async (opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const spinner = ora('Recording quick sale...').start();
     try {
       const body: Record<string, unknown> = {
@@ -545,7 +545,7 @@ ordersCommand
   .option('--json', 'Output as JSON')
   .action(async (id, opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const wantsJson = isJsonOutput(opts);
     const spinner = ora(`Reading order ${id}...`).start();
     try {
@@ -588,7 +588,7 @@ ordersCommand
   .option('--json', 'Output as JSON')
   .action(async (id, milestone, opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
 
     let detail: unknown;
     if (opts.detail) {
@@ -628,7 +628,7 @@ ordersCommand
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
     requireAuth();
-    requireCompanyContext();
+    await requireCompanyContext();
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/order/milestones',

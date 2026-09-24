@@ -25,7 +25,7 @@ export const dashboardCommand = new Command('dashboard')
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading dashboard across all companies...').start();
 
     try {

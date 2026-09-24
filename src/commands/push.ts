@@ -11,7 +11,7 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -52,7 +52,7 @@ async function runFlush(options: { dryRun?: boolean; yes?: boolean }): Promise<v
     console.error(chalk.dim('  (Replay needs a live backend. The queue is preserved.)'));
     process.exit(1);
   }
-  requireCompanyContext();
+  await requireCompanyContext();
 
   console.log('');
   console.log(chalk.bold(`Offline queue — ${total} mutation${total === 1 ? '' : 's'} to replay`));
@@ -147,7 +147,7 @@ export const pushCommand = new Command('push')
 
     // Bulk push to all companies
     if (options.allCompanies) {
-      const ora = (await import('ora')).default;
+      const ora = (await import('../lib/spinner')).default;
       const spinner = ora('Loading companies...').start();
       try {
         const companiesRes = await apiClient.companiesList();

@@ -28,7 +28,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 
 import { isJsonOutput } from '../lib/json-output';
 import {

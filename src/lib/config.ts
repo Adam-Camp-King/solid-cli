@@ -81,7 +81,34 @@ class ConfigManager {
         if (Number.isFinite(id) && id > 0) return id;
       }
     }
-    return this.data.company_id;
+    if (this.data.company_id) return this.data.company_id;
+    // Last resort: the company the auth token itself belongs to, learned from
+    // /auth/me this process (see ensureCompanyContext). In memory only — a
+    // per-invocation token must never rewrite the saved session.
+    return this.derivedCompanyId;
+  }
+
+  /** In-memory company learned from the token's own /auth/me. Never persisted. */
+  private derivedCompanyId: number | undefined;
+  setDerivedCompanyId(id: number | undefined): void {
+    this.derivedCompanyId = id && Number.isFinite(id) && id > 0 ? id : undefined;
+  }
+
+  /** `--token <x>` for this invocation. Never persisted. */
+  private flagTokenValue: string | null = null;
+  setFlagToken(token: string | null): void {
+    this.flagTokenValue = token && token.trim() ? token.trim() : null;
+  }
+  get flagToken(): string | null {
+    return this.flagTokenValue;
+  }
+
+  /**
+   * The token a request will actually carry, in the interceptor's precedence:
+   * --token, SOLID_API_KEY, SOLID_TOKEN, cached session.
+   */
+  get effectiveToken(): string | undefined {
+    return this.flagTokenValue || process.env.SOLID_API_KEY || process.env.SOLID_TOKEN || this.accessToken || undefined;
   }
 
   /**
@@ -226,6 +253,7 @@ class ConfigManager {
     //   3. SOLID_TOKEN env (legacy)
     //   4. cached access_token (solid auth login)
     //   5. cached refresh_token (auto-refresh flow)
+    if (this.flagTokenValue) return true;
     if (process.env.SOLID_API_KEY) return true;
     if (process.env.SOLID_TOKEN) return true;
     const token = this.accessToken;

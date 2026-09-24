@@ -37,7 +37,7 @@ function loadSchema(): SchemaDoc {
 }
 
 async function resolveForCommand(opts: { offline?: boolean }): Promise<ResolvedSchema> {
-  const token = process.env.SOLID_API_KEY || process.env.SOLID_TOKEN || config.accessToken;
+  const token = config.effectiveToken;
   return resolveBlockSchema({
     offline: Boolean(opts.offline),
     fetcher: defaultSchemaFetcher(config.apiUrl, token),

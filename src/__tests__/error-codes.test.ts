@@ -7,6 +7,8 @@ import {
   ERROR_CODES,
   extractScopeFromDetail,
   jsonErrorEnvelopeEnabled,
+  redactSecrets,
+  sanitizeErrorDetail,
   toErrorEnvelope,
   type ClassifiedError,
   type ErrorCode,
@@ -337,6 +339,7 @@ describe('ERROR_CODES vocabulary', () => {
       'NETWORK_ERROR',
       'TIMEOUT',
       'DRY_RUN_BLOCKED',
+      'APPROVAL_REQUIRED',
     ];
     for (const c of expected) {
       expect(ERROR_CODES).toContain(c);
@@ -359,5 +362,57 @@ describe('ERROR_CODES vocabulary', () => {
     for (const c of classified) {
       expect(ERROR_CODES).toContain(c.code);
     }
+  });
+});
+
+// ============================================================================
+// Server `detail` never echoes secrets into the JSON envelope
+// ============================================================================
+
+describe('detail sanitisation', () => {
+  it('drops input/ctx from FastAPI 422 items and redacts the rest', () => {
+    const c = classifyError({
+      status: 422,
+      data: {
+        detail: [
+          {
+            loc: ['body', 'api_key'],
+            msg: 'bad value Bearer abcdef123456',
+            type: 'value_error',
+            input: 'sk_live_supersecretvalue',
+            ctx: { given: 'sk_live_supersecretvalue' },
+          },
+        ],
+      },
+    });
+    const env = toErrorEnvelope(c, 422, 'Validation failed');
+    const json = JSON.stringify(env);
+    expect(json).not.toContain('supersecretvalue');
+    expect(json).not.toContain('abcdef123456');
+    const item = (env.error.detail as Array<Record<string, unknown>>)[0];
+    expect(item).not.toHaveProperty('input');
+    expect(item).not.toHaveProperty('ctx');
+    expect(item.loc).toEqual(['body', 'api_key']);
+    expect(item.msg).toBe('bad value Bearer ***');
+  });
+
+  it('masks secret-named keys in object detail', () => {
+    expect(sanitizeErrorDetail({ api_key: 'whatever', note: 'token=abc123' })).toEqual({
+      api_key: '***',
+      note: 'token=***',
+    });
+  });
+
+  it('sanitises detail handed straight to toErrorEnvelope', () => {
+    const env = toErrorEnvelope(
+      { code: 'VALIDATION_FAILED', detail: [{ msg: 'x', input: 'pat_abcdefghij' }] },
+      422,
+      'x',
+    );
+    expect(JSON.stringify(env)).not.toContain('pat_abcdefghij');
+  });
+
+  it('redactSecrets masks bearer and prefixed keys', () => {
+    expect(redactSecrets('Bearer abcdefgh sk_test_1234567')).toBe('Bearer *** sk_***');
   });
 });

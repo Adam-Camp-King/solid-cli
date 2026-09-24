@@ -476,7 +476,7 @@ export const initCommand = new Command('init')
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora(`Scaffolding ${appType.name}...`).start();
 
     // Resolve the tenant stamp: --company > stored config > env > unset.

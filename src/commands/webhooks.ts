@@ -52,8 +52,8 @@ webhooksCommand.command('create <url>').description('Create a webhook')
   .option('-n, --name <name>', 'Name').option('-e, --events <events>', 'Comma-separated events')
   .action(async (url, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    requireCompanyContext();
-    const ora = (await import('ora')).default;
+    await requireCompanyContext();
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Creating...').start();
     try {
       const events = options.events ? options.events.split(',').map((e: string) => e.trim()) : [];
@@ -69,8 +69,8 @@ webhooksCommand.command('create <url>').description('Create a webhook')
 webhooksCommand.command('delete <id>').description('Delete a webhook')
   .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    requireCompanyContext();
-    const ora = (await import('ora')).default;
+    await requireCompanyContext();
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Deleting...').start();
     try {
       await apiClient.delete(`/api/v1/developer/webhooks/${id}`);
@@ -84,8 +84,8 @@ webhooksCommand.command('simulate <event>').description('Send a test event to a 
   .option('--json', 'JSON output')
   .action(async (event, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    requireCompanyContext();
-    const ora = (await import('ora')).default;
+    await requireCompanyContext();
+    const ora = (await import('../lib/spinner')).default;
 
     const VALID_EVENTS = [
       'company.created', 'company.updated', 'company.deleted',

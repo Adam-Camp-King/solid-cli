@@ -32,7 +32,7 @@ domainsCommand.command('list').alias('ls').description('List every site + every 
   .option('--show-fallback', 'Always show the {slug}.solidnumber.com fallback (overrides per-site config.show_vanilla_address)')
   .action(async (options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading sites and addresses...').start();
     try {
       // /api/sites already returns enriched canonical_url + addresses[] per
@@ -112,7 +112,7 @@ domainsCommand.command('add <domain>').description('Attach a custom domain to a 
   .option('--json', 'JSON output (the backend response, including dns_instructions, verbatim)')
   .action(async (domain, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const json = isJsonOutput(options);
     const spinner = ora({ text: `Resolving target site...`, isSilent: json }).start();
     try {
@@ -193,7 +193,7 @@ domainsCommand.command('set-canonical <site> <address>')
   .description('Force canonical to a specific address (e.g. solid domains set-canonical main-site example.com)')
   .action(async (siteSlug, address) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora(`Looking up site ${siteSlug}...`).start();
     try {
       const siteRes = await apiClient.get(`/api/v1/sites/by-slug/${encodeURIComponent(siteSlug)}`);
@@ -228,7 +228,7 @@ domainsCommand.command('set-canonical <site> <address>')
 domainsCommand.command('remove <id>').description('Remove a custom domain by ID')
   .action(async (id) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const domainId = parseInt(id, 10);
     if (isNaN(domainId)) { console.error(chalk.red('Invalid domain ID. Use `solid domains list` to find IDs.')); process.exit(1); }
     const spinner = ora(`Removing domain #${domainId}...`).start();
@@ -242,7 +242,7 @@ domainsCommand.command('verify <id>').description('Verify DNS for a custom domai
   .option('--json', 'JSON output (the backend verify response verbatim)')
   .action(async (id, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const domainId = parseInt(id, 10);
     if (isNaN(domainId)) { console.error(chalk.red('Invalid domain ID.')); process.exit(1); }
     const json = isJsonOutput(options);

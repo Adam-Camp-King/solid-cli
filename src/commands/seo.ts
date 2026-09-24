@@ -30,7 +30,7 @@ seoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
 
     // Default to company site URL if --url not provided
     if (!options.url) {
@@ -81,7 +81,7 @@ seoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading SEO report...').start();
 
     try {
@@ -146,7 +146,7 @@ seoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Running SEO audit...').start();
 
     try {
@@ -199,7 +199,7 @@ seoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading rankings...').start();
 
     try {
@@ -243,7 +243,7 @@ seoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading citations...').start();
 
     try {
@@ -286,7 +286,7 @@ seoCommand
       process.exit(1);
     }
 
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading SEO gaps...').start();
 
     try {

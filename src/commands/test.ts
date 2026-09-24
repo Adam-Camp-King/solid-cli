@@ -11,7 +11,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../lib/config';

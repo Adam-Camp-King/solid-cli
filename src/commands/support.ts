@@ -53,7 +53,7 @@ supportCommand.command('get <id>').description('View ticket details')
   .option('--json', 'JSON output')
   .action(async (id, options) => {
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading...').start();
     try {
       const res = await apiClient.get(`/api/v1/support/tickets/${id}`);

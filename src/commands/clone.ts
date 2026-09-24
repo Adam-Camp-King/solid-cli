@@ -16,7 +16,7 @@
  */
 
 import { Command } from 'commander';
-import ora from 'ora';
+import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
@@ -43,7 +43,7 @@ export const cloneCommand = new Command('clone')
 
     // ── Bulk clone for agencies ──────────────────────────────────────
     if (options.company && options.company.length > 0 && templateName) {
-      const ora = (await import('ora')).default;
+      const ora = (await import('../lib/spinner')).default;
       console.log('');
       console.log(ui.header(`Bulk Clone — ${options.company.length} companies × ${templateName}`));
       console.log('');

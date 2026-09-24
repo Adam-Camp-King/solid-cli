@@ -85,7 +85,7 @@ paymentCommand
   .description('Payment processing status and configuration')
   .action(async () => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Loading payment status...'), spinner: 'dots' }).start();
 
     try {
@@ -121,7 +121,7 @@ l3Command
   .description('Level 3 qualification overview for your company')
   .action(async () => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Analyzing L3 qualification...'), spinner: 'dots' }).start();
 
     try {
@@ -189,7 +189,7 @@ l3Command
   .description('Check if a product qualifies for Level 3')
   .action(async (sku: string) => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora({ text: chalk.hex(BRAND.dim)(`Checking ${sku}...`), spinner: 'dots' }).start();
 
     try {
@@ -267,7 +267,7 @@ paymentCommand
   .description('Show your company\'s MCC code and industry mapping')
   .action(async () => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Loading MCC mapping...'), spinner: 'dots' }).start();
 
     try {
@@ -305,7 +305,7 @@ paymentCommand
   .option('--limit <n>', 'Number of products to show', '20')
   .action(async (options: { limit: string }) => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const limit = parseInt(options.limit, 10) || 20;
     const spinner = ora({ text: chalk.hex(BRAND.dim)('Loading products...'), spinner: 'dots' }).start();
 
@@ -348,7 +348,7 @@ paymentCommand
   .option('--json', 'JSON output')
   .action(async (options: { period: string; json?: boolean }) => {
     requireAuth();
-    const ora = (await import('ora')).default;
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora('Loading payment analytics...').start();
 
     try {
@@ -397,8 +397,8 @@ paymentCommand
   .option('--account <id>', 'Stripe Connect account ID')
   .action(async (processor: string, options: { account?: string }) => {
     requireAuth();
-    requireCompanyContext();
-    const ora = (await import('ora')).default;
+    await requireCompanyContext();
+    const ora = (await import('../lib/spinner')).default;
     const spinner = ora(`Connecting ${processor}...`).start();
 
     try {
@@ -427,8 +427,8 @@ paymentCommand
   .option('--reader <name>', 'Terminal reader name', 'Default Reader')
   .action(async (options: { amount: string; reader: string }) => {
     requireAuth();
-    requireCompanyContext();
-    const ora = (await import('ora')).default;
+    await requireCompanyContext();
+    const ora = (await import('../lib/spinner')).default;
     const amount = parseFloat(options.amount);
 
     console.log('');
