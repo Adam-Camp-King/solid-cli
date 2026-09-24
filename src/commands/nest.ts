@@ -32,6 +32,7 @@ import {
   flagsToDestination,
   flagsAsArgv,
   guessPageType,
+  readFolder,
   type NestFlags,
 } from './nest-helpers';
 
@@ -94,11 +95,18 @@ export const nestCommand = new Command('nest')
   .option('--live', 'skip sandbox — place immediately on a site as a draft')
   .option('--campaign <id>', 'campaign_id for outcome tracking')
   .option('--goal <goal>', 'form_submit | checkout | booking | chat_start | click')
+  .option('--entry <file>', 'folder: which HTML file is the home page (asked for when unclear)')
+  .option('--single', 'folder: import only the entry page, not the whole site')
   .option('--json', 'machine-readable output')
   .action(async (source: string | undefined, flags: NestFlags) => {
     requireAuth();
     const json = isJsonOutput(flags);
     const sourceKind = detectSource(source);
+
+    if (sourceKind === 'folder') {
+      await nestFolder(source!, flags, json);
+      return;
+    }
 
     // Build destination payload
     const destination = flagsToDestination(flags);
@@ -218,6 +226,94 @@ export const nestCommand = new Command('nest')
       console.log(chalk.dim('  It\'s a draft on your site. Publish when ready.'));
     }
   });
+
+// ---------------------------------------------------------------------------
+// Folder: the site a designer handed over, every page of it
+// ---------------------------------------------------------------------------
+
+async function nestFolder(dir: string, flags: NestFlags, json: boolean): Promise<void> {
+  const fail = (message: string, extra: Record<string, unknown> = {}): never => {
+    if (json) console.log(JSON.stringify({ error: message, ...extra }));
+    else console.error(chalk.red(`  ${message}`));
+    process.exit(1);
+  };
+
+  const read = readFolder(path.resolve(dir));
+  if (!read.htmlFiles.length) fail('That folder has no .html file — nothing to import.', { skipped: read.skipped });
+
+  const spinner = json ? null : ora(`Nesting ${read.files.length} file(s), ${read.htmlFiles.length} page(s)…`).start();
+  const allPages = !flags.single && read.htmlFiles.length > 1;
+  let imported: Record<string, any>;
+  try {
+    const res = await apiClient.post('/api/v1/agent/nest/import', {
+      files: read.files, all_pages: allPages, ...(flags.entry && { entry: flags.entry }),
+      source_hint: `folder:${path.basename(path.resolve(dir))}`,
+    });
+    imported = res.data as Record<string, any>;
+  } catch (error) {
+    if (spinner) spinner.fail(chalk.red('Nest intake failed'));
+    return fail(handleApiError(error).message);
+  }
+
+  if (imported.status === 'needs_choice') {
+    if (spinner) spinner.stop();
+    return fail(`${imported.summary} Re-run with --entry <file>.`, { html_files: imported.html_files });
+  }
+  if (imported.ok === false) {
+    if (spinner) spinner.stop();
+    return fail(String(imported.summary || imported.error || 'Nest refused the folder'), imported);
+  }
+
+  // One import per page (all_pages) or one for the entry page. Each page keeps
+  // the slug and home/page type it was imported with — so page_type is NOT
+  // sent here; only where it lands (mode, site, domain) is.
+  const { page_type: _ignored, ...where } = flagsToDestination(flags);
+  const pages: Array<Record<string, any>> = imported.pages
+    ?? [{ file: imported.entry || read.htmlFiles[0], import_id: imported.import_id, ok: !!imported.import_id }];
+
+  const built: Array<Record<string, unknown>> = [];
+  for (const page of pages) {
+    if (!page.ok || !page.import_id) {
+      built.push({ file: page.file, ok: false, error: page.error || 'not imported' });
+      continue;
+    }
+    if (spinner) spinner.text = `Building ${page.file}…`;
+    try {
+      const res = await apiClient.post('/api/v1/cli/ant/execute', {
+        import_id: page.import_id, modifications: { destination: where },
+      });
+      const out = res.data as Record<string, any>;
+      built.push({ file: page.file, import_id: page.import_id, ok: true, status: out.status,
+        url: out.created?.page?.url ?? page.url, page_id: out.created?.page?.id });
+    } catch (error) {
+      built.push({ file: page.file, import_id: page.import_id, ok: false, error: handleApiError(error).message });
+    }
+  }
+
+  const ok = built.filter((b) => b.ok).length;
+  if (json) {
+    console.log(JSON.stringify({ pages: built, imported: ok, total: built.length,
+      skipped: read.skipped, mode: where.mode ?? 'sandbox' }));
+    if (ok < built.length) process.exitCode = 1;
+    return;
+  }
+  if (spinner) {
+    const verb = (where.mode ?? 'sandbox') === 'sandbox' ? 'to Sandbox' : 'and placed';
+    (ok === built.length ? spinner.succeed(chalk.green(`Nested ${ok} page(s) ${verb}`))
+      : spinner.warn(chalk.yellow(`Nested ${ok} of ${built.length} page(s) ${verb}`)));
+  }
+  console.log('');
+  for (const b of built) {
+    console.log(`  ${b.ok ? chalk.green('✓') : chalk.red('✗')} ${String(b.file)}`
+      + (b.url ? chalk.dim(`  → ${b.url}`) : '') + (b.error ? chalk.red(`  ${b.error}`) : ''));
+  }
+  if (read.skipped.length) {
+    console.log(chalk.dim(`\n  Skipped ${read.skipped.length} item(s): `
+      + read.skipped.slice(0, 5).map((x) => `${x.path} (${x.why})`).join(', ')));
+  }
+  if (ok < built.length) process.exitCode = 1;
+  console.log('');
+}
 
 // ---------------------------------------------------------------------------
 // Subcommands — explicit disambiguation for scripts and agent callers
