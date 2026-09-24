@@ -17,15 +17,20 @@ export const auditCommand = new Command('audit')
   .option('--status <code>', 'T11 — filter by HTTP status code (e.g. 200, 403)')
   .option('--json', 'JSON output')
   .action(async (options) => {
-    const known = ['export', 'suspicious', 'compliance-report', 'gdpr-export', 'gdpr-delete', 'gdpr-consent', 'gdpr-consent-set', 'a11y', 'perf', 'mobile', 'log'];
-    const cmdIdx = process.argv.indexOf('audit');
-    const afterAudit = cmdIdx >= 0 ? process.argv.slice(cmdIdx + 1).filter(a => !a.startsWith('-')) : [];
-    const unknownSub = afterAudit.find(a => !known.includes(a));
-    if (unknownSub) {
-      process.stderr.write(chalk.red(`\n  ✗ Unknown command: solid audit ${unknownSub}\n\n`));
-      process.stderr.write(chalk.dim(`  Run solid audit --help to see all subcommands.\n\n`));
-      process.exit(1);
-    }
+    // ⛔ NO HAND-ROLLED UNKNOWN-SUBCOMMAND CHECK HERE. THE ONE THAT WAS HERE
+    // BROKE EVERY OPTION. It sliced process.argv after "audit" and dropped
+    // anything starting with "-" — which drops the FLAG and keeps its VALUE. So
+    // `solid audit --limit 3` was left holding ["3"] and died with "Unknown
+    // command: solid audit 3". Every option on this command takes a value, so
+    // the ordinary space-separated syntax failed for all of them and only the
+    // attached `--limit=3` form worked; the audit filter fix that shipped in
+    // 2.24.4 was unreachable by the syntax anyone would actually type.
+    //
+    // It was never needed. `audit` declares no arguments, so commander rejects
+    // any operand itself, AFTER binding option values, and its error is the
+    // better one for an AI caller: a JSON envelope with `did_you_mean: []` and
+    // an `accepts` list. Re-deriving argv beside a parser that already knows the
+    // answer is what created the bug — don't put it back.
     if (!config.isLoggedIn()) { console.error(chalk.red('Not logged in.')); process.exit(1); }
     const ora = (await import('ora')).default;
 

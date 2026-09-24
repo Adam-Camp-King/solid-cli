@@ -88,3 +88,93 @@ test('export -o writes the CSV content, not the envelope', async () => {
   expect(mockGet.mock.calls[0][1].params).toEqual({ format: 'csv' });
   expect(fs.readFileSync(file, 'utf-8')).toBe(csv);
 });
+
+// ---------------------------------------------------------------------------
+// ⛔ THE OPTION VALUE IS NOT A SUBCOMMAND — and why the tests above missed it.
+// ---------------------------------------------------------------------------
+// `solid audit --limit 3` failed on a real terminal with "Unknown command:
+// solid audit 3". The guard in the action sliced the REAL process.argv after
+// "audit" and dropped anything starting with "-" — which drops the FLAG and
+// keeps its VALUE. Every option on this command takes a value, so the ordinary
+// space-separated syntax was broken for all of them, and only `--limit=3` worked.
+//
+// ⚠️ The test above passes `--user 7 --action …` in exactly that broken form and
+// was GREEN throughout, because under Jest process.argv holds Jest's own argv:
+// it never contains "audit", so the guard found nothing to complain about and
+// the code path under test was never the code path that ran. A test that reads
+// parsed argv cannot see a bug in code that reads the process's argv. These set
+// process.argv to what a shell would really pass.
+describe('option values written with a space are not read as subcommands', () => {
+  const realArgv = process.argv;
+  let exited: number | null;
+  let exitSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    exited = null;
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation(((c?: number) => {
+      exited = c ?? 0;
+      throw new Error(`process.exit(${exited})`);
+    }) as any);
+  });
+  afterEach(() => { process.argv = realArgv; exitSpy.mockRestore(); });
+
+  test('--limit 3 reaches the route as limit=3 and does not exit', async () => {
+    mockGet.mockResolvedValue({ data: { logs: [], total: 0, scoped_to: { company_id: 3 } } });
+    process.argv = ['node', '/usr/local/bin/solid', 'audit', '--limit', '3'];
+    await run(['--limit', '3']);
+    expect(exited).toBeNull();
+    expect(mockGet.mock.calls[0][1].params).toMatchObject({ limit: '3' });
+  });
+
+  test('--action auth.login filters, written with a space', async () => {
+    mockGet.mockResolvedValue({ data: { logs: [], total: 0, scoped_to: { company_id: 3 } } });
+    process.argv = ['node', '/usr/local/bin/solid', 'audit', '--action', 'auth.login'];
+    await run(['--action', 'auth.login']);
+    expect(exited).toBeNull();
+    expect(mockGet.mock.calls[0][1].params).toMatchObject({ event_type: 'auth.login' });
+  });
+
+  test('the attached form still works — it was the only one that did', async () => {
+    mockGet.mockResolvedValue({ data: { logs: [], total: 0, scoped_to: { company_id: 3 } } });
+    process.argv = ['node', '/usr/local/bin/solid', 'audit', '--limit=3'];
+    await run(['--limit=3']);
+    expect(exited).toBeNull();
+    expect(mockGet.mock.calls[0][1].params).toMatchObject({ limit: '3' });
+  });
+
+  // The audit-specific guard is GONE, so something else must still catch a
+  // genuine typo. That job belongs to the root program's forbidExcessArgs()
+  // walk (src/index.ts), which sets allowExcessArguments(false) on every
+  // command — `audit` declares no arguments, so any operand is excess. Asserted
+  // the way it really happens: through a parent, not on the bare command, which
+  // is permissive on its own under Commander 12.
+  test('a real typo is still rejected before any request is made', async () => {
+    const { Command } = require('commander');
+    let audit: any;
+    jest.isolateModules(() => { audit = require('../../commands/audit').auditCommand; });
+    const program = new Command('solid').exitOverride();
+    program.addCommand(audit);
+    (function forbid(c: any) { c.allowExcessArguments(false); c.exitOverride(); c.commands.forEach(forbid); })(program);
+    process.argv = ['node', '/usr/local/bin/solid', 'audit', 'bogus'];
+    await expect(
+      program.parseAsync(['node', 'solid', 'audit', 'bogus']),
+    ).rejects.toThrow(/too many arguments/i);
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('and the same parent still lets an option value through', async () => {
+    mockGet.mockResolvedValue({ data: { logs: [], total: 0, scoped_to: { company_id: 3 } } });
+    const { Command } = require('commander');
+    let audit: any;
+    jest.isolateModules(() => { audit = require('../../commands/audit').auditCommand; });
+    const program = new Command('solid').exitOverride();
+    program.addCommand(audit);
+    (function forbid(c: any) { c.allowExcessArguments(false); c.exitOverride(); c.commands.forEach(forbid); })(program);
+    process.argv = ['node', '/usr/local/bin/solid', 'audit', '--limit', '3'];
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await program.parseAsync(['node', 'solid', 'audit', '--limit', '3']);
+    } finally { log.mockRestore(); }
+    expect(mockGet.mock.calls[0][1].params).toMatchObject({ limit: '3' });
+  });
+});

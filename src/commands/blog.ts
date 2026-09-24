@@ -38,8 +38,23 @@ export const blogCommand = new Command('blog')
       spinnerText: 'Loading blog posts...',
       errorText: 'Failed to load blog posts',
       fetch: async (offset, limit) => {
-        const params: Record<string, unknown> = { page_size: limit, page: Math.floor(offset / limit) + 1 };
-        if (opts.status) params.status = opts.status;
+        // ⛔ THE ROUTE'S OWN NAMES. GET /api/v1/cms/blog/posts
+        // (controllers/blog_posts.py::list_posts) takes skip, limit, published,
+        // category, featured, search. This sent `page_size`, `page` and
+        // `status` — all three ignored, so --limit and --status did nothing and
+        // every call returned the route's default of 100 posts. Same defect as
+        // `crm contacts --limit` and the audit filters: a parameter name the
+        // server never reads is indistinguishable from no filter.
+        const params: Record<string, unknown> = { limit, skip: offset };
+        // `status` is a string flag over a boolean column; anything that is not
+        // one of the two known words is rejected rather than quietly dropped.
+        if (opts.status) {
+          const s = String(opts.status).toLowerCase();
+          if (s !== 'published' && s !== 'draft') {
+            throw new Error(`--status takes "published" or "draft", not "${opts.status}".`);
+          }
+          params.published = s === 'published';
+        }
         return (await apiClient.get('/api/v1/cms/blog/posts', { params })).data;
       },
       extract: (page) => {

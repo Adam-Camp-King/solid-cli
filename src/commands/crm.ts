@@ -73,33 +73,87 @@ const contactsCommand = new Command('contacts')
     const spinner = ora({ text: 'Loading contacts...', stream: process.stderr }).start();
     try {
       const baseParams: Rec = {};
+      // ⛔ THE SERVER'S OWN PARAMETER NAMES, OR THE FILTER IS DECORATION.
+      // GET /api/v1/crm/contacts (controllers/crm.py::list_contacts) takes
+      // search, source, tags, crm_company_id, has_ai, sort, limit, offset —
+      // and NOTHING else. This sent `page_size`, which FastAPI ignores, so
+      // `--limit=2` returned all 31 contacts with the route's own default of
+      // limit: 100 on the envelope. Exactly the defect the audit filters had:
+      // a name the server never reads looks identical to no filter at all.
       if (opts.search) baseParams.search = opts.search;
-      if (opts.status) baseParams.status = opts.status;
       if (opts.source) baseParams.source = opts.source;
-      if (opts.type) baseParams.contact_type = opts.type;
+
+      // `status` and `contact_type` are NOT query parameters on that route, but
+      // both are on every row it returns — `status` is derived there from order
+      // activity (new / active / inactive), not stored. So they are filtered
+      // here, over what came back, and the result says so: a filter applied to
+      // one page is not the same claim as a filter applied to the company, and
+      // an AI reading `count` must be able to tell which it got.
+      const localFilters: Array<[string, string]> = [];
+      if (opts.status) localFilters.push(['status', String(opts.status).toLowerCase()]);
+      if (opts.type) localFilters.push(['contact_type', String(opts.type).toLowerCase()]);
+      const applyLocal = (rows: Rec[]): Rec[] => localFilters.reduce(
+        (acc, [field, want]) => acc.filter((r) => String(r[field] ?? '').toLowerCase() === want),
+        rows,
+      );
+      const scope = opts.all ? 'all contacts' : `this page (offset ${opts.offset}, limit ${opts.limit})`;
 
       let items: Rec[];
       if (opts.all) {
         const { fetchAllPages } = await import('../lib/command-kit');
         items = await fetchAllPages<Rec, unknown>(
           async (offset, limit) => (await apiClient.get('/api/v1/crm/contacts', {
-            params: { ...baseParams, page_size: limit, offset },
+            params: { ...baseParams, limit, offset },
           })).data,
           (page) => asList(page),
           { limit: 100 },
         );
+        items = applyLocal(items);
         spinner.stop();
-        if (isJsonOutput(opts)) { printJson({ items, count: items.length }); return; }
+        if (isJsonOutput(opts)) {
+          printJson({
+            items, count: items.length,
+            ...(localFilters.length ? { filtered_locally: localFilters.map(([f]) => f), filter_scope: scope } : {}),
+          });
+          return;
+        }
       } else {
         const res = await apiClient.get('/api/v1/crm/contacts', {
-          params: { ...baseParams, page_size: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
+          params: { ...baseParams, limit: parseInt(opts.limit, 10), offset: parseInt(opts.offset, 10) },
         });
         spinner.stop();
-        if (isJsonOutput(opts)) { console.log(JSON.stringify(res.data, null, 2)); return; }
-        items = asList(res.data);
+        items = applyLocal(asList(res.data));
+        if (isJsonOutput(opts)) {
+          if (!localFilters.length) { console.log(JSON.stringify(res.data, null, 2)); return; }
+          // ⛔ WRITE BACK TO THE KEY THE ROWS ACTUALLY CAME IN ON. By here the
+          // api-client has already normalized the envelope (lib/list-envelope),
+          // so the server's `contacts` is usually `items` — but
+          // SOLID_LEGACY_LIST_SHAPES=1 keeps the original. Hardcoding either one
+          // leaves the UNFILTERED list sitting beside the filtered one under a
+          // different name, which is worse than not filtering.
+          const { detectListKey } = await import('../lib/list-envelope');
+          const env = { ...(res.data as Rec) };
+          const rowsKey = detectListKey(res.data) ?? 'items';
+          env[rowsKey] = items;
+          // `total`, `page` and `has_more` described the server's page, not this
+          // subset. Leaving them is how "2 of 31" becomes a wrong claim.
+          for (const stale of ['total', 'count', 'page', 'has_more']) delete env[stale];
+          printJson({
+            ...env, count: items.length,
+            filtered_locally: localFilters.map(([f]) => f), filter_scope: scope,
+          });
+          return;
+        }
       }
 
-      if (items.length === 0) { console.log(chalk.yellow('  No contacts found.')); return; }
+      if (items.length === 0) {
+        console.log(chalk.yellow(
+          localFilters.length
+            ? `  No contacts matched ${localFilters.map(([f, v]) => `${f}=${v}`).join(', ')} in ${scope}.`
+            : '  No contacts found.',
+        ));
+        return;
+      }
 
       // Honor global --sort-by / --order (command-kit applyListSort).
       const { applyListSort, renderDelimited, getListFormat } = await import('../lib/command-kit');
@@ -112,7 +166,10 @@ const contactsCommand = new Command('contacts')
         return;
       }
 
-      console.log(ui.header(`Contacts (${items.length}${opts.all ? '' : ` — page from offset ${opts.offset}`})`));
+      console.log(ui.header(
+        `Contacts (${items.length}${opts.all ? '' : ` — page from offset ${opts.offset}`}`
+        + `${localFilters.length ? `, ${localFilters.map(([f, v]) => `${f}=${v}`).join(' ')} filtered within ${scope}` : ''})`,
+      ));
       console.log(ui.table(['ID', 'Name', 'Email', 'Phone', 'Status'], items.map((c) => [
         String(c.id), contactName(c), String(c.email || chalk.dim('—')),
         String(c.phone || chalk.dim('—')), String(c.status || chalk.dim('—')),
