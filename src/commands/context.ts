@@ -321,7 +321,7 @@ function renderTools(m: ToolManifestResponse): void {
   // that the surface is addressable.
   console.log(chalk.dim('  This is the whole surface. To find a verb without reading all of it:'));
   console.log(chalk.dim('    solid map                  every noun, its verb count, its Atlas address'));
-  console.log(chalk.dim('    solid verbs list 5         scope by Atlas coordinate (5 = money, 53 = taking payment)'));
+  console.log(chalk.dim('    solid verbs list 5         scope by Atlas address (5 = money, 530 = payment)'));
   console.log(chalk.dim('    solid find "<goal>"        search by what you are trying to do'));
   console.log(chalk.dim('    solid where <place>        where a verb runs, and what breaks with it'));
   console.log('');
@@ -487,7 +487,7 @@ export const contextCommand = new Command('context')
           finding_verbs: {
             note: 'The verb surface is addressable. Do not list all verbs to find one.',
             map: 'solid map — every NOUN, its verb count, its Atlas address',
-            scope: 'solid verbs list <prefix> — Atlas coordinate, e.g. 5 = money, 53 = taking payment',
+            scope: 'solid verbs list <prefix> — Atlas address, 1 to 3 digits, e.g. 5 = money, 530 = payment',
             search: 'solid find "<goal>" — search by intent',
             place: 'solid where <place-id> — the Gazetteer: where a verb runs and what depends on it (e.g. svc.api)',
           },

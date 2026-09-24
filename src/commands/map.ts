@@ -12,7 +12,7 @@
  *
  * The coordinate is what makes it useful rather than merely short. Every row
  * carries its Atlas address, so the next question — "show me those" — is
- * `solid verbs list 52`, computed by the agent from what it already has,
+ * `solid verbs list 530`, computed by the agent from what it already has,
  * with no lookup call in between.
  */
 import { Command } from 'commander';
@@ -134,5 +134,5 @@ appendExamples(mapCommand, [
   { cmd: 'solid map', why: 'The whole surface, one line per noun' },
   { cmd: 'solid map --json', why: 'Cache it once at session start' },
   { cmd: 'solid verbs list 5', why: 'Everything about money' },
-  { cmd: 'solid verbs list 52', why: 'Payments only — the prefix is the query' },
+  { cmd: 'solid verbs list 530', why: 'Payments only — the address is the query' },
 ]);

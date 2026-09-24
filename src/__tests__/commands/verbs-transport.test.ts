@@ -673,3 +673,123 @@ describe('verbs list — facet filters (VNP 3.5)', () => {
     exit.mockRestore();
   });
 });
+
+describe('verbs list — three-digit Atlas addresses and retired prefixes', () => {
+  const manifest = {
+    count: 3, total_registered: 845,
+    filtered_by: { surface: null, shape: null, tier: null },
+    verbs: [
+      { name: 'payment.charge', description: 'c', side_effects: 'write', coordinate: '530' },
+      { name: 'payment.refund', description: 'r', side_effects: 'write', coordinate: '531' },
+      { name: 'contact.create', description: 'c', side_effects: 'write', coordinate: '35' },
+    ],
+  };
+  // The body solid-backend/controllers/agent_verb_index.py::resolve_address
+  // sends for a two-digit address in a curated class.
+  const retired = {
+    schema: 'solid:atlas-address/v1', error: 'address_retired', address: '51',
+    message: '51 is not an address in class 5 any more — its nouns have three-digit addresses. Use one of the candidates.',
+    was: ['5:payment'],
+    candidates: [
+      { address: '530', noun: 'payment', title: 'Payment' },
+      { address: '531', noun: 'refund', title: 'Refund' },
+    ],
+    now_a_prefix_for: { domain: 'Receivables', nouns: [{ address: '510', noun: 'invoice', title: 'Invoice' }] },
+  };
+  // axios rejects any non-2xx, so the 410 arrives as a rejected request.
+  const gone = () => Object.assign(new Error('Request failed with status code 410'), {
+    isAxiosError: true, response: { status: 410, data: retired },
+  });
+
+  let printed: string;
+  let stdout: string;
+  let exit: jest.SpiedFunction<typeof process.exit>;
+  beforeEach(() => {
+    jest.clearAllMocks(); printed = ''; stdout = '';
+    jest.spyOn(console, 'log').mockImplementation((v?: unknown) => { printed += String(v); });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(process.stdout, 'write').mockImplementation(((s: string) => { stdout += s; return true; }) as never);
+    jest.spyOn(process.stderr, 'write').mockImplementation((() => true) as never);
+    exit = jest.spyOn(process, 'exit').mockImplementation(((): never => { throw new Error('EXIT1'); }) as never);
+    mockGet.mockImplementation(async (url: string) => (
+      url.startsWith('/api/v1/agent/verbs/address/')
+        ? { status: 200, data: { kind: 'division' } }
+        : { status: 200, data: manifest }
+    ));
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const list = (extra: string[]) => { resetOptions(); return verbsCommand.parseAsync(['list', '--json', ...extra], { from: 'user' }); };
+
+  it('accepts a three-digit address and scopes to exactly that noun', async () => {
+    await list(['531']);
+    expect(JSON.parse(printed).verbs.map((r: unknown[]) => r[0])).toEqual(['payment.refund']);
+    // A three-digit address cannot be retired, so it costs no resolver call.
+    expect(mockGet.mock.calls.map((c) => c[0])).toEqual(['/api/v1/agent/verbs']);
+  });
+
+  it('rejects four digits instead of matching nothing', async () => {
+    await expect(list(['5310'])).rejects.toThrow();
+    expect(mockEmitErrorAndExit).toHaveBeenCalled();
+    const err = mockEmitErrorAndExit.mock.calls[0][0] as { response: { status: number; data: { detail: string } } };
+    expect(err.response.status).toBe(400);
+    expect(err.response.data.detail).toMatch(/1 to 3 digits/);
+  });
+
+  it('a live two-digit prefix still filters normally', async () => {
+    await list(['35']);
+    expect(JSON.parse(printed).verbs.map((r: unknown[]) => r[0])).toEqual(['contact.create']);
+  });
+
+  it('a retired address is a 410 envelope with the candidates, never another noun\'s verbs', async () => {
+    mockGet.mockImplementation(async (url: string) => (
+      url === '/api/v1/agent/verbs/address/51'
+        ? Promise.reject(gone())
+        : { status: 200, data: manifest }
+    ));
+    await expect(list(['51'])).rejects.toThrow();
+    expect(exit).toHaveBeenCalledWith(1);
+    // The manifest was never filtered by the retired digits.
+    expect(mockGet.mock.calls.map((c) => c[0])).toEqual(['/api/v1/agent/verbs/address/51']);
+    expect(printed).toBe('');
+    const env = JSON.parse(stdout).error;
+    expect(env.status).toBe(410);
+    expect(env.reason).toBe('address_retired');
+    expect(env.retryable).toBe(false);
+    expect(env.did_you_mean).toEqual(['solid verbs list 530', 'solid verbs list 531']);
+    expect(env.candidates.map((c: { address: string }) => c.address)).toEqual(['530', '531']);
+    expect(env.was).toEqual(['5:payment']);
+    // Two candidates: picking one would be a guess, so the fix is the map.
+    expect(env.fix).toBe('solid map');
+  });
+
+  it('a retired address is checked before a --since fetch can answer 304', async () => {
+    mockGet.mockImplementation(async (url: string) => (
+      url.startsWith('/api/v1/agent/verbs/address/')
+        ? Promise.reject(gone())
+        : { status: 304, data: '' }
+    ));
+    await expect(list(['51', '--since', 'W/"x"'])).rejects.toThrow();
+    expect(JSON.parse(stdout).error.reason).toBe('address_retired');
+  });
+
+  it('a 404 from the resolver is not a retirement — the filter still answers', async () => {
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/v1/agent/verbs/address/')) {
+        throw Object.assign(new Error('404'), { response: { status: 404, data: { detail: 'Nothing lives at 35.' } } });
+      }
+      return { status: 200, data: manifest };
+    });
+    await list(['35']);
+    expect(JSON.parse(printed).verbs.map((r: unknown[]) => r[0])).toEqual(['contact.create']);
+  });
+
+  it('an unreachable resolver does not block the listing', async () => {
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/v1/agent/verbs/address/')) throw new Error('ECONNRESET');
+      return { status: 200, data: manifest };
+    });
+    await list(['35']);
+    expect(JSON.parse(printed).verbs.map((r: unknown[]) => r[0])).toEqual(['contact.create']);
+  });
+});

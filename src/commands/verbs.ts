@@ -31,6 +31,13 @@ import { buildExample } from '../lib/verb-example';
 import { parseJsonArg } from '../lib/json-arg';
 import { isDryRun } from '../lib/dry-run';
 import { emitErrorAndExit } from '../lib/command-kit';
+import {
+  isAtlasAddress,
+  isRetiredAddressResponse,
+  retiredAddressEnvelope,
+  ATLAS_ADDRESS_ENDPOINT,
+  type RetiredAddressBody,
+} from '../lib/atlas-address';
 
 interface VerbRecord {
   name: string;
@@ -108,12 +115,12 @@ export const verbsCommand = new Command('verbs')
 
 verbsCommand
   .command('list')
-  .description('List verbs. Pass an Atlas prefix to scope: `verbs list 5` money, `verbs list 52` payments')
+  .description('List verbs. Pass an Atlas prefix to scope: `verbs list 5` money, `verbs list 530` payments')
   // ⛔ THE PREFIX IS THE QUERY. No --coordinate flag, deliberately: truncating
   // the address widens the scope, so an agent that knows 52 already knows how
   // to ask for its neighbourhood. A flag would be one more thing to learn for
   // no expressive gain.
-  .argument('[prefix]', 'Atlas coordinate prefix — 5 = money, 53 = taking payment')
+  .argument('[prefix]', 'Atlas prefix, 1 to 3 digits — 5 = money, 530 = payment, 531 = refund')
   .option('--surface <name>', 'Filter to verbs on this surface (http|mcp_stdio|webmcp|ucp|cli|public)')
   .option('--shape <name>', 'Filter to verbs of this shape (preview|explain|aggregate|suggest|...)')
   // The backend has accepted ?tier= since Phase 8 and reports it back in
@@ -149,6 +156,69 @@ verbsCommand
     const wantsJson = options.json || isJsonOutput();
     const spinner = wantsJson ? null : ora('Fetching verb manifest...').start();
     try {
+      // Validate and resolve the Atlas prefix BEFORE the manifest fetch, so a
+      // retired address is reported even on the `--since` path that returns
+      // a 304 and never reaches the filter below.
+      if (prefix) {
+        if (!isAtlasAddress(prefix)) {
+          emitErrorAndExit(Object.assign(
+            new Error(`"${prefix}" is not an Atlas prefix — expected 1 to 3 digits, e.g. 5 or 530.`),
+            {
+              isAxiosError: true,
+              response: {
+                status: 400,
+                data: {
+                  detail: `"${prefix}" is not an Atlas prefix — expected 1 to 3 digits, e.g. 5 or 530. Run: solid map`,
+                  code: 'BAD_REQUEST',
+                },
+              },
+            },
+          ));
+          return;
+        }
+        // ⛔ A two-digit address inside a curated class is retired: its nouns
+        // moved to three digits, and the same two digits can now mean a
+        // different domain. Filtering the manifest by it would quietly answer
+        // with another noun's verbs, so ask the backend, which says 410 with
+        // the candidates. Only two digits can be retired — a class and a
+        // three-digit noun address cannot — so nothing else pays for the call.
+        if (prefix.length === 2) {
+          // axios rejects a 410, so the answer arrives in the catch. Anything
+          // else — 200 (a live division), 404, a network failure — falls
+          // through: the resolver is advisory here, and the manifest fetch
+          // below reports an outage in the normal way.
+          let retired: RetiredAddressBody | null = null;
+          try {
+            await apiClient.get(`${ATLAS_ADDRESS_ENDPOINT}/${prefix}`);
+          } catch (err) {
+            const r = (err as { response?: { status?: number; data?: unknown } }).response;
+            if (r && isRetiredAddressResponse(r.status, r.data)) retired = r.data;
+          }
+          if (retired) {
+            spinner?.stop();
+            const envelope = retiredAddressEnvelope(prefix, retired);
+            if (wantsJson) {
+              process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
+            } else {
+              const e = envelope.error;
+              process.stderr.write(chalk.red(`  ${e.message}`) + '\n');
+              if (e.candidates.length) {
+                process.stderr.write(chalk.dim('  Did you mean:') + '\n');
+                for (const c of e.candidates) {
+                  const label = [c.noun, c.title && c.title !== c.noun ? `(${c.title})` : '']
+                    .filter(Boolean).join(' ');
+                  process.stderr.write(`    ${chalk.cyan(`solid verbs list ${c.address}`)}  ${chalk.dim(label)}` + '\n');
+                }
+              }
+              process.stderr.write(chalk.dim(`  fix: ${e.fix}`) + '\n');
+            }
+            // eslint-disable-next-line no-process-exit
+            process.exit(1);
+            return;
+          }
+        }
+      }
+
       const params: Record<string, string> = {};
       if (options.surface) params.surface = options.surface;
       if (options.shape) params.shape = options.shape;
@@ -182,22 +252,6 @@ verbsCommand
       // the manifest is one fetch either way — and with 4.2's etag that fetch
       // is a 304 on every repeat, so the client-side filter costs nothing.
       if (prefix) {
-        if (!/^[0-9]{1,2}$/.test(prefix)) {
-          emitErrorAndExit(Object.assign(
-            new Error(`"${prefix}" is not an Atlas prefix — expected 1 or 2 digits, e.g. 5 or 52.`),
-            {
-              isAxiosError: true,
-              response: {
-                status: 400,
-                data: {
-                  detail: `"${prefix}" is not an Atlas prefix — expected 1 or 2 digits, e.g. 5 or 52. Run: solid map`,
-                  code: 'BAD_REQUEST',
-                },
-              },
-            },
-          ));
-          return;
-        }
         all = all.filter((v) => (v.coordinate || '').startsWith(prefix));
       }
 
