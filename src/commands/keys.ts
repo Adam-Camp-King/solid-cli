@@ -100,32 +100,95 @@ keysCommand
     } catch (e) { fail(spinner, 'Failed to revoke key', e); }
   });
 
+/**
+ * The key this CLI is authenticating with right now, if it is an sk_ key.
+ * The list returns `key_prefix` as the first 25 chars plus "...".
+ */
+export function currentKeyId(
+  keys: Array<{ id: number; key_prefix: string; is_active?: boolean }>,
+  token: string | undefined,
+): number | undefined {
+  if (!token || !token.startsWith('sk_')) return undefined;
+  const hit = keys.filter((k) => k.is_active !== false)
+    .find((k) => {
+      const p = String(k.key_prefix || '').replace(/\.\.\.$/, '');
+      return p.length > 0 && token.startsWith(p);
+    });
+  return hit?.id;
+}
+
+function collect(v: string, prev: string[]): string[] {
+  return prev.concat(v.split(',').map((s) => s.trim()).filter(Boolean));
+}
+
 keysCommand
-  .command('rotate <key_id>')
-  .description('Revoke and re-create with the same name + scopes (returns a new key)')
-  .action(async (id) => {
+  .command('rotate [key_id]')
+  .description('Replace a key with a new one (same name + scopes, plus any --add-scope). New key is created first; the old one is revoked only after that succeeds. Omit key_id to rotate the sk_ key you are using now.')
+  .option('--add-scope <scope>', 'Add a scope to the replacement key (repeatable, or comma-separated)', collect, [] as string[])
+  .option('--keep-old', 'Create the replacement but do not revoke the old key')
+  .action(async (id: string | undefined, opts: { addScope: string[]; keepOld?: boolean }) => {
     requireAuth();
-    const keyId = parseInt(id, 10);
-    if (isNaN(keyId)) { console.error(chalk.red('Invalid key ID.')); process.exit(1); }
-    const spinner = ora(`Rotating key ${keyId}...`).start();
+    const spinner = ora(id ? `Rotating key ${id}...` : 'Rotating the current key...').start();
     try {
-      // Backend doesn't have a single rotate; do it client-side: list, find, revoke, recreate.
+      // Backend has no single rotate on this surface; do it client-side, in the
+      // order that can never lock anyone out: find → CREATE → then revoke.
       const list = (await apiClient.apiKeyList()).data;
+      let keyId: number | undefined;
+      if (id !== undefined) {
+        keyId = parseInt(id, 10);
+        if (isNaN(keyId)) { spinner.fail(chalk.red('Invalid key ID.')); process.exit(1); }
+      } else {
+        keyId = currentKeyId(list.api_keys, config.effectiveToken);
+        if (keyId === undefined) {
+          spinner.fail(chalk.red('No key id given, and this CLI is not authenticated with an sk_ key it can find.'));
+          console.error(chalk.dim('  Pick one from `solid keys list`, then: solid keys rotate <key_id> --add-scope <scope>'));
+          process.exit(1);
+        }
+      }
       const old = list.api_keys.find((k) => k.id === keyId);
-      if (!old) { spinner.fail(chalk.red(`Key ${keyId} not found`)); return; }
-      await apiClient.apiKeyRevoke(keyId);
-      const fresh = (await apiClient.apiKeyCreate(old.name, old.scopes)).data;
-      spinner.succeed(chalk.green(`Key rotated: new id ${fresh.api_key.id}`));
-      console.log('');
-      console.log(chalk.yellow('  ⚠ Copy this key NOW — it will not be shown again:'));
-      console.log(`  ${chalk.cyan(fresh.key)}`);
+      if (!old) { spinner.fail(chalk.red(`Key ${keyId} not found`)); process.exit(1); }
+      const scopes = Array.from(new Set([...(old.scopes || []), ...(opts.addScope || [])]));
+
+      let fresh;
+      try {
+        fresh = (await apiClient.apiKeyCreate(old.name, scopes, undefined, { require_approval: old.require_approval })).data;
+      } catch (e) {
+        // Nothing was revoked: the old key still works.
+        fail(spinner, `Could not create the replacement — key ${keyId} was NOT revoked and still works`, e);
+        return;
+      }
+
+      let revoked = false;
+      let revokeError: unknown;
+      if (!opts.keepOld) {
+        try { await apiClient.apiKeyRevoke(keyId as number); revoked = true; } catch (e) { revokeError = e; }
+      }
+
+      if (isJsonOutput()) {
+        spinner.stop();
+        console.log(JSON.stringify({
+          rotated_from: keyId, api_key: fresh.api_key, key: fresh.key,
+          old_key_revoked: revoked,
+          ...(revokeError ? { revoke_error: (revokeError as Error)?.message || String(revokeError) } : {}),
+        }, null, 2));
+      } else {
+        spinner.succeed(chalk.green(`New key ${fresh.api_key.id} created (scopes: ${fresh.api_key.scopes.join(', ')})`));
+        if (revoked) console.log(chalk.dim(`  Old key ${keyId} revoked.`));
+        else if (opts.keepOld) console.log(chalk.dim(`  Old key ${keyId} left active (--keep-old). Revoke it later: solid keys revoke ${keyId}`));
+        else console.log(chalk.yellow(`  ⚠ Old key ${keyId} could NOT be revoked — revoke it yourself: solid keys revoke ${keyId}`));
+        console.log('');
+        console.log(chalk.yellow('  ⚠ Copy this key NOW — it will not be shown again:'));
+        console.log(`  ${chalk.cyan(fresh.key)}`);
+      }
+      if (revokeError) process.exitCode = 1;
     } catch (e) { fail(spinner, 'Failed to rotate key', e); }
   });
 
 import { appendExamples as __appendExamplesKeys, fail } from '../lib/command-kit';
 __appendExamplesKeys(keysCommand, [
   { cmd: 'solid keys list', why: 'All issued API keys' },
-  { cmd: 'solid keys issue --name "prod worker" --scope read:orders', why: 'Issue a scoped key' },
+  { cmd: 'solid keys create --name "prod worker" --scopes kb:read,pages:read', why: 'Issue a scoped key' },
   { cmd: 'solid keys revoke <id>', why: 'Kill a compromised key' },
   { cmd: 'solid keys rotate <id>', why: 'Issue replacement; deprecate old' },
+  { cmd: 'solid keys rotate <id> --add-scope verbs:write', why: 'Replace a key with one that also has verbs:write' },
 ]);

@@ -1342,7 +1342,7 @@ class ApiClient {
   }
 
   // CLI API Keys
-  async apiKeyCreate(name: string, scopes: string[], expiresInDays?: number): Promise<ApiResponse<{
+  async apiKeyCreate(name: string, scopes: string[], expiresInDays?: number, extra?: { require_approval?: boolean }): Promise<ApiResponse<{
     status: string;
     key: string;
     warning: string;
@@ -1352,12 +1352,13 @@ class ApiClient {
       name,
       scopes,
       expires_in_days: expiresInDays,
+      ...(extra?.require_approval ? { require_approval: true } : {}),
     });
     return { data: response.data, status: response.status, success: true };
   }
 
   async apiKeyList(): Promise<ApiResponse<{
-    api_keys: Array<{ id: number; name: string; key_prefix: string; scopes: string[]; is_active: boolean; last_used_at?: string }>;
+    api_keys: Array<{ id: number; name: string; key_prefix: string; scopes: string[]; is_active: boolean; last_used_at?: string; require_approval?: boolean }>;
     count: number;
     available_scopes: string[];
   }>> {

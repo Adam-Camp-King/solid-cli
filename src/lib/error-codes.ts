@@ -261,6 +261,21 @@ export function extractScopeFromDetail(detail: unknown): string | undefined {
 }
 
 /**
+ * Scope name from a 403 body, whichever shape carried it: the structured
+ * `{detail: {error: "missing_scope", required_scope}}` (also accepted at the
+ * top level), or the prose `detail: "Missing scope: X"`.
+ */
+export function extractScopeFromBody(body: Record<string, unknown>): string | undefined {
+  for (const layer of [asRecord(body.detail), body]) {
+    if (pickString(layer, 'error') === 'missing_scope' || pickString(layer, 'code') === 'missing_scope') {
+      const s = pickString(layer, 'required_scope') ?? pickString(layer, 'missing_scope') ?? pickString(layer, 'scope');
+      if (s) return s;
+    }
+  }
+  return extractScopeFromDetail(pickString(body, 'detail') ?? pickString(body, 'message'));
+}
+
+/**
  * Normalize varied backend error payloads to a single ErrorCode + metadata.
  * Pure: input → output, no side effects.
  */
@@ -338,15 +353,19 @@ function classifyByStatus(
           }
         );
       }
-      // Scope-missing: extract from prose `detail: "Missing scope: X"`.
-      const detailStr = pickString(body, 'detail') ?? pickString(body, 'message');
-      const scope = extractScopeFromDetail(detailStr);
+      // Scope-missing, in both shapes the backend sends:
+      //   prose:      `detail: "Missing scope: X"` (cli_agents, cli_flows, cli_ant)
+      //   structured: `detail: {error: "missing_scope", required_scope: X, ...}`
+      //               (ada cli-dispatch). Before this read the structured form
+      //               it fell through to FORBIDDEN and told the caller to
+      //               check their tier — the wrong repair entirely.
+      const scope = extractScopeFromBody(body);
       if (scope) {
         return (
           {
             code: 'SCOPE_MISSING',
             scope,
-            hint: `Rotate your key with scope ${scope}: solid keys rotate --add-scope ${scope}`,
+            hint: `This API key lacks scope ${scope}. Replace it with one that has it: solid keys rotate --add-scope ${scope}  (or name another key: solid keys rotate <key_id> --add-scope ${scope})`,
           }
         );
       }
@@ -503,6 +522,8 @@ export function fixForCode(c: ClassifiedError): string | undefined {
     case 'AUTH_REQUIRED':
       return 'solid auth login';
     case 'SCOPE_MISSING':
+      // Real since 2.24.8: with no key id, `keys rotate` replaces the sk_ key
+      // the CLI is using, creating the new key BEFORE revoking the old one.
       return c.scope ? `solid keys rotate --add-scope ${c.scope}` : 'solid keys rotate';
     case 'FEATURE_GATED':
       return 'solid billing status';

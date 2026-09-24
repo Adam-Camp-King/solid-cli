@@ -64,6 +64,31 @@ describe('classifyError — HTTP statuses', () => {
     expect(c.hint).toMatch(/solid keys rotate/);
   });
 
+  it('403 with the structured cli-dispatch detail → SCOPE_MISSING, not FORBIDDEN', () => {
+    // Shape raised by controllers/ada.py cli_dispatch.
+    const c = classifyError({
+      status: 403,
+      data: { detail: {
+        error: 'missing_scope', verb: 'contact.create', required_scope: 'crm:write',
+        key_scopes: ['kb:read'], message: "This API key cannot run 'contact.create'",
+      } },
+    });
+    expect(c.code).toBe('SCOPE_MISSING');
+    expect(c.scope).toBe('crm:write');
+    expect(c.hint).toMatch(/solid keys rotate --add-scope crm:write/);
+    expect(c.hint).not.toMatch(/tier/);
+  });
+
+  it('403 structured missing_scope at the top level also classifies', () => {
+    const c = classifyError({ status: 403, data: { error: 'missing_scope', required_scope: 'verbs:write' } });
+    expect(c.code).toBe('SCOPE_MISSING');
+    expect(c.scope).toBe('verbs:write');
+  });
+
+  it('a plain 403 with no scope stays FORBIDDEN', () => {
+    expect(classifyError({ status: 403, data: { detail: { error: 'nope' } } }).code).toBe('FORBIDDEN');
+  });
+
   it('403 with data.code = FEATURE_GATED → FEATURE_GATED + feature/upgrade', () => {
     const c = classifyError({
       status: 403,
