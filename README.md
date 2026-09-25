@@ -121,7 +121,7 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid auth logout` | Clear stored credentials |
 | `solid auth whoami` | Show current session |
 | `solid status` | Company dashboard |
-| `solid update` | Update the CLI — knows npm, Homebrew and scoop |
+| `solid update` | Update everything Solid# on this machine — the CLI (npm, Homebrew or scoop) and the MCP server your AI tools launch |
 | `solid pull` | Download pages, KB, settings as files |
 | `solid push` | Upload local changes (drafts / unpublished pages) |
 | `solid publish <id>` / `--all` | Make pages live (pending drafts + never-published pages) |
@@ -413,9 +413,18 @@ Full contract: see the [Scripting Contract doc](https://github.com/Adam-Camp-Kin
 When it says there's a new version, run:
 
 ```bash
-solid update            # check, then upgrade this copy
-solid update --check    # say what would happen, change nothing
+solid update                  # upgrade the CLI and the MCP server
+solid update --check          # say what would happen, change nothing
+solid update --json           # do it, and report it as JSON (for an agent)
+solid update --check --json   # report only, as JSON
 ```
+
+Besides the CLI it keeps the MCP server current: any AI-tool config (Claude
+Desktop, Cursor, Windsurf, Claude Code — including per-project servers) that
+launches a bare `@solidnumber/mcp`, which npx serves from its cache forever, is
+switched to `@solidnumber/mcp@latest`, and a global npm install is upgraded. A
+version someone pinned on purpose is left alone and reported. The MCP SDK ships
+inside the server, so it moves with it.
 
 It works out how this copy was installed and runs the right thing —
 `npm install -g`, `brew upgrade`, or `scoop update`. It also warns when a

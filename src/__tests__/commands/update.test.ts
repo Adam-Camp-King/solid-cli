@@ -22,9 +22,15 @@ jest.mock('chalk', () => {
 jest.mock('../../lib/api-client', () => ({ CLI_VERSION: '2.17.0' }));
 jest.mock('child_process', () => ({ spawnSync: jest.fn() }));
 jest.mock('fs', () => ({ existsSync: jest.fn(), realpathSync: jest.fn((p: string) => p) }));
+const emptyMcp = { latest: '1.3.3', clients: [], global: { installed: null, action: 'none' }, pinned: [] };
+jest.mock('../../lib/mcp-freshness', () => ({
+  MCP_LATEST_SPEC: '@solidnumber/mcp@latest',
+  refreshMcp: jest.fn(),
+}));
 
 import { existsSync } from 'fs';
 import { spawnSync } from 'child_process';
+import { refreshMcp } from '../../lib/mcp-freshness';
 
 import {
   detectInstaller,
@@ -37,11 +43,14 @@ import {
 
 const mockExists = existsSync as unknown as jest.Mock;
 const mockSpawn = spawnSync as unknown as jest.Mock;
+const mockRefreshMcp = refreshMcp as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockExists.mockReturnValue(false);
   mockSpawn.mockReturnValue({ status: 0, stdout: '' });
+  mockRefreshMcp.mockResolvedValue(emptyMcp);
+  process.exitCode = undefined;
 });
 
 // ── it knows how this copy got here ──────────────────────────────────────
@@ -196,12 +205,55 @@ describe('solid update', () => {
     expect(installs).toHaveLength(0);
   });
 
-  it('--json gives an agent the whole picture and changes nothing', async () => {
-    const text = await run(['--json']);
+  it('--check --json gives an agent the whole picture and changes nothing', async () => {
+    const text = await run(['--check', '--json']);
     const body = JSON.parse(text);
     expect(body).toMatchObject({ current: '2.17.0', latest: '2.18.0', up_to_date: false, ran: false });
+    // under jest argv[1] is jest itself, so the installer is honestly unknown
+    expect(body.cli).toEqual({ action: 'unknown_installer' });
     expect(body).toHaveProperty('installer');
     expect(body).toHaveProperty('other_copies');
+    expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: false });
+  });
+
+  it('--check never touches the MCP configs either', async () => {
+    await run(['--check']);
+    expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: false });
+  });
+
+  it('--json on its own DOES the update, so an agent can call it', async () => {
+    const text = await run(['--json']);
+    const body = JSON.parse(text);
+    expect(body.ran).toBe(true);
+    expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: true });
+    expect(body.mcp).toEqual(emptyMcp);
+  });
+
+  it('keeps the MCP server current even when the CLI already is', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.17.0' }) }) as never;
+    mockRefreshMcp.mockResolvedValue({
+      latest: '1.3.3',
+      clients: [{ client: 'claude', path: '/x/claude.json', status: 'rewritten', findings: [] }],
+      global: { installed: null, action: 'none' },
+      pinned: [],
+    });
+    const text = await run([]);
+    expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: true });
+    expect(text).toContain('Already on the latest');
+    expect(text).toContain('now launches @solidnumber/mcp@latest');
+    expect(text).toContain('Restart the AI app');
+  });
+
+  it('a failed MCP write makes the command fail', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.17.0' }) }) as never;
+    mockRefreshMcp.mockResolvedValue({
+      latest: '1.3.3',
+      clients: [{ client: 'cursor', path: '/x/mcp.json', status: 'write_failed', findings: [], error: 'EACCES' }],
+      global: { installed: null, action: 'none' },
+      pinned: [],
+    });
+    await run([]);
+    expect(process.exitCode).toBe(1);
   });
 
   it('says so plainly when there is nothing to do', async () => {

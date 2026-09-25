@@ -178,7 +178,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - `solid switch` — Switch active company
 - `solid test` — Test agent responses with assertions
 - `solid today` — Your daily brief: revenue, pipeline, what needs you, recommended actions
-- `solid update` — Update the CLI to the latest release (knows npm, Homebrew and scoop)
+- `solid update` — Update everything Solid# on this machine: the CLI and the MCP server your AI tools launch
 - `solid version` — Print CLI version + capabilities (agent-friendly probe)
 - `solid visual` — Open the Visual Canvas (Figma/Stitch-style page designer) in the browser
 - `solid watch` — Watch local files and auto-push changes to production
@@ -278,7 +278,7 @@ Developer funnel: Free signup → connect the curated connector (OAuth) → mana
 - **webmcp** (4 subcommands) — Manage the in-browser MCP transport — manifest, dispatch test, invocations, consent: `consent, invocations, manifest, test`
 - **widget** (7 subcommands) — Widgets — embeddable business widgets: `activate, create, delete, embed, get, list, update`
 
-*Auto-generated from the live commander tree at build time. CLI version 2.24.8, manifest schema 1.0, generated 2026-09-24. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
+*Auto-generated from the live commander tree at build time. CLI version 2.24.8, manifest schema 1.0, generated 2026-09-25. Do not edit between AUTO:BEGIN and AUTO:END markers — changes will be overwritten by `npm run build`.*
 
 <!-- CLI:AUTO:END -->
 

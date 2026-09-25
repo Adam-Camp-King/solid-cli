@@ -19,9 +19,14 @@
  * of a Homebrew 2.11.13 — seven releases apart, and nothing said a word. The
  * notifier CANNOT see this: it only ever looks at the copy that is running.
  *
- *   solid update            check, then upgrade this copy
- *   solid update --check    say what would happen, change nothing
- *   solid update --json     the same, for an agent
+ * It also brings the MCP server current: every client config that launches a
+ * bare `@solidnumber/mcp` (frozen in npx's cache) is switched to `@latest`, and
+ * a global npm install is upgraded. See lib/mcp-freshness.ts.
+ *
+ *   solid update                  upgrade the CLI and the MCP server
+ *   solid update --check          say what would happen, change nothing
+ *   solid update --json           do it, and report it as JSON (for an agent)
+ *   solid update --check --json   report only, as JSON
  */
 import { spawnSync } from 'child_process';
 import { existsSync, realpathSync } from 'fs';
@@ -32,6 +37,7 @@ import { Command } from 'commander';
 
 import { CLI_VERSION } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { MCP_LATEST_SPEC, McpFreshnessReport, refreshMcp } from '../lib/mcp-freshness';
 
 export const PACKAGE_NAME = '@solidnumber/cli';
 const REGISTRY = `https://registry.npmjs.org/${PACKAGE_NAME}/latest`;
@@ -156,18 +162,85 @@ function selfPath(): string | null {
   }
 }
 
+type CliAction = 'current' | 'would_update' | 'updated' | 'update_failed' | 'unknown_installer' | 'offline';
+
+function printMcp(report: McpFreshnessReport, check: boolean): void {
+  const wired = report.clients.filter((c) => c.status !== 'unreadable');
+  console.log(chalk.bold('\nSolid# MCP') + chalk.dim(report.latest ? `  (latest ${report.latest})` : ''));
+  if (!wired.length && !report.global.installed) {
+    console.log(chalk.dim('  Not set up on this machine — `solid mcp install <client>` when you want it.'));
+  }
+  for (const c of report.clients) {
+    const where = chalk.dim(c.path);
+    if (c.status === 'rewritten') console.log(chalk.green(`  ✓ ${c.client}: now launches ${MCP_LATEST_SPEC}  `) + where);
+    else if (c.status === 'would_rewrite') console.log(`  ${c.client}: would switch to ${MCP_LATEST_SPEC}  ${where}`);
+    else if (c.status === 'current') console.log(chalk.green(`  ✓ ${c.client}: already launches the latest  `) + where);
+    else if (c.status === 'unreadable') console.log(chalk.yellow(`  ${c.client}: config is not valid JSON — left alone  `) + where);
+    else console.log(chalk.red(`  ✗ ${c.client}: could not write (${c.error ?? 'unknown error'})  `) + where);
+  }
+  for (const pin of report.pinned) {
+    console.log(chalk.yellow(`  ${pin.client}: "${pin.server}" is pinned to ${pin.spec} — left as chosen`));
+  }
+  const g = report.global;
+  if (g.installed) {
+    if (g.action === 'upgraded') console.log(chalk.green(`  ✓ global install: ${g.installed} → ${report.latest}`));
+    else if (g.action === 'would_upgrade') console.log(`  global install: would upgrade ${g.installed} → ${report.latest}`);
+    else if (g.action === 'upgrade_failed') console.log(chalk.red(`  ✗ global install: upgrade failed — run npm install -g ${MCP_LATEST_SPEC}`));
+    else console.log(chalk.green(`  ✓ global install: ${g.installed}`));
+  }
+  if (report.clients.some((c) => c.status === 'rewritten')) {
+    console.log(chalk.dim('  Restart the AI app so it relaunches the server.'));
+  }
+  if (!check) console.log(chalk.dim('  The MCP SDK ships inside the server, so it is current whenever the server is.'));
+}
+
 export const updateCommand = new Command('update')
-  .description('Update the CLI to the latest release (knows npm, Homebrew and scoop)')
+  .description('Update everything Solid# on this machine: the CLI and the MCP server your AI tools launch')
   .option('--check', 'Say what would happen; change nothing')
-  .option('--json', 'Emit JSON')
+  .option('--json', 'Emit JSON (runs the update unless --check)')
   .action(async (opts) => {
+    const check = Boolean(opts.check);
+    const json = isJsonOutput(opts);
     const me = selfPath();
     const { installer, command, preflight } = detectInstaller(me);
     const latest = await latestVersion();
     const others = otherCopiesOnPath(me);
     const behind = latest ? isNewer(CLI_VERSION, latest) : false;
+    const steps = command ? (preflight ? [preflight, command] : [command]) : [];
+    const recipe = steps.map((s) => s.join(' ')).join(' && ');
 
-    if (isJsonOutput(opts)) {
+    // ── 1. the CLI ──────────────────────────────────────────────────────────
+    let cliAction: CliAction;
+    if (!latest) cliAction = 'offline';
+    else if (!behind) cliAction = 'current';
+    else if (!command) cliAction = 'unknown_installer';
+    else if (check) cliAction = 'would_update';
+    else {
+      if (!json) console.log(`${chalk.bold('Update available')}  ${CLI_VERSION} → ${chalk.green(latest)}`);
+      // The preflight is plumbing, not news — run it quietly and keep going if
+      // it fails: the upgrade may not have needed it.
+      if (preflight) {
+        const tapped = spawnSync(preflight[0], preflight.slice(1), { stdio: 'ignore' });
+        if (tapped.status !== 0 && !json) {
+          console.log(chalk.yellow(`(${preflight.join(' ')} did not succeed — trying the upgrade anyway)`));
+        }
+      }
+      if (!json) console.log(`Running ${chalk.cyan(command.join(' '))} …\n`);
+      // JSON mode keeps stdout clean for the agent: the installer's own output goes to stderr.
+      const result = spawnSync(command[0], command.slice(1), { stdio: json ? ['ignore', 2, 2] : 'inherit' });
+      cliAction = result.status === 0 ? 'updated' : 'update_failed';
+    }
+
+    // ── 2. the MCP server (always — a current CLI can still launch a stale server) ──
+    const mcp = await refreshMcp({ apply: !check });
+
+    const failed =
+      cliAction === 'update_failed' ||
+      mcp.clients.some((c) => c.status === 'write_failed') ||
+      mcp.global.action === 'upgrade_failed';
+    if (failed && !check) process.exitCode = 1;
+
+    if (json) {
       process.stdout.write(
         JSON.stringify(
           {
@@ -178,7 +251,9 @@ export const updateCommand = new Command('update')
             command: command ? command.join(' ') : null,
             preflight: preflight ? preflight.join(' ') : null,
             other_copies: others,
-            ran: false,
+            ran: !check,
+            cli: { action: cliAction },
+            mcp,
           },
           null,
           2,
@@ -187,65 +262,40 @@ export const updateCommand = new Command('update')
       return;
     }
 
-    if (!latest) {
-      console.log(chalk.yellow('Could not reach the npm registry — try again, or run:'));
-      console.log(`  ${command ? command.join(' ') : `npm install -g ${PACKAGE_NAME}@latest`}`);
-      return;
-    }
-
     // The other copies matter even when this one is current, so say it first.
-    if (others.length) {
+    if (others.length && latest) {
       console.log(chalk.yellow(`\n⚠ Another 'solid' is on your PATH:`));
       for (const other of others) {
         const stale = other.version && isNewer(other.version, latest);
         console.log(
-          `  ${other.path}  ${other.version ?? '(version unknown)'}` +
-            (stale ? chalk.red('  ← behind') : ''),
+          `  ${other.path}  ${other.version ?? '(version unknown)'}` + (stale ? chalk.red('  ← behind') : ''),
         );
       }
       console.log(chalk.dim('  Whichever comes first in PATH is the one that runs.'));
       console.log(chalk.dim(`  Update it too, or remove it so there is only one.\n`));
     }
 
-    if (!behind) {
-      console.log(chalk.green(`Already on the latest — ${CLI_VERSION}.`));
-      return;
-    }
-
-    console.log(`${chalk.bold('Update available')}  ${CLI_VERSION} → ${chalk.green(latest)}`);
-
-    if (!command) {
-      console.log(chalk.yellow(`Cannot tell how this copy was installed (${me ?? 'unknown path'}).`));
+    console.log(chalk.bold('Solid# CLI'));
+    if (cliAction === 'offline') {
+      console.log(chalk.yellow('  Could not reach the npm registry — try again, or run:'));
+      console.log(`    ${command ? command.join(' ') : `npm install -g ${PACKAGE_NAME}@latest`}`);
+    } else if (cliAction === 'current') {
+      console.log(chalk.green(`  ✓ Already on the latest — ${CLI_VERSION}.`));
+    } else if (cliAction === 'would_update') {
+      console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
+      console.log(`  Would run: ${chalk.cyan(recipe)}`);
+    } else if (cliAction === 'unknown_installer') {
+      console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
+      console.log(chalk.yellow(`  Cannot tell how this copy was installed (${me ?? 'unknown path'}).`));
       console.log(
-        `Run whichever fits:\n  npm install -g ${PACKAGE_NAME}@latest\n  brew tap solidnumber/tap && brew upgrade solidnumber/tap/cli\n  scoop update solid`,
+        `  Run whichever fits:\n    npm install -g ${PACKAGE_NAME}@latest\n    brew tap solidnumber/tap && brew upgrade solidnumber/tap/cli\n    scoop update solid`,
       );
-      return;
+    } else if (cliAction === 'updated') {
+      console.log(chalk.green(`  ✓ Updated to ${latest}.`));
+    } else {
+      console.log(chalk.red('  ✗ That did not finish.'));
+      console.log(`  Run it yourself: ${recipe}`);
     }
 
-    const steps = preflight ? [preflight, command] : [command];
-    const recipe = steps.map((s) => s.join(' ')).join(' && ');
-
-    if (opts.check) {
-      console.log(`Would run: ${chalk.cyan(recipe)}`);
-      return;
-    }
-
-    // The preflight is plumbing, not news — run it quietly and only speak up if
-    // it fails, and even then keep going: the upgrade may not have needed it.
-    if (preflight) {
-      const tapped = spawnSync(preflight[0], preflight.slice(1), { stdio: 'ignore' });
-      if (tapped.status !== 0) {
-        console.log(chalk.yellow(`(${preflight.join(' ')} did not succeed — trying the upgrade anyway)`));
-      }
-    }
-
-    console.log(`Running ${chalk.cyan(command.join(' '))} …\n`);
-    const result = spawnSync(command[0], command.slice(1), { stdio: 'inherit' });
-    if (result.status === 0) {
-      console.log(chalk.green(`\nUpdated to ${latest}.`));
-      return;
-    }
-    console.log(chalk.red(`\nThat did not finish (exit ${result.status ?? 'unknown'}).`));
-    console.log(`Run it yourself: ${recipe}`);
-    process.exitCode = 1;
+    printMcp(mcp, check);
   });
