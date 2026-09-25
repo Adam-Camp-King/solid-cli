@@ -2,6 +2,22 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.9] — 2026-09-24
+
+**`solid update` keeps the MCP server current, not just the CLI.**
+
+- Client configs written before 2.24.8 launch a bare `@solidnumber/mcp`, which
+  npx serves from its cache forever — updating the CLI never touched it. After
+  the CLI step, every Solid# launch in Claude Desktop, Cursor, Windsurf and
+  Claude Code (including per-project servers in `~/.claude.json`) that uses the
+  bare spec is switched to `@solidnumber/mcp@latest`; only that one argument
+  changes. A deliberate version pin is left alone and reported. Unparseable
+  files are never written.
+- A global npm install of `@solidnumber/mcp` is upgraded when behind.
+- Runs even when the CLI is already current.
+- `--json` now performs the update and reports it, so an agent can call it;
+  `--check` changes nothing, with or without `--json`. Exit 1 if any step fails.
+
 ## [2.24.8] — 2026-09-24
 
 **Flags reach the commands they belong to, a missing-scope error tells you the
