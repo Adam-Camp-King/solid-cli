@@ -90,7 +90,10 @@ export function detectInstaller(path: string | null): InstallInfo {
     return { installer: 'scoop', command: ['scoop', 'update', 'solid'] };
   }
   if (p.includes('node_modules/@solidnumber/cli')) {
-    return { installer: 'npm', command: ['npm', 'install', '-g', `${PACKAGE_NAME}@latest`] };
+    // --prefer-online: right after a release npm's cached package list does not have
+    // the new version yet, so `@latest` resolved to a version the cache could not
+    // find (ETARGET) — solid update failed for the first minutes of every release.
+    return { installer: 'npm', command: ['npm', 'install', '-g', `${PACKAGE_NAME}@latest`, '--prefer-online'] };
   }
   return { installer: 'unknown', command: null };
 }
@@ -278,7 +281,7 @@ export const updateCommand = new Command('update')
     console.log(chalk.bold('Solid# CLI'));
     if (cliAction === 'offline') {
       console.log(chalk.yellow('  Could not reach the npm registry — try again, or run:'));
-      console.log(`    ${command ? command.join(' ') : `npm install -g ${PACKAGE_NAME}@latest`}`);
+      console.log(`    ${command ? command.join(' ') : `npm install -g ${PACKAGE_NAME}@latest --prefer-online`}`);
     } else if (cliAction === 'current') {
       console.log(chalk.green(`  ✓ Already on the latest — ${CLI_VERSION}.`));
     } else if (cliAction === 'would_update') {
@@ -288,7 +291,7 @@ export const updateCommand = new Command('update')
       console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
       console.log(chalk.yellow(`  Cannot tell how this copy was installed (${me ?? 'unknown path'}).`));
       console.log(
-        `  Run whichever fits:\n    npm install -g ${PACKAGE_NAME}@latest\n    brew tap solidnumber/tap && brew upgrade solidnumber/tap/cli\n    scoop update solid`,
+        `  Run whichever fits:\n    npm install -g ${PACKAGE_NAME}@latest --prefer-online\n    brew tap solidnumber/tap && brew upgrade solidnumber/tap/cli\n    scoop update solid`,
       );
     } else if (cliAction === 'updated') {
       console.log(chalk.green(`  ✓ Updated to ${latest}.`));

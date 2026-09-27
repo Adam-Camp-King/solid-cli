@@ -59,7 +59,7 @@ describe('detectInstaller', () => {
   it('recognises an npm global', () => {
     const out = detectInstaller('/Users/x/.nvm/versions/node/v22.19.0/lib/node_modules/@solidnumber/cli/dist/index.js');
     expect(out.installer).toBe('npm');
-    expect(out.command).toEqual(['npm', 'install', '-g', `${PACKAGE_NAME}@latest`]);
+    expect(out.command).toEqual(['npm', 'install', '-g', `${PACKAGE_NAME}@latest`, '--prefer-online']);
   });
 
   it('recognises Homebrew', () => {
@@ -97,7 +97,7 @@ describe('detectInstaller', () => {
     // formula payload lives under Cellar/<ver>/libexec, which /cellar/ catches.
     const out = detectInstaller('/opt/homebrew/lib/node_modules/@solidnumber/cli/dist/index.js');
     expect(out.installer).toBe('npm');
-    expect(out.command).toEqual(['npm', 'install', '-g', `${PACKAGE_NAME}@latest`]);
+    expect(out.command).toEqual(['npm', 'install', '-g', `${PACKAGE_NAME}@latest`, '--prefer-online']);
   });
 
   it('a linuxbrew keg is still brew', () => {

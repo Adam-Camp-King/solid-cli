@@ -138,7 +138,7 @@ export const realIo: FreshnessIo = {
     }
   },
   upgradeGlobalMcp() {
-    const r = spawnSync('npm', ['install', '-g', MCP_LATEST_SPEC], { stdio: 'inherit' });
+    const r = spawnSync('npm', ['install', '-g', MCP_LATEST_SPEC, '--prefer-online'], { stdio: 'inherit' });
     return r.status === 0;
   },
 };
