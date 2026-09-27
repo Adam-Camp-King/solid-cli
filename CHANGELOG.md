@@ -2,6 +2,18 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.10] — 2026-09-27
+
+**`solid docs` points at the public booking routes that exist, and the
+published counts are regenerated.**
+
+- `solid docs` listed `GET /api/v1/cms/public/availability` for open appointment
+  slots. That route never existed (404). It now lists the host-resolved routes:
+  `GET /api/v1/cms/pages/public/booking?host=<site>` (bookable services),
+  `GET /api/v1/cms/pages/public/booking/times?host=<site>&service_id=<id>&date=YYYY-MM-DD`
+  (open slots) and `POST /api/v1/cms/pages/public/book?host=<site>` (book a slot).
+- Counts re-measured by `npm run sync:counts`: 172 top-level commands, 914 verbs.
+
 ## [2.24.9] — 2026-09-24
 
 **`solid update` keeps the MCP server current, not just the CLI.**
