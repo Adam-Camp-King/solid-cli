@@ -227,7 +227,9 @@ These endpoints serve your public website. Pass \`company_id\` as a query param.
 | GET | \`/api/v1/cms/public/services\` | List public services |
 | GET | \`/api/v1/cms/public/products\` | List public products |
 | GET | \`/api/v1/cms/public/promotions\` | Active promotions |
-| GET | \`/api/v1/cms/public/availability\` | Available appointment slots |
+| GET | \`/api/v1/cms/pages/public/booking?host=<site>\` | Bookable services (site resolved by host, not company_id) |
+| GET | \`/api/v1/cms/pages/public/booking/times?host=<site>&service_id=<id>&date=YYYY-MM-DD\` | Open appointment slots |
+| POST | \`/api/v1/cms/pages/public/book?host=<site>\` | Book a slot (service_id + start_time) |
 
 ## Website Settings
 
