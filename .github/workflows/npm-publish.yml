@@ -63,6 +63,11 @@ jobs:
 
       - run: npm ci
 
+      # ⛔ Build BEFORE the counts gate: sync-counts measures the BUILT CLI
+      # (dist/index.js). With the gate first, the first tag release (v2.24.11)
+      # failed "dist/index.js missing" before anything was checked.
+      - run: npm run build
+
       # The same gate that guards a local publish: every advertised count must
       # already be true. prepublishOnly runs it too; running it here fails the
       # job early with a readable message instead of mid-publish.
@@ -70,8 +75,6 @@ jobs:
         run: npm run check:counts
 
       - run: npm test
-
-      - run: npm run build
 
       - name: Refuse to republish an existing version
         id: guard
