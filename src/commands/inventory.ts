@@ -237,25 +237,31 @@ inventoryCommand
       const data = response.data as Record<string, any>;
 
       if (options.dryRun) {
-        spinner.succeed(chalk.green('Dry run complete'));
-        console.log('');
-        if (data.total !== undefined) console.log(`  ${chalk.bold('Rows:')}      ${data.total}`);
-        if (data.valid !== undefined) console.log(`  ${chalk.bold('Valid:')}     ${chalk.green(data.valid)}`);
-        if (data.errors !== undefined) console.log(`  ${chalk.bold('Errors:')}    ${data.errors > 0 ? chalk.red(data.errors) : chalk.green('0')}`);
-        if (data.preview) {
-          console.log('');
-          console.log(chalk.dim('  Preview:'));
-          for (const row of (data.preview as Record<string, string>[]).slice(0, 5)) {
-            console.log(`    ${row.sku || row.id} — ${row.name || ''} qty: ${row.on_hand ?? row.quantity ?? '?'}`);
-          }
-        }
+        spinner.succeed(chalk.green('Dry run complete — nothing was written'));
       } else {
-        const imported = data.imported || data.created || data.total || 0;
-        spinner.succeed(chalk.green(`Imported ${imported} item(s)`));
-        if (data.errors && data.errors > 0) {
-          console.log(chalk.yellow(`  ${data.errors} row(s) had errors`));
+        spinner.succeed(chalk.green(`Imported ${data.imported ?? 0} item(s)`));
+      }
+      console.log('');
+      if (data.total !== undefined) console.log(`  ${chalk.bold('Rows:')}      ${data.total}`);
+      if (data.created !== undefined) console.log(`  ${chalk.bold(options.dryRun ? 'Would create:' : 'Created:')}   ${data.created}`);
+      if (data.updated !== undefined) console.log(`  ${chalk.bold(options.dryRun ? 'Would update:' : 'Updated:')}   ${data.updated}`);
+      if (data.unchanged) console.log(`  ${chalk.bold('Unchanged:')} ${data.unchanged}`);
+      if (data.errors !== undefined) console.log(`  ${chalk.bold('Errors:')}    ${data.errors > 0 ? chalk.red(data.errors) : chalk.green('0')}`);
+      // Every failed row is named — a row is skipped, never silently dropped.
+      for (const e of (data.row_errors || []) as Record<string, any>[]) {
+        console.log(chalk.red(`    row ${e.row}${e.sku ? ` (${e.sku})` : ''}: ${e.error}`));
+      }
+      if (data.ignored_columns?.length) {
+        console.log(chalk.yellow(`  Columns not imported: ${(data.ignored_columns as string[]).join(', ')}`));
+      }
+      if (options.dryRun && data.preview?.length) {
+        console.log('');
+        console.log(chalk.dim('  Preview:'));
+        for (const row of (data.preview as Record<string, string>[]).slice(0, 5)) {
+          console.log(`    ${row.action.padEnd(9)} ${row.sku} — ${row.name || ''} qty: ${row.on_hand ?? '—'}`);
         }
       }
+      if (data.errors > 0) process.exitCode = 1;
     } catch (error) {
       fail(spinner, 'Failed to import CSV', error);
     }
