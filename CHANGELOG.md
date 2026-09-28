@@ -2,6 +2,25 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.11] — 2026-09-28
+
+**`solid inventory import` reports every row, and `solid update` works in the
+first minutes after a release.**
+
+- `solid inventory import <file>` prints how many rows were created, updated and
+  unchanged, names every row that failed with its row number, SKU and reason, and
+  lists the columns it did not import. It exits 1 if any row failed.
+  `--dry-run` says nothing was written and previews what each row would do.
+- Server-side, shipped 2026-09-28 (no CLI update needed): the import now writes
+  your real products and per-location stock. It used to fail for every company.
+  Rows match by SKU in your company; a blank cell never overwrites; a new SKU needs
+  a name; a `location` column sets that location's count. `--dry-run` is now truly
+  a dry run: the server used to ignore the flag the CLI sends. New verb:
+  `inventory.import_csv`.
+- `solid update` installs with `--prefer-online`. Right after a release, npm's
+  cached package list lacked the new version, so updating to `@latest` failed
+  (`ETARGET`) for the first few minutes. The MCP self-update uses the same flag.
+
 ## [2.24.10] — 2026-09-27
 
 **`solid docs` points at the public booking routes that exist, and the
