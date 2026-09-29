@@ -427,7 +427,12 @@ version someone pinned on purpose is left alone and reported. The MCP SDK ships
 inside the server, so it moves with it.
 
 It works out how this copy was installed and runs the right thing —
-`npm install -g`, `brew upgrade`, or `scoop update`. It also warns when a
+`npm install -g`, `brew upgrade`, or `scoop update`. If that guess is wrong, or
+the command fails, it tries the next way, and it calls the update done only
+when the `solid` your shell runs reports the new version. You never have to
+pick between commands. If Homebrew's formula has not caught up with npm yet
+(it checks every 4 hours), it says so and does not put a second copy on top.
+You only get a command to run yourself when every route has failed. It also warns when a
 **second** `solid` is on your PATH at a different version: an npm global under
 nvm in front of a Homebrew formula is easy to end up with, whichever comes
 first in PATH wins, and upgrading one leaves the other lying in wait. The

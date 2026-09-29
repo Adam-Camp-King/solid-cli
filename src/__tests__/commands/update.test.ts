@@ -38,6 +38,7 @@ import {
   latestVersion,
   otherCopiesOnPath,
   PACKAGE_NAME,
+  updateRoutes,
   updateCommand,
 } from '../../commands/update';
 
@@ -209,8 +210,10 @@ describe('solid update', () => {
     const text = await run(['--check', '--json']);
     const body = JSON.parse(text);
     expect(body).toMatchObject({ current: '2.17.0', latest: '2.18.0', up_to_date: false, ran: false });
-    // under jest argv[1] is jest itself, so the installer is honestly unknown
-    expect(body.cli).toEqual({ action: 'unknown_installer' });
+    // under jest argv[1] is jest itself, so the installer is honestly unknown —
+    // and unknown is no longer a dead end: the ladder still has somewhere to go.
+    expect(body.installer).toBe('unknown');
+    expect(body.cli).toEqual({ action: 'would_update' });
     expect(body).toHaveProperty('installer');
     expect(body).toHaveProperty('other_copies');
     expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: false });
@@ -267,5 +270,92 @@ describe('solid update', () => {
     const text = await run([]);
     expect(text.toLowerCase()).toContain('registry');
     expect(text).toContain(PACKAGE_NAME);
+  });
+
+  describe('⛔ a wrong guess never strands the customer (iMac, 2026-09-29)', () => {
+    const argv1 = process.argv[1];
+    const path = process.env.PATH;
+    const mockSpawn = spawnSync as unknown as jest.Mock;
+    const mockExists = existsSync as unknown as jest.Mock;
+
+    // `answers` maps the first word of a command to its exit code; `solid --version` reads `onPath`.
+    const machine = (answers: Record<string, number>, onPath: () => string) => {
+      process.env.PATH = '/bin-dir';
+      mockExists.mockImplementation((p: string) => p === '/bin-dir/solid');
+      mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+        if (args[0] === '--version') return { status: 0, stdout: onPath() };
+        if (args[0] === 'tap') return { status: 0 };
+        return { status: answers[cmd] ?? 1 };
+      });
+    };
+
+    beforeEach(() => {
+      mockSpawn.mockReset();
+      mockRefreshMcp.mockResolvedValue(emptyMcp as never);
+    });
+    afterEach(() => {
+      process.argv[1] = argv1;
+      process.env.PATH = path;
+      process.exitCode = 0;
+    });
+
+    it('the brew guess fails → it falls through to npm and proves the new version runs', async () => {
+      process.argv[1] = '/opt/homebrew/Cellar/cli/2.17.0/libexec/lib/node_modules/@solidnumber/cli/dist/index.js';
+      let version = '2.17.0';
+      machine({ brew: 1, npm: 0 }, () => version);
+      mockSpawn.mockImplementationOnce(() => ({ status: 0 })); // brew tap
+      const npmRan = jest.fn(() => (version = '2.18.0'));
+      const base = mockSpawn.getMockImplementation()!;
+      mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'npm') npmRan();
+        return base(cmd, args);
+      });
+
+      const text = await run([]);
+      expect(npmRan).toHaveBeenCalled();
+      expect(text).toContain('Updated to 2.18.0');
+      expect(text).not.toContain('Run it yourself');
+      expect(process.exitCode).not.toBe(1);
+    });
+
+    it('a zero exit is not success — only the version the shell runs is', async () => {
+      process.argv[1] = '/usr/local/lib/node_modules/@solidnumber/cli/dist/index.js';
+      machine({ npm: 0, brew: 1 }, () => '2.17.0');
+      const text = await run([]);
+      expect(text).not.toContain('Updated to');
+      expect(text).toContain('new terminal');
+    });
+
+    it('Homebrew behind npm is said plainly, and no npm copy is piled on top', async () => {
+      process.argv[1] = '/opt/homebrew/Cellar/cli/2.17.0/libexec/lib/node_modules/@solidnumber/cli/dist/index.js';
+      machine({ brew: 0, npm: 0 }, () => '2.17.0');
+      const text = await run([]);
+      expect(mockSpawn.mock.calls.some(([cmd]) => cmd === 'npm')).toBe(false);
+      expect(text).toContain('Homebrew does not have 2.18.0 yet');
+    });
+
+    it('when every way fails it says what it tried and the one command that works', async () => {
+      process.argv[1] = '/usr/local/lib/node_modules/@solidnumber/cli/dist/index.js';
+      machine({}, () => '2.17.0');
+      const text = await run([]);
+      expect(text).toContain('Tried:');
+      expect(text).toContain(`npm install -g ${PACKAGE_NAME}@latest --prefer-online`);
+      expect(process.exitCode).toBe(1);
+    });
+  });
+});
+
+describe('updateRoutes', () => {
+  it('an npm global under a Homebrew prefix tries npm first, brew only as a fallback', () => {
+    const r = updateRoutes(detectInstaller('/opt/homebrew/lib/node_modules/@solidnumber/cli/dist/index.js'), 'darwin');
+    expect(r.map((x) => x.installer)).toEqual(['npm', 'brew']);
+  });
+  it('a copy it cannot place still gets every route, never a list to choose from', () => {
+    expect(updateRoutes(detectInstaller(null), 'darwin').map((x) => x.installer)).toEqual(['npm', 'brew']);
+    expect(updateRoutes(detectInstaller(null), 'win32').map((x) => x.installer)).toEqual(['npm', 'scoop']);
+  });
+  it('brew always taps first — brew upgrade never auto-taps', () => {
+    const [brew] = updateRoutes(detectInstaller('/opt/homebrew/Cellar/cli/2.24.0/bin/solid'), 'darwin');
+    expect(brew.preflight).toEqual(['brew', 'tap', 'solidnumber/tap']);
   });
 });

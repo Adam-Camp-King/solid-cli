@@ -165,7 +165,99 @@ function selfPath(): string | null {
   }
 }
 
-type CliAction = 'current' | 'would_update' | 'updated' | 'update_failed' | 'unknown_installer' | 'offline';
+type CliAction =
+  | 'current'
+  | 'would_update'
+  | 'updated'
+  | 'update_failed'
+  | 'formula_behind'
+  | 'updated_unverified'
+  | 'offline';
+
+export interface Route {
+  installer: Exclude<Installer, 'unknown'>;
+  command: string[];
+  preflight?: string[];
+}
+
+const NPM_ROUTE: Route = {
+  installer: 'npm',
+  command: ['npm', 'install', '-g', `${PACKAGE_NAME}@latest`, '--prefer-online'],
+};
+const BREW_ROUTE: Route = {
+  installer: 'brew',
+  command: ['brew', 'upgrade', 'solidnumber/tap/cli'],
+  preflight: ['brew', 'tap', 'solidnumber/tap'],
+};
+const SCOOP_ROUTE: Route = { installer: 'scoop', command: ['scoop', 'update', 'solid'] };
+
+/**
+ * Every way to update this machine, the one that owns this copy first. Pure.
+ *
+ * ⛔ A WRONG GUESS MUST NEVER STRAND A CUSTOMER. 2.23.0 read any path containing
+ * /homebrew/ as a Homebrew install, ran `brew upgrade` on an npm global, and when
+ * that failed printed the same failing command back as "Run it yourself" — the
+ * customer on the iMac 2026-09-29 was left with no way forward the CLI offered.
+ * Detection is a guess about someone else's machine; the ladder makes the guess
+ * cheap to get wrong. `brew upgrade` and `scoop update` only touch a copy that is
+ * already installed, so trying them on a machine that lacks one changes nothing.
+ */
+export function updateRoutes(detected: InstallInfo, platform: string = process.platform): Route[] {
+  const routes: Route[] = [];
+  if (detected.installer === 'brew') routes.push(BREW_ROUTE);
+  if (detected.installer === 'scoop') routes.push(SCOOP_ROUTE);
+  if (detected.installer === 'npm') routes.push(NPM_ROUTE);
+  for (const r of platform === 'win32' ? [NPM_ROUTE, SCOOP_ROUTE] : [NPM_ROUTE, BREW_ROUTE]) {
+    if (!routes.includes(r)) routes.push(r);
+  }
+  return routes;
+}
+
+/** The version of the `solid` a new shell will run — the only proof an update worked. */
+function versionOnPath(me: string | null, env = process.env): string | null {
+  const names = process.platform === 'win32' ? ['solid.cmd', 'solid.exe', 'solid'] : ['solid'];
+  for (const dir of (env.PATH || '').split(delimiter)) {
+    if (!dir) continue;
+    for (const name of names) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return versionOf(candidate);
+    }
+  }
+  return me ? versionOf(me) : null;
+}
+
+interface Attempt {
+  installer: Route['installer'];
+  command: string;
+  exit: number | null;
+  version_after: string | null;
+}
+
+/**
+ * Walk the ladder until the `solid` on PATH reports `latest`. A zero exit is not
+ * success — only the version a new shell will run is.
+ */
+function runLadder(routes: Route[], latest: string, me: string | null, json: boolean): { action: CliAction; attempts: Attempt[] } {
+  const attempts: Attempt[] = [];
+  let anyExitedClean = false;
+  for (const route of routes) {
+    if (route.preflight) spawnSync(route.preflight[0], route.preflight.slice(1), { stdio: 'ignore' });
+    if (!json) console.log(`Running ${chalk.cyan(route.command.join(' '))} …\n`);
+    // JSON mode keeps stdout clean for the agent: the installer's own output goes to stderr.
+    const result = spawnSync(route.command[0], route.command.slice(1), { stdio: json ? ['ignore', 2, 2] : 'inherit' });
+    const exit = result?.status ?? null;
+    const after = exit === 0 ? versionOnPath(me) : null;
+    attempts.push({ installer: route.installer, command: route.command.join(' '), exit, version_after: after });
+    if (exit !== 0) continue;
+    anyExitedClean = true;
+    if (after && !isNewer(after, latest)) return { action: 'updated', attempts };
+    // Homebrew's formula follows npm on a 4-hour poll. It upgraded to the newest
+    // formula there is; installing an npm copy on top would only make two.
+    if (route.installer === 'brew') return { action: 'formula_behind', attempts };
+    if (!json) console.log(chalk.dim(`That finished, but \`solid --version\` still says ${after ?? 'nothing readable'} — trying the next way.\n`));
+  }
+  return { action: anyExitedClean ? 'updated_unverified' : 'update_failed', attempts };
+}
 
 function printMcp(report: McpFreshnessReport, check: boolean): void {
   const wired = report.clients.filter((c) => c.status !== 'unreadable');
@@ -205,33 +297,24 @@ export const updateCommand = new Command('update')
     const check = Boolean(opts.check);
     const json = isJsonOutput(opts);
     const me = selfPath();
-    const { installer, command, preflight } = detectInstaller(me);
+    const detected = detectInstaller(me);
+    const { installer } = detected;
+    const routes = updateRoutes(detected);
     const latest = await latestVersion();
     const others = otherCopiesOnPath(me);
     const behind = latest ? isNewer(CLI_VERSION, latest) : false;
-    const steps = command ? (preflight ? [preflight, command] : [command]) : [];
-    const recipe = steps.map((s) => s.join(' ')).join(' && ');
+    const first = routes[0];
+    const recipe = [first.preflight, first.command].filter(Boolean).map((s) => s!.join(' ')).join(' && ');
 
     // ── 1. the CLI ──────────────────────────────────────────────────────────
     let cliAction: CliAction;
+    let attempts: Attempt[] = [];
     if (!latest) cliAction = 'offline';
     else if (!behind) cliAction = 'current';
-    else if (!command) cliAction = 'unknown_installer';
     else if (check) cliAction = 'would_update';
     else {
       if (!json) console.log(`${chalk.bold('Update available')}  ${CLI_VERSION} → ${chalk.green(latest)}`);
-      // The preflight is plumbing, not news — run it quietly and keep going if
-      // it fails: the upgrade may not have needed it.
-      if (preflight) {
-        const tapped = spawnSync(preflight[0], preflight.slice(1), { stdio: 'ignore' });
-        if (tapped.status !== 0 && !json) {
-          console.log(chalk.yellow(`(${preflight.join(' ')} did not succeed — trying the upgrade anyway)`));
-        }
-      }
-      if (!json) console.log(`Running ${chalk.cyan(command.join(' '))} …\n`);
-      // JSON mode keeps stdout clean for the agent: the installer's own output goes to stderr.
-      const result = spawnSync(command[0], command.slice(1), { stdio: json ? ['ignore', 2, 2] : 'inherit' });
-      cliAction = result.status === 0 ? 'updated' : 'update_failed';
+      ({ action: cliAction, attempts } = runLadder(routes, latest, me, json));
     }
 
     // ── 2. the MCP server (always — a current CLI can still launch a stale server) ──
@@ -251,8 +334,9 @@ export const updateCommand = new Command('update')
             latest,
             up_to_date: latest ? !behind : null,
             installer,
-            command: command ? command.join(' ') : null,
-            preflight: preflight ? preflight.join(' ') : null,
+            command: first.command.join(' '),
+            preflight: first.preflight ? first.preflight.join(' ') : null,
+            attempts,
             other_copies: others,
             ran: !check,
             cli: { action: cliAction },
@@ -281,23 +365,24 @@ export const updateCommand = new Command('update')
     console.log(chalk.bold('Solid# CLI'));
     if (cliAction === 'offline') {
       console.log(chalk.yellow('  Could not reach the npm registry — try again, or run:'));
-      console.log(`    ${command ? command.join(' ') : `npm install -g ${PACKAGE_NAME}@latest --prefer-online`}`);
+      console.log(`    ${first.command.join(' ')}`);
     } else if (cliAction === 'current') {
       console.log(chalk.green(`  ✓ Already on the latest — ${CLI_VERSION}.`));
     } else if (cliAction === 'would_update') {
       console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
       console.log(`  Would run: ${chalk.cyan(recipe)}`);
-    } else if (cliAction === 'unknown_installer') {
-      console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
-      console.log(chalk.yellow(`  Cannot tell how this copy was installed (${me ?? 'unknown path'}).`));
-      console.log(
-        `  Run whichever fits:\n    npm install -g ${PACKAGE_NAME}@latest --prefer-online\n    brew tap solidnumber/tap && brew upgrade solidnumber/tap/cli\n    scoop update solid`,
-      );
     } else if (cliAction === 'updated') {
       console.log(chalk.green(`  ✓ Updated to ${latest}.`));
+    } else if (cliAction === 'formula_behind') {
+      console.log(chalk.yellow(`  Homebrew does not have ${latest} yet — it follows npm within 4 hours.`));
+      console.log('  Nothing is broken. Run solid update again later.');
+    } else if (cliAction === 'updated_unverified') {
+      console.log(chalk.yellow(`  Installed ${latest}, but the solid your shell runs still reports an older version.`));
+      console.log('  Open a new terminal window and run solid --version.');
     } else {
-      console.log(chalk.red('  ✗ That did not finish.'));
-      console.log(`  Run it yourself: ${recipe}`);
+      console.log(chalk.red('  ✗ Could not update automatically. Tried:'));
+      for (const a of attempts) console.log(`    ${a.command}  (exit ${a.exit ?? 'not found'})`);
+      console.log(`  The one that works on almost every machine:\n    ${NPM_ROUTE.command.join(' ')}`);
     }
 
     printMcp(mcp, check);
