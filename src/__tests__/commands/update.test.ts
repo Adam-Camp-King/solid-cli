@@ -43,6 +43,8 @@ import {
   isNewer,
   latestVersion,
   otherCopiesOnPath,
+  FINISH_SINCE,
+  npmPrefixOf,
   PACKAGE_NAME,
   updateRoutes,
   updateCommand,
@@ -331,7 +333,7 @@ describe('solid update', () => {
       machine({ npm: 0, brew: 1 }, () => '2.17.0');
       const text = await run([]);
       expect(text).not.toContain('Updated to');
-      expect(text).toContain('new terminal');
+      expect(text).toContain('first on your PATH is still 2.17.0');
     });
 
     it('Homebrew behind npm is said plainly, and no npm copy is piled on top', async () => {
@@ -393,7 +395,7 @@ describe('solid update — the whole machine, finished by the new binary', () =>
     mockSpawn.mockReset();
     mockRefreshMcp.mockReset().mockResolvedValue(emptyMcp as never);
     mockHook.mockReturnValue({ state: 'absent', detail: '' });
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.18.0' }) }) as never;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.25.0' }) }) as never;
     process.argv[1] = '/usr/local/lib/node_modules/@solidnumber/cli/dist/index.js';
     process.env.PATH = '/bin-dir';
     mockExists.mockImplementation((p: string) => p === '/bin-dir/solid');
@@ -408,7 +410,7 @@ describe('solid update — the whole machine, finished by the new binary', () =>
     let version = '2.17.0';
     mockSpawn.mockImplementation((cmd: string, args: string[]) => {
       if (args[0] === '--version') return { status: 0, stdout: version };
-      if (cmd === 'npm') return (version = '2.18.0'), { status: 0 };
+      if (cmd === 'npm') return (version = '2.25.0'), { status: 0 };
       if (args[0] === 'update') return { status: 0, stdout: '' };
       return { status: 1 };
     });
@@ -420,15 +422,15 @@ describe('solid update — the whole machine, finished by the new binary', () =>
 
   it('--json carries the new binary\'s report through', async () => {
     let version = '2.17.0';
-    const report = { finished_by: '2.18.0', mcp: emptyMcp, machine: [{ id: 'claude_hook', state: 'updated' }] };
+    const report = { finished_by: '2.25.0', mcp: emptyMcp, machine: [{ id: 'claude_hook', state: 'updated' }] };
     mockSpawn.mockImplementation((cmd: string, args: string[]) => {
       if (args[0] === '--version') return { status: 0, stdout: version };
-      if (cmd === 'npm') return (version = '2.18.0'), { status: 0 };
+      if (cmd === 'npm') return (version = '2.25.0'), { status: 0 };
       if (args[0] === 'update') return { status: 0, stdout: JSON.stringify(report) };
       return { status: 1 };
     });
     const body = JSON.parse(await run(['--json']));
-    expect(body.finished_by).toBe('2.18.0');
+    expect(body.finished_by).toBe('2.25.0');
     expect(body.machine).toEqual(report.machine);
   });
 
@@ -436,7 +438,7 @@ describe('solid update — the whole machine, finished by the new binary', () =>
     let version = '2.17.0';
     mockSpawn.mockImplementation((cmd: string, args: string[]) => {
       if (args[0] === '--version') return { status: 0, stdout: version };
-      if (cmd === 'npm') return (version = '2.18.0'), { status: 0 };
+      if (cmd === 'npm') return (version = '2.25.0'), { status: 0 };
       if (args[0] === 'update') return { status: null, error: new Error('ENOENT') };
       return { status: 1 };
     });
@@ -473,5 +475,49 @@ describe('solid update — the whole machine, finished by the new binary', () =>
     expect(text).toContain('not valid JSON');
     expect(process.exitCode).toBe(1);
   });
+
+  it('⛔ never hands off to a release older than --finish — this process finishes instead', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.24.11' }) }) as never;
+    let version = '2.17.0';
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, stdout: version };
+      if (cmd === 'npm') return (version = '2.24.11'), { status: 0 };
+      return { status: 1 };
+    });
+    await run([]);
+    expect(FINISH_SINCE).toBe('2.24.12');
+    expect(mockSpawn.mock.calls.some(([, args]) => args[0] === 'update')).toBe(false);
+    expect(mockHook).toHaveBeenCalledWith(true);
+    expect(process.exitCode).not.toBe(1);
+  });
+
+  it('a second npm copy first on PATH (another nvm Node) is updated where it lives', async () => {
+    const other = '/Users/x/.nvm/versions/node/v20/lib/node_modules/@solidnumber/cli/dist/index.js';
+    mockExists.mockImplementation((p: string) => p === '/bin-dir/solid');
+    const fsMock = jest.requireMock('fs') as { realpathSync: jest.Mock };
+    fsMock.realpathSync.mockImplementation((p: string) => (p === '/bin-dir/solid' ? other : p));
+    let shadowVersion = '2.17.0';
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, stdout: shadowVersion };
+      if (cmd === 'npm' && args.includes('--prefix')) {
+        expect(args[args.indexOf('--prefix') + 1]).toBe('/Users/x/.nvm/versions/node/v20');
+        return (shadowVersion = '2.25.0'), { status: 0 };
+      }
+      if (cmd === 'npm') return { status: 0 }; // updates THIS copy; the shadow still wins
+      if (args[0] === 'update') return { status: 0, stdout: '' };
+      return { status: 1 };
+    });
+    const text = await run([]);
+    fsMock.realpathSync.mockImplementation((p: string) => p);
+    expect(text).toContain('Updated to 2.25.0');
+  });
 });
 
+describe('npmPrefixOf', () => {
+  it('finds the prefix of a unix npm global', () => {
+    expect(npmPrefixOf('/opt/homebrew/lib/node_modules/@solidnumber/cli/dist/index.js')).toBe('/opt/homebrew');
+  });
+  it('is null for a Homebrew keg — brew owns that one', () => {
+    expect(npmPrefixOf('/opt/homebrew/Cellar/cli/2.24.0/libexec/lib/node_modules/@solidnumber/cli/dist/index.js')).toBeNull();
+  });
+});

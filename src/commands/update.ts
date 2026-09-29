@@ -50,6 +50,8 @@ import { refreshInstalledCompletions } from './completion';
 
 export const PACKAGE_NAME = '@solidnumber/cli';
 const REGISTRY = `https://registry.npmjs.org/${PACKAGE_NAME}/latest`;
+/** The first release whose `solid update` understands `--finish`. */
+export const FINISH_SINCE = '2.24.12';
 
 export type Installer = 'npm' | 'brew' | 'scoop' | 'unknown';
 
@@ -265,7 +267,42 @@ function runLadder(routes: Route[], latest: string, me: string | null, json: boo
     if (route.installer === 'brew') return { action: 'formula_behind', attempts };
     if (!json) console.log(chalk.dim(`That finished, but \`solid --version\` still says ${after ?? 'nothing readable'} — trying the next way.\n`));
   }
+  // Every route ran and the `solid` a new shell runs is STILL old: it is another
+  // copy, first on PATH. When that copy is an npm global under a different
+  // prefix (nvm keeps one per Node version), update it where it lives.
+  const shadow = onPath(me).path;
+  const prefix = shadow ? npmPrefixOf(shadow) : null;
+  if (prefix) {
+    const command = [...NPM_ROUTE.command, '--prefix', prefix];
+    if (!json) console.log(`Running ${chalk.cyan(command.join(' '))} …\n`);
+    const result = spawnSync(command[0], command.slice(1), { stdio: json ? ['ignore', 2, 2] : 'inherit' });
+    const exit = result?.status ?? null;
+    const after = exit === 0 ? onPath(me).version : null;
+    attempts.push({ installer: 'npm', command: command.join(' '), exit, version_after: after });
+    if (after && !isNewer(after, latest)) return { action: 'updated', attempts };
+    if (exit === 0) anyExitedClean = true;
+  }
   return { action: anyExitedClean ? 'updated_unverified' : 'update_failed', attempts };
+}
+
+/**
+ * The npm prefix that owns a `solid` on PATH, or null when it is not an npm
+ * global. `<prefix>/bin/solid` → `<prefix>/lib/node_modules/@solidnumber/cli`
+ * on macOS/Linux; `<prefix>\\solid.cmd` → `<prefix>\\node_modules\\…` on Windows.
+ */
+export function npmPrefixOf(binPath: string): string | null {
+  let real = binPath;
+  try {
+    real = realpathSync(binPath);
+  } catch {
+    /* use it as given */
+  }
+  const p = real.replace(/\\/g, '/');
+  if (detectInstaller(p).installer !== 'npm') return null;
+  const i = p.indexOf('/lib/node_modules/@solidnumber/cli');
+  if (i > 0) return real.slice(0, i);
+  const j = p.indexOf('/node_modules/@solidnumber/cli');
+  return j > 0 ? real.slice(0, j) : null;
 }
 
 function printMcp(report: McpFreshnessReport, check: boolean): void {
@@ -459,8 +496,10 @@ export const updateCommand = new Command('update')
         console.log(chalk.yellow(`  Homebrew does not have ${latest} yet — it follows npm within 4 hours.`));
         console.log('  Nothing is broken. Run solid update again later.');
       } else if (cliAction === 'updated_unverified') {
-        console.log(chalk.yellow(`  Installed ${latest}, but the solid your shell runs still reports an older version.`));
-        console.log('  Open a new terminal window and run solid --version.');
+        const runs = onPath(me);
+        console.log(chalk.yellow(`  Installed ${latest}, but the solid first on your PATH is still ${runs.version ?? 'unreadable'}:`));
+        console.log(`    ${runs.path ?? '(not found)'}`);
+        console.log('  Every way to update that copy was tried. Remove it and the updated one runs.');
       } else {
         console.log(chalk.red('  ✗ Could not update automatically. Tried:'));
         for (const a of attempts) console.log(`    ${a.command}  (exit ${a.exit ?? 'not found'})`);
@@ -470,7 +509,10 @@ export const updateCommand = new Command('update')
 
     // ── 2. everything else — by the NEW binary when there is one ─────────────
     let finish: { finished_by: string; mcp: McpFreshnessReport; machine: PartReport[] } | null = null;
-    const fresh = cliAction === 'updated' ? onPath(me).path : null;
+    // `--finish` exists from FINISH_SINCE on. An older latest (a rolled-back
+    // dist-tag) would reject the flag, so this process finishes instead.
+    const canFinish = latest !== null && !isNewer(latest, FINISH_SINCE);
+    const fresh = cliAction === 'updated' && canFinish ? onPath(me).path : null;
     const handed = fresh ? handOff(fresh, json) : null;
     if (handed) {
       if (handed.status !== 0) process.exitCode = 1;
