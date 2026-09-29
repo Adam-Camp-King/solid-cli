@@ -225,6 +225,45 @@ async function installCompletion(root: Command): Promise<{
   return { shell, wroteCompletion: completionFile, updatedRc: rcFile, already: false };
 }
 
+/**
+ * `solid update`'s half of completion: regenerate every completion file that
+ * `solid completion install` wrote, from the command tree of THIS binary. A
+ * static file is a snapshot — without this, verbs added since the install
+ * never tab-complete. A file that is not there is not installed; leave it be.
+ */
+export function refreshInstalledCompletions(
+  root: Command,
+  apply: boolean,
+  home: string = (require('os') as typeof import('os')).homedir(),
+): { state: 'absent' | 'current' | 'updated' | 'would_update' | 'failed'; detail: string } {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  const files: Array<[string, (t: Node) => string]> = [
+    [path.join(home, '.solid-completion.zsh'), generateZsh],
+    [path.join(home, '.solid-completion.bash'), generateBash],
+    [path.join(home, '.config', 'fish', 'completions', 'solid.fish'), generateFish],
+  ];
+  const present = files.filter(([f]) => fs.existsSync(f));
+  if (present.length === 0) return { state: 'absent', detail: 'not installed' };
+  const tree = walk(root);
+  const stale = present.filter(([f, gen]) => {
+    try {
+      return fs.readFileSync(f, 'utf-8') !== gen(tree);
+    } catch {
+      return true;
+    }
+  });
+  const names = present.map(([f]) => f.replace(home, '~')).join(', ');
+  if (stale.length === 0) return { state: 'current', detail: names };
+  if (!apply) return { state: 'would_update', detail: names };
+  try {
+    for (const [f, gen] of stale) fs.writeFileSync(f, gen(tree), 'utf-8');
+  } catch (err) {
+    return { state: 'failed', detail: (err as Error).message };
+  }
+  return { state: 'updated', detail: names };
+}
+
 export const completionCommand = new Command('completion')
   .description('Generate or install shell completion (reflects the live command tree)')
   .option('--bash', 'Generate bash completion to stdout')

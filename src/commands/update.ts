@@ -23,6 +23,10 @@
  * bare `@solidnumber/mcp` (frozen in npx's cache) is switched to `@latest`, and
  * a global npm install is upgraded. See lib/mcp-freshness.ts.
  *
+ * Then everything else the CLI put on the machine — see refreshMachine() — and
+ * after a CLI upgrade that part is run by the NEW binary (`update --finish`).
+ * Full design: Owners-Manual/45-Developer-CLI/25-SOLID-UPDATE.md.
+ *
  *   solid update                  upgrade the CLI and the MCP server
  *   solid update --check          say what would happen, change nothing
  *   solid update --json           do it, and report it as JSON (for an agent)
@@ -33,11 +37,16 @@ import { existsSync, realpathSync } from 'fs';
 import { delimiter, join } from 'path';
 
 import chalk from 'chalk';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 
 import { CLI_VERSION } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { refreshCachedChromium } from '../lib/browser-install';
+import { refreshClaudeHook } from '../lib/claude-hook';
 import { MCP_LATEST_SPEC, McpFreshnessReport, refreshMcp } from '../lib/mcp-freshness';
+import { KitReport, refreshAllKits } from '../lib/project-kits';
+import { refreshInstalledCompletions } from './completion';
+
 
 export const PACKAGE_NAME = '@solidnumber/cli';
 const REGISTRY = `https://registry.npmjs.org/${PACKAGE_NAME}/latest`;
@@ -213,17 +222,17 @@ export function updateRoutes(detected: InstallInfo, platform: string = process.p
   return routes;
 }
 
-/** The version of the `solid` a new shell will run — the only proof an update worked. */
-function versionOnPath(me: string | null, env = process.env): string | null {
+/** The `solid` a new shell will run, and its version — the only proof an update worked. */
+function onPath(me: string | null, env = process.env): { path: string | null; version: string | null } {
   const names = process.platform === 'win32' ? ['solid.cmd', 'solid.exe', 'solid'] : ['solid'];
   for (const dir of (env.PATH || '').split(delimiter)) {
     if (!dir) continue;
     for (const name of names) {
       const candidate = join(dir, name);
-      if (existsSync(candidate)) return versionOf(candidate);
+      if (existsSync(candidate)) return { path: candidate, version: versionOf(candidate) };
     }
   }
-  return me ? versionOf(me) : null;
+  return { path: me, version: me ? versionOf(me) : null };
 }
 
 interface Attempt {
@@ -246,7 +255,7 @@ function runLadder(routes: Route[], latest: string, me: string | null, json: boo
     // JSON mode keeps stdout clean for the agent: the installer's own output goes to stderr.
     const result = spawnSync(route.command[0], route.command.slice(1), { stdio: json ? ['ignore', 2, 2] : 'inherit' });
     const exit = result?.status ?? null;
-    const after = exit === 0 ? versionOnPath(me) : null;
+    const after = exit === 0 ? onPath(me).version : null;
     attempts.push({ installer: route.installer, command: route.command.join(' '), exit, version_after: after });
     if (exit !== 0) continue;
     anyExitedClean = true;
@@ -289,13 +298,115 @@ function printMcp(report: McpFreshnessReport, check: boolean): void {
   if (!check) console.log(chalk.dim('  The MCP SDK ships inside the server, so it is current whenever the server is.'));
 }
 
+type PartState = 'absent' | 'current' | 'updated' | 'would_update' | 'failed' | 'offline';
+
+export interface PartReport {
+  id: 'claude_hook' | 'completion' | 'project_kits' | 'browser';
+  label: string;
+  state: PartState;
+  detail: string;
+  projects?: KitReport[];
+}
+
+/**
+ * EVERYTHING ELSE the CLI put on this machine, after the CLI and the MCP
+ * server. One list, one shape — a thing `solid` installs and this list does
+ * not name is a thing that silently goes stale. Each part refreshes only what
+ * is already installed; none of them adds something the user did not set up.
+ */
+export async function refreshMachine(root: Command, apply: boolean): Promise<PartReport[]> {
+  const parts: PartReport[] = [];
+  const hook = refreshClaudeHook(apply);
+  parts.push({ id: 'claude_hook', label: 'Claude Code session hook', ...hook });
+
+  const completion = refreshInstalledCompletions(root, apply);
+  parts.push({ id: 'completion', label: 'Shell completion', ...completion });
+
+  const kits = refreshAllKits(CLI_VERSION, apply);
+  const kitState: PartState = !kits.length
+    ? 'absent'
+    : kits.some((k) => k.state === 'failed')
+      ? 'failed'
+      : kits.some((k) => k.state === 'updated')
+        ? 'updated'
+        : kits.some((k) => k.state === 'would_update')
+          ? 'would_update'
+          : 'current';
+  parts.push({
+    id: 'project_kits',
+    label: 'Agent skills + plugin',
+    state: kitState,
+    detail: kits.length ? `${kits.length} project${kits.length === 1 ? '' : 's'}` : 'none set up',
+    projects: kits,
+  });
+
+  const browser = await refreshCachedChromium(apply);
+  parts.push({ id: 'browser', label: 'Render browser', ...browser });
+  return parts;
+}
+
+function printParts(parts: PartReport[]): void {
+  console.log(chalk.bold('\nOn this machine'));
+  for (const p of parts) {
+    const line = `${p.label}: ${p.detail}`;
+    if (p.state === 'updated') console.log(chalk.green(`  ✓ ${p.label}: updated  `) + chalk.dim(p.detail));
+    else if (p.state === 'current') console.log(chalk.green(`  ✓ ${p.label}: current  `) + chalk.dim(p.detail));
+    else if (p.state === 'would_update') console.log(`  ${p.label}: would update  ${chalk.dim(p.detail)}`);
+    else if (p.state === 'offline') console.log(chalk.yellow(`  ${line} — try again when online`));
+    else if (p.state === 'failed') console.log(chalk.red(`  ✗ ${line}`));
+    else console.log(chalk.dim(`  ${p.label}: not set up`));
+    for (const k of p.projects ?? []) {
+      if (k.state === 'failed') console.log(chalk.red(`      ✗ ${k.dir}: ${k.error}`));
+      else if (k.state !== 'current') console.log(chalk.dim(`      ${k.dir}: ${k.files} file${k.files === 1 ? '' : 's'}`));
+    }
+  }
+}
+
+/**
+ * Hand the rest of the update to the binary that was just installed.
+ *
+ * ⛔ The process running now is the OLD CLI. Skills, completions and the hook
+ * are compiled into the CLI, so if the old process wrote them it would write
+ * the old version's — a perfectly executed update that leaves every generated
+ * file one release behind. The new binary finishes the job with its own code.
+ * Null when it could not be started; the caller then finishes in-process,
+ * because a slightly stale refresh beats none.
+ */
+function handOff(binary: string, json: boolean): { status: number | null; stdout: string } | null {
+  const r = spawnSync(binary, ['update', '--finish', ...(json ? ['--json'] : [])], {
+    encoding: 'utf8',
+    stdio: json ? ['ignore', 'pipe', 2] : 'inherit',
+  });
+  if (!r || r.error || r.status === null) return null;
+  return { status: r.status, stdout: r.stdout || '' };
+}
+
 export const updateCommand = new Command('update')
-  .description('Update everything Solid# on this machine: the CLI and the MCP server your AI tools launch')
+  .description('Update everything Solid# on this machine: the CLI, the MCP server, and every file the CLI set up')
   .option('--check', 'Say what would happen; change nothing')
   .option('--json', 'Emit JSON (runs the update unless --check)')
-  .action(async (opts) => {
+  .addOption(new Option('--finish', 'Internal: the freshly installed CLI finishing an update').hideHelp())
+  .action(async function (this: Command, opts) {
     const check = Boolean(opts.check);
     const json = isJsonOutput(opts);
+    const root = this.parent ?? this;
+
+    // ── the new binary, finishing what the old one started ──────────────────
+    if (opts.finish) {
+      const mcp = await refreshMcp({ apply: !check });
+      const parts = await refreshMachine(root, !check);
+      if (mcp.clients.some((c) => c.status === 'write_failed') || mcp.global.action === 'upgrade_failed' || parts.some((p) => p.state === 'failed')) {
+        process.exitCode = 1;
+      }
+      if (json) {
+        process.stdout.write(JSON.stringify({ finished_by: CLI_VERSION, mcp, machine: parts }, null, 2) + '\n');
+        return;
+      }
+      printMcp(mcp, check);
+      printParts(parts);
+      return;
+    }
+
     const me = selfPath();
     const detected = detectInstaller(me);
     const { installer } = detected;
@@ -317,13 +428,76 @@ export const updateCommand = new Command('update')
       ({ action: cliAction, attempts } = runLadder(routes, latest, me, json));
     }
 
-    // ── 2. the MCP server (always — a current CLI can still launch a stale server) ──
-    const mcp = await refreshMcp({ apply: !check });
+    const cliFailed = cliAction === 'update_failed';
+
+    // The other copies matter even when this one is current, so say it first.
+    if (!json && others.length && latest) {
+      console.log(chalk.yellow(`\n⚠ Another 'solid' is on your PATH:`));
+      for (const other of others) {
+        const stale = other.version && isNewer(other.version, latest);
+        console.log(
+          `  ${other.path}  ${other.version ?? '(version unknown)'}` + (stale ? chalk.red('  ← behind') : ''),
+        );
+      }
+      console.log(chalk.dim('  Whichever comes first in PATH is the one that runs.'));
+      console.log(chalk.dim(`  Update it too, or remove it so there is only one.\n`));
+    }
+
+    if (!json) {
+      console.log(chalk.bold('Solid# CLI'));
+      if (cliAction === 'offline') {
+        console.log(chalk.yellow('  Could not reach the npm registry — try again, or run:'));
+        console.log(`    ${first.command.join(' ')}`);
+      } else if (cliAction === 'current') {
+        console.log(chalk.green(`  ✓ Already on the latest — ${CLI_VERSION}.`));
+      } else if (cliAction === 'would_update') {
+        console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
+        console.log(`  Would run: ${chalk.cyan(recipe)}`);
+      } else if (cliAction === 'updated') {
+        console.log(chalk.green(`  ✓ Updated to ${latest}.`));
+      } else if (cliAction === 'formula_behind') {
+        console.log(chalk.yellow(`  Homebrew does not have ${latest} yet — it follows npm within 4 hours.`));
+        console.log('  Nothing is broken. Run solid update again later.');
+      } else if (cliAction === 'updated_unverified') {
+        console.log(chalk.yellow(`  Installed ${latest}, but the solid your shell runs still reports an older version.`));
+        console.log('  Open a new terminal window and run solid --version.');
+      } else {
+        console.log(chalk.red('  ✗ Could not update automatically. Tried:'));
+        for (const a of attempts) console.log(`    ${a.command}  (exit ${a.exit ?? 'not found'})`);
+        console.log(`  The one that works on almost every machine:\n    ${NPM_ROUTE.command.join(' ')}`);
+      }
+    }
+
+    // ── 2. everything else — by the NEW binary when there is one ─────────────
+    let finish: { finished_by: string; mcp: McpFreshnessReport; machine: PartReport[] } | null = null;
+    const fresh = cliAction === 'updated' ? onPath(me).path : null;
+    const handed = fresh ? handOff(fresh, json) : null;
+    if (handed) {
+      if (handed.status !== 0) process.exitCode = 1;
+      if (json) {
+        try {
+          finish = JSON.parse(handed.stdout);
+        } catch {
+          finish = null;
+        }
+      }
+    }
+    if (!handed || (json && !finish)) {
+      const mcp = await refreshMcp({ apply: !check });
+      const machine = await refreshMachine(root, !check);
+      finish = { finished_by: CLI_VERSION, mcp, machine };
+      if (!json) {
+        printMcp(mcp, check);
+        printParts(machine);
+      }
+    }
 
     const failed =
-      cliAction === 'update_failed' ||
-      mcp.clients.some((c) => c.status === 'write_failed') ||
-      mcp.global.action === 'upgrade_failed';
+      cliFailed ||
+      (finish !== null &&
+        (finish.mcp.clients.some((c) => c.status === 'write_failed') ||
+          finish.mcp.global.action === 'upgrade_failed' ||
+          finish.machine.some((p) => p.state === 'failed')));
     if (failed && !check) process.exitCode = 1;
 
     if (json) {
@@ -340,50 +514,13 @@ export const updateCommand = new Command('update')
             other_copies: others,
             ran: !check,
             cli: { action: cliAction },
-            mcp,
+            finished_by: finish?.finished_by ?? null,
+            mcp: finish?.mcp ?? null,
+            machine: finish?.machine ?? [],
           },
           null,
           2,
         ) + '\n',
       );
-      return;
     }
-
-    // The other copies matter even when this one is current, so say it first.
-    if (others.length && latest) {
-      console.log(chalk.yellow(`\n⚠ Another 'solid' is on your PATH:`));
-      for (const other of others) {
-        const stale = other.version && isNewer(other.version, latest);
-        console.log(
-          `  ${other.path}  ${other.version ?? '(version unknown)'}` + (stale ? chalk.red('  ← behind') : ''),
-        );
-      }
-      console.log(chalk.dim('  Whichever comes first in PATH is the one that runs.'));
-      console.log(chalk.dim(`  Update it too, or remove it so there is only one.\n`));
-    }
-
-    console.log(chalk.bold('Solid# CLI'));
-    if (cliAction === 'offline') {
-      console.log(chalk.yellow('  Could not reach the npm registry — try again, or run:'));
-      console.log(`    ${first.command.join(' ')}`);
-    } else if (cliAction === 'current') {
-      console.log(chalk.green(`  ✓ Already on the latest — ${CLI_VERSION}.`));
-    } else if (cliAction === 'would_update') {
-      console.log(`  Update available  ${CLI_VERSION} → ${chalk.green(latest)}`);
-      console.log(`  Would run: ${chalk.cyan(recipe)}`);
-    } else if (cliAction === 'updated') {
-      console.log(chalk.green(`  ✓ Updated to ${latest}.`));
-    } else if (cliAction === 'formula_behind') {
-      console.log(chalk.yellow(`  Homebrew does not have ${latest} yet — it follows npm within 4 hours.`));
-      console.log('  Nothing is broken. Run solid update again later.');
-    } else if (cliAction === 'updated_unverified') {
-      console.log(chalk.yellow(`  Installed ${latest}, but the solid your shell runs still reports an older version.`));
-      console.log('  Open a new terminal window and run solid --version.');
-    } else {
-      console.log(chalk.red('  ✗ Could not update automatically. Tried:'));
-      for (const a of attempts) console.log(`    ${a.command}  (exit ${a.exit ?? 'not found'})`);
-      console.log(`  The one that works on almost every machine:\n    ${NPM_ROUTE.command.join(' ')}`);
-    }
-
-    printMcp(mcp, check);
   });

@@ -192,41 +192,50 @@ function writeIfChanged(file: string, content: string, rel: string): WrittenFile
 }
 
 /**
+ * The ONE description of the Solid# plugin package. `solid agent setup` writes
+ * it and `solid update` rewrites it; both must say the same thing, so neither
+ * spells it out.
+ */
+export function solidPluginInput(companyId: number, version: string | undefined): WritePluginInput {
+  return {
+    manifest: {
+      name: 'solid',
+      version,
+      description: 'Operate this Solid# company correctly: verb discovery, response contracts, tenant safety.',
+      homepage: 'https://solidnumber.com',
+    },
+    mcp: { companyId },
+  };
+}
+
+/**
  * Write the Agent Plugins package under `<baseDir>/.solid/plugin/`.
  *
  * ⛔ The caller owns the tenant guard, exactly as `installSkills` documents.
  * This writes tenant-describing content and must never be reachable without a
  * verified `.solid/manifest.json`.
  */
+/** Every file of the plugin package and the bytes it should hold. Writes nothing. */
+export function planPlugin(
+  baseDir: string,
+  skills: readonly Skill[],
+  input: WritePluginInput = {},
+): Array<{ rel: string; path: string; content: string }> {
+  const root = path.join(baseDir, PLUGIN_DIR);
+  // Trailing newline on both: these are files a human may open in an editor,
+  // and every other JSON this CLI writes ends in one.
+  const files = [
+    { rel: 'plugin.json', content: `${JSON.stringify(buildPluginManifest(input.manifest), null, 2)}\n` },
+    { rel: 'mcp.json', content: `${JSON.stringify(buildMcpConfig(input.mcp), null, 2)}\n` },
+    ...skills.map((skill) => ({ rel: path.join('skills', skill.dirname, 'SKILL.md'), content: skill.content })),
+  ];
+  return files.map((f) => ({ ...f, path: path.join(root, f.rel) }));
+}
+
 export function writePlugin(
   baseDir: string,
   skills: readonly Skill[],
   input: WritePluginInput = {},
 ): WrittenFile[] {
-  const root = path.join(baseDir, PLUGIN_DIR);
-  const out: WrittenFile[] = [];
-
-  // Trailing newline on both: these are files a human may open in an editor,
-  // and every other JSON this CLI writes ends in one.
-  out.push(
-    writeIfChanged(
-      path.join(root, 'plugin.json'),
-      `${JSON.stringify(buildPluginManifest(input.manifest), null, 2)}\n`,
-      'plugin.json',
-    ),
-  );
-  out.push(
-    writeIfChanged(
-      path.join(root, 'mcp.json'),
-      `${JSON.stringify(buildMcpConfig(input.mcp), null, 2)}\n`,
-      'mcp.json',
-    ),
-  );
-
-  for (const skill of skills) {
-    const rel = path.join('skills', skill.dirname, 'SKILL.md');
-    out.push(writeIfChanged(path.join(root, rel), skill.content, rel));
-  }
-
-  return out;
+  return planPlugin(baseDir, skills, input).map((f) => writeIfChanged(f.path, f.content, f.rel));
 }

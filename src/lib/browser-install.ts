@@ -34,6 +34,7 @@ import {
   getInstalledBrowsers,
   install,
   resolveBuildId,
+  uninstall,
 } from '@puppeteer/browsers';
 
 
@@ -178,4 +179,56 @@ export function uninstallCachedBrowsers(): void {
   if (fs.existsSync(cacheDir)) {
     fs.rmSync(cacheDir, { recursive: true, force: true });
   }
+}
+
+
+/**
+ * `solid update`'s half of the browser: move a Chromium WE downloaded to the
+ * current stable build, then delete the old one.
+ *
+ * ⛔ `ensureChromium` reuses any cached build forever, so a render or audit
+ * run in 2027 would still drive the Chrome that was stable on install day —
+ * and Lighthouse scores drift with the browser. Only our cache is touched:
+ * a system Chrome or SOLID_CHROMIUM_PATH belongs to the user.
+ *
+ * `absent` when nothing was ever downloaded — an update never starts a
+ * 150 MB download nobody asked for.
+ */
+export async function refreshCachedChromium(
+  apply: boolean,
+  cacheDir: string = browserCacheDir(),
+): Promise<{ state: 'absent' | 'current' | 'updated' | 'would_update' | 'failed' | 'offline'; detail: string }> {
+  if (!fs.existsSync(cacheDir)) return { state: 'absent', detail: 'not downloaded' };
+  let have: string[];
+  try {
+    have = (await getInstalledBrowsers({ cacheDir })).filter((b) => b.browser === Browser.CHROME).map((b) => b.buildId);
+  } catch (err) {
+    return { state: 'failed', detail: (err as Error).message };
+  }
+  if (have.length === 0) return { state: 'absent', detail: 'not downloaded' };
+
+  const platform = detectBrowserPlatform();
+  if (!platform) return { state: 'failed', detail: 'unsupported platform' };
+  let want: string;
+  try {
+    want = await resolveBuildId(Browser.CHROME, platform, 'stable');
+  } catch {
+    return { state: 'offline', detail: `Chrome ${have.join(', ')} (could not reach the release feed)` };
+  }
+  if (have.length === 1 && have[0] === want) return { state: 'current', detail: `Chrome ${want}` };
+  if (!apply) return { state: 'would_update', detail: `Chrome ${have.join(', ')} → ${want}` };
+
+  try {
+    if (!have.includes(want)) await install({ browser: Browser.CHROME, buildId: want, cacheDir });
+    if (!fs.existsSync(computeExecutablePath({ browser: Browser.CHROME, buildId: want, cacheDir }))) {
+      return { state: 'failed', detail: `Chrome ${want} downloaded but its executable is missing` };
+    }
+    // Only now that the new one is proven: the old ones go.
+    for (const old of have.filter((b) => b !== want)) {
+      await uninstall({ browser: Browser.CHROME, buildId: old, cacheDir, platform });
+    }
+  } catch (err) {
+    return { state: 'failed', detail: (err as Error).message };
+  }
+  return { state: 'updated', detail: `Chrome ${have.filter((b) => b !== want).join(', ') || want} → ${want}` };
 }

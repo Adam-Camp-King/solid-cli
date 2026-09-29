@@ -28,7 +28,13 @@ jest.mock('../../lib/mcp-freshness', () => ({
   refreshMcp: jest.fn(),
 }));
 
+jest.mock('../../lib/claude-hook', () => ({ refreshClaudeHook: jest.fn(() => ({ state: 'absent', detail: '' })) }));
+jest.mock('../../lib/browser-install', () => ({ refreshCachedChromium: jest.fn(async () => ({ state: 'absent', detail: '' })) }));
+jest.mock('../../lib/project-kits', () => ({ refreshAllKits: jest.fn(() => []) }));
+jest.mock('../../commands/completion', () => ({ refreshInstalledCompletions: jest.fn(() => ({ state: 'absent', detail: '' })) }));
+
 import { existsSync } from 'fs';
+import { refreshClaudeHook } from '../../lib/claude-hook';
 import { spawnSync } from 'child_process';
 import { refreshMcp } from '../../lib/mcp-freshness';
 
@@ -180,6 +186,7 @@ describe('solid update', () => {
     // test isolation.
     updateCommand.setOptionValue('json', undefined);
     updateCommand.setOptionValue('check', undefined);
+    updateCommand.setOptionValue('finish', undefined);
 
     const out: string[] = [];
     const write = jest.spyOn(process.stdout, 'write').mockImplementation((s: any) => (out.push(String(s)), true));
@@ -285,6 +292,7 @@ describe('solid update', () => {
       mockSpawn.mockImplementation((cmd: string, args: string[]) => {
         if (args[0] === '--version') return { status: 0, stdout: onPath() };
         if (args[0] === 'tap') return { status: 0 };
+        if (args[0] === 'update') return { status: 0, stdout: '' }; // the new binary finishing
         return { status: answers[cmd] ?? 1 };
       });
     };
@@ -359,3 +367,111 @@ describe('updateRoutes', () => {
     expect(brew.preflight).toEqual(['brew', 'tap', 'solidnumber/tap']);
   });
 });
+
+describe('solid update — the whole machine, finished by the new binary', () => {
+  const argv1 = process.argv[1];
+  const path = process.env.PATH;
+  const mockSpawn = spawnSync as unknown as jest.Mock;
+  const mockExists = existsSync as unknown as jest.Mock;
+  const mockHook = refreshClaudeHook as unknown as jest.Mock;
+
+  const run = async (args: string[]) => {
+    for (const k of ['json', 'check', 'finish']) updateCommand.setOptionValue(k, undefined);
+    const out: string[] = [];
+    const write = jest.spyOn(process.stdout, 'write').mockImplementation((s: any) => (out.push(String(s)), true));
+    const log = jest.spyOn(console, 'log').mockImplementation((...a) => out.push(a.join(' ')));
+    try {
+      await updateCommand.parseAsync(args, { from: 'user' });
+    } finally {
+      write.mockRestore();
+      log.mockRestore();
+    }
+    return out.join('\n');
+  };
+
+  beforeEach(() => {
+    mockSpawn.mockReset();
+    mockRefreshMcp.mockReset().mockResolvedValue(emptyMcp as never);
+    mockHook.mockReturnValue({ state: 'absent', detail: '' });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.18.0' }) }) as never;
+    process.argv[1] = '/usr/local/lib/node_modules/@solidnumber/cli/dist/index.js';
+    process.env.PATH = '/bin-dir';
+    mockExists.mockImplementation((p: string) => p === '/bin-dir/solid');
+  });
+  afterEach(() => {
+    process.argv[1] = argv1;
+    process.env.PATH = path;
+    process.exitCode = 0;
+  });
+
+  it('⛔ after the CLI moves, the NEW binary refreshes the rest — the old one never writes old files', async () => {
+    let version = '2.17.0';
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, stdout: version };
+      if (cmd === 'npm') return (version = '2.18.0'), { status: 0 };
+      if (args[0] === 'update') return { status: 0, stdout: '' };
+      return { status: 1 };
+    });
+    await run([]);
+    expect(mockSpawn).toHaveBeenCalledWith('/bin-dir/solid', ['update', '--finish'], expect.anything());
+    expect(mockRefreshMcp).not.toHaveBeenCalled();
+    expect(mockHook).not.toHaveBeenCalled();
+  });
+
+  it('--json carries the new binary\'s report through', async () => {
+    let version = '2.17.0';
+    const report = { finished_by: '2.18.0', mcp: emptyMcp, machine: [{ id: 'claude_hook', state: 'updated' }] };
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, stdout: version };
+      if (cmd === 'npm') return (version = '2.18.0'), { status: 0 };
+      if (args[0] === 'update') return { status: 0, stdout: JSON.stringify(report) };
+      return { status: 1 };
+    });
+    const body = JSON.parse(await run(['--json']));
+    expect(body.finished_by).toBe('2.18.0');
+    expect(body.machine).toEqual(report.machine);
+  });
+
+  it('if the new binary cannot be started, this one still refreshes everything', async () => {
+    let version = '2.17.0';
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, stdout: version };
+      if (cmd === 'npm') return (version = '2.18.0'), { status: 0 };
+      if (args[0] === 'update') return { status: null, error: new Error('ENOENT') };
+      return { status: 1 };
+    });
+    await run([]);
+    expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: true });
+    expect(mockHook).toHaveBeenCalledWith(true);
+  });
+
+  it('--finish refreshes MCP and every machine part, and never touches the CLI', async () => {
+    const text = await run(['--finish']);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: true });
+    expect(mockHook).toHaveBeenCalledWith(true);
+    expect(text).toContain('On this machine');
+  });
+
+  it('an already-current CLI still refreshes the whole machine', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.17.0' }) }) as never;
+    await run([]);
+    expect(mockHook).toHaveBeenCalledWith(true);
+  });
+
+  it('--check reports every part and changes none', async () => {
+    const body = JSON.parse(await run(['--check', '--json']));
+    expect(mockHook).toHaveBeenCalledWith(false);
+    expect(body.machine.map((p: { id: string }) => p.id)).toEqual(['claude_hook', 'completion', 'project_kits', 'browser']);
+  });
+
+  it('a part that fails makes the command fail', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ version: '2.17.0' }) }) as never;
+    mockHook.mockReturnValue({ state: 'failed', detail: 'settings.json is not valid JSON' });
+    const text = await run([]);
+    expect(text).toContain('not valid JSON');
+    expect(process.exitCode).toBe(1);
+  });
+});
+

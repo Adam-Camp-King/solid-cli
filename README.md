@@ -121,7 +121,7 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid auth logout` | Clear stored credentials |
 | `solid auth whoami` | Show current session |
 | `solid status` | Company dashboard |
-| `solid update` | Update everything Solid# on this machine — the CLI (npm, Homebrew or scoop) and the MCP server your AI tools launch |
+| `solid update` | Update everything Solid# on this machine — CLI, MCP server, hook, completion, agent skills, render browser |
 | `solid pull` | Download pages, KB, settings as files |
 | `solid push` | Upload local changes (drafts / unpublished pages) |
 | `solid publish <id>` / `--all` | Make pages live (pending drafts + never-published pages) |
@@ -413,7 +413,7 @@ Full contract: see the [Scripting Contract doc](https://github.com/Adam-Camp-Kin
 When it says there's a new version, run:
 
 ```bash
-solid update                  # upgrade the CLI and the MCP server
+solid update                  # bring everything Solid# on this machine current
 solid update --check          # say what would happen, change nothing
 solid update --json           # do it, and report it as JSON (for an agent)
 solid update --check --json   # report only, as JSON
@@ -425,6 +425,13 @@ launches a bare `@solidnumber/mcp`, which npx serves from its cache forever, is
 switched to `@solidnumber/mcp@latest`, and a global npm install is upgraded. A
 version someone pinned on purpose is left alone and reported. The MCP SDK ships
 inside the server, so it moves with it.
+
+It then brings everything else the CLI set up up to date: the Claude Code
+session hook, your shell completion, the agent skills and plugin in every
+project where you ran `solid agent setup`, and the render browser. The
+freshly installed CLI does this part, so the files come from the new version.
+Only what is already installed is refreshed; an update never adds something
+you did not set up.
 
 It works out how this copy was installed and runs the right thing —
 `npm install -g`, `brew upgrade`, or `scoop update`. If that guess is wrong, or

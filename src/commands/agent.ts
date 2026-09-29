@@ -1299,7 +1299,8 @@ agentCommand
   .option('--json', 'Output as JSON')
   .action(async (opts) => {
     const { SKILLS, installSkills } = await import('../lib/skills/index');
-    const { writePlugin, PLUGIN_DIR, AGENT_PLUGINS_VERSION } = await import('../lib/skills/plugin');
+    const { writePlugin, PLUGIN_DIR, AGENT_PLUGINS_VERSION, solidPluginInput } = await import('../lib/skills/plugin');
+    const { rememberProject } = await import('../lib/project-kits');
     const listOnly = Boolean(opts.list || opts.dryRun);
 
     if (listOnly) {
@@ -1341,15 +1342,9 @@ agentCommand
     // `.claude/skills/`; every client that implements Agent Plugins reads the
     // package. Writing both is two small JSON files, and writing only the
     // second would break the client most likely to be pointed here.
-    const pkg = writePlugin(process.cwd(), SKILLS, {
-      manifest: {
-        name: 'solid',
-        version: cliVersion(),
-        description: 'Operate this Solid# company correctly: verb discovery, response contracts, tenant safety.',
-        homepage: 'https://solidnumber.com',
-      },
-      mcp: { companyId: config.companyId as number },
-    });
+    const pkg = writePlugin(process.cwd(), SKILLS, solidPluginInput(config.companyId as number, cliVersion()));
+    // So `solid update` can keep this directory's skills and plugin current.
+    rememberProject(process.cwd());
 
     if (isJsonOutput(opts)) {
       printJson({
