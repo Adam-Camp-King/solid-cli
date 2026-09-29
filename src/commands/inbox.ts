@@ -338,10 +338,12 @@ emailCmd
     const spinner = ora('Sending email...').start();
 
     try {
+      // The route's fields are to_email / text_content — `to` and `body` were
+      // rejected (422) on every send.
       await apiClient.post('/api/v1/crm/emails/send', {
-        to: options.to,
+        to_email: options.to,
         subject: options.subject,
-        body: options.body,
+        text_content: options.body,
       });
 
       spinner.succeed(chalk.green(`Email sent to ${options.to}`));
@@ -358,7 +360,12 @@ emailCmd
     const spinner = ora('Sending reply...').start();
 
     try {
-      await apiClient.post(`/api/v1/crm/emails/${id}/reply`, { body });
+      // The reply route takes a full send request. Address it to the other
+      // party of the original: its sender if it came in, its recipient if we sent it.
+      const original = (await apiClient.get<{ direction?: string; from_email?: string; to_email?: string; subject?: string }>(`/api/v1/crm/emails/${id}`)).data;
+      const to_email = original.direction === 'inbound' ? original.from_email : original.to_email;
+      const subject = /^re:/i.test(original.subject || '') ? original.subject : `Re: ${original.subject || ''}`;
+      await apiClient.post(`/api/v1/crm/emails/${id}/reply`, { to_email, subject, text_content: body });
       spinner.succeed(chalk.green('Reply sent'));
     } catch (error) {
       fail(spinner, 'Failed to send reply', error);
