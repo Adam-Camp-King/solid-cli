@@ -2,6 +2,36 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.24.12] — 2026-09-30
+
+**`solid app` puts a designer's interactive app live for your company, and
+`solid update` brings everything Solid# on your machine current.**
+
+- New: `solid app publish <folder>` puts an app built in Figma Make, Lovable, v0,
+  Bolt or plain React live for this company. Point it at the BUILT folder (the one
+  with `index.html`: `dist/`, `build/` or `docs/`). It is zipped on your machine and
+  uploaded to a private link, so the app's files never travel inside the API call.
+  `solid app list`, `get`, `rollback` and `unpublish` manage it; every version is
+  kept, and `rollback` also brings an unpublished app back.
+- New: `solid app github`, run once inside the app's repository, adds a workflow
+  that builds the app in your own GitHub Actions and publishes it on every push. It
+  saves a key that can only publish apps as a repository secret, so private
+  repositories are never shared with us.
+- `solid update` tries every way this machine can install the CLI (the one it
+  detects first, then npm, then Homebrew or scoop) and counts the update done only
+  when the `solid` your terminal runs reports the new version. It then refreshes
+  what the CLI set up: the MCP server your AI tools launch, the Claude Code session
+  hook, shell completion, the agent skills and plugin in every project where you ran
+  `solid agent setup`, and the render browser. Nothing new is installed.
+  `solid update --check` lists every part; `--json` reports each part for an agent.
+- Fixed: sending and replying to email from `solid inbox` was rejected on every call
+  (the CLI posted field names the server does not take). It now sends the recipient,
+  subject and text the server expects, and a reply goes to the other party of the
+  original message with `Re:` on the subject.
+- Dependencies: `undici` 6.28.0 → 6.29.0 (high-severity advisories).
+- Coming from 2.24.11 or earlier: that version runs its own update code for this one
+  step. If it stops, run `npm install -g @solidnumber/cli@latest` once.
+
 ## [2.24.11] — 2026-09-28
 
 **`solid inventory import` reports every row, and `solid update` works in the

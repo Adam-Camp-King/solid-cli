@@ -45,11 +45,12 @@
     "test:tarball": "bash scripts/test-tarball.sh",
     "verify:deps": "node scripts/verify-runtime-deps.mjs",
     "postpublish": "node scripts/bump-installers.mjs",
-    "prepublishOnly": "npm run check:release && npm run build && npm test && npm run test:contracts && npm run test:security && npm run audit:prod && npm run verify:deps && npm run check:counts",
+    "prepublishOnly": "npm run check:release && npm run check:changelog && npm run build && npm test && npm run test:contracts && npm run test:security && npm run audit:prod && npm run verify:deps && npm run check:counts",
     "postinstall": "node -e \"try{if(!process.env.CI)console.log('\\n  Solid# CLI installed. Get started:  solid setup\\n')}catch(e){}\"",
     "sync:counts": "ts-node scripts/sync-counts.ts",
     "check:counts": "ts-node scripts/sync-counts.ts --check",
     "check:release": "node scripts/check-release-drift.mjs",
+    "check:changelog": "node scripts/changelog.mjs --check",
     "eval": "node scripts/eval-suite/run.mjs",
     "eval:reads": "node scripts/eval-suite/run.mjs --reads-only --json /tmp/solid-eval.json",
     "eval:gate": "npm run eval:reads && node scripts/eval-suite/gate.mjs /tmp/solid-eval.json",
@@ -101,7 +102,8 @@
   "files": [
     "dist",
     "!dist/__tests__",
-    "platform-docs"
+    "platform-docs",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "@puppeteer/browsers": "^3.2.1",

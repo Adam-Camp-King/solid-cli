@@ -1,0 +1,35 @@
+# GitHub release for every version tag, from CHANGELOG.md.
+#
+# Why: 2.24.12 reached npm with no GitHub release and no changelog in the package,
+# so anyone (or any AI) asking "what changed?" had to diff two tarballs. The notes
+# come from CHANGELOG.md — the same file prepublishOnly refuses to publish without
+# (scripts/changelog.mjs --check) — so npm, GitHub and the package agree.
+#
+# Separate from npm-publish.yml on purpose: the notes must exist even when the npm
+# publish runs elsewhere (a maintainer's machine, staged approval).
+name: Release notes
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notes from CHANGELOG.md
+        run: node scripts/changelog.mjs --notes "$GITHUB_REF_NAME" > notes.md
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          fi
