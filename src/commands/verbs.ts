@@ -485,6 +485,8 @@ verbsCommand
         // should learn whose record it is about to touch.
         ...(verb.acts_on ? { acts_on: verb.acts_on } : {}),
         missing_required: report.missing_required,
+        // ⛔ Either-or requirements (anyOf) — `{}` used to rehearse valid and fail live.
+        missing_one_of: report.missing_one_of,
         type_errors: report.type_errors,
         unknown_fields: report.unknown_fields,
         // ⛔ WITHOUT THIS THE AGENT LEARNS NOTHING. `valid:false` and no reason

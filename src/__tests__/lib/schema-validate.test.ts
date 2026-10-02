@@ -173,3 +173,80 @@ describe('fixFor', () => {
     expect(fixFor('v', r)).toContain('must be string, got integer');
   });
 });
+
+/**
+ * 2026-10-02 — found by a live test on a real processing contract. contract.create
+ * needs one of vendor_id / vendor_name / intake_id (anyOf), and its `terms[]` items
+ * each need a fee type, a basis and the contract's own words. The playground saw
+ * neither: `{}` and a term with no excerpt both rehearsed valid, then failed live.
+ */
+describe('either-or requirements and array items', () => {
+  const CONTRACT = {
+    type: 'object',
+    properties: {
+      company_id: { type: 'integer' },
+      vendor_id: { type: 'integer' },
+      vendor_name: { type: 'string' },
+      intake_id: { type: 'integer' },
+      terms: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['fee_type', 'basis', 'excerpt'],
+          properties: {
+            fee_type: { type: 'string', enum: ['batch_fee', 'card_not_present'] },
+            basis: { type: 'string' },
+            excerpt: { type: 'string', minLength: 1 },
+            rate_bps: { type: 'number', minimum: 0 },
+          },
+        },
+      },
+    },
+    required: ['company_id'],
+    anyOf: [{ required: ['vendor_id'] }, { required: ['vendor_name'] }, { required: ['intake_id'] }],
+  };
+
+  it('an empty payload no longer rehearses valid', () => {
+    const r = validatePayload({}, CONTRACT);
+    expect(r.valid).toBe(false);
+    expect(r.missing_one_of).toEqual([['vendor_id', 'vendor_name', 'intake_id']]);
+    expect(fixFor('contract.create', r)).toBe('add one of vendor_id, vendor_name, intake_id — solid verbs example contract.create');
+  });
+
+  it('any one of the group satisfies it, and an empty string does not', () => {
+    expect(validatePayload({ vendor_name: 'Acme' }, CONTRACT).valid).toBe(true);
+    expect(validatePayload({ intake_id: 7 }, CONTRACT).valid).toBe(true);
+    expect(validatePayload({ vendor_name: '' }, CONTRACT).valid).toBe(false);
+  });
+
+  it('checks inside every array item, naming the item', () => {
+    const r = validatePayload({
+      vendor_name: 'Acme',
+      terms: [
+        { fee_type: 'card_not_present', basis: 'percent_of_volume', excerpt: '3.5% + $3.50', rate_bps: 350 },
+        { fee_type: 'cnp', basis: 'per_item', excerpt: '' },
+        { basis: 'per_item', excerpt: 'BATCH $0.35', rate_bps: '35' },
+        'not an object',
+      ],
+    }, CONTRACT);
+    expect(r.valid).toBe(false);
+    expect(r.value_errors.map((e) => `${e.field}:${e.kind}`)).toEqual(['terms[1].fee_type:enum', 'terms[1].excerpt:min_length']);
+    expect(r.missing_required).toEqual(['terms[2].fee_type']);
+    expect(r.type_errors).toEqual([
+      { field: 'terms[2].rate_bps', want: 'number', got: 'string' },
+      { field: 'terms[3]', want: 'object', got: 'string' },
+    ]);
+  });
+
+  it('an item field company_id is the caller\'s, not auth-injected', () => {
+    const r = validatePayload({ vendor_name: 'Acme', terms: [{ fee_type: 'batch_fee', basis: 'per_item', excerpt: 'x', company_id: 9 }] }, CONTRACT);
+    expect(r.unknown_fields).toEqual(['terms[0].company_id']);
+    expect(r.valid).toBe(true);                    // extras fatal only with additionalProperties:false
+  });
+
+  it('a schema without anyOf or items behaves exactly as before', () => {
+    const r = validatePayload({}, { properties: { a: { type: 'string' } }, required: ['company_id'] });
+    expect(r.valid).toBe(true);
+    expect(r.missing_one_of).toEqual([]);
+  });
+});

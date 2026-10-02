@@ -43,7 +43,7 @@ export interface TypeError_ {
 
 export interface ValueError_ {
   field: string;
-  /** 'enum' | 'minimum' | 'maximum' | 'placeholder' */
+  /** 'enum' | 'minimum' | 'maximum' | 'placeholder' | 'min_length' */
   kind: string;
   detail: string;
 }
@@ -69,6 +69,15 @@ export interface ValidationReport {
    * invents no rules; it stops ignoring the ones we were given.
    */
   value_errors: ValueError_[];
+  /**
+   * ⛔ "ONE OF THESE" IS A REQUIREMENT TOO. Added 2026-10-02 after a live test:
+   * `contract.create` needs a vendor_id, a vendor_name or an intake_id — any one —
+   * and `required[]` cannot say "one of", so `{}` rehearsed valid and the live
+   * call refused `missing_vendor`. The schema now carries
+   * `anyOf: [{required:[…]}, …]`; each unmet group lists the fields that would
+   * satisfy it, e.g. [["vendor_id","vendor_name","intake_id"]].
+   */
+  missing_one_of: string[][];
 }
 
 export interface SchemaProp {
@@ -77,6 +86,9 @@ export interface SchemaProp {
   enum?: unknown[];
   minimum?: number;
   maximum?: number;
+  minLength?: number;
+  /** For an array: the schema every item must satisfy, checked recursively. */
+  items?: JsonSchema;
 }
 
 export interface JsonSchema {
@@ -84,6 +96,8 @@ export interface JsonSchema {
   properties?: Record<string, SchemaProp>;
   required?: string[];
   additionalProperties?: boolean;
+  /** Either-or: satisfied when ANY group's fields are all present. */
+  anyOf?: { required?: string[] }[];
 }
 
 /**
@@ -140,79 +154,138 @@ export function validatePayload(
     type_errors: [],
     unknown_fields: [],
     value_errors: [],
+    missing_one_of: [],
   };
   if (!schema || typeof schema !== 'object') return report;
 
+  // Unknown fields are fatal only where THEIR schema says additionalProperties:
+  // false — at the top level or inside an array item alike.
+  const fatalUnknown: string[] = [];
+  checkObject(report, payload, schema, '', fatalUnknown);
+
+  report.valid =
+    report.missing_required.length === 0 &&
+    report.missing_one_of.length === 0 &&
+    report.type_errors.length === 0 &&
+    report.value_errors.length === 0 &&
+    fatalUnknown.length === 0;
+
+  return report;
+}
+
+/**
+ * One object against one schema, appending to `report` with `prefix` on every
+ * field name, so an item of an array reports as `terms[0].excerpt`.
+ *
+ * ⛔ ARRAY ITEMS ARE CHECKED. Added 2026-10-02: a contract's `terms[]` carries fee
+ * type, basis and the excerpt every term must have, and the playground looked at
+ * none of it — a term with no excerpt or a misspelled fee type rehearsed green and
+ * failed live. An item is checked by exactly the rules of the top level.
+ */
+function checkObject(
+  report: ValidationReport,
+  payload: Record<string, unknown>,
+  schema: JsonSchema,
+  prefix: string,
+  fatalUnknown: string[],
+): void {
+  const top = prefix === '';
+  const injected = (f: string) => top && AUTH_INJECTED.has(f);
   const props = schema.properties || {};
 
   for (const field of schema.required || []) {
-    if (AUTH_INJECTED.has(field)) continue;
+    if (injected(field)) continue;
     const missing =
       !(field in payload) || payload[field] === undefined;
-    if (missing) report.missing_required.push(field);
+    if (missing) report.missing_required.push(prefix + field);
+  }
+
+  if (Array.isArray(schema.anyOf) && schema.anyOf.length) {
+    const present = (f: string) =>
+      f in payload && payload[f] !== undefined && payload[f] !== null && payload[f] !== '';
+    const groups = schema.anyOf.map((g) => g.required || []).filter((g) => g.length);
+    if (groups.length && !groups.some((g) => g.every(present))) {
+      report.missing_one_of.push(groups.map((g) => g.map((f) => prefix + f).join(' + ')));
+    }
   }
 
   for (const [field, value] of Object.entries(payload)) {
     const spec = props[field];
+    const name = prefix + field;
     if (!spec) {
-      if (!AUTH_INJECTED.has(field)) report.unknown_fields.push(field);
+      if (!injected(field)) {
+        report.unknown_fields.push(name);
+        if (schema.additionalProperties === false) fatalUnknown.push(name);
+      }
       continue;
     }
     if (value === undefined) continue;
     if (!typeMatches(value, spec.type, spec.nullable)) {
       report.type_errors.push({
-        field,
+        field: name,
         want: Array.isArray(spec.type) ? spec.type.join('|') : String(spec.type),
         got: jsonTypeOf(value),
       });
       continue;                       // a wrong type makes value checks noise
     }
+    if (Array.isArray(value) && spec.items && (spec.items.type === 'object' || spec.items.properties)) {
+      value.forEach((el, i) => {
+        const at = `${name}[${i}]`;
+        if (el === null || typeof el !== 'object' || Array.isArray(el)) {
+          report.type_errors.push({ field: at, want: 'object', got: jsonTypeOf(el) });
+          return;
+        }
+        checkObject(report, el as Record<string, unknown>, spec.items as JsonSchema, `${at}.`, fatalUnknown);
+      });
+      continue;
+    }
+    checkValue(report, name, value, spec);
+  }
+}
 
-    // ---- value checks, all of them from the schema we already hold --------
-    if (typeof value === 'string' && PLACEHOLDER_STRING.test(value)) {
+/** Value checks, all of them from the schema we already hold. */
+function checkValue(report: ValidationReport, field: string, value: unknown, spec: SchemaProp): void {
+  if (typeof value === 'string' && PLACEHOLDER_STRING.test(value)) {
+    report.value_errors.push({
+      field, kind: 'placeholder',
+      detail: `${value} is an unsubstituted placeholder — replace it with a real value`,
+    });
+    return;
+  }
+  if (value === -1 && (spec.minimum === undefined || spec.minimum >= 0)) {
+    report.value_errors.push({
+      field, kind: 'placeholder',
+      detail: '-1 is the placeholder `solid verbs example` emits for a number — replace it',
+    });
+    return;
+  }
+  if (Array.isArray(spec.enum) && spec.enum.length && !spec.enum.includes(value as never)) {
+    report.value_errors.push({
+      field, kind: 'enum',
+      detail: `${JSON.stringify(value)} is not one of ${spec.enum.map((e) => JSON.stringify(e)).join(', ')}`,
+    });
+    return;
+  }
+  if (typeof value === 'string' && spec.minLength !== undefined && value.length < spec.minLength) {
+    report.value_errors.push({
+      field, kind: 'min_length',
+      detail: `must be at least ${spec.minLength} character${spec.minLength === 1 ? '' : 's'}`,
+    });
+    return;
+  }
+  if (typeof value === 'number') {
+    if (spec.minimum !== undefined && value < spec.minimum) {
       report.value_errors.push({
-        field, kind: 'placeholder',
-        detail: `${value} is an unsubstituted placeholder — replace it with a real value`,
+        field, kind: 'minimum', detail: `${value} is below the minimum ${spec.minimum}`,
       });
-      continue;
+      return;
     }
-    if (value === -1 && (spec.minimum === undefined || spec.minimum >= 0)) {
+    if (spec.maximum !== undefined && value > spec.maximum) {
       report.value_errors.push({
-        field, kind: 'placeholder',
-        detail: '-1 is the placeholder `solid verbs example` emits for a number — replace it',
+        field, kind: 'maximum', detail: `${value} is above the maximum ${spec.maximum}`,
       });
-      continue;
-    }
-    if (Array.isArray(spec.enum) && spec.enum.length && !spec.enum.includes(value as never)) {
-      report.value_errors.push({
-        field, kind: 'enum',
-        detail: `${JSON.stringify(value)} is not one of ${spec.enum.map((e) => JSON.stringify(e)).join(', ')}`,
-      });
-      continue;
-    }
-    if (typeof value === 'number') {
-      if (spec.minimum !== undefined && value < spec.minimum) {
-        report.value_errors.push({
-          field, kind: 'minimum', detail: `${value} is below the minimum ${spec.minimum}`,
-        });
-        continue;
-      }
-      if (spec.maximum !== undefined && value > spec.maximum) {
-        report.value_errors.push({
-          field, kind: 'maximum', detail: `${value} is above the maximum ${spec.maximum}`,
-        });
-      }
     }
   }
-
-  const extrasAreFatal = schema.additionalProperties === false;
-  report.valid =
-    report.missing_required.length === 0 &&
-    report.type_errors.length === 0 &&
-    report.value_errors.length === 0 &&
-    (!extrasAreFatal || report.unknown_fields.length === 0);
-
-  return report;
 }
 
 /**
@@ -224,6 +297,9 @@ export function validatePayload(
  * this sprint keeps finding elsewhere.
  */
 export function fixFor(verb: string, report: ValidationReport): string {
+  if (report.missing_one_of.length) {
+    return `add one of ${report.missing_one_of[0].join(', ')} — solid verbs example ${verb}`;
+  }
   if (report.missing_required.length) {
     const first = report.missing_required[0];
     // `verbs example` from 4.1, not `describe`: a caller missing a field wants
