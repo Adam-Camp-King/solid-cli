@@ -38,7 +38,7 @@ async function run(args: string[]): Promise<string> {
   const write = jest.spyOn(process.stdout, 'write').mockImplementation((s: any) => (out.push(String(s)), true));
   try {
     const pub = appCommand.commands.find((c) => c.name() === 'publish')!;
-    for (const k of ['confirm', 'json', 'root', 'name', 'slug']) pub.setOptionValue(k, undefined);
+    for (const k of ['confirm', 'json', 'root', 'name', 'slug', 'hold']) pub.setOptionValue(k, undefined);
     await appCommand.parseAsync(args, { from: 'user' });
   } finally {
     log.mockRestore(); err.mockRestore(); write.mockRestore();
@@ -83,7 +83,7 @@ test('--confirm zips the folder, PUTs it to the upload link, then publishes by r
 
   const [url, body] = post.mock.calls[1];
   expect(url).toBe('/api/v1/agent/app/publish');
-  expect(body).toEqual({ slug: 'sell', upload_id: 'a'.repeat(32), confirm: true });
+  expect(body).toEqual({ slug: 'sell', upload_id: 'a'.repeat(32), confirm: true });   // a temp folder is no git repo: no commit is claimed
   expect(body.files).toBeUndefined(); // the bytes never ride in the API call
   expect(text).toContain('Live: https://store/company_42/apps/sell/index.html');
 });
@@ -219,5 +219,58 @@ describe('solid app github — reads the repo, asks nobody', () => {
     expect(help).toContain('ask the person nothing');
     expect(help).toContain('solid app github --slug <name> --plan --json');
     expect(help).toContain('never pulls from GitHub');
+  });
+});
+
+
+import { buildSource } from '../../commands/app';
+
+describe('what nobody should have to ask us', () => {
+  const publishing = (reply: Record<string, unknown>) => {
+    (global as any).fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    post.mockImplementation(async (url: string) => (url.endsWith('/upload_url')
+      ? { data: { ok: true, upload_id: 'd'.repeat(32), upload_url: 'https://s', headers: {} } }
+      : { data: reply }));
+  };
+
+  test('a publish prints how updates happen and how to send a lead, as the server worded them', async () => {
+    const dir = folder({ 'index.html': '<p>' });
+    publishing({ ok: true, url: 'https://trade-now.solidhost.app/sell/', published_version: 2,
+      keep_it_current: 'This was a ONE-TIME publish. Solid# never pulls',
+      send_a_lead: 'await fetch("https://api.solidnumber.com/api/v1/public/apps/trade-now/sell/lead"',
+      warnings: ['The app loads from mrishii.github.io'] });
+    const text = await run(['publish', dir, '--slug', 'sell', '--confirm']);
+    expect(text).toContain('ONE-TIME publish');
+    expect(text).toContain('/api/v1/public/apps/trade-now/sell/lead');
+    expect(text).toContain('mrishii.github.io');
+  });
+
+  test('--hold asks the server to keep the build without making it live, and says how to', async () => {
+    const dir = folder({ 'index.html': '<p>' });
+    publishing({ ok: true, held: true, held_version: 3, live_version: 2,
+      make_it_live: 'Version 3 is kept but NOT live: solid app rollback sell 3 --confirm' });
+    const text = await run(['publish', dir, '--slug', 'sell', '--confirm', '--hold']);
+    expect(post.mock.calls[1][1]).toMatchObject({ hold: true });
+    expect(text).toContain('Kept as version 3');
+    expect(text).toContain('solid app rollback sell 3 --confirm');
+    expect(text).not.toContain('✓ Live');
+  });
+
+  test('in GitHub Actions the commit and the repository ride with the publish', () => {
+    expect(buildSource('/nowhere', { GITHUB_SHA: 'A'.repeat(40), GITHUB_REPOSITORY: 'MrIshii/tradenow-sell-page' }))
+      .toEqual({ commit: 'a'.repeat(40), repo: 'MrIshii/tradenow-sell-page' });
+    expect(buildSource('/nowhere', { GITHUB_SHA: 'not a sha', GITHUB_REPOSITORY: 'no slash' })).toEqual({});
+  });
+
+  test('--review writes a workflow whose every build waits for the owner', () => {
+    const repo = folder({ 'package.json': PKG, 'package-lock.json': '{}' });
+    const plan = inspectRepo(repo, { tracked: inGit() });
+    const y = workflowYaml({ slug: 'sell', branch: 'main', plan, review: true });
+    expect(y).toContain('app publish dist --slug sell --confirm --hold');
+    expect(y).toContain('REVIEW MODE');
+    // the file answers, for a later reader, what a developer once had to write to us to ask
+    expect(y).toContain('Solid# never pulls from this repository');
+    expect(y).toContain('app get sell');
+    expect(workflowYaml({ slug: 'sell', branch: 'main', plan })).not.toContain('--hold');
   });
 });

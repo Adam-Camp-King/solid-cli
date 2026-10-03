@@ -42,6 +42,28 @@ export function zipFolder(files: Array<{ path: string; content: string; encoding
   return zipSync(entries, { level: 6 });
 }
 
+/** Which commit of which repository a folder is, when it can be known. Pure but for git. */
+export function buildSource(cwd: string, env: NodeJS.ProcessEnv = process.env): { commit?: string; repo?: string } {
+  // In GitHub Actions both are given; they name the commit the workflow checked out.
+  let commit = env.GITHUB_SHA;
+  let repo = env.GITHUB_REPOSITORY;
+  if (!commit) {
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' });
+    // Only when the folder's tree is clean: a commit that is not what was built would be a lie.
+    const dirty = spawnSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' });
+    if (head.status === 0 && dirty.status === 0 && !dirty.stdout.trim()) commit = head.stdout.trim();
+  }
+  if (!repo) {
+    const url = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd, encoding: 'utf8' });
+    const m = url.status === 0 ? url.stdout.trim().match(/[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?$/) : null;
+    if (m) repo = m[1];
+  }
+  return {
+    ...(commit && /^[0-9a-f]{7,40}$/i.test(commit) ? { commit: commit.toLowerCase() } : {}),
+    ...(repo && /^[\w.-]+\/[\w.-]+$/.test(repo) ? { repo } : {}),
+  };
+}
+
 function done(json: boolean, out: Record<string, any>, render: () => void): void {
   if (out && out.ok === false) {
     if (json) printJson(out);
@@ -72,6 +94,7 @@ appCommand
   .option('--name <name>', 'Display name')
   .option('--root <folder>', 'Inside <folder>, the sub-folder that holds index.html')
   .option('--confirm', 'Consent to publish (without it, shows what would be published)')
+  .option('--hold', 'Keep this build as a version but do NOT make it live — the owner makes it live after a look')
   .option('--json', 'Output JSON')
   .action(async (folder: string, opts) => {
     const json = isJsonOutput(opts);
@@ -106,14 +129,25 @@ appCommand
       out = await call('publish', {
         slug: opts.slug, upload_id: up.upload_id, confirm: true,
         ...(opts.root ? { root: opts.root } : {}), ...(opts.name ? { name: opts.name } : {}),
+        ...(opts.hold ? { hold: true } : {}),
+        ...buildSource(abs),
       });
     } catch (error) {
       return fail(json, handleApiError(error).message);
     }
     done(json, out, () => {
-      console.log(chalk.green(`✓ Live: ${out.url}`));
-      console.log(chalk.dim(`  version ${out.published_version ?? out.live_version} · link it from a site page with a button`));
+      if (out.held) {
+        console.log(chalk.green(`✓ Kept as version ${out.held_version} — not live yet`));
+        console.log(`  ${out.make_it_live}`);
+      } else {
+        console.log(chalk.green(`✓ Live: ${out.url}`));
+        console.log(chalk.dim(`  version ${out.published_version ?? out.live_version} · link it from a site page with a button`));
+      }
       for (const w of out.warnings || []) console.log(chalk.yellow(`  ⚠ ${w}`));
+      // What nobody should have to ask us: how a change reaches the live app, and how
+      // the app sends a lead. Both come from the server, worded for this app.
+      if (out.keep_it_current) console.log(`\n${out.keep_it_current}`);
+      if (out.send_a_lead) console.log(`\n${out.send_a_lead}`);
     });
   });
 
@@ -145,9 +179,16 @@ appCommand
       done(json, out, () => {
         console.log(`${out.slug}  ${out.status}  ${out.url ?? '(offline)'}`);
         for (const v of out.versions || []) {
-          console.log(`  v${v.n}${v.n === out.live_version ? ' (live)' : ''}  ${v.published_at}  ${v.files} files  ${v.source}`);
+          const mark = v.n === out.live_version ? ' (live)' : v.held ? ' (held — not live)' : '';
+          const from = v.commit ? `  commit ${String(v.commit).slice(0, 12)}${v.repo ? ` of ${v.repo}` : ''}` : '';
+          console.log(`  v${v.n}${mark}  ${v.published_at}  ${v.files} files  ${v.source}${from}`);
         }
         for (const w of out.warnings || []) console.log(chalk.yellow(`  ⚠ ${w}`));
+        for (const h of out.outside_hosts || []) {
+          if (h.kind !== 'solid') console.log(chalk.dim(`  depends on ${h.host} (${h.kind}, ${h.times}×)`));
+        }
+        if (out.how_updates_work) console.log(`\n${out.how_updates_work}`);
+        if (out.send_a_lead) console.log(`\n${out.send_a_lead}`);
       });
     } catch (error) {
       fail(json, handleApiError(error).message);
@@ -375,7 +416,7 @@ export function inspectRepo(repoRoot: string, opts: {
 }
 
 /** The workflow `solid app github` writes. Pure — the tests read it back. */
-export function workflowYaml(o: { slug: string; branch: string; plan: RepoPlan }): string {
+export function workflowYaml(o: { slug: string; branch: string; plan: RepoPlan; review?: boolean }): string {
   const { plan } = o;
   const file = `solid-app-${o.slug}.yml`;
   const trigger = plan.mode === 'after_workflow'
@@ -407,8 +448,20 @@ export function workflowYaml(o: { slug: string; branch: string; plan: RepoPlan }
   const when = plan.mode === 'after_workflow' ? `each time "${plan.after!.name}" finishes on ${o.branch}`
     : plan.mode === 'committed' ? `each time ${plan.folder}/ changes on ${o.branch}`
       : `on every push to ${o.branch}`;
-  return `# Publishes ${plan.folder}/ to Solid# as the app "${o.slug}" ${when}.
+  const held = o.review
+    ? '\n# REVIEW MODE: each build is kept as a version and is NOT live until the owner makes it live\n'
+      + `# (Apps → Hosted → Make live, or: solid app rollback ${o.slug} <version> --confirm).`
+    : '';
+  return `# Publishes ${plan.folder}/ to Solid# as the app "${o.slug}" ${when}.${held}
 # Written by \`solid app github\`. The key (secret SOLID_API_KEY) can only publish apps.
+#
+# For whoever (or whichever AI) reads this file later:
+#  - Solid# never pulls from this repository. THIS workflow is the only thing that
+#    updates the live app. If the live app is behind, check this workflow's last run.
+#  - Which build is live, and from which commit:  npx -y @solidnumber/cli@latest app get ${o.slug}
+#  - Put an earlier version back:  npx -y @solidnumber/cli@latest app rollback ${o.slug} <version> --confirm
+#  - This repository can be private. GitHub Pages is not needed.
+#  - Everything else:  npx -y @solidnumber/cli@latest app --help
 name: Publish ${o.slug} to Solid#
 on:
 ${trigger}  workflow_dispatch:
@@ -419,7 +472,7 @@ jobs:
   publish:
 ${gate}    runs-on: ubuntu-latest
     steps:
-${checkout}${build}      - run: npx -y @solidnumber/cli@latest app publish ${plan.folder} --slug ${o.slug} --confirm
+${checkout}${build}      - run: npx -y @solidnumber/cli@latest app publish ${plan.folder} --slug ${o.slug} --confirm${o.review ? ' --hold' : ''}
         env:
           SOLID_API_KEY: \${{ secrets.SOLID_API_KEY }}
           NO_UPDATE_NOTIFIER: '1'
@@ -433,6 +486,7 @@ appCommand
   .option('--folder <folder>', 'The BUILT folder, relative to the repo root. Found for you when left out (docs, dist, build, out, or <app>/dist)')
   .option('--build <command>', 'Build command to run instead of the one found (run at the repo root)')
   .option('--branch <branch>', 'Branch to publish from', 'main')
+  .option('--review', 'Each build waits for the owner: it is kept as a version and goes live only when they make it live')
   .option('--plan', 'Only show what was found and what would be written. Creates no key, writes no file')
   .option('--json', 'Output JSON')
   .action(async (opts) => {
@@ -445,13 +499,14 @@ appCommand
     if (plan.problems.length) {
       return fail(json, plan.problems[0], { found: plan.found, problems: plan.problems });
     }
-    const yaml = workflowYaml({ slug: opts.slug, branch: opts.branch, plan });
+    const yaml = workflowYaml({ slug: opts.slug, branch: opts.branch, plan, review: Boolean(opts.review) });
     const when = plan.mode === 'after_workflow' ? `each time "${plan.after!.name}" finishes`
       : plan.mode === 'committed' ? `each time ${plan.folder}/ changes` : `on every push to ${opts.branch}`;
 
     if (opts.plan) {
       const out = { ok: true, plan_only: true, mode: plan.mode, folder: plan.folder, app_dir: plan.appDir || '.',
-        manager: plan.manager, publishes: when, found: plan.found, workflow: rel, workflow_yaml: yaml,
+        manager: plan.manager, publishes: when, review: Boolean(opts.review), found: plan.found,
+        workflow: rel, workflow_yaml: yaml,
         next: `solid app github --slug ${opts.slug}${opts.folder ? ` --folder ${opts.folder}` : ''}` };
       if (json) return printJson(out);
       for (const f of plan.found) console.log(chalk.dim(`  · ${f}`));
@@ -486,11 +541,12 @@ appCommand
       ...(secretSet ? [] : ['gh secret set SOLID_API_KEY   # paste the key below when asked (or: repo Settings → Secrets and variables → Actions)']),
       `git add ${rel} && git commit -m "Publish ${opts.slug} to Solid# automatically" && git push`,
       `gh workflow run solid-app-${opts.slug}.yml   # publish the current build now`,
-      `solid app get ${opts.slug}   # the live address and version`,
+      `solid app get ${opts.slug}   # the live address, the version, the commit it came from`,
+      ...(opts.review ? [`solid app rollback ${opts.slug} <version> --confirm   # the owner's yes: makes a held version live`] : []),
     ];
     const out = {
       ok: true, workflow: rel, mode: plan.mode, folder: plan.folder, app_dir: plan.appDir || '.',
-      manager: plan.manager, publishes: when, found: plan.found,
+      manager: plan.manager, publishes: when, review: Boolean(opts.review), found: plan.found,
       key_id: keyId, key_scope: 'apps:write', secret_set: secretSet, steps,
       next: steps[0],
       ...(secretSet ? {} : { key }),
@@ -523,4 +579,12 @@ What is always true:
   · Static files only. Asset paths must be relative (Vite: base: './').
   · The app does not run on a *.solidnumber.com page. Link to its address with a button.
   · Every version is kept: solid app rollback <name> <version> --confirm
+  · "solid app get <name>" says which commit is live. Compare commits, never file names.
+  · The publish reply names every outside address the build depends on. Fix the personal
+    and preview ones (github.io, figma.site, vercel.app…) before calling it done.
+  · To send what a visitor enters into the business's CRM, use the code under "send_a_lead"
+    in the publish reply exactly. It needs no key and works only from the app's own address.
+  · The owner wants to look first: add --hold (one publish) or --review (every push). The
+    build is kept, not live, until: solid app rollback <name> <version> --confirm
+  · Never write to Solid# to ask how this works. Run the command; the reply says what to do next.
 `);
