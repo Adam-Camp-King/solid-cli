@@ -34,6 +34,17 @@ export interface LiveBlockSchema {
   type_aliases?: Record<string, string>;
   universal_optional_props?: string[];
   motion_schema?: unknown;
+  /** schemas/block_shapes.py — what the renderer actually reads. */
+  shapes?: { rules?: string[]; blocks?: Record<string, LiveBlockShape> };
+  starter_page?: unknown;
+}
+
+export interface LiveBlockShape {
+  shows_when?: string;
+  items?: Record<string, string>;
+  values?: Record<string, Array<string | number>>;
+  notes?: string[];
+  example?: unknown;
 }
 
 export interface SchemaSourceInfo {
@@ -93,7 +104,20 @@ export function mergeLiveSchema(live: LiveBlockSchema, bundled: SchemaDoc): Sche
     out.props = props;
     if (enums && Object.keys(enums).length > 0) out.enums = enums;
     if (b?.notes) out.notes = b.notes;
-    if (b?.example !== undefined) out.example = b.example;
+    if (b?.example !== undefined) { out.example = b.example; out.example_source = 'bundled'; }
+    // ⛔ THE LIVE SHAPE WINS. The bundled example and enums were typed by hand and
+    // drifted from the renderer; the live shape is read out of it.
+    const shape = live.shapes?.blocks?.[type];
+    if (shape) {
+      if (shape.shows_when) out.shows_when = shape.shows_when;
+      if (shape.items) out.items = shape.items;
+      if (shape.values) {
+        out.enums = { ...(out.enums || {}),
+          ...Object.fromEntries(Object.entries(shape.values).map(([k, v]) => [k, v.map(String)])) };
+      }
+      if (shape.notes?.length) out.notes = shape.notes.join(' ');
+      if (shape.example !== undefined) { out.example = shape.example; out.example_source = 'live'; }
+    }
     return out;
   });
 
@@ -108,6 +132,8 @@ export function mergeLiveSchema(live: LiveBlockSchema, bundled: SchemaDoc): Sche
       ...bundled.envelope,
       ...(live.universal_optional_props ? { universal_optional_props: live.universal_optional_props } : {}),
       ...(live.motion_schema !== undefined ? { motion_schema: live.motion_schema } : {}),
+      ...(live.shapes?.rules ? { rules: live.shapes.rules } : {}),
+      ...(live.starter_page !== undefined ? { starter_page: live.starter_page } : {}),
     },
     blocks,
   };

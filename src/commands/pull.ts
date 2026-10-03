@@ -368,6 +368,18 @@ export const pullCommand = new Command('pull')
     // ── Write manifest ───────────────────────────────────────────────
     writeTenantManifest(baseDir, manifest);
 
+    // What this folder is and how to change it — for whoever opens it cold.
+    {
+      const { writePullReadme, PULL_README } = await import('../lib/pull-readme');
+      let slug: string | undefined;
+      try {
+        slug = JSON.parse(fs.readFileSync(path.join(baseDir, 'solid.config.json'), 'utf-8')).slug;
+      } catch { /* no config pulled — the README names the address generically */ }
+      if (writePullReadme(baseDir, { name: manifest.company_name, slug })) {
+        console.log(chalk.green(`  ✓ ${PULL_README} — what is in this folder and how to change it`));
+      }
+    }
+
     // The Solid# skills for any AI that works in this directory — installed
     // once, kept current by `solid update` (lib/project-kits.ts).
     {
@@ -451,5 +463,5 @@ __ae_pull(pullCommand, [
   { cmd: 'solid pull',                  why: 'Download your business (pages, KB, settings) as local files' },
   { cmd: 'solid pull --pages-only',     why: 'Pages only — faster' },
   { cmd: 'solid pull --kb-only',        why: 'KB only' },
-  { cmd: 'solid pull --out ./backup',   why: 'Choose target dir' },
+  { cmd: 'solid pull --dir ./backup',   why: 'Choose target dir' },
 ]);

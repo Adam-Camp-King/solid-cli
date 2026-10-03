@@ -90,3 +90,38 @@ describe('resolveBlockSchema', () => {
     expect(r.source.kind).toBe('bundled');
   });
 });
+
+describe('mergeLiveSchema carries the live shapes', () => {
+  const bundled = loadBundledSchema();
+  const live = {
+    version: 1,
+    block_types: ['faq'],
+    block_schema: { faq: { required: [], optional: ['id', 'title', 'faqs'] } },
+    shapes: {
+      rules: ['A section is {type, ...props}.'],
+      blocks: { faq: { shows_when: 'faqs has at least one entry', items: { faqs: '{id, question, answer}' },
+        values: { columns: [2, 3] }, notes: ['a', 'b'],
+        example: { type: 'faq', faqs: [{ id: 'q1', question: 'Q', answer: 'A' }] } } },
+    },
+    starter_page: { title: 'Home' },
+  };
+
+  it('the live example, item fields and shows_when win over the bundled copy', () => {
+    const doc = mergeLiveSchema(live, bundled);
+    const faq = doc.blocks[0];
+    expect(faq.shows_when).toBe('faqs has at least one entry');
+    expect(faq.items).toEqual({ faqs: '{id, question, answer}' });
+    expect(faq.example).toEqual(live.shapes.blocks.faq.example);
+    expect(faq.example_source).toBe('live');
+    expect(faq.enums?.columns).toEqual(['2', '3']);
+    expect(faq.notes).toBe('a b');
+    expect(doc.envelope.starter_page).toEqual({ title: 'Home' });
+    expect(doc.envelope.rules).toHaveLength(1);
+  });
+
+  it('an older backend with no shapes still merges', () => {
+    const doc = mergeLiveSchema({ ...live, shapes: undefined, starter_page: undefined }, bundled);
+    expect(doc.blocks[0].shows_when).toBeUndefined();
+    expect(doc.blocks[0].example_source).not.toBe('live');
+  });
+});

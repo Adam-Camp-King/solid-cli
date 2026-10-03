@@ -17,6 +17,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { appCommand } from '../../commands/app';
+import { bringCommand } from '../../commands/bring';
+import { findCommand } from '../../commands/find';
+import { mapCommand } from '../../commands/map';
+import { nestCommand } from '../../commands/nest';
+import { verbsCommand } from '../../commands/verbs';
 import { SKILLS, installSkills } from '../../lib/skills/index';
 
 function tmpdir(): string {
@@ -63,6 +69,9 @@ describe('skills index', () => {
     const REAL = new Set([
       'schema', 'scope', 'doctor', 'forms', 'embed', 'chat-widgets',
       'pull', 'switch', 'agent', 'context', 'apply', 'publish', 'domains',
+      // Read from the command objects themselves, so a rename breaks this test
+      // instead of leaving a skill that teaches a dead name.
+      ...[mapCommand, verbsCommand, findCommand, bringCommand, nestCommand, appCommand].map((c) => c.name()),
     ]);
     const bad: string[] = [];
     for (const skill of SKILLS) {

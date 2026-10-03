@@ -377,7 +377,7 @@ siteCommand
 import { appendExamples as __appendExamplesSite, fail } from '../lib/command-kit';
 __appendExamplesSite(siteCommand, [
   { cmd: 'solid site list', why: 'All sites (main, subdomains, landing)' },
-  { cmd: 'solid site create --name "ACME Plumbing"', why: 'Provision a new site from defaults' },
+  { cmd: 'solid site create acme --name "ACME Plumbing"', why: 'Provision a new site (slug first)' },
   { cmd: 'solid site info main', why: 'DNS, SSL, custom-domain status' },
   { cmd: 'solid site templates', why: '52 industry templates' },
   { cmd: 'solid site regenerate', why: 'Rebuild after template change' },

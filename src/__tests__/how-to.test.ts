@@ -41,6 +41,17 @@ describe('findHowTo', () => {
     expect(findHowTo('how do I change which company I am working on')).toEqual([]);
   });
 
+  it('answers a designer with the build topic', () => {
+    expect(findHowTo('I am going to design a website')[0].id).toBe('build');
+    expect(findHowTo('how do I bring a figma design')[0].id).toBe('build');
+    expect(findHowTo('is this a page or app')[0].id).toBe('build');
+  });
+
+  it('answers "what is a verb" with the verbs topic', () => {
+    expect(findHowTo('what is a verb')[0].id).toBe('verbs');
+    expect(findHowTo('can I delete a verb')[0].id).toBe('verbs');
+  });
+
   it('still has a topic to show when asked with no question at all', () => {
     expect(defaultHowTo().id).toBe('start');
   });

@@ -114,7 +114,21 @@ export const verbsCommand = new Command('verbs')
 // SURFACES list, so nothing caught the drift. `solid verbs list` already
 // prints the LIVE total from the backend; a second, frozen copy of the number
 // in help text can only ever go stale.
-  .description('Discover + invoke any agent-attraction verb (12 shapes, 4 sibling transports)');
+  .description('Discover + invoke any verb — an action the platform performs (12 shapes, 4 sibling transports)');
+
+verbsCommand.addHelpText('after', `
+What a verb is: an ACTION the platform can perform — something you call, like page.publish.
+Tool, action, verb: the same thing (the connector says "action"). It is not a word, a record or
+a setting, and it cannot be created, edited or deleted. To remove a thing, call the verb that
+removes it (kb.entry_delete deletes a knowledge entry).
+
+A name reads thing.action: the noun before the dot, what is done to it after.
+
+Nothing is held back. "verbs list" with no prefix is a starting page, not the whole platform:
+  solid map                      everything, by class and noun
+  solid verbs list <prefix>      one neighbourhood of the map
+  solid find "<plain words>"     search by what you want to do
+`);
 
 verbsCommand
   .command('list')

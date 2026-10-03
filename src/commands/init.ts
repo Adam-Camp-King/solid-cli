@@ -582,7 +582,7 @@ export const initCommand = new Command('init')
 
 import { appendExamples as __ae_init } from '../lib/command-kit';
 __ae_init(initCommand, [
-  { cmd: 'solid init',                  why: 'Scaffold local app boilerplate (local-only, no cloud)' },
-  { cmd: 'solid init --type nextjs',    why: 'Specific template' },
+  { cmd: 'solid init my-app',           why: 'Scaffold a local Node project that calls the Solid# API (local-only, no cloud)' },
+  { cmd: 'solid init my-app --type saas', why: 'A specific project type (see --list)' },
   { cmd: 'solid init --list',           why: 'Available templates' },
 ]);

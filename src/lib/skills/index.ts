@@ -46,6 +46,31 @@ description: Discover and call Solid# verbs correctly — read the manifest inst
 
 # Calling Solid# verbs
 
+## What a verb is
+
+A verb is an **action the platform can perform** — something you CALL, like
+\`page.publish\`. Tool, action, verb: the same thing under three names (the
+connector says "action"). It is not a word, a record or a setting, and it
+cannot be created, edited or deleted. To remove or change a *thing*, call the
+verb that does it: \`kb.entry_delete\` deletes a knowledge entry. "There is no
+delete verb for X" means the platform has no action that deletes X.
+
+A name reads \`thing.action\`: before the dot is the noun (contact, page, app,
+kb), after it what is done to it.
+
+**Nothing is held back.** Any list you are shown is a starting set, not the
+whole platform:
+
+\`\`\`bash
+solid map                        # everything, by class and noun
+solid verbs list <prefix>        # one neighbourhood of the map
+solid find "<plain words>"       # search by what you want to do
+solid verbs describe <name>      # one verb's inputs
+\`\`\`
+
+Never tell a person the platform cannot do something until \`solid find\` and
+\`solid map\` both came back without it.
+
 This CLI is self-describing. **Read the contract, do not guess the command.**
 Guessing produces "unknown command" and a wasted turn; the manifest is one call
 away and is always current, because it is generated from the same registry the
@@ -134,6 +159,68 @@ company-specific work in it.
   pick the interpretation that lets the task continue.
 `;
 
+const BUILDING_SKILL = `---
+name: solid-building
+description: Build or bring a website or an app onto Solid# — decide page or app from the files, pick the one right import or publish command, and know what a kept design lets you change. Use before importing, publishing or hand-coding anything a visitor will see.
+---
+
+# Building or bringing a website or an app
+
+## Start with the front door, every time
+
+\`\`\`bash
+solid bring <folder> --json          # reads the folder: page, app, or server code — and the next command
+solid bring --bringing nothing --json   # starting from scratch: the steps, in order
+\`\`\`
+
+Do not ask the person whether it is a page or an app. The files say, and
+\`solid bring\` reads them.
+
+## Page or app — the rule
+
+- **Page**: a visitor reads it and fills in a form. It lives on
+  \`<company>.solidnumber.com\`, and the owner can change it afterwards.
+- **App**: a visitor *does* something in it — steps, the camera, a calculated
+  result, anything that needs its own JavaScript. It lives on
+  \`<company>.solidhost.app/<name>/\`, and only its developer changes it.
+
+Why two places: \`*.solidnumber.com\` shares the dashboard's sign-in, so no
+outside JavaScript runs there. An app gets its own address so it can.
+A company can have many apps; each takes its own \`<name>\`.
+
+## A page
+
+\`\`\`bash
+solid nest <file|folder|url>     # the one import: previews, builds, scores, can be rolled back
+\`\`\`
+
+The reply says which way it went (\`import_mode\`):
+
+- **convert** — rebuilt as native blocks. Edited block by block.
+- **keep** — it could not be rebuilt faithfully, so it is stored as designed.
+  It is changed through its **slots**: the marked spots (headline, images,
+  buttons, phone). List and change them with the verbs \`page.slot_list\` and
+  \`page.slot_update\`. The logo, name, phone and email follow the brand.
+  Anything outside a slot is changed by importing a new version.
+
+Hand-coding a page? Mark what the owner should be able to change with
+\`data-editable="<name>"\`, and brand-following spots with
+\`data-brand="logo|name|phone|email"\`.
+
+## An app
+
+\`\`\`bash
+solid app publish <built folder> --slug <name> --confirm   # the BUILT files (dist/, build/), not the source
+solid app github --slug <name>                             # publish on every change; run once in the repo
+\`\`\`
+
+## Server code is not run
+
+No tenant server code runs here — no Node, PHP or database of your own. Use
+what is built in instead: a form sends a lead, booking, chat and payment links
+are platform features. \`solid bring\` names the replacement for what it finds.
+`;
+
 /**
  * Every skill Solid# installs, in install order.
  *
@@ -153,6 +240,12 @@ export const SKILLS: Skill[] = [
     description:
       'Discover and call verbs from the manifest; read output schemas as hints, not contracts.',
     content: VERBS_SKILL,
+  },
+  {
+    dirname: 'solid-building',
+    description:
+      'Build or bring a website or an app: page or app, the one import, slots in a kept design.',
+    content: BUILDING_SKILL,
   },
   {
     dirname: 'solid-tenancy',

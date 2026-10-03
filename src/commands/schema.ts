@@ -23,18 +23,13 @@ import { getProgram } from '../lib/program-registry';
 import { buildVerbManifest } from '../lib/verb-manifest';
 import { CLI_VERSION } from '../lib/api-client';
 import { config } from '../lib/config';
-import type { BlockDef, SchemaDoc } from '../lib/block-types';
+import type { BlockDef } from '../lib/block-types';
 import {
   defaultSchemaFetcher,
-  loadBundledSchema,
   resolveBlockSchema,
   ResolvedSchema,
   SchemaSourceInfo,
 } from '../lib/block-schema-source';
-
-function loadSchema(): SchemaDoc {
-  return loadBundledSchema();
-}
 
 async function resolveForCommand(opts: { offline?: boolean }): Promise<ResolvedSchema> {
   const token = config.effectiveToken;
@@ -60,6 +55,13 @@ function printBlock(block: BlockDef): void {
   console.log(`  ${chalk.dim('component:')} ${block.component}   ${chalk.dim('category:')} ${block.category}`);
   if (block.required && block.required.length > 0) {
     console.log(`  ${chalk.dim('required:')} ${block.required.join(', ')}`);
+  }
+  if (block.shows_when) {
+    console.log(`  ${chalk.dim('shows when:')} ${block.shows_when} ${chalk.dim('(without it the block renders nothing, with no error)')}`);
+  }
+  if (block.items) {
+    console.log(`  ${chalk.dim('list items:')}`);
+    for (const [name, says] of Object.entries(block.items)) console.log(`    ${chalk.green(name)}: ${says}`);
   }
   if (block.props && Object.keys(block.props).length > 0) {
     console.log(`  ${chalk.dim('props:')}`);
@@ -207,10 +209,29 @@ schemaCommand
   .description('Emit canonical example JSON per block type — agents copy/paste, no inference (A.3)')
   .option('--examples', 'Emit examples (default for this subcommand)')
   .option('--type <name>', 'Show one block type only (e.g., hero)')
+  .option('--starter', 'Emit a whole page that renders, made of the examples — the thing to copy')
+  .option('--offline', 'Skip the live fetch; examples are then made up from prop types')
   .option('--json', 'Emit JSON; without --json renders a human-readable list')
   .action(async (opts) => {
-    const { synthesizeExample, synthesizeAllExamples } = await import('../lib/block-example-synth');
-    const schema = loadSchema();
+    const synth = await import('../lib/block-example-synth');
+    // ⛔ LIVE FIRST. This used to read only the bundled file and SYNTHESIZE every
+    // example from prop types — a guess at what the renderer reads. The backend now
+    // serves examples read out of the renderer; a made-up one is the fallback only.
+    const resolved = await resolveForCommand(opts);
+    const schema = resolved.schema;
+    const synthesizeExample = (b: BlockDef) => (b.example_source === 'live' ? b.example : synth.synthesizeExample(b));
+    const synthesizeAllExamples = (bs: BlockDef[]) =>
+      Object.fromEntries(bs.map((b) => [b.type, synthesizeExample(b)]));
+
+    if (opts.starter) {
+      const page = schema.envelope.starter_page;
+      if (!page) {
+        console.error(chalk.red('The starter page comes from the live schema, and it could not be reached.'));
+        process.exit(1);
+      }
+      process.stdout.write(JSON.stringify(page, null, 2) + '\n');
+      return;
+    }
 
     if (opts.type) {
       const target = String(opts.type).toLowerCase();

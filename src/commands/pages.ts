@@ -628,11 +628,12 @@ pagesCommand.addHelpText('after', `
 Examples:
   $ solid pages list                               # Paginated
   $ solid pages list --all --json                  # Everything as JSON
-  $ solid pages get home                           # Detail view by slug
+  $ solid pages get 42                             # Detail view by id
+  $ solid pages slug home                          # Detail view by slug
   $ solid pages create --title "About" --slug about
   $ solid pages publish about                      # Publish a draft
   $ solid pages unpublish about
-  $ solid pages generate --type website            # AI-generate a full site
+  $ solid pages generate "a services page for a plumber"   # AI-generate a page
 
 Versioning: every publish creates a snapshot. See: solid history pages <slug>
 and solid rollback pages <slug> --version <n>.

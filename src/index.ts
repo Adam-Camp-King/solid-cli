@@ -82,6 +82,7 @@ import { webmcpCommand } from './commands/webmcp';
 import { ucpCommand } from './commands/ucp';
 import { nestCommand } from './commands/nest';
 import { appCommand } from './commands/app';
+import { bringCommand } from './commands/bring';
 import { connectCommand } from './commands/connect';
 import { flowsCommand } from './commands/flows';
 import { brandCommand } from './commands/brand';
@@ -577,6 +578,7 @@ program.addCommand(bidsCommand);
 program.addCommand(predictCommand);
 program.addCommand(nestCommand);
 program.addCommand(appCommand);
+program.addCommand(bringCommand);
 program.addCommand(reportsCommand);
 program.addCommand(docsCommand);
 program.addCommand(healthCommand);
@@ -677,6 +679,8 @@ program.addHelpText('after', () => {
     '',
     ui.commandHelp([
       { cmd: 'solid auth login', desc: 'Login to your company' },
+      { cmd: 'solid bring [folder]', desc: 'START HERE to build or bring a website or app — says what it is and what to run' },
+      { cmd: 'solid map', desc: 'Everything the platform can do, by class and noun (verbs = actions you call)' },
       { cmd: 'solid clone plumber', desc: 'Scaffold from 52 industry templates' },
       { cmd: 'solid pull', desc: 'Download business data as local files' },
       { cmd: 'solid push', desc: 'Upload local changes (drafts / unpublished)' },
