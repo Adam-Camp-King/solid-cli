@@ -26,6 +26,7 @@ a build until you choose to make it live.**
   (`missing_one_of`). A payload it called valid is no longer refused live.
 - Release notes are a release gate: every version ships with its CHANGELOG entry,
   shows on solidnumber.com/docs/cli/changelog, and gets a GitHub release.
+- Dependency update: axios 1.20.
 
 ## [2.24.12] — 2026-09-30
 
