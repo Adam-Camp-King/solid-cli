@@ -116,23 +116,27 @@ export const renderCommand = new Command('render')
       process.exit(2);
     }
 
-    // Make sure we have a browser. If not installed AND non-interactive,
-    // surface an actionable error rather than hanging on a prompt that
-    // never gets answered.
+    // Make sure we have a browser. ⛔ An AI agent asked to render used to be
+    // REFUSED here ("run solid render --install") — the tool told the agent to
+    // go and do the tool's job, and only SOLID_AUTO_INSTALL=1 (which nobody
+    // sets) let it through. `solid audit` always downloaded. Now render does
+    // too, for people and agents alike, and says so; SOLID_AUTO_INSTALL=0 is
+    // the explicit opt-out for a machine that must never download.
     let executablePath: string | null = await findChromiumExecutable();
     if (!executablePath) {
-      const auto = process.env.SOLID_AUTO_INSTALL && /^(1|true|yes|on)$/i.test(process.env.SOLID_AUTO_INSTALL);
-      const interactive = process.stdout.isTTY && process.stdin.isTTY;
-      if (!auto && !interactive) {
-        const msg = 'Chromium not installed. Run `solid render --install` (one-time, ~150MB).';
+      const optedOut = /^(0|false|no|off)$/i.test(process.env.SOLID_AUTO_INSTALL ?? '');
+      if (optedOut) {
+        const msg = 'No browser for rendering, and SOLID_AUTO_INSTALL=0 forbids the download. ' +
+          'Run `solid render --install` (one-time, ~150MB) or install Google Chrome.';
         if (isJsonOutput(opts)) {
           process.stdout.write(JSON.stringify({ ok: false, error: 'NO_BROWSER', message: msg }, null, 2) + '\n');
         } else {
           console.error(chalk.red(msg));
-          console.error(chalk.dim('  Or set SOLID_AUTO_INSTALL=1 to download on first use.'));
         }
         process.exit(1);
       }
+      console.error(chalk.dim('No browser for rendering yet — downloading Chromium once (~150MB) into ~/.solid/chromium/. ' +
+        '`solid update` keeps it current.'));
       const spinner = ora({ text: 'First-time setup — downloading Chromium…', stream: process.stderr }).start();
       try {
         const result = await ensureChromium((dl, total) => {
@@ -217,7 +221,8 @@ Examples:
   $ solid render about --viewport 1280x720
   $ solid render --install                   # one-time browser setup
 
-The first run downloads Chromium (~150MB) into ~/.solid/chromium/.
-Subsequent runs are instant. Set SOLID_AUTO_INSTALL=1 in CI / agent
-environments to bypass the install prompt.
+Uses Google Chrome when it is installed. Otherwise the first run downloads
+Chromium (~150MB, once) into ~/.solid/chromium/ — for a person or an AI agent
+alike — and \`solid update\` keeps it current. Set SOLID_AUTO_INSTALL=0 on a
+machine that must never download it.
 `);

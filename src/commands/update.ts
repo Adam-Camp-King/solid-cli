@@ -364,9 +364,9 @@ export async function refreshMachine(root: Command, apply: boolean): Promise<Par
     ? 'absent'
     : kits.some((k) => k.state === 'failed')
       ? 'failed'
-      : kits.some((k) => k.state === 'updated')
+      : kits.some((k) => k.state === 'updated' || k.state === 'installed')
         ? 'updated'
-        : kits.some((k) => k.state === 'would_update')
+        : kits.some((k) => k.state === 'would_update' || k.state === 'would_install')
           ? 'would_update'
           : 'current';
   parts.push({
@@ -394,7 +394,10 @@ function printParts(parts: PartReport[]): void {
     else console.log(chalk.dim(`  ${p.label}: not set up`));
     for (const k of p.projects ?? []) {
       if (k.state === 'failed') console.log(chalk.red(`      ✗ ${k.dir}: ${k.error}`));
-      else if (k.state !== 'current') console.log(chalk.dim(`      ${k.dir}: ${k.files} file${k.files === 1 ? '' : 's'}`));
+      else if (k.state === 'installed' || k.state === 'would_install') {
+        console.log(chalk.dim(`      ${k.dir}: ${k.state === 'installed' ? 'installed' : 'would install'} the Solid# skills — ` +
+          'an AI working here reads the verb catalog instead of guessing commands'));
+      } else if (k.state !== 'current') console.log(chalk.dim(`      ${k.dir}: ${k.files} file${k.files === 1 ? '' : 's'}`));
     }
   }
 }

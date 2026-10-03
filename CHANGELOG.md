@@ -2,6 +2,25 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [Unreleased]
+
+**Your AI gets the Solid# skills without being told to, and `solid render` no
+longer refuses an AI agent.**
+
+- A client project (a folder with `.solid/manifest.json`) gets the Solid# skills
+  and plugin automatically: `solid init` and `solid pull` install them when they
+  bind the folder, and `solid update` installs them in the project it runs in if
+  they are missing. An AI working there reads the verb catalog instead of
+  guessing commands. Other folders, your home folder and the Solid# platform repo
+  are never written.
+- `solid render` downloads its browser on first use for an AI agent too (it used
+  to refuse with "run `solid render --install`" unless `SOLID_AUTO_INSTALL=1`),
+  and says so. `solid audit` already did. Google Chrome is used when it is
+  installed, so most machines download nothing. `SOLID_AUTO_INSTALL=0` forbids
+  the download.
+- `solid setup` skips the browser question when a browser is already there, and
+  otherwise offers it with Yes as the default.
+
 ## [2.25.0] — 2026-10-03
 
 **`solid app` reads your repository itself, says which commit is live, and can hold

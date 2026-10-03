@@ -526,6 +526,13 @@ export const initCommand = new Command('init')
       }
       writeTenantManifest(projectDir, buildTenantManifest(binding.companyId, companyName, config.apiUrl));
       files['.solid/manifest.json'] = ''; // listed in the scaffold summary below
+      // The Solid# skills, so an AI working in this project reads the verb
+      // catalog instead of guessing (lib/project-kits.ts) — before the first
+      // commit, so they are part of the project from the start.
+      const { installKitForNewProject } = await import('../lib/project-kits');
+      const { CLI_VERSION } = await import('../lib/api-client');
+      const kit = installKitForNewProject(projectDir, CLI_VERSION);
+      if (kit && kit.state === 'installed') files['.claude/skills/ (Solid# skills for your AI)'] = '';
     }
 
     // The client's OWN git — their source, their repo, never ours. --no-git opts out.

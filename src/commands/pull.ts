@@ -368,6 +368,17 @@ export const pullCommand = new Command('pull')
     // ── Write manifest ───────────────────────────────────────────────
     writeTenantManifest(baseDir, manifest);
 
+    // The Solid# skills for any AI that works in this directory — installed
+    // once, kept current by `solid update` (lib/project-kits.ts).
+    {
+      const { installKitForNewProject } = await import('../lib/project-kits');
+      const { CLI_VERSION } = await import('../lib/api-client');
+      const kit = installKitForNewProject(baseDir, CLI_VERSION);
+      if (kit && kit.state === 'installed') {
+        console.log(chalk.green('  ✓ Solid# skills → ./.claude/skills/ (your AI reads the verb catalog instead of guessing)'));
+      }
+    }
+
     // ── Save offline cache if requested ─────────────────────────────
     if (options.cache) {
       const cacheSpinner = ora('Saving offline cache...').start();

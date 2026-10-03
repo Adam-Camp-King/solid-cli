@@ -68,7 +68,7 @@ function manifestCompany(dir: string): number | null {
 
 export interface KitReport {
   dir: string;
-  state: 'current' | 'updated' | 'would_update' | 'failed';
+  state: 'current' | 'updated' | 'installed' | 'would_update' | 'would_install' | 'failed';
   files: number;
   error?: string;
 }
@@ -82,7 +82,8 @@ function differs(file: string, content: string): boolean {
 }
 
 /** Refresh one directory's kit. Null when it has no kit, or may not be touched. */
-export function refreshKit(dir: string, version: string, apply: boolean): KitReport | null {
+export function refreshKit(dir: string, version: string, apply: boolean,
+                           installIfMissing = false): KitReport | null {
   const companyId = manifestCompany(dir);
   if (companyId === null || isProtectedRoot(dir)) return null;
 
@@ -92,7 +93,25 @@ export function refreshKit(dir: string, version: string, apply: boolean): KitRep
   }));
   const hasSkills = skillFiles.some((f) => fs.existsSync(f.path));
   const hasPlugin = fs.existsSync(path.join(dir, PLUGIN_DIR, 'plugin.json'));
-  if (!hasSkills && !hasPlugin) return null;
+  if (!hasSkills && !hasPlugin) {
+    // ⛔ The ONE place update adds files: the client project you ran it in
+    // (installIfMissing — refreshAllKits passes it for cwd only). A customer's
+    // AI that works there without the skills guesses commands instead of
+    // reading the verb catalog; the fix should not depend on anyone knowing
+    // `solid agent setup` exists. Still tenant-bound and never a protected root.
+    if (!installIfMissing) return null;
+    const files = [...skillFiles, ...planPlugin(dir, SKILLS, solidPluginInput(companyId, version))];
+    if (!apply) return { dir, state: 'would_install', files: files.length };
+    try {
+      for (const f of files) {
+        fs.mkdirSync(path.dirname(f.path), { recursive: true });
+        fs.writeFileSync(f.path, f.content);
+      }
+    } catch (err) {
+      return { dir, state: 'failed', files: files.length, error: (err as Error).message };
+    }
+    return { dir, state: 'installed', files: files.length };
+  }
 
   const wanted = [
     ...(hasSkills ? skillFiles : []),
@@ -126,7 +145,7 @@ export function refreshAllKits(version: string, apply: boolean, cwd = process.cw
 
   const reports: KitReport[] = [];
   for (const dir of dirs) {
-    const r = refreshKit(dir, version, apply);
+    const r = refreshKit(dir, version, apply, dir === here);
     if (r) reports.push(r);
   }
 
@@ -142,4 +161,21 @@ export function refreshAllKits(version: string, apply: boolean, cwd = process.cw
     }
   }
   return reports;
+}
+
+
+/**
+ * A directory just bound to a company (`solid init`, `solid pull`) gets the
+ * Solid# skills + plugin right away, and is remembered so `solid update` keeps
+ * them current. Never throws: a project that could not take the kit still works,
+ * and `solid update` run there installs it later.
+ */
+export function installKitForNewProject(dir: string, version: string): KitReport | null {
+  try {
+    const r = refreshKit(dir, version, true, true);
+    if (r && r.state !== 'failed') rememberProject(path.resolve(dir));
+    return r;
+  } catch {
+    return null;
+  }
 }

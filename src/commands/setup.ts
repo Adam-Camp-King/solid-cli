@@ -412,10 +412,17 @@ async function stepCompletion(opts: SetupOptions): Promise<StepResult> {
 
 async function stepRenderChromium(opts: SetupOptions): Promise<StepResult> {
   if (opts.skipRender) return { step: 'render_chromium', status: 'skipped', detail: '--skip-render' };
-  // Default NO for the optional ~150MB download — opt-in only.
+  // Google Chrome (or a cached download) already does the job — nothing to ask.
+  const { findChromiumExecutable } = await import('../lib/browser-install');
+  if (await findChromiumExecutable()) {
+    return { step: 'render_chromium', status: 'done', detail: 'a browser is already here — solid render and solid audit use it' };
+  }
+  // No browser: default YES. `solid render` and `solid audit` need one, and an
+  // AI agent running setup with --yes should come out able to screenshot and
+  // audit pages rather than hitting the download later.
   const ok = await confirm(
-    'Install the page-preview engine? Optional, ~150MB — lets `solid render` screenshot your pages.',
-    false,
+    'Install the page-preview engine (~150MB, once)? `solid render` screenshots pages and `solid audit` checks speed and SEO with it.',
+    true,
     !!opts.yes,
   );
   if (!ok) return { step: 'render_chromium', status: 'skipped', detail: 'declined (opt-in)' };

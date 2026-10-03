@@ -149,6 +149,40 @@ describe('Agent skills + plugin, in every project they were set up', () => {
     expect(fs.readFileSync(skill(dir), 'utf8')).toBe('old skill');
   });
 
+  it('the client project update runs in gets the kit when it has none', () => {
+    const here = project('fresh', 61);
+    const [r] = refreshAllKits('2.25.0', true, here);
+    expect(r.state).toBe('installed');
+    expect(fs.readFileSync(skill(here), 'utf8')).toBe(SKILLS[0].content);
+    expect(fs.existsSync(path.join(here, '.solid', 'plugin', 'plugin.json'))).toBe(true);
+    expect(knownProjects()).toEqual([here]);
+  });
+
+  it('…but a remembered project elsewhere is never given a kit it did not have', () => {
+    const elsewhere = project('elsewhere', 61);
+    fs.mkdirSync(path.join(elsewhere, '.claude'), { recursive: true });
+    rememberProject(elsewhere);
+    const here = project('unbound-here', null);
+    expect(refreshAllKits('2.25.0', true, here)).toEqual([]);
+    expect(fs.existsSync(skill(elsewhere))).toBe(false);
+  });
+
+  it('--check reports the install and writes nothing', () => {
+    const here = project('fresh', 61);
+    const [r] = refreshAllKits('2.25.0', false, here);
+    expect(r.state).toBe('would_install');
+    expect(fs.existsSync(skill(here))).toBe(false);
+  });
+
+  it('a project created by solid init / pull gets the kit and is remembered', () => {
+    const { installKitForNewProject } = require('../../lib/project-kits');
+    const dir = project('new', 77);
+    const r = installKitForNewProject(dir, '2.25.0');
+    expect(r.state).toBe('installed');
+    expect(fs.readFileSync(path.join(dir, '.solid', 'plugin', 'mcp.json'), 'utf8')).toContain('77');
+    expect(knownProjects()).toEqual([dir]);
+  });
+
   it('a kit found where update runs is remembered; a deleted project is forgotten', () => {
     const here = project('here', 61);
     staleSkill(here);
