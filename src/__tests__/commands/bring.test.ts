@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { bringCommand, describeFolder, listFiles } from '../../commands/bring';
+import { bringCommand, describeFolder, listFiles, writeStarter } from '../../commands/bring';
 
 function folder(files: Record<string, string>): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solid-bring-'));
@@ -68,5 +68,15 @@ describe('bring help', () => {
     expect(help).toContain('solid nest');
     expect(help).toContain('solid app publish');
     expect(help).not.toMatch(/same door/);
+  });
+});
+
+describe('writeStarter', () => {
+  it('writes the files and never overwrites one that is already there', () => {
+    const root = folder({ 'index.html': 'mine' });
+    const out = writeStarter(root, { files: { 'index.html': 'starter', 'a/b.css': 'x', '../escape': 'no' } });
+    expect(out).toEqual({ written: ['a/b.css'], kept: ['index.html'] });
+    expect(fs.readFileSync(path.join(root, 'index.html'), 'utf8')).toBe('mine');
+    expect(fs.existsSync(path.join(root, '..', 'escape'))).toBe(false);
   });
 });

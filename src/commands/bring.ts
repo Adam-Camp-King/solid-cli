@@ -104,17 +104,46 @@ function show(out: Record<string, any>): void {
     console.log(`  ${chalk.cyan('solid bring <folder>'.padEnd(32))} I have files — tell me what they are`);
   }
   if (out.how && !s) console.log(`\n${out.how}`);
+  const starters = out.starters as Record<string, any> | undefined;
+  if (starters && !out._written) {
+    for (const kind of Object.keys(starters)) {
+      console.log(chalk.dim(`\nA working ${kind} to copy:  solid bring --bringing ${s?.bringing ?? kind} --starter ${kind} --out ./${kind === 'app' ? 'my-app' : 'my-page'}`));
+    }
+  }
+}
+
+/**
+ * Write one starter's files into `dir`. Refuses to overwrite: a starter is for an
+ * empty start, and a file already there is someone's work.
+ */
+export function writeStarter(dir: string, starter: { files?: Record<string, string> }): { written: string[]; kept: string[] } {
+  const written: string[] = [];
+  const kept: string[] = [];
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [rel, body] of Object.entries(starter.files || {})) {
+    if (rel.includes('..') || path.isAbsolute(rel)) continue;
+    const file = path.join(dir, rel);
+    if (fs.existsSync(file)) { kept.push(rel); continue; }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, body);
+    written.push(rel);
+  }
+  return { written, kept };
 }
 
 export const bringCommand = new Command('bring')
   .description('START HERE to build or bring a website or an app: asks what you are bringing, or reads a folder and says what it is')
   .argument('[source]', 'A folder to look at, or a design link / tool name (e.g. "Figma Make")')
   .option('--bringing <what>', 'nothing | design | site | app — the steps, in order, for that')
+  .option('--starter <kind>', 'page | app — write a working starter (use with --out)')
+  .option('--out <dir>', 'Where --starter writes its files', '.')
   .option('--json', 'Output JSON')
   .action(async (source: string | undefined, opts) => {
     const json = isJsonOutput(opts);
     const args: Record<string, unknown> = {};
     if (opts.bringing) args.bringing = String(opts.bringing);
+    // A starter comes with the steps for what is being brought; asking for one says which.
+    if (opts.starter && !opts.bringing) args.bringing = opts.starter === 'app' ? 'app' : 'site';
     if (source) {
       const abs = path.resolve(source);
       if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) {
@@ -135,6 +164,23 @@ export const bringCommand = new Command('bring')
     try {
       const res = await apiClient.post(DISPATCH, { verb: 'design.intake', args });
       const out = ((res.data as any)?.result ?? res.data) as Record<string, any>;
+      if (opts.starter) {
+        const starter = out.starters?.[String(opts.starter)];
+        if (!starter) {
+          const message = `No "${opts.starter}" starter. Ask for page or app.`;
+          if (json) printJson({ ok: false, error: message }); else console.error(chalk.red(`✗ ${message}`));
+          process.exitCode = 1;
+          return;
+        }
+        const res2 = writeStarter(path.resolve(String(opts.out)), starter);
+        if (json) return printJson({ ok: true, ...res2, rules: starter.rules, then: starter.then });
+        for (const f of res2.written) console.log(chalk.green(`  ✓ ${path.join(String(opts.out), f)}`));
+        for (const f of res2.kept) console.log(chalk.yellow(`  · ${f} is already there — left alone`));
+        console.log('');
+        (starter.rules || []).forEach((r: string) => console.log(`  · ${r}`));
+        if (starter.then?.cli) console.log(`\nThen:  ${chalk.cyan(starter.then.cli)}`);
+        return;
+      }
       if (json) return printJson(out);
       show(out);
     } catch (error) {
@@ -149,6 +195,10 @@ export const bringCommand = new Command('bring')
   });
 
 bringCommand.addHelpText('after', `
+A working file to copy, wired the right way from line one:
+  solid bring --starter page --out ./my-page    one HTML file, the owner's editable spots marked
+  solid bring --starter app --out ./my-app      an app that shows the brand and sends leads
+
 For an AI agent: run "solid bring <folder> --json" FIRST when someone has files, and
 "solid bring --bringing nothing --json" when they are starting from scratch. The reply names
 the exact next command. Do not ask the person whether it is a page or an app — the folder says.
