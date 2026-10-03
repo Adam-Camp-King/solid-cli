@@ -21,6 +21,27 @@ longer refuses an AI agent.**
 - `solid setup` skips the browser question when a browser is already there, and
   otherwise offers it with Yes as the default.
 
+**A front door for anyone building or bringing a website or an app, and the block
+structure told truthfully.**
+
+- `solid bring [folder]` — start here. With a folder it reads the files and says
+  what they are (a page, an app, or something with server code) and the exact
+  next command; with nothing it asks what you are bringing and gives the steps in
+  order. Nothing is decided in the CLI: it asks the backend's `design.intake`.
+- `solid pull` leaves a `SOLID-README.md` in the folder: what each folder is, what
+  a page is made of, what a kept design is and how its slots are changed, where
+  an app goes, and what `solid push` does and does not send.
+- `solid schema pages --block <type>` shows what a block needs before it shows
+  anything ("shows when") and the fields of each list item, live from the
+  backend. `solid schema blocks` returns examples read out of the renderer
+  instead of ones made up from prop types, and `--starter` returns a whole page
+  that renders.
+- What a verb is, said plainly in `solid verbs --help`, `solid how-to` and the
+  installed skills: an action you call — not a word, not deletable — and nothing
+  is held back (`solid map`, `solid find`).
+- A new installed skill, `solid-building`: page or app, the one import, slots.
+- Seven help examples that named flags or arguments the commands do not take.
+
 ## [2.25.0] — 2026-10-03
 
 **`solid app` reads your repository itself, says which commit is live, and can hold
