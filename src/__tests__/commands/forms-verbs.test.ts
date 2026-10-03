@@ -105,14 +105,21 @@ describe('solid verbs invoke — consent has to travel', () => {
     });
   });
 
-  it('⛔ refuses a write verb WITHOUT --confirm and never calls the backend', async () => {
+  it('⛔ sends a write WITHOUT --confirm to the server with no consent, so it is refused there and recorded', async () => {
+    // 2026-10-03: refusing locally meant the attempt left no receipt. The body
+    // carries no confirm, so the server refuses it (confirmation_required) and
+    // nothing changes.
     mockGet.mockResolvedValue({ data: WRITE_VERB });
+    mockPost.mockRejectedValue(Object.assign(new Error('400'), {
+      isAxiosError: true,
+      response: { status: 400, data: { detail: { error: 'confirmation_required' } } },
+    }));
 
     await expect(
       run('verbs', ['invoke', 'survey.publish', '-p', '{"survey_id":2}']),
-    ).rejects.toThrow('__exit_1__');
+    ).rejects.toThrow();
 
-    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/agent/survey/publish', { survey_id: 2 });
   });
 
   it('does not smuggle confirm into a read verb', async () => {

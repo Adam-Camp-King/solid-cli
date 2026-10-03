@@ -24,6 +24,10 @@ a build until you choose to make it live.**
 - The Playground checks inside array items (`terms[0].excerpt`, `lines[2].amount`)
   with the same rules as the top level, and enforces "one of these is required"
   (`missing_one_of`). A payload it called valid is no longer refused live.
+- `solid verbs invoke` on a write without `--confirm` now sends the call without
+  consent instead of stopping before it: the server refuses it
+  (`confirmation_required`), nothing changes, and the attempt is recorded in
+  `audit.receipts`. It used to leave no trace. `--confirm` is still how you consent.
 - Release notes are a release gate: every version ships with its CHANGELOG entry,
   shows on solidnumber.com/docs/cli/changelog, and gets a GitHub release.
 - Dependency update: axios 1.20.

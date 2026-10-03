@@ -226,18 +226,35 @@ describe('verbs invoke — the consent gate (VNP 1.3)', () => {
       http_endpoint: '/api/v1/agent/contact/create',
     });
 
-  it('still blocks a real write with no --confirm', () => {
+  it('a real write with no --confirm goes to the server WITHOUT consent, is refused there and exits', () => {
+    // 2026-10-03: the CLI used to stop here and send nothing, so the refused
+    // attempt left no receipt. Now the server refuses it (confirmation_required)
+    // and records it — and still nothing changes, because no confirm was sent.
     mockGet.mockResolvedValue(writeVerb());
     mockIsDryRun.mockReturnValue(false);
+    mockPost.mockRejectedValue(Object.assign(new Error('400'), {
+      isAxiosError: true,
+      response: { status: 400, data: { detail: { error: 'confirmation_required' } } },
+    }));
 
-    const exit = jest.spyOn(process, 'exit').mockImplementation(((): never => {
-      throw new Error('EXIT');
-    }) as never);
-
-    return expect(invoke('contact.create')).rejects.toThrow('EXIT').then(() => {
-      expect(mockPost).not.toHaveBeenCalled();
-      exit.mockRestore();
+    return expect(invoke('contact.create')).rejects.toThrow('FAILAPI').then(() => {
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      const body = mockPost.mock.calls[0][1] as Record<string, unknown>;
+      expect(body.confirm).toBeUndefined();
     });
+  });
+
+  it('an unconfirmed dispatch write asks the server to require consent', async () => {
+    mockGet.mockResolvedValue(verb({ name: 'kb_entry_update', side_effects: 'write', transport: 'dispatch' }));
+    mockIsDryRun.mockReturnValue(false);
+    mockPost.mockRejectedValue(Object.assign(new Error('400'), {
+      isAxiosError: true,
+      response: { status: 400, data: { detail: { error: 'confirmation_required' } } },
+    }));
+    await expect(invoke('kb_entry_update', ['-p', '{"entry_id":1}'])).rejects.toThrow('FAILAPI');
+    const body = mockPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body.require_confirm).toBe(true);
+    expect(body.confirm).toBeUndefined();
   });
 
   it('lets a DRY RUN through without --confirm, and sends nothing at all', async () => {

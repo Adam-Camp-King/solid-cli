@@ -436,12 +436,19 @@ verbsCommand
     // to consent to. --confirm stays mandatory for the real call.
     const previewOnly = isDryRun();
 
-    if (isWrite && !previewOnly && !options.confirm) {
-      console.error(chalk.red(`${verb.name} writes (side_effects=${verb.side_effects}).`));
-      console.error(chalk.dim(`  Re-run with --confirm to consent:`));
-      console.error(chalk.dim(`    solid verbs invoke ${verb.name} --confirm${options.payload ? ` -p '${typeof options.payload === 'string' ? options.payload : ''}'` : ''}`));
-      process.exit(1);
-    }
+    // ⛔ AN UNCONFIRMED WRITE STILL GOES TO THE SERVER. It used to stop here with
+    // process.exit(1), so the server never saw the attempt and audit.receipts had
+    // no record of it — a refused call left no trace (found 2026-10-03). Now the
+    // call is sent WITHOUT confirm: the server refuses it (confirmation_required),
+    // writes the receipt, and nothing changes. The hint below still tells the
+    // person how to consent.
+    const consentHint = (isWrite && !previewOnly && !options.confirm)
+      ? () => {
+          console.error(chalk.red(`${verb.name} writes (side_effects=${verb.side_effects}) — refused without consent.`));
+          console.error(chalk.dim(`  Re-run with --confirm to consent:`));
+          console.error(chalk.dim(`    solid verbs invoke ${verb.name} --confirm${options.payload ? ` -p '${typeof options.payload === 'string' ? options.payload : ''}'` : ''}`));
+        }
+      : null;
 
     // ⛔ ROUTE BY TRANSPORT, NOT BY GUESSWORK. Every verb used to be POSTed at
     // /api/v1/agent/<name>, and for a third of them that route has never
@@ -522,7 +529,8 @@ verbsCommand
     }
 
     try {
-      const body = isWrite ? { ...payload, confirm: true } : payload;
+      const confirmed = isWrite && Boolean(options.confirm);
+      const body = confirmed ? { ...payload, confirm: true } : payload;
       let res;
 
       if (transport === 'dispatch') {
@@ -533,7 +541,10 @@ verbsCommand
         res = await apiClient.post(verb.dispatch_endpoint || DEFAULT_DISPATCH_ENDPOINT, {
           verb: verb.name,
           args: payload,
-          confirm: isWrite ? true : undefined,
+          confirm: confirmed ? true : undefined,
+          // Every write needs consent from the CLI; the server refuses an
+          // unconfirmed one and records the refusal as a receipt.
+          require_confirm: isWrite ? true : undefined,
         });
       } else {
         const method = httpMethodOf(verb);
@@ -544,6 +555,7 @@ verbsCommand
 
       printJson(res.data);
     } catch (e) {
+      if (consentHint) consentHint();
       failApi(e);
     }
   });
