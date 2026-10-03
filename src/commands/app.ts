@@ -565,6 +565,20 @@ appCommand
   });
 
 appCommand.addHelpText('after', `
+PAGE OR APP — the one question: does it need its OWN JavaScript to do its job?
+  NO  → a PAGE. Import it (solid verbs invoke design.intake names the door). It lives on
+        <company>.solidnumber.com as editable blocks; the owner, their AI and Solid# can change
+        every word and image, and it follows the brand (logo, colours).
+  YES → an APP. Publish its built files with the commands below. It lives at
+        <company>.solidhost.app/<name>/, runs exactly as built, and only its developer can
+        change it. A brand change in Solid# does not reach it.
+  How to tell: picture it with JavaScript off. Only polish lost (animation, menus) → page.
+        It stops doing its job (steps, camera, calculator) → app.
+  Why two addresses: every solidnumber.com address shares the dashboard's sign-in, so outside
+        script never runs there. solidhost.app is a separate domain where it can.
+  Most businesses have both: pages, plus a button that opens the app. A business can have many
+  apps (/sell/, /quote/). ".app" is a domain ending, not the App Store.
+
 For an AI agent — do this in order and ask the person nothing:
   1. solid app github --slug <name> --plan --json   reads the repo: the built folder, how it builds, when to publish
   2. solid app github --slug <name> --json          writes the workflow and a publish-only key

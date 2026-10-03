@@ -2,6 +2,31 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.25.0] — 2026-10-03
+
+**`solid app` reads your repository itself, says which commit is live, and can hold
+a build until you choose to make it live.**
+
+- `solid app github` reads the repository before it writes anything: it finds the
+  app's folder (the root or one level down), the package manager from the lockfile,
+  the built folder (Vite's `outDir` included) and whether one of your own workflows
+  already rebuilds it, then writes the matching workflow — build then publish,
+  publish a committed folder when it changes, or publish when your rebuilding
+  workflow finishes. `--folder` is optional; `--plan` shows what it found and the
+  workflow without creating a key or writing a file. The real run prints the exact
+  steps, in order.
+- `solid app publish` sends the commit and repository the build came from, so
+  `solid app get` says which commit is live. `--hold` keeps a build without making
+  it live, and `solid app github --review` does that on every push. `publish` and
+  `get` print what the server says to do next, and the outside addresses the build
+  depends on. Publishing opens company by company; until it is on for yours, the
+  command says so and nothing is published.
+- The Playground checks inside array items (`terms[0].excerpt`, `lines[2].amount`)
+  with the same rules as the top level, and enforces "one of these is required"
+  (`missing_one_of`). A payload it called valid is no longer refused live.
+- Release notes are a release gate: every version ships with its CHANGELOG entry,
+  shows on solidnumber.com/docs/cli/changelog, and gets a GitHub release.
+
 ## [2.24.12] — 2026-09-30
 
 **`solid app` puts a designer's interactive app live for your company, and

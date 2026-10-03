@@ -219,6 +219,12 @@ describe('solid app github — reads the repo, asks nobody', () => {
     expect(help).toContain('ask the person nothing');
     expect(help).toContain('solid app github --slug <name> --plan --json');
     expect(help).toContain('never pulls from GitHub');
+    // page or app: the question, both answers, and why there are two addresses
+    expect(help).toContain('does it need its OWN JavaScript to do its job?');
+    expect(help).toContain('<company>.solidnumber.com');
+    expect(help).toContain('<company>.solidhost.app/<name>/');
+    expect(help).toContain("shares the dashboard's sign-in");
+    expect(help).toContain('not the App Store');
   });
 });
 
