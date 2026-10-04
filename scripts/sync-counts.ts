@@ -253,11 +253,44 @@ function needsAHuman(text: string, c: Counts): string[] {
   return out;
 }
 
+/**
+ * ⛔ A FIGURE THIS PACKAGE CANNOT MEASURE MAY NOT BE IN THIS PACKAGE.
+ *
+ * README.md said "14 user-facing AI agents (plus 102 background workers)" at
+ * 2.27.0 — the frozen figures the monorepo's own CLAUDE.md warns about — and
+ * `check:counts` passed, because it measures version, commands and verbs and
+ * nothing else. The agent roster and the task functions live in solid-backend;
+ * solid-cli is also checked out alone and cannot count either. So the README
+ * does not state them, and this refuses the line if it comes back.
+ */
+const UNMEASURABLE: RegExp[] = [
+  /\b\d+\+? (?:user-facing |deeply trained )?AI agents\b/i,
+  /\b\d+\+? (?:background )?(?:workers|task functions)\b/i,
+];
+
+function unmeasurableClaims(): string[] {
+  const path = join(CLI, "README.md");
+  if (!existsSync(path)) return [];
+  const out: string[] = [];
+  readFileSync(path, "utf8").split("\n").forEach((line, i) => {
+    if (UNMEASURABLE.some((re) => re.test(line))) out.push(`solid-cli/README.md:${i + 1}: ${line.trim().slice(0, 110)}`);
+  });
+  return out;
+}
+
 function main() {
   const check = process.argv.includes("--check");
   const c = measure();
   const stale: string[] = [];
   const unowned: string[] = [];
+
+  const unmeasurable = unmeasurableClaims();
+  if (unmeasurable.length) {
+    console.error("✗ README.md states a count this package cannot measure (agents and workers are counted in solid-backend):");
+    for (const u of unmeasurable) console.error(`    ${u}`);
+    console.error("  Fix:  remove the figure — say what the CLI does, not how many agents the platform has.");
+    process.exit(1);
+  }
 
   if (!IN_MONOREPO) {
     console.log("  (solid-cli checked out alone — only surfaces inside solid-cli/ are checked)");

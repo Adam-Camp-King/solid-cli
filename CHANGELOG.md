@@ -2,6 +2,39 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.28.0] — 2026-10-04
+
+**A verb says what it returns, every call hands back its receipt, and the first
+page is the verbs an agent needs.**
+
+- `solid verbs invoke` prints `_receipt`: the handle of the receipt the call
+  left. A refusal prints it on stderr. `solid verbs receipts <ref>` reads that
+  one call back; `--session <id>` reads a whole run, `--broken` lists results
+  that did not match the verb's published `output_schema`, with what was missing.
+- `solid verbs list` with no prefix leads with the verbs an AI is handed as
+  tools (the backend marks them `first_page`), then the rest by name. It used
+  to be whatever the alphabet put first: `accounting_connection.*` to
+  `analytics.*`. A prefix or a filter stays in name order.
+
+- `solid verbs describe` prints what a verb returns: the keys on every result
+  that worked, the keys of one that did not, and whether that was read from
+  every return path of the handler (`proven`), declared by its author, or only
+  seen in source (`hint`, nothing promised). `--json` carries the full
+  `output_schema`, now with `required` and value types where the backend
+  publishes them.
+- `solid verbs invoke --dry-run` adds `returns`, so the keys the next step
+  plans on are known before the call.
+- `solid verbs invoke` prints a list result with the server's own key
+  (`journeys`, `drafts`) beside `items`. It printed only `items`, a key the
+  verb's `output_schema` never named.
+- `solid verbs snapshot` writes a v2 snapshot whose fingerprint includes what a
+  verb returns and what it refuses on, so `--changed-since` reports a changed
+  return shape or refusal. A v1 snapshot is still read and compared as v1; the
+  reply says it cannot see those two and to take a new one.
+- README: the front page describes the verb contract instead of release notes
+  for 2.11 to 2.15, and no longer states agent or worker counts. `check:counts`
+  refuses the README if a count this package cannot measure comes back.
+
 ## [2.27.0] — 2026-10-04
 
 **The verb list is a page, not a dump, and `solid push` sends services and products.**

@@ -42,6 +42,12 @@ import { config } from './config';
 import { deriveExistenceGet, isDryRun, makeDryRunResult } from './dry-run';
 import { autoFlushQueue, enqueue, isAutoFlushInProgress, isQueueMode, queueSize } from './offline-queue';
 import { applyListEnvelope } from './list-envelope';
+import { receiptRefOf } from './output-contract';
+
+function receiptOf(headers: unknown): { receipt?: string } {
+  const ref = receiptRefOf(headers);
+  return ref ? { receipt: ref } : {};
+}
 import { checkSkewFromHeaders } from './version-skew';
 
 // Resolve our package version once. Used for the X-Solid-CLI-Version header
@@ -77,6 +83,8 @@ interface ApiResponse<T = unknown> {
   data: T;
   status: number;
   success: boolean;
+  /** The handle of the receipt this call left (`X-Solid-Receipt`), when the server sent one. */
+  receipt?: string;
 }
 
 /**
@@ -726,7 +734,7 @@ class ApiClient {
     },
   ): Promise<ApiResponse<T>> {
     const response = await this.client.get(url, options);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Dry-run interception happens at the request-interceptor layer —
@@ -737,17 +745,17 @@ class ApiClient {
   // per-call key (stable across internal retries only). See the interceptor.
   async post<T = unknown>(url: string, data?: unknown, options?: { idempotencyKey?: string }): Promise<ApiResponse<T>> {
     const response = await this.client.post(url, data, idempotencyConfig(options));
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async put<T = unknown>(url: string, data?: unknown, options?: { idempotencyKey?: string }): Promise<ApiResponse<T>> {
     const response = await this.client.put(url, data, idempotencyConfig(options));
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async patch<T = unknown>(url: string, data?: unknown, options?: { idempotencyKey?: string }): Promise<ApiResponse<T>> {
     const response = await this.client.patch(url, data, idempotencyConfig(options));
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async delete<T = unknown>(
@@ -759,7 +767,7 @@ class ApiClient {
       ...(options?.data !== undefined ? { data: options.data } : {}),
       ...idempotencyConfig(options),
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Auth endpoints
@@ -773,7 +781,7 @@ class ApiClient {
       email,
       password,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async authStatus(): Promise<ApiResponse<{
@@ -792,12 +800,12 @@ class ApiClient {
   // Health endpoints
   async healthQuick(): Promise<ApiResponse<{ status: string; timestamp: string }>> {
     const response = await this.client.get('/api/v1/healthcheck/quick');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async healthFull(): Promise<ApiResponse<Record<string, any>>> {
     const response = await this.client.get('/api/v1/health');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async healthMcp(): Promise<ApiResponse<{
@@ -806,7 +814,7 @@ class ApiClient {
     agents: { total_agents: number };
   }>> {
     const response = await this.client.get('/api/v1/healthcheck/mcp');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Integration endpoints
@@ -816,7 +824,7 @@ class ApiClient {
     external_integrations: Record<string, unknown>;
   }>> {
     const response = await this.client.get('/api/v1/vibe/integrations/catalog');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsList(status?: string): Promise<ApiResponse<{
@@ -832,7 +840,7 @@ class ApiClient {
   }>> {
     const params = status ? { status } : {};
     const response = await this.client.get('/api/v1/vibe/integrations/', { params });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsHealth(): Promise<ApiResponse<{
@@ -842,7 +850,7 @@ class ApiClient {
     warnings: string[];
   }>> {
     const response = await this.client.get('/api/v1/vibe/integrations/health');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsGenerate(params: {
@@ -859,7 +867,7 @@ class ApiClient {
     code_preview: string;
   }>> {
     const response = await this.client.post('/api/v1/vibe/integrations/generate', params);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsValidate(integrationId: string): Promise<ApiResponse<{
@@ -868,7 +876,7 @@ class ApiClient {
     blocking_issues_count: number;
   }>> {
     const response = await this.client.post(`/api/v1/vibe/integrations/validate/${integrationId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsTest(integrationId: string, testParams?: Record<string, unknown>): Promise<ApiResponse<{
@@ -879,7 +887,7 @@ class ApiClient {
     const response = await this.client.post(`/api/v1/vibe/integrations/test/${integrationId}`, {
       test_params: testParams || {},
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsDeploy(integrationId: string): Promise<ApiResponse<{
@@ -889,7 +897,7 @@ class ApiClient {
     deployed_at: string;
   }>> {
     const response = await this.client.post(`/api/v1/vibe/integrations/deploy/${integrationId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsDisable(integrationId: string, reason?: string): Promise<ApiResponse<{
@@ -897,7 +905,7 @@ class ApiClient {
     status: string;
   }>> {
     const response = await this.client.post(`/api/v1/vibe/integrations/disable/${integrationId}`, { reason });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsRollback(integrationId: string, reason?: string): Promise<ApiResponse<{
@@ -905,7 +913,7 @@ class ApiClient {
     status: string;
   }>> {
     const response = await this.client.post(`/api/v1/vibe/integrations/rollback/${integrationId}`, { reason });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async integrationsLogs(integrationId: string, limit = 100): Promise<ApiResponse<{
@@ -920,7 +928,7 @@ class ApiClient {
     const response = await this.client.get(`/api/v1/vibe/integrations/${integrationId}/logs`, {
       params: { limit },
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Vibe endpoints
@@ -931,7 +939,7 @@ class ApiClient {
     preview_id?: string;
   }>> {
     const response = await this.client.post('/api/v1/vibe/analyze', { prompt });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async vibeApply(previewId: string): Promise<ApiResponse<{
@@ -943,7 +951,7 @@ class ApiClient {
       preview_id: previewId,
       confirm: true,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Company info
@@ -951,7 +959,7 @@ class ApiClient {
     const response = await this.client.post('/api/v1/rpc/Company/info', {
       query: { id: config.companyId },
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // KB endpoints (via REST API)
@@ -999,7 +1007,7 @@ class ApiClient {
   // CMS Pages
   async pagesList(params?: { site_id?: number; page_type?: string }): Promise<ApiResponse<{ pages: unknown[]; total: number }>> {
     const response = await this.client.get('/api/v1/cms/pages', { params });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async pagesPublish(pageId: number): Promise<ApiResponse<{ success: boolean }>> {
@@ -1009,18 +1017,18 @@ class ApiClient {
     // all made FastAPI report a missing required field, and `solid pages
     // publish` returned 422 for every tenant, on every page.
     const response = await this.client.post(`/api/v1/cms/pages/${pageId}/publish`, {});
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async pagesUnpublish(pageId: number): Promise<ApiResponse<{ success: boolean }>> {
     const response = await this.client.post(`/api/v1/cms/pages/${pageId}/unpublish`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Services
   async servicesList(): Promise<ApiResponse<{ items: unknown[]; total: number }>> {
     const response = await this.client.get(`/api/v1/services/catalog`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Products
@@ -1029,7 +1037,7 @@ class ApiClient {
     const response = await this.client.get(`/api/v1/cms/public/products`, {
       params: { company_id: companyId, ...params },
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Website settings update
@@ -1038,36 +1046,36 @@ class ApiClient {
     const response = await this.client.patch(`/api/v1/companies/${companyId}`, {
       website_settings: settings,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Single page (full detail with layout_json)
   async pageGet(pageId: number): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.get(`/api/v1/cms/pages/${pageId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Update page
   async pageUpdate(pageId: number, data: Record<string, unknown>): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.patch(`/api/v1/cms/pages/${pageId}`, data);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Create page
   async pageCreate(data: Record<string, unknown>): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.post(`/api/v1/cms/pages`, data);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Sites (solid site)
   async sitesList(): Promise<ApiResponse<{ sites: unknown[]; count: number }>> {
     const response = await this.client.get('/api/v1/sites');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async siteGet(siteId: number): Promise<ApiResponse<{ site: Record<string, unknown> }>> {
     const response = await this.client.get(`/api/v1/sites/${siteId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async siteCreate(slug: string, template?: string, name?: string, isLive?: boolean): Promise<ApiResponse<Record<string, unknown>>> {
@@ -1077,23 +1085,23 @@ class ApiClient {
       name: name || undefined,
       is_live: isLive ?? false,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async siteDelete(siteId: number): Promise<ApiResponse<{ success: boolean }>> {
     const response = await this.client.delete(`/api/v1/sites/${siteId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async siteTemplates(): Promise<ApiResponse<{ templates: unknown[]; recommended: string }>> {
     const response = await this.client.get('/api/v1/sites/templates');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Page management (additional)
   async pageDelete(pageId: number): Promise<ApiResponse<{ success: boolean }>> {
     const response = await this.client.delete(`/api/v1/cms/pages/${pageId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // AI Chat (talk to agents)
@@ -1102,18 +1110,18 @@ class ApiClient {
       message,
       agent: agentName,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Templates (solid clone)
   async templatesList(): Promise<ApiResponse<{ templates: unknown[]; total: number }>> {
     const response = await this.client.get('/api/v1/cli/templates/');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async templatePreview(name: string): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.get(`/api/v1/cli/templates/${name}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async templateClone(name: string): Promise<ApiResponse<{
@@ -1123,7 +1131,7 @@ class ApiClient {
     created: { kb_entries: number; pages?: number; services?: number };
   }>> {
     const response = await this.client.post(`/api/v1/cli/templates/${name}/clone`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Multi-company (CLI Agency)
@@ -1133,7 +1141,7 @@ class ApiClient {
     count: number;
   }>> {
     const response = await this.client.get('/api/v1/cli/companies/');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyCreate(name: string, template?: string, industry?: string): Promise<ApiResponse<{
@@ -1143,7 +1151,7 @@ class ApiClient {
     template?: unknown;
   }>> {
     const response = await this.client.post('/api/v1/cli/companies/', { name, template, industry });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companySwitch(companyId: number): Promise<ApiResponse<{
@@ -1155,7 +1163,7 @@ class ApiClient {
     expires_in: number;
   }>> {
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/switch`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyMembers(companyId: number): Promise<ApiResponse<{
@@ -1164,7 +1172,7 @@ class ApiClient {
     count: number;
   }>> {
     const response = await this.client.get(`/api/v1/cli/companies/${companyId}/members`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyMemberRevoke(companyId: number, userId: number): Promise<ApiResponse<{
@@ -1174,7 +1182,7 @@ class ApiClient {
     user_id: number;
   }>> {
     const response = await this.client.delete(`/api/v1/cli/companies/${companyId}/members/${userId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyInvite(companyId: number, email: string, role = 'developer'): Promise<ApiResponse<{
@@ -1183,7 +1191,7 @@ class ApiClient {
     token?: string;
   }>> {
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/invite`, { email, role });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // ── T10 — Agency-managed companies + design-lock ─────────────────
@@ -1202,7 +1210,7 @@ class ApiClient {
     next_steps: string[];
   }>> {
     const response = await this.client.post('/api/v1/cli/companies/for-client', payload);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyLockStatus(companyId: number): Promise<ApiResponse<{
@@ -1212,7 +1220,7 @@ class ApiClient {
     locks: Record<string, boolean>;
   }>> {
     const response = await this.client.get(`/api/v1/cli/companies/${companyId}/lock-status`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyLock(companyId: number, areas: string[]): Promise<ApiResponse<{
@@ -1222,7 +1230,7 @@ class ApiClient {
     locks: Record<string, boolean>;
   }>> {
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/lock`, { areas });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyUnlock(companyId: number, areas: string[], all = false): Promise<ApiResponse<{
@@ -1234,7 +1242,7 @@ class ApiClient {
     const body: Record<string, unknown> = { all };
     if (!all) body.areas = areas;
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/unlock`, body);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // ── SPRINT-AGENT-FIREWALL — agent identities, quarantine, reputation ──
@@ -1242,27 +1250,27 @@ class ApiClient {
     company_id: number; count: number; identities: Array<Record<string, unknown>>;
   }>> {
     const response = await this.client.get('/api/v1/agent/identities', { params: includeRevoked ? { include_revoked: true } : {} });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentIdentityCreate(body: { agent_type: string; trust_tier?: string; label?: string }): Promise<ApiResponse<Record<string, unknown> & { id: number; agent_key: string }>> {
     const response = await this.client.post('/api/v1/agent/identities', body);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentIdentityRevoke(id: number): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.delete(`/api/v1/agent/identities/${id}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentIdentityQuarantine(id: number, reason: string): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.post(`/api/v1/agent/identities/${id}/quarantine`, { reason });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentIdentityRelease(id: number): Promise<ApiResponse<Record<string, unknown>>> {
     const response = await this.client.post(`/api/v1/agent/identities/${id}/release`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentIdentityReputation(id: number): Promise<ApiResponse<{
@@ -1271,14 +1279,14 @@ class ApiClient {
     identity: Record<string, unknown>;
   }>> {
     const response = await this.client.get(`/api/v1/agent/identities/${id}/reputation`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentRisk(days = 7): Promise<ApiResponse<{
     window_days: number; elevated: Array<Record<string, unknown>>; quarantined: Array<Record<string, unknown>>;
   }>> {
     const response = await this.client.get('/api/v1/agent/identities/risk', { params: { days } });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyLockPreset(companyId: number, profile: string): Promise<ApiResponse<{
@@ -1290,7 +1298,7 @@ class ApiClient {
     applied_preset: string;
   }>> {
     const response = await this.client.post(`/api/v1/cli/companies/${companyId}/lock-preset`, { profile });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async companyRequestUnlock(companyId: number, areas: string[], reason: string): Promise<ApiResponse<{
@@ -1304,7 +1312,7 @@ class ApiClient {
       areas,
       reason,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // ── Tenant Activity Gate ────────────────────────────────────────────────
@@ -1373,7 +1381,7 @@ class ApiClient {
       expires_in_days: expiresInDays,
       ...(extra?.require_approval ? { require_approval: true } : {}),
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async apiKeyList(): Promise<ApiResponse<{
@@ -1382,12 +1390,12 @@ class ApiClient {
     available_scopes: string[];
   }>> {
     const response = await this.client.get('/api/v1/cli/api-keys/');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async apiKeyRevoke(keyId: number): Promise<ApiResponse<{ status: string; id: number }>> {
     const response = await this.client.delete(`/api/v1/cli/api-keys/${keyId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Agent management endpoints
@@ -1405,7 +1413,7 @@ class ApiClient {
     // and axios/follow-redirects strips the Authorization header, causing
     // spurious 401s under SOLID_API_KEY auth. Verified 2026-04-19.
     const response = await this.client.get('/api/v1/cli/agents/');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentDetail(agentType: string): Promise<ApiResponse<{
@@ -1419,7 +1427,7 @@ class ApiClient {
     tools: string[];
   }>> {
     const response = await this.client.get(`/api/v1/cli/agents/${agentType}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentTools(agentType: string): Promise<ApiResponse<{
@@ -1428,7 +1436,7 @@ class ApiClient {
     total: number;
   }>> {
     const response = await this.client.get(`/api/v1/cli/agents/${agentType}/tools`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentData(agentType: string): Promise<ApiResponse<{
@@ -1449,7 +1457,7 @@ class ApiClient {
     }>;
   }>> {
     const response = await this.client.get(`/api/v1/cli/agents/${agentType}/data`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async orchestrationDashboard(): Promise<ApiResponse<{
@@ -1466,7 +1474,7 @@ class ApiClient {
     total_agents: number;
   }>> {
     const response = await this.client.get('/api/orchestration/dashboard');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async orchestrationAgents(statusFilter?: string): Promise<ApiResponse<{
@@ -1482,7 +1490,7 @@ class ApiClient {
   }>> {
     const params = statusFilter ? { status_filter: statusFilter } : {};
     const response = await this.client.get('/api/orchestration/agents', { params });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async orchestrationAgentDetail(agentId: number): Promise<ApiResponse<{
@@ -1505,7 +1513,7 @@ class ApiClient {
     };
   }>> {
     const response = await this.client.get(`/api/orchestration/agents/${agentId}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async orchestrationDelegate(agentId: number, task: string, priority?: number): Promise<ApiResponse<{
@@ -1518,7 +1526,7 @@ class ApiClient {
       task,
       priority: priority || 5,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async orchestrationAnalytics(days?: number): Promise<ApiResponse<{
@@ -1532,7 +1540,7 @@ class ApiClient {
   }>> {
     const params = days ? { days } : {};
     const response = await this.client.get('/api/orchestration/analytics', { params });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Dragon — Mission orchestration
@@ -1551,7 +1559,7 @@ class ApiClient {
     const body: Record<string, unknown> = { mission };
     if (agentIds && agentIds.length > 0) body.agent_ids = agentIds;
     const response = await this.client.post('/api/v1/agents/missions', body);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async missionExecute(missionId: string): Promise<ApiResponse<{
@@ -1566,7 +1574,7 @@ class ApiClient {
     }>;
   }>> {
     const response = await this.client.post(`/api/v1/agents/missions/${missionId}/execute`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // Dragon — Telemetry
@@ -1579,7 +1587,7 @@ class ApiClient {
     missions_active: number;
   }>> {
     const response = await this.client.get('/api/v1/telemetry/agents/summary');
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
   // =========================================================================
   // CLI History & Rollback
@@ -1588,28 +1596,28 @@ class ApiClient {
   async historyPages(slug?: string, limit = 50): Promise<ApiResponse<unknown>> {
     const url = slug ? `/api/v1/cli/history/pages/${slug}` : '/api/v1/cli/history/pages';
     const response = await this.client.get(url, { params: { limit } });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async historyPageVersion(slug: string, version: number): Promise<ApiResponse<unknown>> {
     const response = await this.client.get(`/api/v1/cli/history/pages/${slug}/${version}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async rollbackPage(slug: string, version: number): Promise<ApiResponse<unknown>> {
     const response = await this.client.post(`/api/v1/cli/history/pages/${slug}/rollback`, { version });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async historyKB(entryId?: number, limit = 50): Promise<ApiResponse<unknown>> {
     const url = entryId ? `/api/v1/cli/history/kb/${entryId}` : '/api/v1/cli/history/kb';
     const response = await this.client.get(url, { params: { limit } });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async rollbackKB(entryId: number, version: number): Promise<ApiResponse<unknown>> {
     const response = await this.client.post(`/api/v1/cli/history/kb/${entryId}/rollback`, { version });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async createSnapshot(source = 'cli', changeSummary?: string): Promise<ApiResponse<unknown>> {
@@ -1617,7 +1625,7 @@ class ApiClient {
       source,
       change_summary: changeSummary,
     });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // =========================================================================
@@ -1631,29 +1639,29 @@ class ApiClient {
     kb_only?: boolean;
   } = {}): Promise<ApiResponse<unknown>> {
     const response = await this.client.post('/api/v1/cli/preview', options);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async previewList(status?: string, limit = 20): Promise<ApiResponse<unknown>> {
     const params: Record<string, unknown> = { limit };
     if (status) params.status = status;
     const response = await this.client.get('/api/v1/cli/preview', { params });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async previewGet(token: string): Promise<ApiResponse<unknown>> {
     const response = await this.client.get(`/api/v1/cli/preview/${token}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async previewPromote(token: string): Promise<ApiResponse<unknown>> {
     const response = await this.client.post(`/api/v1/cli/preview/${token}/promote`, { confirm: true });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async previewExpire(token: string): Promise<ApiResponse<unknown>> {
     const response = await this.client.delete(`/api/v1/cli/preview/${token}`);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // =========================================================================
@@ -1663,12 +1671,12 @@ class ApiClient {
   async agentLogs(agentType?: string, options: { hours?: number; limit?: number; event_type?: string } = {}): Promise<ApiResponse<unknown>> {
     const url = agentType ? `/api/v1/cli/agents/${agentType}/logs` : '/api/v1/cli/agents/logs';
     const response = await this.client.get(url, { params: options });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentErrors(agentType: string, hours = 24, limit = 50): Promise<ApiResponse<unknown>> {
     const response = await this.client.get(`/api/v1/cli/agents/${agentType}/logs/errors`, { params: { hours, limit } });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentTest(options: {
@@ -1679,12 +1687,12 @@ class ApiClient {
     timeout_seconds?: number;
   }): Promise<ApiResponse<unknown>> {
     const response = await this.client.post('/api/v1/cli/agents/test', options);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async agentTestResults(hours = 24, limit = 50): Promise<ApiResponse<unknown>> {
     const response = await this.client.get('/api/v1/cli/agents/test/results', { params: { hours, limit } });
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   // =========================================================================
@@ -1702,7 +1710,7 @@ class ApiClient {
     overwrite_existing?: boolean;
   }): Promise<ApiResponse<unknown>> {
     const response = await this.client.post('/api/v1/cli/migrate/preview', options);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 
   async migrateExecute(options: {
@@ -1716,7 +1724,7 @@ class ApiClient {
     overwrite_existing?: boolean;
   }): Promise<ApiResponse<unknown>> {
     const response = await this.client.post('/api/v1/cli/migrate/execute', options);
-    return { data: response.data, status: response.status, success: true };
+    return { data: response.data, status: response.status, success: true, ...receiptOf(response.headers) };
   }
 }
 

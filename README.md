@@ -2,38 +2,66 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; run `npm run sync:counts` (scripts/sync-counts.ts). Verified by `npm run check:counts`, which prepublishOnly runs. -->
-176 top-level commands, 700+ subcommands, 54 industries, 14 user-facing AI agents (plus 102 background workers). One CLI.
+176 top-level commands, 924 verbs. One CLI, built for an AI agent to drive.
 
-**v2.15** — the Starter Kit: `solid init <name> --company <id>` scaffolds a
-tenant-stamped starter project bound to one Solid# company — a `CLAUDE.md`
-carrying the operating rules (ground-don't-guess, persist-to-company_id,
-preview→confirm, `start_here`/`end_session`), a `.solid/config.json` tenant
-stamp (company_id + connector URL), a token-safe `.gitignore`, a scoped-token
-`.env.example`, and it `git init`s the client's own repo. The companion
-connector verb `scaffold_project` hands the same starter pack over the wire.
+## What a verb tells you before you call it
 
-**v2.13** — the operator brief: `solid today` is your one-command daily
-brief (revenue, pipeline, urgent work, recommended next actions), and
-`solid how-to` answers in plain language how to connect Solid# to
-Claude/ChatGPT and what the CLI can do — discoverability for non-technical
-owners and agents alike.
+Every action in Solid# is a verb (`page.publish`, `contact.update`,
+`appointment.book`). Each one publishes its own contract, so an agent can
+decide before it acts:
 
-**v2.12** — the site-publish substrate: `solid apply` reconciles pages,
-sites, domains, and surveys from one manifest (declare the whole business
-surface, apply, `solid publish --all`); `solid embed <chat|form|paylink>`
-emits ready-to-paste snippets that wire any website — including
-AI-generated ones — to live chat, CRM-backed forms, and hosted checkout;
-`solid context --claude` now installs the `solid-commerce` skill so coding
-agents in a tenant-bound directory build on Solid# by default.
+```bash
+solid verbs describe page.publish --json
+```
 
-**v2.11** — outbound voice (`solid voice call` / `solid voice text` /
-`solid voice translate`) + universal `solid agent dispatch <verb>` +
-shortcut commands (`solid deal`, `solid calendar`, `solid lead-promote`).
-Agent-ready by default — `--json` output ships structured error
-envelopes; every business entity is a node in a typed JSON-LD graph;
-queries via SPARQL; offline reads + writes with auto-flush on
-reconnect. Magic-link install via `solid setup --install-token`;
-Homebrew + Scoop distribution. See [Graph (v2)](#graph-v2--vendor-portable-json-ld).
+```jsonc
+{
+  "name": "page.publish",
+  "side_effects": "write",
+  "requires_consent": true,            // refused without --confirm
+  "undone_by": "page.unpublish",       // the way back, named before the write
+  "refuses_when": [                    // what it will refuse, and the override if there is one
+    { "code": "publish_requires_subscription", "override": null },
+    { "code": "fidelity_below_threshold", "override": "accept_fidelity" },
+    { "code": "blocked_by_guardrails", "override": null }
+  ],
+  "output_schema": {                   // what comes back
+    "required": ["success"],
+    "anyOf": [
+      { "title": "worked",  "required": ["message", "page", "promoted_fields", "published_url", "success"] },
+      { "title": "did not", "required": ["error", "success"] }
+    ],
+    "x-solid-derivation": "proven-from-return-paths"
+  }
+}
+```
+
+- **Refusals up front.** `refuses_when` lists each refusal code, the condition
+  and the override.
+- **The undo, before the write.** `undone_by` names the verb that takes a write
+  back; `null` means none is known, never a guess.
+- **What comes back.** `output_schema` says which keys are on every result.
+  `proven-from-return-paths` means every return path of the handler was read;
+  `inferred-from-return-literals` means keys worth looking for, none promised.
+- **A dry run that tells the truth.** `solid verbs invoke <verb> -p '{…}' --dry-run`
+  validates the payload locally, shows the exact request, `undone_by` and what
+  would come back, and exits 1 when the call is invalid. It needs no consent.
+- **Consent is part of the contract.** A write needs `--confirm`. Without it
+  the call is still sent, the server refuses it, and the refusal is on record.
+- **Every call hands back its receipt.** `solid verbs invoke` prints
+  `_receipt`, the handle of the record that call left, and a refusal prints one
+  too. `solid verbs receipts <ref>` reads it back: who, what, outcome, duration,
+  and whether the result matched the verb's published schema (`contract: kept`
+  or `broken`). `--session <id>` reads a whole run; set `SOLID_SESSION_ID` to
+  join several invocations into one.
+- **What changed since the catalog you were holding.** `solid verbs snapshot >
+  verbs.snap.json`, then `solid verbs list --changed-since verbs.snap.json`
+  returns the verbs added, removed or changed — inputs, outputs and refusals.
+- **A list is a page.** `solid verbs list` returns 100 working verbs, one name
+  per operation, leading with the ones an AI is handed as tools. `solid map`, a
+  prefix or `solid find "<task>"` reaches the rest.
+
+Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ```bash
 npx @solidnumber/cli clone plumber

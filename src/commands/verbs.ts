@@ -28,6 +28,7 @@ import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { isJsonOutput, printJson } from '../lib/json-output';
 import { clip } from '../lib/verb-search';
 import { validatePayload, fixFor, type JsonSchema } from '../lib/schema-validate';
+import { frontPageOrder, receiptRefOf, returnsOf, revealHiddenKeys } from '../lib/output-contract';
 import { buildExample } from '../lib/verb-example';
 import { parseJsonArg } from '../lib/json-arg';
 import { isDryRun } from '../lib/dry-run';
@@ -318,6 +319,7 @@ verbsCommand
             next: 'solid verbs describe <name>  ·  refresh the snapshot: solid verbs snapshot > verbs.snap.json' });
           return;
         }
+        if (diff.blind_to) console.log(chalk.dim(`this snapshot is an older kind and cannot see a changed ${diff.blind_to.join(' or ')} — take a new one: solid verbs snapshot > verbs.snap.json`));
         console.log(chalk.cyan(`Since ${diff.since}: ${diff.added.length} added, ${diff.changed.length} changed, ${diff.removed.length} removed, ${diff.unchanged} unchanged`));
         for (const n of diff.added) console.log(`  ${chalk.green('+')} ${n}`);
         for (const n of diff.changed) console.log(`  ${chalk.yellow('~')} ${n}`);
@@ -338,6 +340,10 @@ verbsCommand
         && !options.surface && !options.shape && !options.tier;
       const limit = options.limit ? Math.max(1, parseInt(options.limit, 10) || 0)
         : bare ? DEFAULT_PAGE : null;
+      // The bare list leads with the verbs an agent needs first; a prefix or a filter
+      // is a deliberate ask and stays in name order.
+      const led = bare && all.some((v) => (v as { first_page?: string }).first_page);
+      if (led) all = frontPageOrder(all as Array<VerbRecord & { first_page?: string }>);
       // --tier is answered, and so is how much it can mean: a floor is declared on
       // very few verbs, so "everything is starter" is an absence, not an entitlement.
       // The server applied ?tier= already, so what it removed is the difference.
@@ -404,6 +410,7 @@ verbsCommand
           count: shown.length,
           total: data.total_registered,
           has_more: shown.length < all.length,
+          ...(led ? { order: 'the verbs an AI is handed as tools first, then by name' } : {}),
           filtered_by: data.filtered_by,
           ...(view.hidden.aliases || view.hidden.inactive ? { hidden: view.hidden } : {}),
           ...(options.tier ? { tier_removed: tierRemoved,
@@ -491,6 +498,17 @@ verbsCommand
       const undo = (v as { undone_by?: string | null }).undone_by;
       if (v.side_effects !== 'read') console.log(`  undone_by:        ${undo || 'no undo verb is known'}`);
       console.log(`  http_endpoint:    ${v.http_endpoint}`);
+      // What comes back, and how sure that is.
+      const returns = returnsOf((v as { output_schema?: unknown }).output_schema);
+      if (!returns) {
+        console.log(`  returns:          not published`);
+      } else if (returns.basis === 'hint') {
+        console.log(`  returns:          may include ${returns.may_include.join(', ')} (seen in source, none promised)`);
+      } else {
+        console.log(`  returns:          ${returns.when_it_worked.join(', ') || 'no key on every result'} (${returns.basis})`);
+        if (returns.when_it_did_not) console.log(`  if it did not:    ${returns.when_it_did_not.join(', ')}`);
+        if (returns.may_include.length) console.log(`  may include:      ${returns.may_include.join(', ')}`);
+      }
       console.log('');
       console.log(chalk.dim('input_schema:'));
       console.log(JSON.stringify(v.input_schema, null, 2)
@@ -601,6 +619,7 @@ verbsCommand
           ? { verb: verb.name, args: payload, ...(isWrite ? { confirm: true } : {}) }
           : (isWrite ? { ...payload, confirm: true } : payload);
 
+      const returns = returnsOf((verb as { output_schema?: unknown }).output_schema);
       printJson({
         dry_run: true,
         valid: report.valid,
@@ -614,6 +633,8 @@ verbsCommand
         ...(verb.acts_on ? { acts_on: verb.acts_on } : {}),
         // The way back, before the write: null means no undo verb is known.
         ...(isWrite ? { undone_by: (verb as { undone_by?: string | null }).undone_by ?? null } : {}),
+        // What comes back, before the call: the keys the next step can plan on.
+        ...(returns ? { returns } : {}),
         missing_required: report.missing_required,
         // ⛔ Either-or requirements (anyOf) — `{}` used to rehearse valid and fail live.
         missing_one_of: report.missing_one_of,
@@ -676,9 +697,64 @@ verbsCommand
           : await apiClient.post(verb.http_endpoint as string, body);
       }
 
-      printJson(res.data);
+      // The shape `output_schema` names: a list keeps the server's own key beside `items`.
+      const shown = revealHiddenKeys(res.data);
+      // The handle of the receipt this call left — read it back with `solid verbs receipts <ref>`.
+      const ref = res.receipt;
+      if (ref && shown && typeof shown === 'object' && !Array.isArray(shown)) {
+        (shown as Record<string, unknown>)._receipt = ref;
+      }
+      printJson(shown);
     } catch (e) {
       if (consentHint) consentHint();
+      // A refusal leaves a receipt too, and it is the one most worth finding again.
+      const ref = receiptRefOf((e as { response?: { headers?: unknown } })?.response?.headers);
+      if (ref) console.error(chalk.dim(`receipt: ${ref}  ·  solid verbs receipts ${ref}`));
+      failApi(e);
+    }
+  });
+
+verbsCommand
+  .command('receipts [ref]')
+  .description('What ran: one receipt per verb call. Give a receipt handle for one call, or filter.')
+  .option('--session <id>', 'Every call of one run (the SOLID_SESSION_ID you set, or a full session ref)')
+  .option('--verb <name>', 'Only this verb')
+  .option('--outcome <outcome>', 'success | fail | refused | preview')
+  .option('--broken', 'Only calls whose result did not match the verb\'s published output_schema')
+  .option('--limit <n>', 'How many, newest first (default 20)')
+  .option('--json', 'Output as raw JSON (default for AI consumption)')
+  .action(async (ref, options) => {
+    const wantsJson = options.json || isJsonOutput();
+    const args: Record<string, unknown> = { limit: Math.max(1, Math.min(parseInt(options.limit, 10) || 20, 500)) };
+    if (ref) args.ref = String(ref);
+    if (options.session) {
+      const s = String(options.session);
+      args.session_ref = s.includes(':') ? s : `cli:${s}`;
+    }
+    if (options.verb) args.verb = String(options.verb);
+    if (options.outcome) args.outcome = String(options.outcome);
+    if (options.broken) args.contract = 'broken';
+    try {
+      const res = await apiClient.post('/api/v1/agent/audit/receipts', args);
+      // The verb answers directly on its own route and inside `result` on dispatch.
+      const body = revealHiddenKeys(res.data) as { receipts?: unknown; result?: { receipts?: unknown } };
+      const found = body.receipts ?? (body.result && revealHiddenKeys(body.result).receipts);
+      const rows = (Array.isArray(found) ? found : []) as Array<Record<string, unknown>>;
+      if (wantsJson) {
+        printJson({ schema: 'solid:verb-receipts/v1', count: rows.length, receipts: rows,
+          ...(ref && !rows.length ? { note: 'No receipt with that handle for this company.' } : {}) });
+        return;
+      }
+      if (!rows.length) { console.log(chalk.dim(ref ? 'No receipt with that handle for this company.' : 'No receipts match.')); return; }
+      for (const r of rows) {
+        const mark = r.outcome === 'success' ? chalk.green('✓') : r.outcome === 'preview' ? chalk.cyan('○') : chalk.red('✗');
+        const contract = r.contract === 'broken' ? chalk.red(` contract broken: ${r.contract_detail || ''}`)
+          : r.contract === 'kept' ? chalk.dim(' contract kept') : '';
+        console.log(`${mark} ${chalk.cyan(String(r.verb))}  ${r.outcome}${r.reason ? ` (${r.reason})` : ''}  ${chalk.dim(`${r.surface || ''} · ${r.duration_ms ?? '?'}ms · ${r.created_at}`)}${contract}`);
+        if (r.message) console.log(chalk.dim(`    ${r.message}`));
+        console.log(chalk.dim(`    ${r.ref || `#${r.id}`}${r.session_ref ? ` · ${r.session_ref}` : ''}${r.evidence_ref ? ` · ${r.evidence_ref}` : ''}`));
+      }
+    } catch (e) {
       failApi(e);
     }
   });
