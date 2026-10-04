@@ -2,7 +2,7 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
-## [Unreleased]
+## [2.27.0] — 2026-10-04
 
 **The verb list is a page, not a dump, and `solid push` sends services and products.**
 
@@ -240,7 +240,7 @@ reads exactly like "nothing lives here". It now returns the standard error envel
 the CLI will not pick one for you. The examples in `verbs`, `map` and `context`
 use the three-digit addresses.
 
-## [Unreleased]
+## [2.27.0] — 2026-10-04
 
 **`solid apply` grows a memory: a lockfile, three-way drift, recorded pre-images
 with rollback, and export — plus five more kinds.**
