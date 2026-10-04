@@ -56,6 +56,23 @@ try {
   // leave as 0.0.0 — version-skew is best-effort, never fatal
 }
 
+/**
+ * One id for this run, sent as X-Solid-Session on every request so the backend
+ * stamps it on each verb receipt — `audit.receipts session_ref=<this>` then reads
+ * the whole run back in order. Before this every CLI receipt had session_ref
+ * null and a run could not be grouped at all.
+ *
+ * One process is one run by default. An agent that drives several `solid`
+ * invocations as ONE piece of work sets SOLID_SESSION_ID once and every
+ * invocation joins the same session. The backend only accepts `cli:` plus 8–64
+ * of [A-Za-z0-9_-]; anything else in the env var is replaced, never sent.
+ */
+export function resolveSessionRef(env: string | undefined = process.env.SOLID_SESSION_ID): string {
+  const given = (env || '').trim().replace(/^cli:/, '');
+  return `cli:${/^[A-Za-z0-9_-]{8,64}$/.test(given) ? given : randomUUID()}`;
+}
+export const CLI_SESSION_REF = resolveSessionRef();
+
 interface ApiResponse<T = unknown> {
   data: T;
   status: number;
@@ -362,6 +379,7 @@ class ApiClient {
       // response headers to trigger the skew warning.
       requestConfig.headers['X-Solid-CLI-Version'] = CLI_VERSION;
       requestConfig.headers['User-Agent'] = `solid-cli/${CLI_VERSION} node/${process.version.slice(1)}`;
+      requestConfig.headers['X-Solid-Session'] = CLI_SESSION_REF;
 
       // Agent-aware headers — when an AI (Claude/Cursor/Codex) drives the
       // CLI via `solid ai`, these tell the backend WHO is making the call

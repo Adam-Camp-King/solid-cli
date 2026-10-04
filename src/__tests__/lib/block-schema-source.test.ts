@@ -21,8 +21,13 @@ describe('bundled cms-blocks.json (offline fallback)', () => {
   const bundled = loadBundledSchema();
   const types = bundled.blocks.map((b) => b.type);
 
-  it('matches solid-backend schemas/block_schema.py: 29 types including raw_html', () => {
-    expect(types).toHaveLength(29);
+  // ⛔ No count pinned here. This asserted 29 while the backend had 36: the pin kept the
+  // file frozen instead of catching that it was behind. The file is GENERATED from the
+  // live schema (scripts/sync-block-schema.ts --check is the drift guard).
+  it('is the generated copy of the backend schema, raw_html and the motion blocks included', () => {
+    expect(bundled._meta.note).toContain('GENERATED');
+    expect(types).toContain('cinematic-hero');
+    expect(new Set(types).size).toBe(types.length);
     expect(types).toContain('raw_html');
     expect(bundled.blocks.find((b) => b.type === 'raw_html')?.required).toEqual(['html']);
   });
@@ -75,7 +80,7 @@ describe('resolveBlockSchema', () => {
     expect(r.source.kind).toBe('bundled');
     expect(r.source.stale).toBe(true);
     expect(r.source.fallback_reason).toContain('ECONNREFUSED');
-    expect(r.schema.blocks.length).toBe(29);
+    expect(r.schema.blocks.length).toBe(loadBundledSchema().blocks.length);
   });
 
   it('falls back on an unexpected payload shape', async () => {

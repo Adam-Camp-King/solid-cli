@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "version": "1.1.0",
+    "version": "synced-from-live-1",
     "source": "solid-backend/schemas/block_schema.py (served live at GET /api/v1/cms/pages/schema)",
-    "extracted_from": "block types, required/optional props and aliases: solid-backend/schemas/block_schema.py; component names, categories, prop types, enums and examples: solid-frontend/src/components/cms/blocks/*.tsx",
-    "synced_at": "2026-09-17",
-    "note": "OFFLINE FALLBACK. `solid schema pages` fetches the live schema first and only uses this file when the API is unreachable — output says so. Re-sync from block_schema.py when block types change."
+    "extracted_from": "block types, props, list item fields, allowed values and examples: solid-backend/schemas/block_schema.py + block_shapes.py (scripts/sync-block-schema.ts); component names and categories: kept by hand",
+    "synced_at": "2026-10-04",
+    "note": "OFFLINE FALLBACK. `solid schema pages` fetches the live schema first and only uses this file when the API is unreachable \u2014 output says so. GENERATED: run `npx ts-node scripts/sync-block-schema.ts`, do not edit."
   },
   "envelope": {
     "sections": "array of block objects",
@@ -18,103 +18,54 @@
     "universal_optional_props": [
       "mcp_tools",
       "motion"
-    ]
+    ],
+    "motion_schema": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "fade",
+            "fade-down",
+            "fade-up",
+            "none",
+            "parallax",
+            "scale",
+            "slide-left",
+            "slide-right",
+            "stagger"
+          ]
+        },
+        "profile": {
+          "type": "string",
+          "enum": [
+            "balanced",
+            "cinematic",
+            "subtle"
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "on-load",
+            "on-view"
+          ]
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "delay_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "blocks": [
-    {
-      "type": "hero",
-      "component": "Hero",
-      "category": "Headers",
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "ctaText": "string",
-        "ctaLink": "string",
-        "backgroundStyle": "\"gradient\" | \"solid\" | \"image\"",
-        "backgroundImage": "string",
-        "backgroundColor": "string (hex or CSS var)",
-        "textColor": "string",
-        "buttonColor": "string",
-        "alignment": "\"left\" | \"center\" | \"right\"",
-        "backgroundVideo": "string (url, direct .mp4/.webm — plays muted, looping, inline behind the content)",
-        "backgroundVideoPoster": "string (url, image shown until the video plays)"
-      },
-      "example": {
-        "id": "hero-1",
-        "type": "hero",
-        "title": "Transform Your Workflow",
-        "subtitle": "The all-in-one platform for modern teams",
-        "ctaText": "Start Free Trial",
-        "ctaLink": "/signup"
-      }
-    },
-    {
-      "type": "hero-image",
-      "component": "HeroImage",
-      "category": "Headers",
-      "aliases": [
-        "hero_image",
-        "heroimage"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "primaryCTA": "string",
-        "secondaryCTA": "string",
-        "backgroundImage": "string (url)",
-        "showVideoButton": "boolean",
-        "backgroundVideo": "string (url, direct .mp4/.webm — plays muted, looping, inline behind the content)",
-        "backgroundVideoPoster": "string (url, image shown until the video plays)"
-      },
-      "example": {
-        "id": "hero-image-1",
-        "type": "hero-image",
-        "title": "Built to Move",
-        "subtitle": "See the work in motion",
-        "backgroundImage": "https://cdn.example.com/hero-fallback.jpg",
-        "backgroundVideo": "https://cdn.example.com/hero-loop.mp4",
-        "backgroundVideoPoster": "https://cdn.example.com/hero-poster.jpg"
-      }
-    },
-    {
-      "type": "hero-split",
-      "component": "HeroSplit",
-      "category": "Headers",
-      "aliases": [
-        "hero_split",
-        "herosplit"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "features": "string[]",
-        "primaryCTA": "string",
-        "imageUrl": "string",
-        "backgroundVideo": "string (url, direct .mp4/.webm — plays muted, looping, inline behind the content)",
-        "backgroundVideoPoster": "string (url, image shown until the video plays)"
-      }
-    },
-    {
-      "type": "text",
-      "component": "TextBlock",
-      "category": "Content",
-      "aliases": [
-        "text-block",
-        "text_block",
-        "textblock"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "content": "string (HTML/markdown-ish, backend sanitizes)",
-        "alignment": "\"left\" | \"center\" | \"right\"",
-        "maxWidth": "\"sm\" | \"md\" | \"lg\" | \"full\"",
-        "backgroundColor": "string"
-      }
-    },
     {
       "type": "accordion",
       "component": "Accordion",
@@ -123,24 +74,74 @@
       "props": {
         "title": "string",
         "subtitle": "string",
-        "items": "AccordionItem[] — { id, title, content }",
+        "items": "AccordionItem[] \u2014 { id, title, content }",
         "allowMultiple": "boolean"
+      },
+      "example": {
+        "type": "accordion",
+        "title": "Good to know",
+        "items": [
+          {
+            "id": "a1",
+            "title": "Do you work weekends?",
+            "content": "Yes, Saturdays until 2pm."
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "items has at least one entry",
+      "items": {
+        "items": "{id, title, content} \u2014 all three; content is plain text"
       }
     },
     {
-      "type": "process-steps",
-      "component": "ProcessSteps",
-      "category": "Content",
+      "type": "before-after",
+      "component": "BeforeAfter",
+      "category": "Media",
       "aliases": [
-        "process",
-        "process_steps",
-        "processsteps"
+        "before_after",
+        "beforeafter"
       ],
       "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
-        "steps": "Step[] — { id, title, description }"
+        "items": "ComparisonItem[] \u2014 { before, after, caption }"
+      },
+      "example": {
+        "type": "before-after",
+        "title": "Before and after",
+        "items": [
+          {
+            "beforeImage": "https://example.com/before.jpg",
+            "afterImage": "https://example.com/after.jpg",
+            "label": "Kitchen refit"
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "items has at least one entry",
+      "items": {
+        "items": "{beforeImage, afterImage, label?}"
+      }
+    },
+    {
+      "type": "bento-motion-grid",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "bento",
+        "bento-grid",
+        "bento_motion_grid",
+        "bentomotiongrid"
+      ],
+      "required": [
+        "tiles"
+      ],
+      "props": {
+        "tiles": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "heading": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "subheading": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
       }
     },
     {
@@ -156,252 +157,138 @@
       "props": {
         "title": "string",
         "subtitle": "string",
-        "posts": "BlogPost[] — { id, title, excerpt, image, href }",
+        "posts": "BlogPost[] \u2014 { id, title, excerpt, image, href }",
         "viewAllLink": "string",
         "viewAllText": "string"
+      },
+      "example": {
+        "type": "blog-preview",
+        "title": "Latest articles",
+        "posts": [
+          {
+            "id": "p1",
+            "title": "When to replace a roof",
+            "excerpt": "Five signs it is time.",
+            "slug": "when-to-replace-a-roof",
+            "date": "2026-09-01"
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "posts has at least one entry \u2014 it does not fetch posts itself",
+      "items": {
+        "posts": "{id, title, excerpt, image?, date?, category?, slug?} \u2014 the link is /blog/<slug>"
       }
     },
     {
-      "type": "features",
-      "component": "FeaturesGrid",
-      "category": "Features & Pricing",
+      "type": "booking",
+      "component": "BookingWidget",
+      "category": "Forms & Widgets",
       "aliases": [
-        "features-grid",
-        "features_grid",
-        "featuresgrid"
+        "appointments",
+        "booking_widget",
+        "bookingwidget",
+        "schedule"
       ],
       "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
-        "features": "Feature[] — { icon, title, description }",
-        "columns": "2 | 3 | 4",
-        "backgroundColor": "string"
+        "services": "string[]",
+        "calendar_url": "unknown \u2014 accepted by the backend validator; the frontend block does not read it",
+        "slot_duration": "unknown \u2014 accepted by the backend validator; the frontend block does not read it"
       },
-      "enums": {
-        "icon": [
-          "Zap",
-          "Shield",
-          "Star",
-          "Rocket",
-          "Users",
-          "BarChart",
-          "Lock",
-          "Globe"
-        ]
-      },
+      "notes": "Pulls missing services from company context.",
       "example": {
-        "id": "features-1",
-        "type": "features",
-        "title": "Why us",
-        "features": [
+        "type": "booking",
+        "title": "Book a visit"
+      },
+      "example_source": "live",
+      "shows_when": "always \u2014 it reads the business's real services and times",
+      "items": {
+        "services": "a list of plain strings, used only as suggestions"
+      }
+    },
+    {
+      "type": "business-hours",
+      "component": "BusinessHours",
+      "category": "Business Info",
+      "aliases": [
+        "business_hours",
+        "businesshours",
+        "hours"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "hours": "DayHours[] \u2014 { day, open, close, closed }"
+      },
+      "notes": "If `hours` omitted, parses free-text hours from company context.",
+      "example": {
+        "type": "business-hours",
+        "title": "Opening hours",
+        "hours": [
           {
-            "icon": "Zap",
-            "title": "Fast",
-            "description": "60-minute response."
+            "day": "Monday",
+            "hours": "8am \u2013 6pm"
           },
           {
-            "icon": "Shield",
-            "title": "Safe",
-            "description": "Bonded and insured."
+            "day": "Sunday",
+            "hours": "Closed"
           }
-        ],
-        "columns": 2
-      }
-    },
-    {
-      "type": "pricing",
-      "component": "PricingCards",
-      "category": "Features & Pricing",
-      "aliases": [
-        "pricing-cards",
-        "pricing_cards",
-        "pricingcards"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "tiers": "PricingTier[] — { name, price, period, description, features[], cta, ctaLink, highlighted }"
-      }
-    },
-    {
-      "type": "cta",
-      "component": "CTA",
-      "category": "Calls to Action",
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "primaryCta": "string",
-        "primaryLink": "string",
-        "secondaryCta": "string",
-        "secondaryLink": "string",
-        "backgroundStyle": "\"gradient\" | \"solid\"",
-        "backgroundColor": "string",
-        "buttonColor": "string"
-      }
-    },
-    {
-      "type": "countdown",
-      "component": "Countdown",
-      "category": "Calls to Action",
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "targetDate": "string (ISO-8601)",
-        "ctaText": "string",
-        "ctaLink": "string"
-      }
-    },
-    {
-      "type": "testimonials",
-      "component": "Testimonials",
-      "category": "Social Proof",
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "testimonials": "Testimonial[] — { quote, author, role, avatar }"
-      },
-      "notes": "Auto-merges Google reviews from company context if available."
-    },
-    {
-      "type": "stats",
-      "component": "Stats",
-      "category": "Social Proof",
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "stats": "Stat[] — { value, label, icon }"
-      },
-      "enums": {
-        "icon": [
-          "trending",
-          "users",
-          "globe",
-          "zap"
         ]
-      }
-    },
-    {
-      "type": "team",
-      "component": "Team",
-      "category": "Social Proof",
-      "aliases": [
-        "staff"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "members": "TeamMember[] — { id, name, role, image, bio }"
-      }
-    },
-    {
-      "type": "logo-cloud",
-      "component": "LogoCloud",
-      "category": "Social Proof",
-      "aliases": [
-        "clients",
-        "logo_cloud",
-        "logocloud",
-        "logos",
-        "partners"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "logos": "Logo[] — { id, name, src }"
-      }
-    },
-    {
-      "type": "google-reviews",
-      "component": "GoogleReviews",
-      "category": "Social Proof",
-      "aliases": [
-        "google_reviews",
-        "googlereviews",
-        "reviews"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "overallRating": "number",
-        "totalReviews": "number",
-        "reviews": "Review[] — { author, rating, text, date }"
-      }
-    },
-    {
-      "type": "gallery",
-      "component": "Gallery",
-      "category": "Media",
-      "aliases": [
-        "portfolio"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "images": "GalleryImage[] — { id, src, alt, caption }",
-        "columns": "2 | 3 | 4",
-        "layout": "\"grid\" | \"masonry\""
-      }
-    },
-    {
-      "type": "video-embed",
-      "component": "VideoEmbed",
-      "category": "Media",
-      "aliases": [
-        "video",
-        "video_embed",
-        "videoembed",
-        "vimeo",
-        "youtube"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "videoUrl": "string (YouTube/Vimeo URL, or a direct .mp4/.webm/.mov/.m4v file URL)",
-        "thumbnailUrl": "string",
-        "aspectRatio": "\"16:9\" | \"4:3\" | \"1:1\"",
-        "autoplay": "boolean (browsers only autoplay muted video)",
-        "muted": "boolean (direct files; default true when autoplay — browsers only autoplay muted video)",
-        "loop": "boolean (direct files)",
-        "playsInline": "boolean (direct files; default true — required for inline autoplay on iOS)",
-        "controls": "boolean (direct files; default !autoplay)",
-        "posterUrl": "string (url, direct files; shown before playback; falls back to thumbnailUrl)"
       },
-      "example": {
-        "id": "video-1",
-        "type": "video-embed",
-        "title": "Our Process",
-        "videoUrl": "https://cdn.example.com/process.mp4",
-        "autoplay": true,
-        "muted": true,
-        "loop": true,
-        "playsInline": true,
-        "controls": false,
-        "posterUrl": "https://cdn.example.com/process-poster.jpg"
+      "example_source": "live",
+      "shows_when": "hours has an entry (left off, it reads the business's own hours if set)",
+      "items": {
+        "hours": "a LIST of {day, hours} \u2014 day is the full name ('Monday'); hours is text ('8am \u2013 6pm', or 'Closed')"
       }
     },
     {
-      "type": "before-after",
-      "component": "BeforeAfter",
-      "category": "Media",
+      "type": "chat-widget",
+      "component": "ChatWidgetBlock",
+      "category": "Forms & Widgets",
       "aliases": [
-        "before_after",
-        "beforeafter"
+        "chat",
+        "chat_widget",
+        "chatwidget",
+        "chatwidgetblock"
       ],
       "required": [],
       "props": {
-        "title": "string",
-        "subtitle": "string",
-        "items": "ComparisonItem[] — { before, after, caption }"
+        "chat_id": "string",
+        "agent_id": "unknown \u2014 accepted by the backend validator; the frontend block does not read it",
+        "position": "\"bottom-right\" | \"bottom-left\"",
+        "greeting": "string",
+        "primaryColor": "string"
+      }
+    },
+    {
+      "type": "cinematic-hero",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "cinematic_hero",
+        "cinematichero"
+      ],
+      "required": [
+        "title"
+      ],
+      "props": {
+        "title": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "eyebrow": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "subtitle": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "primaryCta": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "secondaryCta": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "asset": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "primaryCtaText": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "primaryCtaHref": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "secondaryCtaText": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "secondaryCtaHref": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "assetSrc": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "assetAlt": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "assetAlignment": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
       }
     },
     {
@@ -421,67 +308,575 @@
         "email": "string",
         "phone": "string",
         "address": "string",
-        "fields": "unknown — accepted by the backend validator; the frontend block does not read it",
-        "submit_text": "unknown — accepted by the backend validator; the frontend block does not read it",
-        "post_url": "unknown — accepted by the backend validator; the frontend block does not read it"
+        "fields": "unknown \u2014 accepted by the backend validator; the frontend block does not read it",
+        "submit_text": "unknown \u2014 accepted by the backend validator; the frontend block does not read it",
+        "post_url": "unknown \u2014 accepted by the backend validator; the frontend block does not read it"
       },
-      "notes": "Pulls missing contact fields from company context."
-    },
-    {
-      "type": "booking",
-      "component": "BookingWidget",
-      "category": "Forms & Widgets",
-      "aliases": [
-        "appointments",
-        "booking_widget",
-        "bookingwidget",
-        "schedule"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "services": "string[]",
-        "calendar_url": "unknown — accepted by the backend validator; the frontend block does not read it",
-        "slot_duration": "unknown — accepted by the backend validator; the frontend block does not read it"
+      "notes": "The form sends a lead to this business with no setup. Extra fields arrive inside the message. Leave post_url off unless the form must go somewhere else.",
+      "example": {
+        "type": "contact",
+        "title": "Ask for a quote",
+        "submit_text": "Send",
+        "fields": [
+          "name",
+          "email",
+          "phone",
+          {
+            "name": "job",
+            "label": "What do you need?",
+            "options": [
+              "Repair",
+              "New roof"
+            ]
+          },
+          "message"
+        ]
       },
-      "notes": "Pulls missing services from company context."
-    },
-    {
-      "type": "chat-widget",
-      "component": "ChatWidgetBlock",
-      "category": "Forms & Widgets",
-      "aliases": [
-        "chat",
-        "chat_widget",
-        "chatwidget",
-        "chatwidgetblock"
-      ],
-      "required": [],
-      "props": {
-        "chat_id": "string",
-        "position": "\"bottom-right\" | \"bottom-left\"",
-        "greeting": "string",
-        "primaryColor": "string",
-        "agent_id": "unknown — accepted by the backend validator; the frontend block does not read it"
+      "example_source": "live",
+      "shows_when": "always \u2014 with nothing set it is a working form: name, email, phone, subject, message",
+      "items": {
+        "fields": "a name ('email') or {name, label?, type?, required?, placeholder?, options?} \u2014 type is text, email, tel, number, textarea or select; giving options makes it a select"
       }
     },
     {
-      "type": "business-hours",
-      "component": "BusinessHours",
-      "category": "Business Info",
+      "type": "countdown",
+      "component": "Countdown",
+      "category": "Calls to Action",
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "targetDate": "string (ISO-8601)",
+        "ctaText": "string",
+        "ctaLink": "string"
+      },
+      "notes": "targetDate is an ISO date and time, e.g. 2026-12-01T09:00:00Z. With no title it reads 'Coming Soon' \u2014 set title and subtitle.",
+      "example": {
+        "type": "countdown",
+        "title": "Doors open",
+        "subtitle": "Our new shop on Main Street.",
+        "targetDate": "2026-12-01T09:00:00Z"
+      },
+      "example_source": "live",
+      "shows_when": "targetDate"
+    },
+    {
+      "type": "cta",
+      "component": "CTA",
+      "category": "Calls to Action",
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "primaryCta": "string",
+        "primaryLink": "string",
+        "secondaryCta": "string",
+        "secondaryLink": "string",
+        "backgroundStyle": "\"gradient\" | \"solid\"",
+        "backgroundColor": "string",
+        "buttonColor": "string"
+      },
+      "enums": {
+        "backgroundStyle": [
+          "gradient",
+          "solid"
+        ]
+      },
+      "notes": "A button shows only when its link goes somewhere \u2014 not empty and not '#'.",
+      "example": {
+        "type": "cta",
+        "title": "Ready when you are",
+        "subtitle": "Quotes are free.",
+        "primaryCta": "Get a quote",
+        "primaryLink": "/contact",
+        "secondaryCta": "Call us",
+        "secondaryLink": "tel:+15550100"
+      },
+      "example_source": "live",
+      "shows_when": "title, subtitle, or a primaryLink that goes somewhere"
+    },
+    {
+      "type": "divider",
+      "component": "Divider",
+      "category": "Layout",
       "aliases": [
-        "business_hours",
-        "businesshours",
-        "hours"
+        "separator",
+        "spacer"
+      ],
+      "required": [],
+      "props": {
+        "style": "\"line\" | \"dots\" | \"gradient\" | \"space\"",
+        "spacing": "\"small\" | \"medium\" | \"large\""
+      },
+      "enums": {
+        "style": [
+          "line",
+          "dots",
+          "gradient",
+          "space"
+        ],
+        "spacing": [
+          "sm",
+          "md",
+          "lg"
+        ]
+      },
+      "example": {
+        "type": "divider",
+        "style": "line",
+        "spacing": "md"
+      },
+      "example_source": "live",
+      "shows_when": "always"
+    },
+    {
+      "type": "faq",
+      "component": "FAQ",
+      "category": "FAQ",
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "faqs": "FAQItem[] \u2014 { id, question, answer }"
+      },
+      "example": {
+        "type": "faq",
+        "title": "Questions",
+        "faqs": [
+          {
+            "id": "q1",
+            "question": "Do you give free quotes?",
+            "answer": "Yes, always."
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "faqs has at least one entry",
+      "items": {
+        "faqs": "{id, question, answer} \u2014 the prop is faqs, not items"
+      }
+    },
+    {
+      "type": "features",
+      "component": "FeaturesGrid",
+      "category": "Features & Pricing",
+      "aliases": [
+        "features-grid",
+        "features_grid",
+        "featuresgrid"
       ],
       "required": [],
       "props": {
         "title": "string",
         "subtitle": "string",
-        "hours": "DayHours[] — { day, open, close, closed }"
+        "features": "Feature[] \u2014 { icon, title, description }",
+        "columns": "2 | 3 | 4",
+        "backgroundColor": "string"
       },
-      "notes": "If `hours` omitted, parses free-text hours from company context."
+      "enums": {
+        "columns": [
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "example": {
+        "type": "features",
+        "title": "Why people call us",
+        "columns": 3,
+        "features": [
+          {
+            "icon": "Clock",
+            "title": "On time",
+            "description": "We give a one-hour window and keep it."
+          },
+          {
+            "icon": "Shield",
+            "title": "Insured",
+            "description": "Fully covered on every job."
+          },
+          {
+            "icon": "Star",
+            "title": "Guaranteed",
+            "description": "Not right? We come back."
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "features has an entry (left empty, it lists the business's own services if it has any)",
+      "items": {
+        "features": "{icon, title, description} \u2014 icon is one of: Zap, Shield, Star, Rocket, Users, BarChart, Lock, Globe, Sparkles, Award, Hammer, Wrench, HardHat, Ruler, PaintRoller, Paintbrush, Drill, Building2, House, Truck, TreePine, Car, Package, Heart, Scissors, Utensils, Stethoscope, CircleCheck, Clock, MapPin, Phone, Calendar. Exact capitals; an unknown name shows Zap."
+      }
+    },
+    {
+      "type": "gallery",
+      "component": "Gallery",
+      "category": "Media",
+      "aliases": [
+        "portfolio"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "images": "GalleryImage[] \u2014 { id, src, alt, caption }",
+        "columns": "2 | 3 | 4",
+        "layout": "\"grid\" | \"masonry\""
+      },
+      "enums": {
+        "columns": [
+          "2",
+          "3",
+          "4"
+        ],
+        "layout": [
+          "grid",
+          "masonry"
+        ]
+      },
+      "example": {
+        "type": "gallery",
+        "title": "Recent work",
+        "columns": 3,
+        "images": [
+          {
+            "url": "https://example.com/job1.jpg",
+            "alt": "New slate roof"
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "images has at least one entry",
+      "items": {
+        "images": "{url, alt?, caption?} \u2014 the field is url, not src"
+      }
+    },
+    {
+      "type": "google-reviews",
+      "component": "GoogleReviews",
+      "category": "Social Proof",
+      "aliases": [
+        "google_reviews",
+        "googlereviews",
+        "reviews"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "overallRating": "number",
+        "totalReviews": "number",
+        "reviews": "Review[] \u2014 { author, rating, text, date }"
+      },
+      "notes": "Leave reviews off to show the business's connected Google reviews.",
+      "example": {
+        "type": "google-reviews",
+        "title": "Reviews on Google"
+      },
+      "example_source": "live",
+      "shows_when": "reviews has an entry, or the business has Google reviews connected",
+      "items": {
+        "reviews": "{id, author, rating, text, date?} \u2014 date is shown as written"
+      }
+    },
+    {
+      "type": "hero",
+      "component": "Hero",
+      "category": "Headers",
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "ctaText": "string",
+        "ctaLink": "string",
+        "backgroundStyle": "\"gradient\" | \"solid\" | \"image\"",
+        "backgroundImage": "string",
+        "backgroundColor": "string (hex or CSS var)",
+        "textColor": "string",
+        "buttonColor": "string",
+        "alignment": "\"left\" | \"center\" | \"right\"",
+        "backgroundVideo": "string (url, direct .mp4/.webm \u2014 plays muted, looping, inline behind the content)",
+        "backgroundVideoPoster": "string (url, image shown until the video plays)"
+      },
+      "enums": {
+        "backgroundStyle": [
+          "gradient",
+          "solid",
+          "image"
+        ],
+        "alignment": [
+          "left",
+          "center",
+          "right"
+        ]
+      },
+      "notes": "The button always shows; with no ctaText it reads 'Get Started' \u2014 set ctaText and ctaLink. backgroundStyle is worked out when left off: solid if backgroundColor is set, image if backgroundImage is.",
+      "example": {
+        "type": "hero",
+        "title": "Roof repairs, done in a day",
+        "subtitle": "Licensed and insured. Serving the whole county.",
+        "ctaText": "Get a quote",
+        "ctaLink": "/contact",
+        "alignment": "center"
+      },
+      "example_source": "live",
+      "shows_when": "title or subtitle"
+    },
+    {
+      "type": "hero-image",
+      "component": "HeroImage",
+      "category": "Headers",
+      "aliases": [
+        "hero_image",
+        "heroimage"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "primaryCTA": "string",
+        "primaryLink": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "secondaryCTA": "string",
+        "backgroundImage": "string (url)",
+        "showVideoButton": "boolean",
+        "backgroundVideo": "string (url, direct .mp4/.webm \u2014 plays muted, looping, inline behind the content)",
+        "backgroundVideoPoster": "string (url, image shown until the video plays)"
+      },
+      "notes": "primaryCTA is the button's WORDS (a string); primaryLink is where it goes (default /contact). secondaryCTA shows only with showVideoButton: true, and it goes nowhere \u2014 leave it off.",
+      "example": {
+        "type": "hero-image",
+        "title": "Kitchens built to be used",
+        "subtitle": "Design, cabinets and installation by one crew.",
+        "primaryCTA": "See our work",
+        "primaryLink": "/gallery",
+        "backgroundImage": "https://example.com/kitchen.jpg"
+      },
+      "example_source": "live",
+      "shows_when": "title or subtitle"
+    },
+    {
+      "type": "hero-split",
+      "component": "HeroSplit",
+      "category": "Headers",
+      "aliases": [
+        "hero_split",
+        "herosplit"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "features": "string[]",
+        "primaryCTA": "string",
+        "primaryLink": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "imageUrl": "string",
+        "backgroundVideo": "string (url, direct .mp4/.webm \u2014 plays muted, looping, inline behind the content)",
+        "backgroundVideoPoster": "string (url, image shown until the video plays)"
+      },
+      "notes": "primaryCTA is the button's words (a string); primaryLink is where it goes (default /contact).",
+      "example": {
+        "type": "hero-split",
+        "title": "Same-day plumbing",
+        "subtitle": "A real person answers, day or night.",
+        "features": [
+          "Upfront pricing",
+          "Licensed plumbers",
+          "Work guaranteed"
+        ],
+        "primaryCTA": "Book a visit",
+        "primaryLink": "/book",
+        "imageUrl": "https://example.com/van.jpg"
+      },
+      "example_source": "live",
+      "shows_when": "title or subtitle",
+      "items": {
+        "features": "a list of plain strings \u2014 not objects"
+      }
+    },
+    {
+      "type": "kinetic-marquee",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "kinetic_marquee",
+        "kineticmarquee",
+        "marquee"
+      ],
+      "required": [
+        "phrase"
+      ],
+      "props": {
+        "phrase": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "separator": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "speed": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "direction": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      }
+    },
+    {
+      "type": "logo-cloud",
+      "component": "LogoCloud",
+      "category": "Social Proof",
+      "aliases": [
+        "clients",
+        "logo_cloud",
+        "logocloud",
+        "logos",
+        "partners"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "logos": "Logo[] \u2014 { id, name, src }",
+        "grayscale": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      },
+      "notes": "Logos are shown grey until hovered; grayscale: false shows them in colour.",
+      "example": {
+        "type": "logo-cloud",
+        "title": "Trusted by",
+        "logos": [
+          {
+            "name": "Acme Builders",
+            "imageUrl": "https://example.com/acme.png"
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "logos has at least one entry",
+      "items": {
+        "logos": "{name, imageUrl, href?}"
+      }
+    },
+    {
+      "type": "magnetic-cta",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "magnetic_cta",
+        "magneticcta"
+      ],
+      "required": [],
+      "props": {
+        "heading": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "text": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "href": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "cta": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "variant": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "captureRadius": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      }
+    },
+    {
+      "type": "map-embed",
+      "component": "MapEmbed",
+      "category": "Business Info",
+      "aliases": [
+        "directions",
+        "location",
+        "map",
+        "map_embed",
+        "mapembed"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string"
+      },
+      "notes": "Renders a directions card using company context address/phone/hours. No iframe, no API key required."
+    },
+    {
+      "type": "parallax-tilt-card",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "parallax_tilt_card",
+        "parallaxtiltcard"
+      ],
+      "required": [],
+      "props": {
+        "heading": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "cards": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "title": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "body": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "href": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "asset": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "assetSrc": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "assetAlt": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "overlayText": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      }
+    },
+    {
+      "type": "pricing",
+      "component": "PricingCards",
+      "category": "Features & Pricing",
+      "aliases": [
+        "pricing-cards",
+        "pricing_cards",
+        "pricingcards"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "tiers": "PricingTier[] \u2014 { name, price, period, description, features[], cta, ctaLink, highlighted }"
+      },
+      "notes": "highlighted: true adds a 'Most Popular' badge. Use only the business's real prices.",
+      "example": {
+        "type": "pricing",
+        "title": "Plans",
+        "tiers": [
+          {
+            "name": "Basic",
+            "price": "$49",
+            "period": "/month",
+            "description": "For one location.",
+            "features": [
+              "Monthly visit",
+              "Phone support"
+            ],
+            "cta": "Choose Basic",
+            "ctaLink": "/contact"
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "tiers has at least one entry",
+      "items": {
+        "tiers": "{name, price, period?, description, features, cta, ctaLink?, highlighted?} \u2014 features is a list of plain strings and MUST be present on every tier; price is shown as written, so include the currency sign; cta is the button's words"
+      }
+    },
+    {
+      "type": "process-steps",
+      "component": "ProcessSteps",
+      "category": "Content",
+      "aliases": [
+        "process",
+        "process_steps",
+        "processsteps"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "steps": "Step[] \u2014 { id, title, description }"
+      },
+      "example": {
+        "type": "process-steps",
+        "title": "How it works",
+        "steps": [
+          {
+            "title": "Tell us what you need",
+            "description": "Two minutes, by phone or form."
+          },
+          {
+            "title": "We visit and quote",
+            "description": "A fixed price before any work."
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "steps has at least one entry",
+      "items": {
+        "steps": "{title, description} \u2014 the step number is added for you"
+      }
     },
     {
       "type": "products",
@@ -505,70 +900,9 @@
         "columns": "2 | 3 | 4",
         "show_prices": "boolean",
         "layout": "\"grid\" | \"list\"",
-        "product_ids": "unknown — accepted by the backend validator; the frontend block does not read it"
+        "product_ids": "unknown \u2014 accepted by the backend validator; the frontend block does not read it"
       },
       "notes": "Pulls products from company context."
-    },
-    {
-      "type": "service-area",
-      "component": "ServiceArea",
-      "category": "Business Info",
-      "aliases": [
-        "areas",
-        "coverage",
-        "service_area",
-        "servicearea"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "regions": "ServiceRegion[] — { id, name, description }",
-        "mapEmbed": "string"
-      }
-    },
-    {
-      "type": "map-embed",
-      "component": "MapEmbed",
-      "category": "Business Info",
-      "aliases": [
-        "directions",
-        "location",
-        "map",
-        "map_embed",
-        "mapembed"
-      ],
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string"
-      },
-      "notes": "Renders a directions card using company context address/phone/hours. No iframe, no API key required."
-    },
-    {
-      "type": "faq",
-      "component": "FAQ",
-      "category": "FAQ",
-      "required": [],
-      "props": {
-        "title": "string",
-        "subtitle": "string",
-        "faqs": "FAQItem[] — { id, question, answer }"
-      }
-    },
-    {
-      "type": "divider",
-      "component": "Divider",
-      "category": "Layout",
-      "aliases": [
-        "separator",
-        "spacer"
-      ],
-      "required": [],
-      "props": {
-        "style": "\"line\" | \"dots\" | \"gradient\" | \"space\"",
-        "spacing": "\"small\" | \"medium\" | \"large\""
-      }
     },
     {
       "type": "raw_html",
@@ -588,6 +922,247 @@
         "className": "string"
       },
       "notes": "Escape hatch for imports (Nest/Ant). Use only when no native block fits the source markup. `html` is required."
+    },
+    {
+      "type": "service-area",
+      "component": "ServiceArea",
+      "category": "Business Info",
+      "aliases": [
+        "areas",
+        "coverage",
+        "service_area",
+        "servicearea"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "regions": "ServiceRegion[] \u2014 { id, name, description }",
+        "mapEmbed": "string"
+      },
+      "notes": "Without mapEmbed (a Google Maps embed address) a placeholder is shown where the map goes.",
+      "example": {
+        "type": "service-area",
+        "title": "Where we work",
+        "regions": [
+          {
+            "id": "r1",
+            "name": "Northside",
+            "description": "Same-day visits."
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "regions has an entry (left off, it reads the business's own service areas if set)",
+      "items": {
+        "regions": "{id, name, description?}"
+      }
+    },
+    {
+      "type": "stats",
+      "component": "Stats",
+      "category": "Social Proof",
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "stats": "Stat[] \u2014 { value, label, icon }"
+      },
+      "notes": "Any other icon name breaks the block \u2014 leave icon off when unsure.",
+      "example": {
+        "type": "stats",
+        "title": "By the numbers",
+        "stats": [
+          {
+            "id": "s1",
+            "value": "1,200+",
+            "label": "Roofs repaired",
+            "icon": "trending"
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "stats has at least one entry",
+      "items": {
+        "stats": "{id, value, label, icon?} \u2014 value is text ('1,200+'); icon is trending, users, globe or zap, or left off"
+      }
+    },
+    {
+      "type": "sticky-scroll-stack",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "sticky_scroll_stack",
+        "stickyscrollstack"
+      ],
+      "required": [
+        "items"
+      ],
+      "props": {
+        "items": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "heading": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "subheading": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      }
+    },
+    {
+      "type": "team",
+      "component": "Team",
+      "category": "Social Proof",
+      "aliases": [
+        "staff"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "members": "TeamMember[] \u2014 { id, name, role, image, bio }",
+        "columns": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      },
+      "enums": {
+        "columns": [
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "example": {
+        "type": "team",
+        "title": "Meet the crew",
+        "members": [
+          {
+            "name": "Sam Ortiz",
+            "title": "Owner",
+            "bio": "Twenty years on roofs."
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "members has at least one entry",
+      "items": {
+        "members": "{name, title?, bio?, photo_url?, email?, phone?} \u2014 note photo_url, with the underscore"
+      }
+    },
+    {
+      "type": "testimonials",
+      "component": "Testimonials",
+      "category": "Social Proof",
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "testimonials": "Testimonial[] \u2014 { quote, author, role, avatar }"
+      },
+      "notes": "When the business has Google reviews connected, those are shown INSTEAD of this list. Real words from real customers only.",
+      "example": {
+        "type": "testimonials",
+        "title": "What customers say",
+        "testimonials": [
+          {
+            "id": "t1",
+            "name": "Dana R.",
+            "role": "Homeowner",
+            "company": "",
+            "content": "Showed up when they said and fixed it first time.",
+            "rating": 5
+          }
+        ]
+      },
+      "example_source": "live",
+      "shows_when": "testimonials has an entry, or the business has Google reviews",
+      "items": {
+        "testimonials": "{id, name, role, company, content, rating, avatar?} \u2014 rating is a whole number 1 to 5"
+      }
+    },
+    {
+      "type": "text",
+      "component": "TextBlock",
+      "category": "Content",
+      "aliases": [
+        "text-block",
+        "text_block",
+        "textblock"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "content": "string (HTML/markdown-ish, backend sanitizes)",
+        "alignment": "\"left\" | \"center\" | \"right\"",
+        "maxWidth": "\"sm\" | \"md\" | \"lg\" | \"full\"",
+        "backgroundColor": "string"
+      },
+      "enums": {
+        "alignment": [
+          "left",
+          "center",
+          "right"
+        ],
+        "maxWidth": [
+          "sm",
+          "md",
+          "lg",
+          "full"
+        ]
+      },
+      "notes": "content is a string. It understands '## ' and '### ' headings, '- ' lists, **bold** and [words](address). Not HTML.",
+      "example": {
+        "type": "text",
+        "title": "About us",
+        "content": "We have fixed roofs here since 1998.\n\n- Family owned\n- **Free** inspections"
+      },
+      "example_source": "live",
+      "shows_when": "always \u2014 with no content it is an empty band, so give it content"
+    },
+    {
+      "type": "text-mask-reveal",
+      "component": "unknown (not in bundled CLI data)",
+      "category": "Motion",
+      "aliases": [
+        "text_mask_reveal",
+        "textmaskreveal"
+      ],
+      "required": [
+        "text"
+      ],
+      "props": {
+        "text": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "media": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "mediaSrc": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "mediaType": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it",
+        "mediaPoster": "unknown \u2014 listed by the live schema; the bundled CLI data has no type for it"
+      }
+    },
+    {
+      "type": "video-embed",
+      "component": "VideoEmbed",
+      "category": "Media",
+      "aliases": [
+        "video",
+        "video_embed",
+        "videoembed",
+        "vimeo",
+        "youtube"
+      ],
+      "required": [],
+      "props": {
+        "title": "string",
+        "subtitle": "string",
+        "videoUrl": "string (YouTube/Vimeo URL, or a direct .mp4/.webm/.mov/.m4v file URL)",
+        "thumbnailUrl": "string",
+        "aspectRatio": "\"16:9\" | \"4:3\" | \"1:1\"",
+        "autoplay": "boolean (browsers only autoplay muted video)",
+        "muted": "boolean (direct files; default true when autoplay \u2014 browsers only autoplay muted video)",
+        "loop": "boolean (direct files)",
+        "playsInline": "boolean (direct files; default true \u2014 required for inline autoplay on iOS)",
+        "controls": "boolean (direct files; default !autoplay)",
+        "posterUrl": "string (url, direct files; shown before playback; falls back to thumbnailUrl)"
+      },
+      "example": {
+        "type": "video-embed",
+        "title": "See us at work",
+        "videoUrl": "https://www.youtube.com/watch?v=VIDEO_ID"
+      },
+      "example_source": "live",
+      "shows_when": "videoUrl"
     }
   ]
 }

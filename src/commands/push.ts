@@ -5,6 +5,8 @@
  *   ./pages/*.json       — Create/update CMS pages
  *   ./kb/*.md             — Create/update knowledge base entries
  *   ./solid.config.json   — Update website settings
+ *   ./services/*.json, ./products/*.json — name, description, category of a file that
+ *                            differs from its record (never a price; lib/push-catalog.ts)
  *
  * Compares against .solid/manifest.json to detect what changed.
  * All changes are scoped to the authenticated company_id.
@@ -22,6 +24,7 @@ import { ui } from '../lib/ui';
 import { requireTenantManifest, PullManifest } from '../lib/tenant-guard';
 import { fail, requireCompanyContext } from '../lib/command-kit';
 import { parseKbMarkdown, detectChanges, ChangeSet } from '../lib/push-utils';
+import { CatalogDiff, diffCatalog, mergeDiffs, readCatalogFiles } from '../lib/push-catalog';
 
 export { parseKbMarkdown, detectChanges, ChangeSet };
 
@@ -218,7 +221,26 @@ export const pushCommand = new Command('push')
     const scanSpinner = ora('Scanning for changes...').start();
     const changes = detectChanges(baseDir, manifest);
 
-    const totalChanges = changes.summary.creates + changes.summary.updates + (changes.summary.settings ? 1 : 0);
+    // services/ and products/: only files that DIFFER from the record, and never a price
+    // (lib/push-catalog.ts). Read-only until the push itself.
+    let catalog: CatalogDiff = { changes: [], price_not_pushed: [], not_pushed: [] };
+    if (!options.pagesOnly && !options.kbOnly && !options.settingsOnly) {
+      try {
+        const svc = readCatalogFiles(baseDir, 'services');
+        const prod = readCatalogFiles(baseDir, 'products');
+        const [svcRemote, prodRemote] = await Promise.all([
+          svc.length ? apiClient.servicesList().then((r) => (r.data as any).items || []) : Promise.resolve([]),
+          prod.length ? apiClient.productsList().then((r) => (r.data as any).items || []) : Promise.resolve([]),
+        ]);
+        catalog = mergeDiffs(diffCatalog('services', svc, svcRemote), diffCatalog('products', prod, prodRemote));
+      } catch {
+        // The catalog could not be read; pages and KB still push. Said below.
+        console.error(chalk.yellow('  Could not compare services/products with the business — they are not pushed this run.'));
+      }
+    }
+
+    const totalChanges = changes.summary.creates + changes.summary.updates + (changes.summary.settings ? 1 : 0)
+      + catalog.changes.length;
 
     if (totalChanges === 0) {
       scanSpinner.succeed(chalk.dim('No changes detected'));
@@ -248,6 +270,15 @@ export const pushCommand = new Command('push')
 
     if (!options.pagesOnly && !options.kbOnly && changes.settings.changed) {
       console.log(`    ${chalk.yellow('~')} solid.config.json (website settings)`);
+    }
+    for (const c of catalog.changes) {
+      console.log(`    ${chalk.yellow('~')} ${c.kind}/${c.file} (${c.changed.join(', ')})`);
+    }
+    for (const p of catalog.price_not_pushed) {
+      console.log(chalk.dim(`    · ${p.kind}/${p.file}: price ${p.remote} → ${p.local} is NOT pushed — change a price with the verb ${p.use}`));
+    }
+    for (const n of catalog.not_pushed) {
+      console.log(chalk.dim(`    · ${n.kind}/${n.file}: not pushed — ${n.why}`));
     }
 
     console.log('');
@@ -443,6 +474,25 @@ export const pushCommand = new Command('push')
         errors++;
         process.exit(1);
       }
+    }
+
+    // ── Push services and products (name, description, category — never a price) ──
+    if (catalog.changes.length) {
+      const catSpinner = ora('Pushing services and products...').start();
+      let done = 0;
+      for (const c of catalog.changes) {
+        try {
+          await apiClient.post('/api/v1/ada/cli-dispatch', { verb: c.verb, args: c.args, confirm: true });
+          done++;
+          pushed++;
+        } catch (error) {
+          catSpinner.stop();
+          console.error(chalk.red(`    Failed: ${c.kind}/${c.file} — ${handleApiError(error).message}`));
+          errors++;
+        }
+      }
+      if (done === catalog.changes.length) catSpinner.succeed(chalk.green(`${done} services/products updated`));
+      else catSpinner.fail(chalk.red(`${done} of ${catalog.changes.length} services/products updated`));
     }
 
     // ── Update manifest ───────────────────────────────────────────────

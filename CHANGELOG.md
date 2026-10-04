@@ -211,6 +211,26 @@ use the three-digit addresses.
 
 ## [Unreleased]
 
+**The verb list is a page, not a dump, and `solid push` sends services and products.**
+
+- `solid verbs list` with no prefix returns the first page: 100 working verbs, one
+  name per operation, with `has_more` and the way to the rest (`solid map`, a
+  prefix, `solid find`, `--all`). It used to print every row — 1,524 of them,
+  about 45K tokens. `--aliases` shows older spellings and `--include-inactive`
+  shows stub and disabled verbs; `describe` and `invoke` take either by name.
+- `solid map` counts one name per operation, so a noun is its real size.
+- `solid verbs describe` and `invoke --dry-run` show `undone_by`: the verb that
+  takes a write back, or that none is known.
+- `--tier` says how many verbs it removed. Almost every verb declares the
+  starter floor, so it is not an entitlement check.
+- `solid push` sends a changed name, description or category of a file in
+  `services/` or `products/`. A price is never pushed — the reply names the verb
+  that changes one — and a file with no `_id` is not created.
+- The offline block schema is generated from the live one
+  (`npm run sync:blocks`, checked before publish): 36 blocks, with what each
+  needs before it shows anything and examples read out of the renderer.
+
+
 **`solid apply` grows a memory: a lockfile, three-way drift, recorded pre-images
 with rollback, and export — plus five more kinds.**
 

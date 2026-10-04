@@ -29,7 +29,7 @@ This folder is ${name}'s website and business data as files. \`solid pull\` wrot
 |---|---|---|
 | \`pages/<slug>.json\` | One website page each | editing the file, then \`solid push\` |
 | \`kb/<title>.md\` | What the AI knows and answers from | editing the file, then \`solid push\` |
-| \`services/\`, \`products/\` | What the business sells — **for reading**; \`solid push\` does not send them | the verbs \`service.update\` / \`product.update\` |
+| \`services/\`, \`products/\` | What the business sells | editing the file, then \`solid push\` — it sends a changed name, description or category. A **price** is never pushed (\`service.update\` / \`product.update_pricing\`), and a new file is not created |
 | \`solid.config.json\` | Name, phone, hours, address, website settings | \`solid push\` sends \`website_settings\` only; the rest with the verb \`company.update_profile\` |
 | \`.solid/manifest.json\` | Which business this folder belongs to | never by hand |
 

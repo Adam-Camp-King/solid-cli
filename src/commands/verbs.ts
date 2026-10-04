@@ -151,6 +151,12 @@ per operation), not the whole platform. --all prints every one; the rest of the 
   solid map                      everything, by class and noun
   solid verbs list <prefix>      one neighbourhood of the map
   solid find "<plain words>"     search by what you want to do
+
+Every call leaves a receipt (verb, outcome, reason, who, duration — never the argument values):
+  solid verbs invoke audit.receipts -p '{"limit":10}'
+To read one piece of work back in order, give its invocations one session id (8–64 of A-Z a-z 0-9 _ -):
+  export SOLID_SESSION_ID=my-run-0001
+  solid verbs invoke audit.receipts -p '{"session_ref":"cli:my-run-0001"}'
 `);
 
 verbsCommand
