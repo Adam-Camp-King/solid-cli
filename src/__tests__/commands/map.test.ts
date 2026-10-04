@@ -65,3 +65,19 @@ describe('buildMap', () => {
     expect(buildMap([])).toEqual([]);
   });
 });
+
+describe('buildMap counts one name per operation', () => {
+  const verbs = [
+    { name: 'deal.update', side_effects: 'write', coordinate: '31', noun: 'deal' },
+    { name: 'deals_update', side_effects: 'write', coordinate: '31', noun: 'deal', same_as: 'deal.update' },
+    { name: 'deal.get', side_effects: 'read', coordinate: '31', noun: 'deal' },
+  ];
+
+  it('an alias is not counted, so a noun is its real size', () => {
+    expect(buildMap(verbs)).toEqual([{ coordinate: '31', noun: 'deal', verbs: 2, writes: 1 }]);
+  });
+
+  it('--aliases counts them', () => {
+    expect(buildMap(verbs, { aliases: true })[0].verbs).toBe(3);
+  });
+});

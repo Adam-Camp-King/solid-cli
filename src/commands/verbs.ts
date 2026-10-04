@@ -1,9 +1,10 @@
 /**
  * solid verbs — Universal agent-attraction verb invoker.
  *
- * Backend ships 169 agent-attraction verbs across 12 shapes (aggregate /
- * explain / preview / suggest / transaction / receipt / revert / subscribe /
- * discovery / trail / reputation / macro / telemetry). Phases 1-5 complete.
+ * The backend ships its verbs across 12 shapes (aggregate / explain / preview /
+ * suggest / transaction / receipt / revert / subscribe / discovery / trail /
+ * reputation / macro / telemetry). ⛔ No count here: it froze at 169 while the
+ * catalog passed 1,500. `solid verbs list` prints the live total.
  * Most are already callable via dedicated CLI wrappers (solid transaction,
  * solid manifest, solid audit log, etc.). This command is the AI-first
  * universal entry point: every verb is discoverable + invokable without
@@ -108,6 +109,27 @@ export function httpMethodOf(verb: { http_method?: string | null }): 'GET' | 'PO
 /** Where dispatch-transport verbs go when the manifest does not say. ada.py mounts at /api/v1/ada. */
 export const DEFAULT_DISPATCH_ENDPOINT = '/api/v1/ada/cli-dispatch';
 
+/** Rows on the bare list's first page. */
+export const DEFAULT_PAGE = 100;
+
+/**
+ * What a list shows by default: one name per operation, and only verbs that can do what
+ * their name says. Pure. Nothing is removed from the catalog — `describe` and `invoke`
+ * take an alias or a stub by name, and the two flags bring them back into the list.
+ */
+export function defaultView<T extends { same_as?: string | null; status?: string }>(
+  verbs: T[], opts: { aliases?: boolean; includeInactive?: boolean } = {},
+): { verbs: T[]; hidden: { aliases: number; inactive: number } } {
+  let aliases = 0;
+  let inactive = 0;
+  const out = verbs.filter((v) => {
+    if (!opts.aliases && v.same_as) { aliases++; return false; }
+    if (!opts.includeInactive && (v.status === 'stub' || v.status === 'disabled')) { inactive++; return false; }
+    return true;
+  });
+  return { verbs: out, hidden: { aliases, inactive } };
+}
+
 export const verbsCommand = new Command('verbs')
   // ⛔ NO COUNT IN THIS STRING. It said "169 agent-attraction verbs" against a
 // real 545 — and `src/commands/verbs.ts` is not in scripts/sync-counts.ts's
@@ -124,7 +146,8 @@ removes it (kb.entry_delete deletes a knowledge entry).
 
 A name reads thing.action: the noun before the dot, what is done to it after.
 
-Nothing is held back. "verbs list" with no prefix is a starting page, not the whole platform:
+Nothing is held back. "verbs list" with no prefix is the first page (100 working verbs, one name
+per operation), not the whole platform. --all prints every one; the rest of the way in:
   solid map                      everything, by class and noun
   solid verbs list <prefix>      one neighbourhood of the map
   solid find "<plain words>"     search by what you want to do
@@ -144,7 +167,7 @@ verbsCommand
   // `filtered_by` on every response — but the flag did not exist here, so an
   // agent reading the envelope to learn its own options was told about one
   // that errors. Verified against the live API: starter 843, professional 845.
-  .option('--tier <name>', 'Filter to verbs available at this tier (starter|builder|professional|enterprise)')
+  .option('--tier <name>', 'Filter by declared tier floor (starter|builder|professional|enterprise). Almost every verb declares starter, so this is not an entitlement check')
   .option('--json', 'Output the raw manifest as JSON')
   // ⛔ THE DEFAULT USED TO BE EVERYTHING. `verbs list --json` returned all 845
   // records with full input_schemas — 1,947,944 bytes, ~486,986 tokens before
@@ -169,6 +192,13 @@ verbsCommand
   .option('--full', 'Every field including input_schema — the old default, ~316K tokens')
   .option('--names-only', 'Just the names, nothing else')
   .option('-n, --limit <n>', 'Return at most this many verbs')
+  // ⛔ THE DEFAULT IS A PAGE. With no prefix and no --limit this printed every row —
+  // 1,524 of them, ~45K tokens (measured 2026-10-04) — under help text that called it
+  // "a starting page". Aliases were a fifth of it and stubs sat beside working verbs.
+  // Nothing is held back: the reply says has_more and names how to get the rest.
+  .option('--all', 'Every matching verb, not just the first page')
+  .option('--aliases', 'Include older spellings of a verb (same_as); hidden by default')
+  .option('--include-inactive', 'Include stub and disabled verbs; hidden by default')
   .action(async (prefix: string | undefined, options) => {
     const wantsJson = options.json || isJsonOutput();
     const spinner = wantsJson ? null : ora('Fetching verb manifest...').start();
@@ -262,8 +292,23 @@ verbsCommand
 
       const data = res.data as VerbManifest;
 
-      const limit = options.limit ? Math.max(1, parseInt(options.limit, 10) || 0) : null;
       let all = data.verbs || [];
+      const registered = all.length;
+      const view = defaultView(all, {
+        aliases: Boolean(options.aliases), includeInactive: Boolean(options.includeInactive),
+      });
+      all = view.verbs;
+      // A prefix, a filter or --full is a deliberate ask and is answered whole; the bare
+      // list is the one that gets a page.
+      const bare = !prefix && !options.all && !options.limit && !options.full && !options.namesOnly
+        && !options.writes && !options.reads && options.consent !== false
+        && !options.surface && !options.shape && !options.tier;
+      const limit = options.limit ? Math.max(1, parseInt(options.limit, 10) || 0)
+        : bare ? DEFAULT_PAGE : null;
+      // --tier is answered, and so is how much it can mean: a floor is declared on
+      // very few verbs, so "everything is starter" is an absence, not an entitlement.
+      // The server applied ?tier= already, so what it removed is the difference.
+      const tierRemoved = Math.max(0, (data.total_registered || registered) - registered);
 
       // Scope by Atlas prefix. Filtered here rather than server-side because
       // the manifest is one fetch either way — and with 4.2's etag that fetch
@@ -327,12 +372,17 @@ verbsCommand
           total: data.total_registered,
           has_more: shown.length < all.length,
           filtered_by: data.filtered_by,
+          ...(view.hidden.aliases || view.hidden.inactive ? { hidden: view.hidden } : {}),
+          ...(options.tier ? { tier_removed: tierRemoved,
+            tier_note: `--tier removed ${tierRemoved} of ${data.total_registered || registered} verbs. Almost every verb declares the starter floor, so this is not an entitlement check.` } : {}),
           // Published on the index tier too, not just --full: an agent that
           // never fetches the full manifest still wants to know whether the
           // one it holds is current.
           ...(data.etag ? { etag: data.etag } : {}),
           verbs: shown.map((v) => [v.name, clip(v.description || '', 90), v.side_effects]),
-          next: 'solid verbs describe <name>  ·  unchanged? --since <etag>  ·  full records: --full',
+          next: shown.length < all.length
+            ? 'more: solid map (every noun) · solid verbs list <prefix> · solid find "<words>" · --all  ·  then: solid verbs describe <name>'
+            : 'solid verbs describe <name>  ·  unchanged? --since <etag>  ·  full records: --full',
         });
         return;
       }
@@ -352,6 +402,13 @@ verbsCommand
         console.log(`  ${chalk.gray(v.shape.padEnd(11))} ${v.name}${tag}`);
       }
       console.log('');
+      if (shown.length < all.length) {
+        console.log(chalk.dim(`${all.length - shown.length} more — solid map · solid verbs list <prefix> · solid find "<words>" · --all`));
+      }
+      if (view.hidden.aliases || view.hidden.inactive) {
+        console.log(chalk.dim(`hidden: ${view.hidden.aliases} older spellings (--aliases), ${view.hidden.inactive} stub or disabled (--include-inactive)`));
+      }
+      if (options.tier) console.log(chalk.dim(`--tier removed ${tierRemoved} verbs; almost every verb declares the starter floor — this is not an entitlement check`));
       console.log(chalk.dim(`use 'solid verbs describe <name>' for schema details`));
     } catch (e) {
       spinner?.stop();
@@ -383,6 +440,9 @@ verbsCommand
       console.log(`  surfaces:         ${v.surfaces.join(', ')}`);
       console.log(`  requires_consent: ${v.requires_consent}`);
       console.log(`  tier_floor:       ${v.tier_floor}`);
+      // How to take it back — the question asked before a write.
+      const undo = (v as { undone_by?: string | null }).undone_by;
+      if (v.side_effects !== 'read') console.log(`  undone_by:        ${undo || 'no undo verb is known'}`);
       console.log(`  http_endpoint:    ${v.http_endpoint}`);
       console.log('');
       console.log(chalk.dim('input_schema:'));
@@ -505,6 +565,8 @@ verbsCommand
         // business, not the business's invoices. The rehearsal is where an agent
         // should learn whose record it is about to touch.
         ...(verb.acts_on ? { acts_on: verb.acts_on } : {}),
+        // The way back, before the write: null means no undo verb is known.
+        ...(isWrite ? { undone_by: (verb as { undone_by?: string | null }).undone_by ?? null } : {}),
         missing_required: report.missing_required,
         // ⛔ Either-or requirements (anyOf) — `{}` used to rehearse valid and fail live.
         missing_one_of: report.missing_one_of,

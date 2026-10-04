@@ -29,6 +29,7 @@ interface MapVerb {
   side_effects?: string;
   coordinate?: string | null;
   noun?: string | null;
+  same_as?: string | null;
 }
 
 interface NounRow {
@@ -42,10 +43,14 @@ interface NounRow {
  * Fold the manifest into one row per noun. Pure, so the shaping is testable
  * without a network.
  */
-export function buildMap(verbs: readonly MapVerb[]): NounRow[] {
+export function buildMap(verbs: readonly MapVerb[], opts: { aliases?: boolean } = {}): NounRow[] {
   const rows = new Map<string, NounRow>();
 
   for (const v of verbs) {
+    // One name per operation. An alias (same_as) is an older spelling of a verb that is
+    // already counted; counting both made a noun look twice its size and, filed by its
+    // own spelling, made a second noun (deals beside deal).
+    if (v.same_as && !opts.aliases) continue;
     const coordinate = v.coordinate || '';
     const noun = v.noun || '(unplaced)';
     // Key on both: a noun without a coordinate is a real state (an unplaced
@@ -65,6 +70,7 @@ export function buildMap(verbs: readonly MapVerb[]): NounRow[] {
 export const mapCommand = new Command('map')
   .description('Every noun on the platform, its verb count, and its Atlas address')
   .option('--json', 'Machine-readable output')
+  .option('--aliases', 'Count older spellings of a verb too (hidden by default)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -85,7 +91,8 @@ export const mapCommand = new Command('map')
     }
     spinner?.stop();
 
-    const rows = buildMap(verbs);
+    const rows = buildMap(verbs, { aliases: Boolean(options.aliases) });
+    const aliases = options.aliases ? 0 : verbs.filter((v) => v.same_as).length;
     const unplaced = rows.filter((r) => !r.coordinate);
 
     if (wantsJson) {
@@ -93,7 +100,8 @@ export const mapCommand = new Command('map')
         schema: 'solid:agent-map/v1',
         row: ['coordinate', 'noun', 'verbs', 'writes'],
         nouns: rows.length,
-        total_verbs: verbs.length,
+        total_verbs: verbs.length - aliases,
+        ...(aliases ? { hidden: { aliases } } : {}),
         // Rows are arrays for the same reason the verb index uses them:
         // repeating four keys 170+ times is most of a small payload.
         map: rows.map((r) => [r.coordinate, r.noun, r.verbs, r.writes]),
