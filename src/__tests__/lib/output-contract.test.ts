@@ -39,6 +39,13 @@ describe('returnsOf', () => {
     expect(r).toMatchObject({ basis: 'hint', always: [], when_it_worked: [], may_include: ['deal_id', 'stage'] });
   });
 
+  it('an observed schema says what real results carried and promises nothing', () => {
+    const r = returnsOf({ properties: { id: { type: 'integer', 'x-solid-observed': 4 }, note: {} },
+      'x-solid-derivation': 'observed-in-receipts' });
+    expect(r).toMatchObject({ basis: 'observed', always: [], when_it_worked: [], may_include: ['id', 'note'],
+      types: { id: 'integer' } });
+  });
+
   it('a schema with no marker was declared by its author', () => {
     expect(returnsOf({ properties: { id: { type: 'integer' } }, required: ['id'] })?.basis).toBe('declared');
   });

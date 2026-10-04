@@ -502,8 +502,9 @@ verbsCommand
       const returns = returnsOf((v as { output_schema?: unknown }).output_schema);
       if (!returns) {
         console.log(`  returns:          not published`);
-      } else if (returns.basis === 'hint') {
-        console.log(`  returns:          may include ${returns.may_include.join(', ')} (seen in source, none promised)`);
+      } else if (returns.basis === 'hint' || returns.basis === 'observed') {
+        const how = returns.basis === 'observed' ? 'seen in real results' : 'seen in source';
+        console.log(`  returns:          may include ${returns.may_include.join(', ')} (${how}, none promised)`);
       } else {
         console.log(`  returns:          ${returns.when_it_worked.join(', ') || 'no key on every result'} (${returns.basis})`);
         if (returns.when_it_did_not) console.log(`  if it did not:    ${returns.when_it_did_not.join(', ')}`);

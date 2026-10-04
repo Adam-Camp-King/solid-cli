@@ -42,7 +42,8 @@ solid verbs describe page.publish --json
   back; `null` means none is known, never a guess.
 - **What comes back.** `output_schema` says which keys are on every result.
   `proven-from-return-paths` means every return path of the handler was read;
-  `inferred-from-return-literals` means keys worth looking for, none promised.
+  `observed-in-receipts` and `inferred-from-return-literals` mean keys worth
+  looking for, none promised.
 - **A dry run that tells the truth.** `solid verbs invoke <verb> -p '{…}' --dry-run`
   validates the payload locally, shows the exact request, `undone_by` and what
   would come back, and exits 1 when the call is invalid. It needs no consent.

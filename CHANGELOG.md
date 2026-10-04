@@ -18,8 +18,9 @@ page is the verbs an agent needs.**
 
 - `solid verbs describe` prints what a verb returns: the keys on every result
   that worked, the keys of one that did not, and whether that was read from
-  every return path of the handler (`proven`), declared by its author, or only
-  seen in source (`hint`, nothing promised). `--json` carries the full
+  every return path of the handler (`proven`), declared by its author, seen in
+  real results (`observed`) or only seen in source (`hint`); the last two
+  promise nothing. `--json` carries the full
   `output_schema`, now with `required` and value types where the backend
   publishes them.
 - `solid verbs invoke --dry-run` adds `returns`, so the keys the next step

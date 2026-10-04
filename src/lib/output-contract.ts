@@ -5,6 +5,7 @@
  *   proven-from-return-paths       every return path of the handler was read, so
  *                                  `required` is true of every result
  *   inferred-from-return-literals  keys worth looking for; none is promised
+ *   observed-in-receipts           keys real results were seen to carry; none is promised
  *   (absent)                       the verb's author declared it
  * An agent plans its next call on the keys of a result that worked, so that is
  * what `returns` names — and it says which of the three it is reading.
@@ -17,8 +18,12 @@ export interface OutputSchema {
 }
 
 export interface Returns {
-  /** proven: read from every return path · declared: stated by the author · hint: keys seen in source, none promised. */
-  basis: 'proven' | 'declared' | 'hint';
+  /**
+   * proven: read from every return path · declared: stated by the author ·
+   * observed: keys real results were seen to carry · hint: keys seen in source.
+   * Only proven and declared promise anything.
+   */
+  basis: 'proven' | 'declared' | 'observed' | 'hint';
   /** Keys on every result, a refusal included. */
   always: string[];
   /** Keys on every result that worked. Same as `always` when the verb has no failure return. */
@@ -39,11 +44,12 @@ export function returnsOf(schema: unknown): Returns | null {
   if (!keys.length && !(s.required || []).length) return null;
   const marker = s['x-solid-derivation'];
   const basis: Returns['basis'] = marker === 'proven-from-return-paths' ? 'proven'
-    : marker ? 'hint' : 'declared';
-  const always = basis === 'hint' ? [] : [...(s.required || [])];
+    : marker === 'observed-in-receipts' ? 'observed' : marker ? 'hint' : 'declared';
+  const promised = basis === 'proven' || basis === 'declared';
+  const always = promised ? [...(s.required || [])] : [];
   const branch = (title: string) => (s.anyOf || []).find((b) => b.title === title)?.required;
-  const worked = basis === 'hint' ? [] : [...(branch('worked') || always)];
-  const didNot = basis === 'hint' ? undefined : branch('did not');
+  const worked = promised ? [...(branch('worked') || always)] : [];
+  const didNot = promised ? branch('did not') : undefined;
   const named = new Set([...always, ...worked, ...(didNot || [])]);
   const types: Returns['types'] = {};
   for (const k of keys) {
