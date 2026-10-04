@@ -46,7 +46,19 @@ async function run(args: string[]): Promise<string> {
   return out.join('\n');
 }
 
-beforeEach(() => { post.mockReset(); process.exitCode = 0; });
+// ⛔ GitHub's runner sets GITHUB_SHA / GITHUB_REPOSITORY, and `solid app publish`
+// reads them to say which commit is live — so the same test passed on a Mac and
+// failed in CI, which failed the npm release workflow on every tag. The tests
+// that assert "no commit is claimed" run without them; the CI case is pinned below.
+const CI_ENV = ['GITHUB_SHA', 'GITHUB_REPOSITORY', 'GITHUB_ACTIONS', 'GITHUB_SERVER_URL'];
+const savedEnv: Record<string, string | undefined> = {};
+beforeEach(() => {
+  post.mockReset(); process.exitCode = 0;
+  for (const k of CI_ENV) { savedEnv[k] = process.env[k]; delete process.env[k]; }
+});
+afterEach(() => {
+  for (const k of CI_ENV) { if (savedEnv[k] === undefined) delete process.env[k]; else process.env[k] = savedEnv[k]; }
+});
 afterAll(() => { process.exitCode = 0; });
 
 test('a folder with no index.html is refused before anything is sent', async () => {
