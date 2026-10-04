@@ -2,7 +2,7 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
-## [Unreleased]
+## [2.26.0] — 2026-10-04
 
 **Your AI gets the Solid# skills without being told to, and `solid render` no
 longer refuses an AI agent.**
