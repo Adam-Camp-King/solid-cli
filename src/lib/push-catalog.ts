@@ -39,6 +39,8 @@ export interface CatalogChange {
   verb: string;
   args: Record<string, unknown>;
   changed: string[];
+  /** field → the record's current value, for the dry run's before → after. */
+  before: Record<string, unknown>;
 }
 export interface CatalogDiff {
   changes: CatalogChange[];
@@ -69,11 +71,15 @@ export function diffCatalog(
       continue;
     }
     const args: Record<string, unknown> = {};
+    const before: Record<string, unknown> = {};
     for (const [field, arg] of Object.entries(PUSHABLE[kind])) {
-      if (field in data && data[field] != null && !same(data[field], record[field])) args[arg] = data[field];
+      if (field in data && data[field] != null && !same(data[field], record[field])) {
+        args[arg] = data[field];
+        before[arg] = record[field] ?? null;
+      }
     }
     if (Object.keys(args).length) {
-      out.changes.push({ kind, file, id, verb, args: { [idArg]: id, ...args }, changed: Object.keys(args) });
+      out.changes.push({ kind, file, id, verb, args: { [idArg]: id, ...args }, changed: Object.keys(args), before });
     }
     if ('price' in data && data.price != null && Number(data.price) !== Number(record.price)) {
       out.price_not_pushed.push({ kind, file, id, local: data.price, remote: record.price ?? null, use: priceVerb });

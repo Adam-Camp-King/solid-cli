@@ -14,7 +14,8 @@ describe('diffCatalog', () => {
       { file: 'drain.json', data: { _id: 7, title: 'Drain cleaning', description: 'New words', category: 'plumbing', price: 120 } },
     ], remote);
     expect(d.changes).toEqual([{ kind: 'services', file: 'drain.json', id: 7, verb: 'service.update',
-      args: { service_id: 7, description: 'New words' }, changed: ['description'] }]);
+      args: { service_id: 7, description: 'New words' }, changed: ['description'],
+      before: { description: 'Old words' } }]);
     expect(d.price_not_pushed).toEqual([]);
   });
 

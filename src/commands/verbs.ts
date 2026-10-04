@@ -203,6 +203,9 @@ verbsCommand
   // "a starting page". Aliases were a fifth of it and stubs sat beside working verbs.
   // Nothing is held back: the reply says has_more and names how to get the rest.
   .option('--all', 'Every matching verb, not just the first page')
+  // The catalog has no per-verb dates, so "since" is a snapshot the agent kept
+  // (lib/verb-snapshot.ts): `solid verbs snapshot > verbs.snap.json`, later hand it back.
+  .option('--changed-since <snapshot.json>', 'Only what was added, removed or changed since a snapshot from `solid verbs snapshot`')
   .option('--aliases', 'Include older spellings of a verb (same_as); hidden by default')
   .option('--include-inactive', 'Include stub and disabled verbs; hidden by default')
   .action(async (prefix: string | undefined, options) => {
@@ -297,6 +300,30 @@ verbsCommand
       }
 
       const data = res.data as VerbManifest;
+
+      if (options.changedSince) {
+        const { diffSnapshot, isSnapshot } = await import('../lib/verb-snapshot');
+        const fs = await import('fs');
+        let prev: unknown;
+        try { prev = JSON.parse(fs.readFileSync(String(options.changedSince), 'utf8')); } catch { prev = null; }
+        if (!isSnapshot(prev)) {
+          const message = `${options.changedSince} is not a verb snapshot. Make one with: solid verbs snapshot > verbs.snap.json`;
+          if (wantsJson) printJson({ ok: false, error: message }); else console.error(chalk.red(`✗ ${message}`));
+          process.exitCode = 1;
+          return;
+        }
+        const diff = diffSnapshot(prev, data.verbs || []);
+        if (wantsJson) {
+          printJson({ schema: 'solid:verb-changes/v1', ...diff, ...(data.etag ? { etag: data.etag } : {}),
+            next: 'solid verbs describe <name>  ·  refresh the snapshot: solid verbs snapshot > verbs.snap.json' });
+          return;
+        }
+        console.log(chalk.cyan(`Since ${diff.since}: ${diff.added.length} added, ${diff.changed.length} changed, ${diff.removed.length} removed, ${diff.unchanged} unchanged`));
+        for (const n of diff.added) console.log(`  ${chalk.green('+')} ${n}`);
+        for (const n of diff.changed) console.log(`  ${chalk.yellow('~')} ${n}`);
+        for (const n of diff.removed) console.log(`  ${chalk.red('-')} ${n}`);
+        return;
+      }
 
       let all = data.verbs || [];
       const registered = all.length;
@@ -418,6 +445,20 @@ verbsCommand
       console.log(chalk.dim(`use 'solid verbs describe <name>' for schema details`));
     } catch (e) {
       spinner?.stop();
+      failApi(e);
+    }
+  });
+
+verbsCommand
+  .command('snapshot')
+  .description('A fingerprint of every verb, to hand back later with `verbs list --changed-since <file>`')
+  .action(async () => {
+    try {
+      const res = await apiClient.get('/api/v1/agent/verbs');
+      const data = res.data as VerbManifest;
+      const { takeSnapshot } = await import('../lib/verb-snapshot');
+      printJson(takeSnapshot(data.verbs || [], data.etag));
+    } catch (e) {
       failApi(e);
     }
   });

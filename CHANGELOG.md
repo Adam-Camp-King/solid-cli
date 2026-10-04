@@ -19,6 +19,11 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 - `solid push` sends a changed name, description or category of a file in
   `services/` or `products/`. A price is never pushed — the reply names the verb
   that changes one — and a file with no `_id` is not created.
+- `solid verbs snapshot` and `solid verbs list --changed-since <snapshot.json>`:
+  keep a fingerprint of the catalog and later ask only what was added, removed
+  or changed. A snapshot, not a date — the catalog carries no per-verb dates.
+- `solid push --dry-run` shows what each file would change, field by field
+  (before → after), and says when a file would change nothing.
 - The offline block schema is generated from the live one
   (`npm run sync:blocks`, checked before publish): 36 blocks, with what each
   needs before it shows anything and examples read out of the renderer.

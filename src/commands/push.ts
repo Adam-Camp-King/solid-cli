@@ -284,6 +284,38 @@ export const pushCommand = new Command('push')
     console.log('');
 
     if (options.dryRun) {
+      // Field by field: what each file would change on the record it overwrites
+      // (lib/push-diff.ts). Reads only.
+      const { pageDiff, kbDiff, lines, show } = await import('../lib/push-diff');
+      console.log(chalk.bold('  What would change:'));
+      if (!options.kbOnly && !options.settingsOnly) {
+        for (const page of changes.pages) {
+          const id = manifest.pages[page.file]?.id;
+          let remote: Record<string, any> | null = null;
+          if (page.action === 'update' && id) {
+            try { remote = (await apiClient.pageGet(id)).data as Record<string, any>; } catch { remote = null; }
+          }
+          console.log(`    pages/${page.file}`);
+          if (page.action === 'update' && !remote) console.log(chalk.yellow('        (could not read the page to compare)'));
+          else lines(pageDiff(page.data, remote)).forEach((l) => console.log(chalk.dim(l)));
+        }
+      }
+      if (!options.pagesOnly && !options.settingsOnly && changes.kb.length) {
+        let entries: Array<Record<string, any>> | null = null;
+        try { entries = ((await apiClient.kbSearch('', 100)).data as Record<string, any>).results || []; } catch { entries = null; }
+        for (const kb of changes.kb) {
+          console.log(`    kb/${kb.file}`);
+          if (!entries) { console.log(chalk.yellow('        (could not read the knowledge base to compare)')); continue; }
+          const remote = kb.action === 'update' ? entries.find((e) => e.id === (kb.data as any).id) || null : null;
+          if (kb.action === 'update' && !remote) console.log(chalk.yellow('        (this entry was not in the first 100 read back — not compared)'));
+          else lines(kbDiff(kb.data as any, remote)).forEach((l) => console.log(chalk.dim(l)));
+        }
+      }
+      for (const c of catalog.changes) {
+        console.log(`    ${c.kind}/${c.file}`);
+        for (const f of c.changed) console.log(chalk.dim(`        ${f}: ${show(c.before[f])}  →  ${show(c.args[f])}`));
+      }
+      console.log('');
       console.log(chalk.dim('  Dry run — no changes made.'));
       return;
     }
