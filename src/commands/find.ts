@@ -15,6 +15,11 @@
  * not generalise. `agent.verbs.search` ranks the same catalog with embeddings
  * and scores 56% top-1 / 78% top-5 on the held-out set.
  *
+ * Since 2026-10-04 a second stage reads the closest candidates against the
+ * request (the backend's services/verb_judge.py): 82% top-1 on a set written
+ * before it existed, and it can answer that NO verb does the request. find
+ * carries that answer through whole — see lib/find-answer.ts.
+ *
  * The bigger reason is that this ranker was CLI-private, so an agent on Claude
  * Desktop, in a browser, or arriving over UCP had no verb discovery at all —
  * it had to download all 936 verbs. Discovery is not a CLI feature; it is the
@@ -36,6 +41,7 @@ import { isJsonOutput, printJson } from '../lib/json-output';
 import { fail } from '../lib/command-kit';
 import { rankVerbs, clip, type SearchableVerb, type VerbMatch } from '../lib/verb-search';
 import { appendExamples } from '../lib/command-kit';
+import { readSearchAnswer, type SearchAnswer } from '../lib/find-answer';
 
 export const findCommand = new Command('find')
   .description('Find the verb for a task, in plain language — intent to callable name in one call')
@@ -58,6 +64,7 @@ export const findCommand = new Command('find')
     let matches: VerbMatch[] | null = null;
     let rankedBy = 'lexical (local)';
     let searchedCount = 0;
+    let answer: SearchAnswer | null = null;
     try {
       const res = await apiClient.post('/api/v1/ada/cli-dispatch', {
         verb: 'agent.verbs.search',
@@ -65,21 +72,18 @@ export const findCommand = new Command('find')
         confirm: false,
         typed_phrase: null,
       });
-      const data = (res.data as any) || {};
-      const payload = data.result ?? data;
-      if (data.ok !== false && Array.isArray(payload?.matches) && payload.matches.length) {
-        matches = payload.matches.map((m: any): VerbMatch => ({
-          name: String(m.name),
-          score: Number(m.score) || 0,
-          description: String(m.description || ''),
-          side_effects: String(m.side_effects || 'read'),
-        }));
-        rankedBy = payload.ranked_by || 'hybrid';
+      answer = readSearchAnswer(res.data);
+      if (answer.state !== 'unusable') {
+        matches = answer.matches;
+        rankedBy = answer.judged ? `${answer.rankedBy}, then judged` : answer.rankedBy;
       }
     } catch {
       // Any failure at all — old backend, no route, offline, rate limit —
       // falls through. This is never fatal: see the header.
     }
+    // ⛔ The server read the catalog and answered that no verb does this. That is
+    // the answer — the local ranker is not asked for five guesses to replace it.
+    const noVerb = answer?.state === 'no_verb';
 
     // ── 2. Fallback: pull the manifest and rank it here.
     if (!matches) {
@@ -121,6 +125,19 @@ export const findCommand = new Command('find')
         // different qualities of answer, and an agent deciding whether to
         // trust a low score needs to know which one it got.
         ranked_by: rankedBy,
+        // How sure the server is, and what to do about it — measured on held-out
+        // prompts and published by the search itself. Absent when the local
+        // ranker answered: it has no calibration to offer.
+        ...(answer?.confidence
+          ? { confidence: { level: answer.confidence.level, next_step: answer.confidence.next_step } }
+          : {}),
+        ...(noVerb
+          ? {
+              no_verb: true,
+              closest: answer!.closest.map((c) => [c.name, clip(c.description, 72)]),
+              ...(answer!.gap ? { gap: answer!.gap } : {}),
+            }
+          : {}),
         not_searched:
           'CLI-local commands (switch, company, auth, pull, push) are not verbs — ' +
           'list them with: solid schema verbs --json',
@@ -129,8 +146,25 @@ export const findCommand = new Command('find')
         // command exists to avoid.
         next: matches.length
           ? `solid verbs describe ${matches[0].name}`
-          : 'solid schema verbs --json',
+          : noVerb
+            ? 'No verb does this. Tell the user plainly; it is recorded as a request for one.'
+            : 'solid schema verbs --json',
       });
+      return;
+    }
+
+    if (noVerb) {
+      console.log('');
+      console.log(chalk.yellow(`  No verb does "${query}".`));
+      if (answer!.confidence?.next_step) console.log(chalk.dim(`  ${answer!.confidence.next_step}`));
+      if (answer!.closest.length) {
+        console.log('');
+        console.log(chalk.dim('  The closest that were read (none of them does it):'));
+        for (const c of answer!.closest) {
+          console.log(chalk.dim(`    ${c.name}  ${clip(c.description, 70)}`));
+        }
+      }
+      console.log('');
       return;
     }
 
@@ -153,6 +187,9 @@ export const findCommand = new Command('find')
       );
     }
     console.log('');
+    if (answer?.confidence?.next_step) {
+      console.log(chalk.dim(`  ${answer.confidence.level}: ${answer.confidence.next_step}`));
+    }
     console.log(chalk.dim(`  Next:  solid verbs describe ${matches[0].name}`));
     console.log(
       chalk.dim(

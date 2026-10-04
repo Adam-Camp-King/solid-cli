@@ -2,6 +2,23 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [Unreleased]
+
+**`solid find` says how sure it is, and says when no verb does what you asked.**
+
+- `solid find` passes the search's confidence through: `confidence.level` and
+  the `next_step` that goes with it (`likely`, `partial`, `ambiguous`, `weak`).
+  It kept only the matches before, so the confidence the backend measures never
+  reached the caller.
+- When the backend's judged search answers that no verb does the request,
+  `find` says so — `no_verb: true`, an empty `matches`, the `closest` verbs that
+  were read, and `gap` (the request is recorded as demand for a new verb). It
+  used to treat an empty answer as a failed call and rank the manifest locally,
+  which printed five guesses in place of "there is no verb for this".
+- `ranked_by` reads `hybrid, then judged` when a model read the candidates
+  against the request. The local ranker is still the fallback when the backend
+  gives no answer at all.
+
 ## [2.28.0] — 2026-10-04
 
 **A verb says what it returns, every call hands back its receipt, and the first
