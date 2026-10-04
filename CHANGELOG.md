@@ -22,6 +22,11 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 - The offline block schema is generated from the live one
   (`npm run sync:blocks`, checked before publish): 36 blocks, with what each
   needs before it shows anything and examples read out of the renderer.
+- Every request carries the run's session id (`X-Solid-Session`), so the verb
+  receipts of one run read back together: `audit.receipts` with
+  `session_ref`. One process is one run; set `SOLID_SESSION_ID` (8–64 of
+  A-Z a-z 0-9 _ -) to make several `solid` invocations one session. Before this
+  every CLI receipt had no session. `solid verbs --help` says how.
 
 ## [2.26.0] — 2026-10-04
 
