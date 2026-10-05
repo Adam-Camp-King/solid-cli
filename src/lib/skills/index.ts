@@ -55,8 +55,10 @@ cannot be created, edited or deleted. To remove or change a *thing*, call the
 verb that does it: \`kb.entry_delete\` deletes a knowledge entry. "There is no
 delete verb for X" means the platform has no action that deletes X.
 
-A name reads \`thing.action\`: before the dot is the noun (contact, page, app,
-kb), after it what is done to it.
+A name's LAST part is the action (create, update, publish); what comes before it
+is the noun it acts on (contact, page, app, kb). Most names are two parts
+(\`page.publish\`); some carry an area first (\`crm.contacts.create\`). Never
+build a name from the pattern: use one \`solid find\` returned.
 
 **Nothing is held back.** Any list you are shown is a starting set, not the
 whole platform:

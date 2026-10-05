@@ -145,7 +145,8 @@ Tool, action, verb: the same thing (the connector says "action"). It is not a wo
 a setting, and it cannot be created, edited or deleted. To remove a thing, call the verb that
 removes it (kb.entry_delete deletes a knowledge entry).
 
-A name reads thing.action: the noun before the dot, what is done to it after.
+A name's LAST part is the action; what comes before it is the noun it acts on
+(page.publish; crm.contacts.create is the contacts noun in the crm area).
 
 Nothing is held back. "verbs list" with no prefix is the first page (100 working verbs, one name
 per operation), not the whole platform. --all prints every one; the rest of the way in:
