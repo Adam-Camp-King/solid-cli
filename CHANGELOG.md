@@ -2,6 +2,30 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.29.0] — 2026-10-05
+
+**`solid how-to protocol` — the builder protocol — and help that says what things are.**
+
+- `solid how-to protocol` prints the builder protocol: Solid#'s recommended process
+  for anything built and connected to Solid# — tests, security, build, a held
+  version, the owner's yes, live, verified, recorded — opening with a ten-question
+  self-check an AI answers about a project before proposing work. `--full` prints
+  the whole document as Markdown, ready to save into a project. It is optional;
+  nothing is enforced and no publish is refused for lacking it.
+- `solid update` never just names an optional extra. It printed "Agent skills +
+  plugin: not set up" and nothing else. Each part now says what it is, who it is
+  for and the one command, under Optional; `--json` carries `what`,
+  `how_it_works`, `turn_on` and `set_up[]` per part. `solid how-to extras` is the
+  whole answer. Page screenshots report working when Google Chrome is installed.
+- `solid mcp connect genspark` prints the steps that work, verified on a live
+  connection: a Super Agent chat, Tools, Add new MCP server, Streamable HTTP, the
+  one URL, the header left empty, sign in. It says plainly that the connection is
+  to the business of the account that signs in.
+- The naming rule in the help is one the names keep: a name's last part is the
+  action, and what comes before it is the noun it acts on (`page.publish`;
+  `crm.contacts.create` is the contacts noun in the crm area). It said "a name
+  reads thing.action" beside a three-part example.
+
 ## [2.28.2] — 2026-10-05
 
 **`solid find` answers a request that is not one verb — it no longer says "no verb".**
