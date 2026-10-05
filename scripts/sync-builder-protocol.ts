@@ -11,6 +11,14 @@
  *
  * It renders from the backend checkout beside this one (../solid-backend, or
  * SOLID_BACKEND_DIR). Without one it FAILS — a check that skips reads as a pass.
+ *
+ * ⛔ ONE EXCEPTION, AND IT IS NAMED: the publish runner. The backend is a private
+ * repository the CLI's GitHub Actions job cannot clone, so `--check` there could
+ * only ever fail — it stopped 2.29.0 from publishing on the day this gate was
+ * added. On GitHub Actions, with no backend present, `--check` says it did not
+ * compare and passes. The comparison is made where the backend exists: on the
+ * machine that cuts the release (`prepublishOnly` runs there too) and in the
+ * monorepo. Anywhere else a missing backend is still a failure.
  */
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
@@ -21,6 +29,11 @@ const BACKEND = process.env.SOLID_BACKEND_DIR || path.join(__dirname, '..', '..'
 
 function main(): void {
   if (!fs.existsSync(path.join(BACKEND, 'services', 'builder_protocol.py'))) {
+    if (process.argv.includes('--check') && process.env.GITHUB_ACTIONS === 'true' && fs.existsSync(FILE)) {
+      console.log('· BUILDER-PROTOCOL.md not compared here: this runner has no backend checkout. '
+        + 'It is compared on the machine that cuts the release.');
+      return;
+    }
     throw new Error(`no backend checkout at ${BACKEND} (set SOLID_BACKEND_DIR) — the protocol is rendered from it`);
   }
   const run = spawnSync('python3', ['-m', 'services.builder_protocol'], { cwd: BACKEND, encoding: 'utf8' });
