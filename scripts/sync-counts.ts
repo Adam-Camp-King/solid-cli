@@ -110,6 +110,9 @@ const SURFACES: Surface[] = [
   "solid-public/src/app/cli/page.tsx",
   "solid-public/src/app/cli/llms.txt/route.ts",
   "solid-public/src/app/robots.txt/marketing-robots.ts",
+  // Added 2026-10-05 — the developers page said "871 verbs" while the CLI had 924.
+  // An outside AI quoted it against two other numbers. It was never scanned.
+  "solid-public/src/app/developers/DevelopersContent.tsx",
   "solid-cli/README.md",
   "CLAUDE.md",
   // Added 2.24.8 — both sat at 2.20.0 through four releases because nothing
@@ -166,6 +169,10 @@ function rewrite(text: string, c: Counts): string {
     //     WebMCP counts verbs, MCP counts tools. A bare "\d+ commands" would
     //     be exactly the over-match that rewrote WebMCP's 523 verbs.
     .replace(/\b\d{2,4}(?= top-level commands\b)/g, String(c.commands))
+    // 1c. "924 verbs from the terminal" — the developers page. Anchored on "from
+    //     the terminal": only the CLI is a terminal, so this cannot be WebMCP's or
+    //     the connector's count.
+    .replace(/\b\d{2,4}(?= verbs from the terminal\b)/g, String(c.verbs))
     // 2. STRUCTURED version fields only — a JSON/TS key whose whole job is to
     //    name the current version.
     .replace(/("(?:latest|softwareVersion|cli:version)"\s*:\s*")\d+\.\d+\.\d+(?=")/g, `$1${c.version}`)
