@@ -2,7 +2,7 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
-## [Unreleased]
+## [2.28.0] — 2026-10-04
 
 **`solid app publish` works. It failed for everyone with "Failed to parse URL from
 undefined".**
@@ -42,8 +42,6 @@ undefined".**
 - `ranked_by` reads `hybrid, then judged` when a model read the candidates
   against the request. The local ranker is still the fallback when the backend
   gives no answer at all.
-
-## [2.28.0] — 2026-10-04
 
 **A verb says what it returns, every call hands back its receipt, and the first
 page is the verbs an agent needs.**
