@@ -2,6 +2,25 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.28.2] — 2026-10-05
+
+**`solid find` answers a request that is not one verb — it no longer says "no verb".**
+
+- Asked to build something — "create an app that uses Solid# business verbs" —
+  `solid find` said there was no verb for it and left the caller to read the
+  whole catalog. It now prints the path: each step in order, the verb that step
+  calls, and which steps are yours. You and your AI build it; Solid# is what it
+  connects to. Four paths: an app, a site, an automation, a connection to
+  another system.
+- A request too vague to route ("update it") comes back with the one to three
+  questions to settle, then search again — instead of five guesses.
+- `--json` carries `answer` whole for an agent: `kind` (`build`, `ask`,
+  `not_ours`), `say` (one line for the person), `instructions` (written to the
+  AI that asked), and `path.steps[]` or `ask[]`. It is never clipped, and `next`
+  names the first step.
+- A request outside what Solid# does is still a plain "no verb", still recorded
+  as a request for one, and now says what Solid# can do instead.
+
 ## [2.28.1] — 2026-10-04
 
 **`solid update` says what is running, not only what will start next.**
