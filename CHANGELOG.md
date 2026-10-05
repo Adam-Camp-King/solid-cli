@@ -19,6 +19,11 @@ undefined".**
 - `solid app publish` refuses a build over the upload limit before sending it,
   with both sizes, and stops with a plain sentence if the server hands back no
   upload link.
+- Every `solid app` refusal carries a `reason` an agent can branch on
+  (`upload_too_large`, `no_upload_link`, `no_index_html`, `not_a_folder`,
+  `upload_failed`, `confirmation_required`) and `next`, the literal command to
+  run. The dry run reports `zipped_bytes` and says the limit is checked at
+  publish — "would publish" no longer reads as "will fit".
 - `--json` is unchanged: it prints the server's answer as sent, as before.
 - The tests answer the way the server does. They used to hand each command the
   bare shape it expected, which is why they passed while the command failed.

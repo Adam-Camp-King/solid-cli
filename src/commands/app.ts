@@ -96,9 +96,20 @@ function done(json: boolean, out: Record<string, any>, render: () => void): void
   else render();
 }
 
+/**
+ * A refusal an AI can act on, not only read.
+ *
+ * The caller is as often an agent as a person. A sentence is enough for a
+ * person; an agent needs something to branch on (`reason`) and the literal
+ * thing to do about it (`next`). Pass both in `extra`; a person is shown `next`
+ * under the sentence.
+ */
 function fail(json: boolean, message: string, extra: Record<string, unknown> = {}): void {
   if (json) printJson({ ok: false, error: message, ...extra });
-  else console.error(chalk.red(`✗ ${message}`));
+  else {
+    console.error(chalk.red(`✗ ${message}`));
+    if (typeof extra.next === 'string') console.error(chalk.dim(`  ${extra.next}`));
+  }
   process.exitCode = 1;
 }
 
@@ -117,19 +128,28 @@ appCommand
   .action(async (folder: string, opts) => {
     const json = isJsonOutput(opts);
     const abs = path.resolve(folder);
-    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return fail(json, `Not a folder: ${folder}`);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return fail(json, `Not a folder: ${folder}`, { reason: 'not_a_folder', next: 'Pass the BUILT app folder — the one with index.html (dist/, build/ or docs/).' });
     const read = readFolder(abs);
     const hasIndex = read.files.some((f) => f.path === 'index.html' || f.path.endsWith('/index.html'));
     if (!hasIndex) {
       return fail(json, 'No index.html in that folder — publish the BUILT app (run its build first; '
-        + 'Vite/React write dist/, Create React App writes build/).', { skipped: read.skipped });
+        + 'Vite/React write dist/, Create React App writes build/).',
+        { reason: 'no_index_html', next: 'Build the app, then: solid app publish <built-folder> --slug ' + opts.slug, skipped: read.skipped });
     }
     if (!opts.confirm) {
       const bytes = read.files.reduce((n, f) => n + Buffer.byteLength(f.content, f.encoding === 'base64' ? 'base64' : 'utf8'), 0);
-      const plan = { would_publish: read.files.length, bytes, slug: opts.slug, skipped: read.skipped,
+      // The limit is on the ZIPPED size and is the server's to state (it rides on the
+      // upload answer), so the dry run reports the zipped size it would send and says
+      // the check happens at publish — "would publish" must not read as "will fit".
+      const zippedBytes = zipFolder(read.files).byteLength;
+      const plan = { would_publish: read.files.length, bytes, zipped_bytes: zippedBytes, slug: opts.slug,
+        skipped: read.skipped,
+        size_check: 'The zipped size is checked against the upload limit when you publish; over it, nothing is sent.',
         next: `solid app publish ${folder} --slug ${opts.slug} --confirm` };
       if (json) return printJson(plan);
-      console.log(`Would publish ${read.files.length} file(s), ${(bytes / 1024).toFixed(0)} KB, as '${opts.slug}'.`);
+      console.log(`Would publish ${read.files.length} file(s), ${(bytes / 1024).toFixed(0)} KB `
+        + `(${(zippedBytes / 1048576).toFixed(1)} MB zipped), as '${opts.slug}'.`);
+      console.log(chalk.dim('  The zipped size is checked against the upload limit when you publish.'));
       for (const s of read.skipped.slice(0, 5)) console.log(chalk.dim(`  left out: ${s.path} (${s.why})`));
       console.log(chalk.dim(`Re-run with --confirm to publish.`));
       return;
@@ -145,15 +165,20 @@ appCommand
       if (typeof up.upload_url !== 'string' || !up.upload_url || !up.upload_id) {
         return fail(json, 'The server did not hand back an upload link, so nothing was sent. '
           + 'Update the CLI (solid update) and run it again; if it still fails, send this to Solid#.',
-          { answered: Object.keys(up) });
+          { reason: 'no_upload_link', next: 'solid update', answered: Object.keys(up) });
       }
       if (typeof up.max_bytes === 'number' && zip.byteLength > up.max_bytes) {
         return fail(json, `The built app is ${(zip.byteLength / 1048576).toFixed(1)} MB zipped; the limit is `
           + `${(up.max_bytes / 1048576).toFixed(0)} MB. Nothing was sent. Shrink the largest files `
-          + '(images are usually the cause) and run it again.', { bytes: zip.byteLength, max_bytes: up.max_bytes });
+          + '(images are usually the cause) and run it again.',
+          { reason: 'upload_too_large', bytes: zip.byteLength, max_bytes: up.max_bytes,
+            next: `Shrink the build under ${up.max_bytes} bytes zipped, then: solid app publish ${folder} --slug ${opts.slug} --confirm` });
       }
       const put = await fetch(up.upload_url, { method: 'PUT', headers: up.headers, body: zip });
-      if (!put.ok) return fail(json, `Upload failed (${put.status}). Run it again — the link is good for an hour.`);
+      if (!put.ok) {
+        return fail(json, `Upload failed (${put.status}). Run it again — the link is good for an hour.`,
+          { reason: 'upload_failed', status: put.status, next: `solid app publish ${folder} --slug ${opts.slug} --confirm` });
+      }
       out = await call('publish', {
         slug: opts.slug, upload_id: up.upload_id, confirm: true,
         ...(opts.root ? { root: opts.root } : {}), ...(opts.name ? { name: opts.name } : {}),
@@ -230,7 +255,10 @@ appCommand
   .option('--json', 'Output JSON')
   .action(async (slug: string, version: string, opts) => {
     const json = isJsonOutput(opts);
-    if (!opts.confirm) return fail(json, `Re-run with --confirm: solid app rollback ${slug} ${version} --confirm`);
+    if (!opts.confirm) {
+      return fail(json, 'Changing what is live needs --confirm.',
+        { reason: 'confirmation_required', next: `solid app rollback ${slug} ${version} --confirm` });
+    }
     try {
       const out = await call('rollback', { slug, version: Number(version), confirm: true });
       done(json, out, () => console.log(chalk.green(`✓ ${slug} v${out.live_version} is live: ${out.url}`)));
@@ -246,7 +274,10 @@ appCommand
   .option('--json', 'Output JSON')
   .action(async (slug: string, opts) => {
     const json = isJsonOutput(opts);
-    if (!opts.confirm) return fail(json, `Re-run with --confirm: solid app unpublish ${slug} --confirm`);
+    if (!opts.confirm) {
+      return fail(json, 'Taking an app offline needs --confirm.',
+        { reason: 'confirmation_required', next: `solid app unpublish ${slug} --confirm` });
+    }
     try {
       const out = await call('unpublish', { slug, confirm: true });
       done(json, out, () => console.log(chalk.green(`✓ ${slug} is offline. solid app rollback ${slug} <version> --confirm brings it back.`)));

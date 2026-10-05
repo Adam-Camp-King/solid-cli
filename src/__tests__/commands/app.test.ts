@@ -139,6 +139,37 @@ test('an answer with no upload link never reaches the network and says so plainl
   expect(process.exitCode).toBe(1);
 });
 
+test('every refusal gives an agent a reason to branch on and the next command — in --json', async () => {
+  const dir = folder({ 'index.html': '<p>', 'big.bin': 'x'.repeat(4096) });
+  (global as any).fetch = jest.fn();
+  post.mockResolvedValue({ data: { ok: true, upload_id: 'f'.repeat(32), upload_url: 'https://s', headers: {}, max_bytes: 16 } });
+  const big = JSON.parse(await run(['publish', dir, '--slug', 'sell', '--confirm', '--json']));
+  expect(big.ok).toBe(false);
+  expect(big.reason).toBe('upload_too_large');
+  expect(big.max_bytes).toBe(16);
+  expect(big.bytes).toBeGreaterThan(16);
+  expect(big.next).toContain(`solid app publish ${dir} --slug sell --confirm`);
+
+  post.mockResolvedValue({ data: { ok: true } });
+  const noLink = JSON.parse(await run(['publish', dir, '--slug', 'sell', '--confirm', '--json']));
+  expect(noLink.reason).toBe('no_upload_link');
+  expect(noLink.next).toBe('solid update');
+
+  const empty = folder({ 'readme.txt': 'x' });
+  const noIndex = JSON.parse(await run(['publish', empty, '--slug', 'sell', '--confirm', '--json']));
+  expect(noIndex.reason).toBe('no_index_html');
+  expect(noIndex.next).toContain('--slug sell');
+});
+
+test('the dry run reports the zipped size and says the limit is checked at publish', async () => {
+  const dir = folder({ 'index.html': '<p>', 'a.js': 'x'.repeat(2000) });
+  const plan = JSON.parse(await run(['publish', dir, '--slug', 'sell', '--json']));
+  expect(plan.would_publish).toBe(2);
+  expect(plan.zipped_bytes).toBeGreaterThan(0);
+  expect(plan.size_check).toContain('checked against the upload limit');
+  expect(post).not.toHaveBeenCalled();
+});
+
 test('a build over the size limit is refused before it is uploaded, with both sizes', async () => {
   // The same customer's first two builds were 27.4 MB against a 25 MB limit; the dry
   // run had said "would publish". The limit rides on the upload answer (max_bytes).
