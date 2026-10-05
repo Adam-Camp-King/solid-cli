@@ -2,6 +2,7 @@
  * Unit tests for `solid how-to` matching (src/commands/how-to.ts). Pure.
  */
 import { defaultHowTo, findHowTo, HOWTO_TOPICS } from '../commands/how-to';
+import { protocolBody, protocolDocument } from '../lib/builder-protocol';
 
 describe('findHowTo', () => {
   it('answers "connect to claude" with the connect topic', () => {
@@ -62,5 +63,43 @@ describe('findHowTo', () => {
       expect(t.keywords.length).toBeGreaterThan(0);
       expect(t.body.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// The builder protocol is written once in the backend and carried as a file
+// (platform-docs/BUILDER-PROTOCOL.md, scripts/sync-builder-protocol.ts).
+describe('the builder protocol topic', () => {
+  it.each([
+    'builder protocol',
+    'what are the best practices',
+    'set up unit tests and regression testing',
+    'what security checks should the project have',
+    'is there a deploy protocol',
+  ])('answers %j with the protocol', (q) => {
+    expect(findHowTo(q)[0].id).toBe('protocol');
+  });
+
+  it('leaves "get my website live" to the publish topic', () => {
+    expect(findHowTo('get my website live')[0].id).toBe('publish');
+  });
+
+  it('carries the whole document in the package', () => {
+    const doc = protocolDocument();
+    expect(doc).toContain('# Building on Solid#: the test, security and deploy protocol');
+    expect(doc).not.toContain('[[');
+  });
+
+  it('prints the ten questions, says it is optional, and names the whole document', () => {
+    const body = HOWTO_TOPICS.find((t) => t.id === 'protocol')!.body;
+    expect(body).toBe(protocolBody());
+    expect(body).toContain('The ten-question check');
+    expect(body).toMatch(/^10\. /m);
+    expect(body).not.toMatch(/^11\. /m);
+    expect(body).toContain('It is optional');
+    expect(body).toContain('solid how-to protocol --full');
+  });
+
+  it('says so when the install does not carry the document', () => {
+    expect(protocolBody('/nonexistent/BUILDER-PROTOCOL.md')).toContain('not in this install');
   });
 });

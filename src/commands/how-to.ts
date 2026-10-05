@@ -12,6 +12,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { ui } from '../lib/ui';
 import { howToBody } from '../lib/machine-extras';
+import { protocolBody, protocolDocument } from '../lib/builder-protocol';
 
 export interface HowToTopic {
   id: string;
@@ -127,6 +128,19 @@ export const HOWTO_TOPICS: HowToTopic[] = [
     body: howToBody(),
   },
   {
+    // Written once in the backend and carried here as a file (lib/builder-protocol.ts).
+    // The connector's `how_to` answers the same questions with the same words.
+    id: 'protocol',
+    title: 'Check or build a project\'s process: tests, security, deploy, owner\'s manual',
+    keywords: ['protocol', 'builder protocol', 'best practice', 'best practices', 'good process',
+      'unit test', 'unit tests', 'regression', 'regression testing', 'testing', 'ci pipeline',
+      'deploy process', 'deploy protocol', 'release process', 'security check', 'security checks',
+      'secret scan', 'owners manual', 'quality gate', 'audit my project', 'check my project',
+      // The title's own words carry punctuation ("tests,"), which a whole-word match never meets.
+      'tests', 'security', 'process'],
+    body: protocolBody(),
+  },
+  {
     id: 'publish',
     title: 'Get a site live',
     keywords: ['publish', 'website', 'site', 'live', 'deploy', 'launch', 'domain', 'page'],
@@ -165,7 +179,10 @@ function mentions(q: string, kw: string): boolean {
 function score(question: string, t: HowToTopic): number {
   const q = question.toLowerCase();
   if (!q) return 0;
-  let s = t.keywords.reduce((acc, kw) => acc + (mentions(q, kw) ? 1 : 0), 0);
+  // A phrase is evidence; one common word is not. "what are the best practices" tied
+  // the protocol topic (on the phrase) with capabilities (on "what", a title word) and
+  // the earlier topic won. The backend's how_to weighs a phrase the same way.
+  let s = t.keywords.reduce((acc, kw) => acc + (mentions(q, kw) ? (kw.includes(' ') ? 2 : 1) : 0), 0);
   s += t.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3 && mentions(q, w)).length;
   return s;
 }
@@ -203,8 +220,23 @@ function renderTopic(t: HowToTopic): void {
 export const howToCommand = new Command('how-to')
   .description('Plain-language answers: how to connect to Claude/ChatGPT, where to start, what the CLI can do')
   .argument('[question...]', 'What you want to do, e.g. "connect to claude"')
-  .action((questionParts: string[] = []) => {
+  .option('--full', 'With `protocol`: print the whole builder protocol as Markdown, ready to save into a project')
+  .action((questionParts: string[] = [], opts: { full?: boolean } = {}) => {
     const question = (questionParts || []).join(' ').trim();
+
+    if (opts.full) {
+      // The one topic long enough to have a whole form. Printed bare, so it can be
+      // redirected into a file and handed to the project's own AI.
+      const top = question ? findHowTo(question)[0] : undefined;
+      const doc = top?.id === 'protocol' ? protocolDocument() : null;
+      if (!doc) {
+        console.error(chalk.yellow('--full prints the builder protocol: solid how-to protocol --full'));
+        process.exitCode = 1;
+        return;
+      }
+      process.stdout.write(doc);
+      return;
+    }
 
     if (!question) {
       console.log('');
