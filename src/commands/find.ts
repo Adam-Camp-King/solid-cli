@@ -84,6 +84,10 @@ export const findCommand = new Command('find')
     // ⛔ The server read the catalog and answered that no verb does this. That is
     // the answer — the local ranker is not asked for five guesses to replace it.
     const noVerb = answer?.state === 'no_verb';
+    // ⛔ And "not one verb" is not "no": something to BUILD comes back with its
+    // path, a vague request with the questions to settle. Both are the answer.
+    const toBuild = answer?.state === 'build' ? answer.answer : null;
+    const toAsk = answer?.state === 'ask' ? answer.answer : null;
 
     // ── 2. Fallback: pull the manifest and rank it here.
     if (!matches) {
@@ -138,13 +142,22 @@ export const findCommand = new Command('find')
               ...(answer!.gap ? { gap: answer!.gap } : {}),
             }
           : {}),
+        // Written to the AI that asked: what kind of request this is, the path to
+        // follow (who builds, each step and the verb it calls) or the questions
+        // to settle. Never clipped — it is instructions, not a listing.
+        ...(toBuild || toAsk ? { answer: toBuild || toAsk } : {}),
+        ...(noVerb && answer!.answer ? { answer: answer!.answer } : {}),
         not_searched:
           'CLI-local commands (switch, company, auth, pull, push) are not verbs — ' +
           'list them with: solid schema verbs --json',
         // The literal next command. An answer that does not say what to do
         // with it sends the agent back to discovery, which is the thing this
         // command exists to avoid.
-        next: matches.length
+        next: toBuild
+          ? `Follow answer.path.steps in order. First: solid verbs describe ${toBuild.path!.steps.find((st) => st.verb)?.verb ?? 'design.intake'}`
+          : toAsk
+            ? 'Settle answer.ask (ask the user only what you cannot answer), then: solid find "<one action, one sentence>"'
+            : matches.length
           ? `solid verbs describe ${matches[0].name}`
           : noVerb
             ? 'No verb does this. Tell the user plainly; it is recorded as a request for one.'
@@ -153,9 +166,41 @@ export const findCommand = new Command('find')
       return;
     }
 
+    if (toBuild) {
+      const path = toBuild.path!;
+      console.log('');
+      console.log(chalk.green(`  ${toBuild.say}`));
+      console.log('');
+      console.log(`  ${chalk.bold(path.what)}`);
+      console.log(chalk.dim(`  ${path.who_builds}`));
+      console.log('');
+      for (const st of path.steps) {
+        const who = st.verb ? chalk.cyan(st.verb) : chalk.yellow('yours');
+        console.log(`  ${st.step}. ${who}`);
+        console.log(chalk.dim(`     ${st.do}`));
+      }
+      console.log('');
+      console.log(chalk.dim(`  ${path.how_it_connects}`));
+      console.log(chalk.dim('  Each verb above:  solid verbs describe <name>'));
+      console.log('');
+      return;
+    }
+
+    if (toAsk) {
+      console.log('');
+      console.log(chalk.green(`  ${toAsk.say}`));
+      console.log('');
+      for (const q of toAsk.ask!) console.log(`    • ${q}`);
+      console.log('');
+      console.log(chalk.dim('  Then search again, one sentence per action:  solid find "create an invoice for a customer"'));
+      console.log('');
+      return;
+    }
+
     if (noVerb) {
       console.log('');
       console.log(chalk.yellow(`  No verb does "${query}".`));
+      if (answer!.answer?.say) console.log(`  ${answer!.answer.say}`);
       if (answer!.confidence?.next_step) console.log(chalk.dim(`  ${answer!.confidence.next_step}`));
       if (answer!.closest.length) {
         console.log('');
