@@ -80,6 +80,19 @@ export async function findChromiumExecutable(): Promise<string | null> {
   }
 
   // 3. System Chrome — macOS bundle, Linux PATH, Windows registry
+  return findSystemChrome();
+}
+
+/**
+ * The Google Chrome already installed on this machine, or null.
+ *
+ * `solid render` uses it, so a machine that has it needs nothing downloaded —
+ * and `solid update` must say screenshots WORK there. It used to look only for
+ * the private copy and report "Render browser: not set up" on every machine
+ * with Chrome, where `solid render --install` then refuses to download one: a
+ * line that could never be made to go away.
+ */
+export function findSystemChrome(): string | null {
   try {
     const platform = detectBrowserPlatform();
     if (platform) {
@@ -88,9 +101,8 @@ export async function findChromiumExecutable(): Promise<string | null> {
     }
   } catch {
     // computeSystemExecutablePath throws when no system Chrome —
-    // expected on Linux servers. Fall through.
+    // expected on Linux servers.
   }
-
   return null;
 }
 

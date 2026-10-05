@@ -11,6 +11,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { ui } from '../lib/ui';
+import { howToBody } from '../lib/machine-extras';
 
 export interface HowToTopic {
   id: string;
@@ -112,6 +113,17 @@ export const HOWTO_TOPICS: HowToTopic[] = [
       'solid verbs describe <name>      # one verb\'s inputs',
       'solid verbs invoke <name> -p \'{...}\' --confirm',
     ].join('\n'),
+  },
+  {
+    // What `solid update` lists under "Optional", and how each one works — the
+    // answer for a person, and for the AI they ask (lib/machine-extras.ts).
+    id: 'extras',
+    title: 'The optional extras on this computer, and how to turn one on',
+    keywords: ['extras', 'optional', 'not set up', 'agent skills', 'skills', 'plugin', 'render browser',
+      'render', 'browser', 'agent',
+      'page screenshots', 'screenshots', 'chromium', 'session hook', 'shell completion', 'completion',
+      'on this machine', 'turn on', 'set them up', 'set it up'],
+    body: howToBody(),
   },
   {
     id: 'publish',

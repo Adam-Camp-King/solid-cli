@@ -41,10 +41,11 @@ import { Command, Option } from 'commander';
 
 import { CLI_VERSION } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
-import { refreshCachedChromium } from '../lib/browser-install';
+import { findSystemChrome, refreshCachedChromium } from '../lib/browser-install';
 import { refreshClaudeHook } from '../lib/claude-hook';
 import { MCP_LATEST_SPEC, McpFreshnessReport, refreshMcp } from '../lib/mcp-freshness';
 import { KitReport, refreshAllKits } from '../lib/project-kits';
+import { EXTRAS, FOR_AI, HOWTO_COMMAND, describe } from '../lib/machine-extras';
 import { refreshInstalledCompletions } from './completion';
 
 
@@ -359,7 +360,9 @@ function printMcp(report: McpFreshnessReport, check: boolean): void {
   if (!check) console.log(chalk.dim('  The MCP SDK ships inside the server, so it is current whenever the server is.'));
 }
 
-type PartState = 'absent' | 'current' | 'updated' | 'would_update' | 'failed' | 'offline';
+// `system`: it works through something already on the machine (Google Chrome), so
+// there is nothing of ours to refresh — and nothing for anyone to set up.
+type PartState = 'absent' | 'current' | 'updated' | 'would_update' | 'failed' | 'offline' | 'system';
 
 export interface PartReport {
   id: 'claude_hook' | 'completion' | 'project_kits' | 'browser';
@@ -367,6 +370,17 @@ export interface PartReport {
   state: PartState;
   detail: string;
   projects?: KitReport[];
+  // What it is, who it is for and how it works — on every part, so a reader
+  // (a person, or the AI they paste this to) never has to go and find out.
+  // `turn_on` and `set_up` only while it is not on. See lib/machine-extras.ts.
+  optional?: true;
+  name?: string;
+  what?: string;
+  useful_when?: string;
+  how_it_works?: string;
+  turn_on?: string;
+  turn_on_where?: string;
+  set_up?: string[];
 }
 
 /**
@@ -374,14 +388,17 @@ export interface PartReport {
  * server. One list, one shape — a thing `solid` installs and this list does
  * not name is a thing that silently goes stale. Each part refreshes only what
  * is already installed; none of them adds something the user did not set up.
+ *
+ * ⛔ A PART THAT IS NOT ON IS NEVER JUST NAMED. Every part is optional, and each
+ * carries what it is, who it is for and the one command (lib/machine-extras.ts).
  */
 export async function refreshMachine(root: Command, apply: boolean): Promise<PartReport[]> {
   const parts: PartReport[] = [];
   const hook = refreshClaudeHook(apply);
-  parts.push({ id: 'claude_hook', label: 'Claude Code session hook', ...hook });
+  parts.push({ id: 'claude_hook', label: EXTRAS.claude_hook.name, ...hook });
 
   const completion = refreshInstalledCompletions(root, apply);
-  parts.push({ id: 'completion', label: 'Shell completion', ...completion });
+  parts.push({ id: 'completion', label: EXTRAS.completion.name, ...completion });
 
   const kits = refreshAllKits(CLI_VERSION, apply);
   const kitState: PartState = !kits.length
@@ -395,27 +412,35 @@ export async function refreshMachine(root: Command, apply: boolean): Promise<Par
           : 'current';
   parts.push({
     id: 'project_kits',
-    label: 'Agent skills + plugin',
+    label: EXTRAS.project_kits.name,
     state: kitState,
     detail: kits.length ? `${kits.length} project${kits.length === 1 ? '' : 's'}` : 'none set up',
     projects: kits,
   });
 
-  const browser = await refreshCachedChromium(apply);
-  parts.push({ id: 'browser', label: 'Render browser', ...browser });
-  return parts;
+  // ⛔ "Not downloaded" is not "not working". `solid render` uses Google Chrome
+  // when it is installed, and then refuses to download a private copy — so on
+  // such a machine screenshots work and there is nothing to set up.
+  let browser: { state: PartState; detail: string } = await refreshCachedChromium(apply);
+  if (browser.state === 'absent' && findSystemChrome()) {
+    browser = { state: 'system', detail: 'uses Google Chrome on this machine' };
+  }
+  parts.push({ id: 'browser', label: EXTRAS.browser.name, ...browser });
+  return parts.map((p) => ({ ...p, ...describe(p.id, p.state !== 'absent') }));
 }
 
 function printParts(parts: PartReport[]): void {
-  console.log(chalk.bold('\nOn this machine'));
-  for (const p of parts) {
+  const on = parts.filter((p) => p.state !== 'absent');
+  const off = parts.filter((p) => p.state === 'absent');
+  if (on.length) console.log(chalk.bold('\nOn this machine'));
+  for (const p of on) {
     const line = `${p.label}: ${p.detail}`;
     if (p.state === 'updated') console.log(chalk.green(`  ✓ ${p.label}: updated  `) + chalk.dim(p.detail));
     else if (p.state === 'current') console.log(chalk.green(`  ✓ ${p.label}: current  `) + chalk.dim(p.detail));
+    else if (p.state === 'system') console.log(chalk.green(`  ✓ ${p.label}: working  `) + chalk.dim(p.detail));
     else if (p.state === 'would_update') console.log(`  ${p.label}: would update  ${chalk.dim(p.detail)}`);
     else if (p.state === 'offline') console.log(chalk.yellow(`  ${line} — try again when online`));
-    else if (p.state === 'failed') console.log(chalk.red(`  ✗ ${line}`));
-    else console.log(chalk.dim(`  ${p.label}: not set up`));
+    else console.log(chalk.red(`  ✗ ${line}`));
     for (const k of p.projects ?? []) {
       if (k.state === 'failed') console.log(chalk.red(`      ✗ ${k.dir}: ${k.error}`));
       else if (k.state === 'installed' || k.state === 'would_install') {
@@ -424,6 +449,19 @@ function printParts(parts: PartReport[]): void {
       } else if (k.state !== 'current') console.log(chalk.dim(`      ${k.dir}: ${k.files} file${k.files === 1 ? '' : 's'}`));
     }
   }
+  if (!off.length) return;
+  // ⛔ NEVER A BARE "not set up". Each extra says what it is, who it is for and
+  // the one command — so nobody, and no AI, has to go and find out.
+  console.log(chalk.bold('\nOptional'));
+  const width = Math.max(...off.map((p) => (p.name ?? p.label).length)) + 3;
+  const pad = ' '.repeat(width + 2);
+  for (const p of off) {
+    const e = EXTRAS[p.id];
+    console.log(`\n  ${chalk.cyan(e.name.padEnd(width))}${e.what}`);
+    console.log(chalk.dim(`${pad}${e.useful_when}`));
+    console.log(`${pad}Turn on:  ${chalk.bold(e.turn_on)}${e.turn_on_where ? chalk.dim(`   (${e.turn_on_where})`) : ''}`);
+  }
+  console.log(chalk.dim(`\n  What these are and how each one works:  ${HOWTO_COMMAND}`));
 }
 
 /**
@@ -586,6 +624,11 @@ export const updateCommand = new Command('update')
             finished_by: finish?.finished_by ?? null,
             mcp: finish?.mcp ?? null,
             machine: finish?.machine ?? [],
+            // Written to an AI reading this for someone who asks "what is this?"
+            // or "set it up" — only when something optional is not on.
+            ...((finish?.machine ?? []).some((p) => p.state === 'absent')
+              ? { machine_for_ai: { read: HOWTO_COMMAND, rules: FOR_AI } }
+              : {}),
           },
           null,
           2,

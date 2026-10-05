@@ -29,7 +29,10 @@ jest.mock('../../lib/mcp-freshness', () => ({
 }));
 
 jest.mock('../../lib/claude-hook', () => ({ refreshClaudeHook: jest.fn(() => ({ state: 'absent', detail: '' })) }));
-jest.mock('../../lib/browser-install', () => ({ refreshCachedChromium: jest.fn(async () => ({ state: 'absent', detail: '' })) }));
+jest.mock('../../lib/browser-install', () => ({
+  refreshCachedChromium: jest.fn(async () => ({ state: 'absent', detail: '' })),
+  findSystemChrome: jest.fn(() => null),
+}));
 jest.mock('../../lib/project-kits', () => ({ refreshAllKits: jest.fn(() => []) }));
 jest.mock('../../commands/completion', () => ({ refreshInstalledCompletions: jest.fn(() => ({ state: 'absent', detail: '' })) }));
 
@@ -37,6 +40,10 @@ import { existsSync } from 'fs';
 import { refreshClaudeHook } from '../../lib/claude-hook';
 import { spawnSync } from 'child_process';
 import { refreshMcp } from '../../lib/mcp-freshness';
+import { findSystemChrome } from '../../lib/browser-install';
+import { refreshAllKits } from '../../lib/project-kits';
+import { refreshInstalledCompletions } from '../../commands/completion';
+import { EXTRAS } from '../../lib/machine-extras';
 
 import {
   detectInstaller,
@@ -453,7 +460,7 @@ describe('solid update — the whole machine, finished by the new binary', () =>
     expect(mockSpawn).not.toHaveBeenCalled();
     expect(mockRefreshMcp).toHaveBeenCalledWith({ apply: true });
     expect(mockHook).toHaveBeenCalledWith(true);
-    expect(text).toContain('On this machine');
+    expect(text).toContain('Optional');
   });
 
   it('an already-current CLI still refreshes the whole machine', async () => {
@@ -466,6 +473,66 @@ describe('solid update — the whole machine, finished by the new binary', () =>
     const body = JSON.parse(await run(['--check', '--json']));
     expect(mockHook).toHaveBeenCalledWith(false);
     expect(body.machine.map((p: { id: string }) => p.id)).toEqual(['claude_hook', 'completion', 'project_kits', 'browser']);
+  });
+
+  // ── an extra is never just named ───────────────────────────────────────────
+  //
+  // 2026-10-05: `solid update` printed "Agent skills + plugin: not set up" and
+  // "Render browser: not set up". The owner asked his AI what they meant; it read
+  // the CLI's installed files to find out, then searched his home folder and
+  // downloaded his business's data to "set them up". The CLI had explained nothing.
+
+  it('⛔ never prints a bare "not set up" — each extra says what it is, who it is for, and the command', async () => {
+    const text = await run(['--finish']);
+    expect(text).not.toContain('not set up');
+    expect(text).toContain('Optional');
+    expect(text).not.toMatch(/broken/i);
+    for (const e of Object.values(EXTRAS)) {
+      expect(text).toContain(e.name);
+      expect(text).toContain(e.what);
+      expect(text).toContain(e.useful_when);
+      expect(text).toContain(`Turn on:  ${e.turn_on}`);
+    }
+    expect(text).toContain('solid how-to extras');
+  });
+
+  it('screenshots that work through Google Chrome are reported as working, with nothing to set up', async () => {
+    (findSystemChrome as unknown as jest.Mock).mockReturnValueOnce('/Applications/Google Chrome.app/chrome');
+    const text = await run(['--finish']);
+    expect(text).toContain('Page screenshots: working');
+    expect(text).toContain('uses Google Chrome on this machine');
+    expect(text).not.toContain('solid render --install');
+  });
+
+  it('an extra that is on is listed as on, not offered again', async () => {
+    mockHook.mockReturnValue({ state: 'current', detail: '~/.claude/settings.json' });
+    const text = await run(['--finish']);
+    expect(text).toContain('On this machine');
+    expect(text).toContain('Claude Code session hook: current');
+    expect(text).not.toContain('Turn on:  solid install');
+  });
+
+  it('--json tells an AI what each extra is, how it works, the steps — and what not to do', async () => {
+    const body = JSON.parse(await run(['--check', '--json']));
+    const kit = body.machine.find((p: { id: string }) => p.id === 'project_kits');
+    expect(kit).toMatchObject({ state: 'absent', optional: true, turn_on: 'solid agent setup' });
+    expect(kit.how_it_works).toContain('.solid/manifest.json');
+    expect(kit.set_up.join(' ')).toContain('Do not search the disk');
+    expect(body.machine_for_ai.read).toBe('solid how-to extras');
+    const rules = body.machine_for_ai.rules.join(' ');
+    expect(rules).toContain("Do not read the CLI's installed files");
+    expect(rules).toContain('Do not search the disk');
+    expect(rules).toContain('solid pull');
+  });
+
+  it('--json carries no instructions to set anything up when nothing is off', async () => {
+    mockHook.mockReturnValue({ state: 'current', detail: '' });
+    (refreshInstalledCompletions as unknown as jest.Mock).mockReturnValueOnce({ state: 'current', detail: '' });
+    (refreshAllKits as unknown as jest.Mock).mockReturnValueOnce([{ dir: '/x', state: 'current', files: 0 }]);
+    (findSystemChrome as unknown as jest.Mock).mockReturnValueOnce('/chrome');
+    const body = JSON.parse(await run(['--check', '--json']));
+    expect(body.machine_for_ai).toBeUndefined();
+    expect(body.machine.every((p: { turn_on?: string }) => p.turn_on === undefined)).toBe(true);
   });
 
   it('a part that fails makes the command fail', async () => {
