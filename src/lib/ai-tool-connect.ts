@@ -110,8 +110,15 @@ export const AI_TOOLS: AiTool[] = [
     label: 'Genspark',
     method: 'manual',
     transport: 'connector',
-    steps: CONNECTOR_STEPS('Genspark → Settings → Integrations / MCP'),
-    notes: ['Not yet verified end-to-end by us. The URL is standard remote MCP; if Genspark speaks it, it works.'],
+    steps: [
+      'Open a Super Agent chat and click the Tools icon under the chat box',
+      'Choose "Add new MCP server"',
+      'Server Type: Streamable HTTP',
+      `Server URL:  ${CONNECTOR_URL}`,
+      'Leave Request Header empty and click Add Server',
+      'Sign in with your Solid# account in the window that opens and approve (tick write if you want more than read)',
+    ],
+    notes: ['The connection is to the business of the account that signs in — there is no company picker.'],
   },
   {
     id: 'manus',
