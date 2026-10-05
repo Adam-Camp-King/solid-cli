@@ -19,6 +19,20 @@
  * The MCP SDK ships INSIDE @solidnumber/mcp; it moves when we publish, never on
  * a user's machine.
  *
+ * ⛔ "LAUNCHES THE LATEST" IS ABOUT THE NEXT START, NOT ABOUT NOW (2026-10-04).
+ * A config with `@latest` is correct and `solid update` said so — "already
+ * launches the latest" — minutes after 1.3.5 was published, while every AI app
+ * open on that machine was still running the 1.3.4 server it had started that
+ * morning. A person might guess a restart is needed; an agent reads "latest"
+ * and believes it is on it. So the report now says what is RUNNING.
+ *
+ * ⛔ THE FOLDER ON DISK CANNOT ANSWER THAT ALONE. Every server on a machine is
+ * launched from one npx cache folder, and fetching a new version overwrites
+ * that folder under the servers already running from it. The folder then says
+ * 1.3.5 while a process started an hour earlier is still executing 1.3.4. What
+ * tells them apart is TIME: a process that started before its package was last
+ * written to disk is running an older copy than the one on disk.
+ *
  * The planning functions are pure (config object in, plan out). File and npm
  * I/O sits behind an injectable `io` so tests never touch a real home dir.
  */
@@ -111,6 +125,45 @@ export interface FreshnessIo {
   globalMcpVersion(): string | null;
   /** Upgrade the global install; true on success. */
   upgradeGlobalMcp(): boolean;
+  /**
+   * The Solid# MCP server processes running on this machine, or null when the
+   * process list cannot be read here. Optional: an io without it reports
+   * "could not check", never "none running".
+   */
+  runningMcpServers?(): RunningProcess[] | null;
+  /** The version in a package folder and when it was last written, or null. */
+  packageOnDisk?(pkgDir: string): { version: string; writtenAtMs: number } | null;
+}
+
+/** One running server process: who, since when, and the package folder it was started from. */
+export interface RunningProcess {
+  pid: number;
+  startedAtMs: number | null;
+  pkgDir: string | null;
+}
+
+/**
+ * PURE. Server processes out of `ps -axo pid=,lstart=,command=` text.
+ *
+ * Only the server itself is kept — `node …/node_modules/.bin/solid-mcp` or a path
+ * inside `node_modules/@solidnumber/mcp/`. The `npm exec @solidnumber/mcp@latest`
+ * line above it is the launcher: same server, no path, and counting it would
+ * report every server twice.
+ */
+export function parseRunning(psText: string): RunningProcess[] {
+  const out: RunningProcess[] = [];
+  for (const line of psText.split('\n')) {
+    const m = /^\s*(\d+)\s+(\S+\s+\S+\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/.exec(line);
+    if (!m) continue;
+    const command = m[3];
+    const bin = /(\S*node_modules)\/\.bin\/solid-mcp(?:\s|$)/.exec(command);
+    const inside = /(\S*node_modules\/@solidnumber\/mcp)\//.exec(command);
+    const pkgDir = bin ? `${bin[1]}/@solidnumber/mcp` : inside ? inside[1] : null;
+    if (!pkgDir) continue;
+    const started = Date.parse(m[2]);
+    out.push({ pid: parseInt(m[1], 10), startedAtMs: Number.isFinite(started) ? started : null, pkgDir });
+  }
+  return out;
 }
 
 export const realIo: FreshnessIo = {
@@ -141,6 +194,30 @@ export const realIo: FreshnessIo = {
     const r = spawnSync('npm', ['install', '-g', MCP_LATEST_SPEC, '--prefer-online'], { stdio: 'inherit' });
     return r.status === 0;
   },
+  runningMcpServers() {
+    // Windows has no `ps`; saying "could not check" is the honest answer there.
+    if (process.platform === 'win32') return null;
+    try {
+      const out = spawnSync('ps', ['-axo', 'pid=,lstart=,command='], { encoding: 'utf8', timeout: 10_000 });
+      if (out.status !== 0 || typeof out.stdout !== 'string') return null;
+      return parseRunning(out.stdout);
+    } catch {
+      return null;
+    }
+  },
+  packageOnDisk(pkgDir) {
+    try {
+      const file = `${pkgDir}/package.json`;
+      const version = (JSON.parse(fs.readFileSync(file, 'utf-8')) as { version?: unknown }).version;
+      if (typeof version !== 'string') return null;
+      const st = fs.statSync(file);
+      // npm extracts files with the tarball's own mtime on some versions, so the
+      // later of mtime and ctime is when THIS copy landed on disk.
+      return { version, writtenAtMs: Math.max(st.mtimeMs, st.ctimeMs) };
+    } catch {
+      return null;
+    }
+  },
 };
 
 /** Newest published @solidnumber/mcp, or null. Never throws. */
@@ -164,12 +241,67 @@ export interface ClientReport {
   error?: string;
 }
 
+/**
+ * What one running server is, relative to the newest release:
+ *   current        started after the latest package was written to disk
+ *   older_on_disk  its package folder still holds an older version
+ *   older_in_memory the folder was updated after this process started — it is
+ *                   still running the copy it loaded
+ *   unknown        its start time or its package could not be read
+ */
+export type RunningState = 'current' | 'older_on_disk' | 'older_in_memory' | 'unknown';
+
+export interface RunningServer {
+  pid: number;
+  state: RunningState;
+  started_at: string | null;
+  /** The version in the folder it was started from — NOT necessarily what it is running. */
+  version_on_disk: string | null;
+}
+
+export interface RunningReport {
+  /** False when this machine's process list could not be read: nothing is claimed. */
+  checked: boolean;
+  servers: RunningServer[];
+  /** True when a running server is not on the latest release. Restart the AI app. */
+  restart_needed: boolean;
+}
+
 export interface McpFreshnessReport {
   latest: string | null;
   clients: ClientReport[];
   global: { installed: string | null; action: 'none' | 'upgraded' | 'would_upgrade' | 'upgrade_failed' };
   /** Pinned specs we deliberately did not touch — someone chose that version. */
   pinned: Array<ServerFinding & { client: McpClient }>;
+  /** What is running NOW — a correct config only decides the next start. */
+  running: RunningReport;
+}
+
+/** A little slack so a process and the package it just installed are not judged by a few ms. */
+const WRITE_SLACK_MS = 2_000;
+
+/** PURE. Each running server judged against the newest release. */
+export function judgeRunning(
+  processes: RunningProcess[] | null,
+  latest: string | null,
+  packageOnDisk: (pkgDir: string) => { version: string; writtenAtMs: number } | null,
+): RunningReport {
+  if (processes === null) return { checked: false, servers: [], restart_needed: false };
+  const servers: RunningServer[] = processes.map((p) => {
+    const disk = p.pkgDir ? packageOnDisk(p.pkgDir) : null;
+    const started_at = p.startedAtMs !== null ? new Date(p.startedAtMs).toISOString() : null;
+    let state: RunningState = 'unknown';
+    if (disk && latest && isNewer(disk.version, latest)) state = 'older_on_disk';
+    else if (disk && p.startedAtMs !== null) {
+      state = p.startedAtMs + WRITE_SLACK_MS < disk.writtenAtMs ? 'older_in_memory' : 'current';
+    }
+    return { pid: p.pid, state, started_at, version_on_disk: disk?.version ?? null };
+  });
+  return {
+    checked: true,
+    servers,
+    restart_needed: servers.some((s) => s.state === 'older_on_disk' || s.state === 'older_in_memory'),
+  };
 }
 
 function isNewer(current: string, candidate: string): boolean {
@@ -237,5 +369,10 @@ export async function refreshMcp(opts: {
     else action = io.upgradeGlobalMcp() ? 'upgraded' : 'upgrade_failed';
   }
 
-  return { latest, clients, global: { installed, action }, pinned };
+  const running = judgeRunning(
+    io.runningMcpServers ? io.runningMcpServers() : null,
+    latest,
+    (dir) => (io.packageOnDisk ? io.packageOnDisk(dir) : null),
+  );
+  return { latest, clients, global: { installed, action }, pinned, running };
 }

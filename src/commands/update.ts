@@ -315,7 +315,8 @@ function printMcp(report: McpFreshnessReport, check: boolean): void {
     const where = chalk.dim(c.path);
     if (c.status === 'rewritten') console.log(chalk.green(`  ✓ ${c.client}: now launches ${MCP_LATEST_SPEC}  `) + where);
     else if (c.status === 'would_rewrite') console.log(`  ${c.client}: would switch to ${MCP_LATEST_SPEC}  ${where}`);
-    else if (c.status === 'current') console.log(chalk.green(`  ✓ ${c.client}: already launches the latest  `) + where);
+    // "Launches @latest" is about the NEXT start. What is running now is said below.
+    else if (c.status === 'current') console.log(chalk.green(`  ✓ ${c.client}: launches @latest — its next start loads ${report.latest ?? 'the newest'}  `) + where);
     else if (c.status === 'unreadable') console.log(chalk.yellow(`  ${c.client}: config is not valid JSON — left alone  `) + where);
     else console.log(chalk.red(`  ✗ ${c.client}: could not write (${c.error ?? 'unknown error'})  `) + where);
   }
@@ -331,6 +332,29 @@ function printMcp(report: McpFreshnessReport, check: boolean): void {
   }
   if (report.clients.some((c) => c.status === 'rewritten')) {
     console.log(chalk.dim('  Restart the AI app so it relaunches the server.'));
+  }
+  // ⛔ What is RUNNING. A correct config decides only the next start, and "launches
+  // the latest" was printed while every open AI app still ran the previous server.
+  // A report from a binary older than 2.28.1 has no `running`: that is "not checked".
+  const run = report.running ?? { checked: false, servers: [], restart_needed: false };
+  if (!run.checked) {
+    console.log(chalk.dim('  Could not check what is running here — if an AI app is open, restart it to load the new server.'));
+  } else if (!run.servers.length) {
+    console.log(chalk.dim(`  No Solid# MCP server is running — the next one started loads ${report.latest ?? 'the newest'}.`));
+  } else {
+    const stale = run.servers.filter((s) => s.state === 'older_on_disk' || s.state === 'older_in_memory');
+    const unknown = run.servers.filter((s) => s.state === 'unknown');
+    const current = run.servers.length - stale.length - unknown.length;
+    if (stale.length) {
+      console.log(chalk.yellow(
+        `  ⚠ ${stale.length} running server${stale.length === 1 ? '' : 's'} started before this release `
+        + `${stale.length === 1 ? 'is' : 'are'} still on the older version (pid ${stale.map((s) => s.pid).join(', ')}).`));
+      console.log(chalk.yellow(
+        `    Restart the AI app that started ${stale.length === 1 ? 'it' : 'them'} to load ${report.latest ?? 'the newest'} `
+        + '— in Claude Code: /mcp, then reconnect solid.'));
+    }
+    if (current) console.log(chalk.green(`  ✓ ${current} running server${current === 1 ? ' is' : 's are'} on ${report.latest ?? 'the newest'}`));
+    if (unknown.length) console.log(chalk.dim(`  ${unknown.length} running server${unknown.length === 1 ? '' : 's'} could not be dated — restart to be sure.`));
   }
   if (!check) console.log(chalk.dim('  The MCP SDK ships inside the server, so it is current whenever the server is.'));
 }

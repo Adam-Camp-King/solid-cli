@@ -2,6 +2,26 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.28.1] — 2026-10-04
+
+**`solid update` says what is running, not only what will start next.**
+
+- `solid update` checks the Solid# MCP servers that are running now. It printed
+  "already launches the latest" minutes after a new server was published while
+  every open AI app was still running the previous one: the config was correct,
+  and that only decides the next start. A server started before the newest
+  release is now named with its pid and the way to load the new one (in Claude
+  Code: `/mcp`, then reconnect `solid`).
+- In `--json`, `mcp.running` carries `checked`, each server's `state`
+  (`current`, `older_on_disk`, `older_in_memory`, `unknown`) and
+  `restart_needed`, so an agent can act on it instead of reading a sentence.
+- A server is judged by when it started against when its package was last
+  written to disk, because every server on a machine starts from one folder and
+  a new version overwrites that folder under the servers already running.
+- Where the process list cannot be read (Windows), it says it could not check —
+  never "none running".
+- The config line now reads "launches @latest — its next start loads <version>".
+
 ## [2.28.0] — 2026-10-04
 
 **`solid app publish` works. It failed for everyone with "Failed to parse URL from
