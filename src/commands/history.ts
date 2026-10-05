@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import ora from '../lib/spinner';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { unwrapVerb } from '../lib/verb-envelope';
 import { ui } from '../lib/ui';
 import * as readline from 'readline';
 import { isJsonOutput, printJson } from '../lib/json-output';
@@ -424,8 +425,9 @@ historyCommand
       const params: Record<string, any> = { entity_type: type, limit: parseInt(opts.limit) };
       if (id) params.entity_id = parseInt(id);
       const res = await apiClient.post('/api/v1/agent/history/entity', params);
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       const versions = data.versions || [];
       spinner.succeed(chalk.green(`${versions.length} changes for ${type}${id ? ` #${id}` : ''}`));
       if (versions.length === 0) { console.log(chalk.dim('  No changes recorded.')); return; }
@@ -450,8 +452,9 @@ historyCommand
     const spinner = ora('Loading recent changes...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/history/recent', { limit: parseInt(opts.limit) });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       const changes = data.changes || [];
       spinner.succeed(chalk.green(`${changes.length} recent changes`));
       if (changes.length === 0) { console.log(chalk.dim('  No changes recorded.')); return; }
@@ -484,8 +487,9 @@ rollbackCommand
       const res = await apiClient.post('/api/v1/agent/history/rollback', {
         entity_type: type, entity_id: parseInt(id), version,
       });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       if (data.status === 'rolled_back') {
         spinner.succeed(chalk.green(`Rolled back ${type} #${id} to v${version} (${(data.restored_fields || []).length} fields restored)`));
       } else {

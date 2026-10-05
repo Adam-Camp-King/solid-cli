@@ -15,6 +15,7 @@ import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { unwrapVerb } from '../lib/verb-envelope';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -38,8 +39,9 @@ codeCommand
     const spinner = ora('Loading code status...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/code/status', {});
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green('Code Status'));
       console.log('');
       const systems = data.systems || {};
@@ -66,8 +68,9 @@ codeCommand
     const spinner = ora('Loading code history...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/code/history', { limit: parseInt(opts.limit) });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       const history = data.history || [];
       spinner.succeed(chalk.green(`${history.length} changes`));
       if (history.length === 0) { console.log(chalk.dim('  No changes recorded.')); return; }
@@ -93,8 +96,9 @@ codeCommand
     const spinner = ora('Loading diffs...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/code/diff', {});
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       if (!data.has_changes) {
         spinner.succeed(chalk.green('No pending changes'));
         return;
@@ -139,8 +143,9 @@ codeCommand
       const res = await apiClient.post('/api/v1/agent/code/rollback', {
         entity_type: type, entity_id: parseInt(id), version,
       });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       if (data.status === 'rolled_back') {
         spinner.succeed(chalk.green(`Rolled back ${type} #${id} to v${version}`));
       } else {

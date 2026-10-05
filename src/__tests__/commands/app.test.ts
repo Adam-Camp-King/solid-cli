@@ -13,8 +13,22 @@ jest.mock('chalk', () => {
   return { __esModule: true, default: proxy };
 });
 const post = jest.fn();
+// ⛔ THE SERVER'S REAL SHAPE. `/api/v1/agent/app/<verb>` is served by the backend's
+// catch-all, which wraps every answer as `{ ok, verb, result }`
+// (controllers/ada.py::_cli_dispatch). These tests used to hand the command the
+// bare answer it expected, so they passed while `solid app publish` failed for
+// every real user with "Failed to parse URL from undefined" (found by a customer,
+// 2026-10-04). Each test below still states the VERB's answer; this wraps it the
+// way the server does before the command sees it.
 jest.mock('../../lib/api-client', () => ({
-  apiClient: { post: (...a: unknown[]) => post(...a) },
+  apiClient: {
+    post: async (...a: unknown[]) => {
+      const res = await post(...a);
+      if (!res || typeof res.data !== 'object' || res.data === null) return res;
+      const verb = `app.${String(a[0]).split('/').pop()}`;
+      return { ...res, data: { ok: true, verb, result: res.data } };
+    },
+  },
   handleApiError: (e: Error) => ({ message: e.message }),
 }));
 
@@ -107,6 +121,36 @@ test('a failed upload stops before publishing', async () => {
   const text = await run(['publish', dir, '--slug', 'sell', '--confirm']);
   expect(post).toHaveBeenCalledTimes(1);
   expect(text).toContain('Upload failed (403)');
+  expect(process.exitCode).toBe(1);
+});
+
+test('an answer with no upload link never reaches the network and says so plainly', async () => {
+  // The customer's failure was fetch(undefined): "Failed to parse URL from undefined".
+  // Whatever the server sends, a missing link must stop here with a sentence.
+  const dir = folder({ 'index.html': '<p>' });
+  const put = jest.fn();
+  (global as any).fetch = put;
+  post.mockResolvedValue({ data: { ok: true, something_else: 1 } });
+  const text = await run(['publish', dir, '--slug', 'sell', '--confirm']);
+  expect(put).not.toHaveBeenCalled();
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(text).toContain('did not hand back an upload link');
+  expect(text).not.toContain('undefined');
+  expect(process.exitCode).toBe(1);
+});
+
+test('a build over the size limit is refused before it is uploaded, with both sizes', async () => {
+  // The same customer's first two builds were 27.4 MB against a 25 MB limit; the dry
+  // run had said "would publish". The limit rides on the upload answer (max_bytes).
+  const dir = folder({ 'index.html': '<p>', 'big.bin': 'x'.repeat(4096) });
+  const put = jest.fn();
+  (global as any).fetch = put;
+  post.mockResolvedValue({ data: { ok: true, upload_id: 'e'.repeat(32), upload_url: 'https://s', headers: {}, max_bytes: 16 } });
+  const text = await run(['publish', dir, '--slug', 'sell', '--confirm']);
+  expect(put).not.toHaveBeenCalled();
+  expect(post).toHaveBeenCalledTimes(1);          // publish is never called
+  expect(text).toContain('the limit is');
+  expect(text).toContain('Nothing was sent');
   expect(process.exitCode).toBe(1);
 });
 

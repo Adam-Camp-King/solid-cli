@@ -46,16 +46,9 @@ export interface SandboxDiff {
   total_changes?: number;
 }
 
-/** The verb surface answers either bare or as {ok, verb, result}. */
-export function unwrapVerb<T = Record<string, unknown>>(data: unknown): T {
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const d = data as Record<string, unknown>;
-    if ('result' in d && d.result && typeof d.result === 'object' && ('ok' in d || 'verb' in d)) {
-      return d.result as T;
-    }
-  }
-  return (data ?? {}) as T;
-}
+// One reading for every command: lib/verb-envelope.ts.
+export { unwrapVerb } from './verb-envelope';
+import { unwrapVerb } from './verb-envelope';
 
 const VERB = (name: string) => `/api/v1/agent/sandbox/${name}`;
 

@@ -12,6 +12,7 @@ import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
+import { unwrapVerb } from '../lib/verb-envelope';
 import { isJsonOutput } from '../lib/json-output';
 
 function requireAuth() {
@@ -57,8 +58,9 @@ notesCommand
         body.related_entity_id = parseInt(eid);
       }
       const res = await apiClient.post('/api/v1/agent/notes/add', body);
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(`Note #${data.note_id} added (${data.note_type})`));
     } catch (error) { fail(spinner, 'Failed', error); }
   });
@@ -76,8 +78,9 @@ notesCommand
     const spinner = ora('Searching notes...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/notes/search', { query, limit: parseInt(opts.limit) });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       const results = data.results || [];
       spinner.succeed(chalk.green(`${results.length} result(s) via ${data.method}`));
       if (results.length === 0) { console.log(chalk.dim('  No matching notes.')); return; }
@@ -110,8 +113,9 @@ notesCommand
       const body: Record<string, any> = { limit: parseInt(opts.limit) };
       if (opts.type) body.note_type = opts.type;
       const res = await apiClient.post('/api/v1/agent/notes/list', body);
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       const notes = data.notes || [];
       spinner.succeed(chalk.green(`${notes.length} note(s)`));
       if (notes.length === 0) { console.log(chalk.dim('  No notes yet. Use `solid notes add` to create one.')); return; }
@@ -138,8 +142,9 @@ notesCommand
     const spinner = ora('Loading work context...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/notes/context', { limit: parseInt(opts.limit) });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(data.summary || 'Work context loaded'));
       console.log('');
 
@@ -185,8 +190,9 @@ notesCommand
     const spinner = ora('Archiving note...').start();
     try {
       const res = await apiClient.post('/api/v1/agent/notes/archive', { note_id: parseInt(id) });
-      const data = res.data as Record<string, any>;
-      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(data, null, 2)); return; }
+      const data = unwrapVerb(res.data);
+      // --json prints the answer as the server sent it; the lines below read the verb's own.
+      if (isJsonOutput(opts)) { spinner.stop(); console.log(JSON.stringify(res.data, null, 2)); return; }
       spinner.succeed(chalk.green(`Note #${id} archived`));
     } catch (error) { fail(spinner, 'Failed', error); }
   });

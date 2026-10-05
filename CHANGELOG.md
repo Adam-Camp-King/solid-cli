@@ -4,6 +4,25 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+**`solid app publish` works. It failed for everyone with "Failed to parse URL from
+undefined".**
+
+- `solid app publish --confirm`, `solid app get`, `list`, `rollback` and
+  `unpublish` read the answer the server actually sends. The backend wraps these
+  verbs' answers as `{ ok, verb, result }` and the CLI read the wrapper, so the
+  upload link was `undefined` and `solid app get` printed
+  `undefined  undefined  (offline)` for a live app. Publishing an app from the
+  CLI never worked on any earlier version. Found by a customer on 2026-10-04.
+- The same mistake is fixed in `solid notes` ("Note #undefined added"),
+  `solid code` and `solid history` (empty lists). One shared reading now does
+  the unwrapping for all of them.
+- `solid app publish` refuses a build over the upload limit before sending it,
+  with both sizes, and stops with a plain sentence if the server hands back no
+  upload link.
+- `--json` is unchanged: it prints the server's answer as sent, as before.
+- The tests answer the way the server does. They used to hand each command the
+  bare shape it expected, which is why they passed while the command failed.
+
 **`solid find` says how sure it is, and says when no verb does what you asked.**
 
 - `solid find` passes the search's confidence through: `confidence.level` and

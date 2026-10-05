@@ -23,13 +23,31 @@ import { Command } from 'commander';
 import { zipSync } from 'fflate';
 
 import { apiClient, handleApiError } from '../lib/api-client';
+import { unwrapVerb } from '../lib/verb-envelope';
 import { isJsonOutput, printJson } from '../lib/json-output';
 import { readFolder } from './nest-helpers';
 
+/**
+ * One app verb, and its own answer.
+ *
+ * ⛔ The backend serves these from its catch-all, which wraps the answer as
+ * `{ ok, verb, result }`. This returned the wrapper, so every caller below read
+ * `upload_url`, `slug`, `status` and `url` off the wrong object: publish died
+ * with "Failed to parse URL from undefined" and `get` printed
+ * "undefined  undefined  (offline)" for a live app. See lib/verb-envelope.ts.
+ */
 async function call(verb: string, body: Record<string, unknown>): Promise<Record<string, any>> {
   const res = await apiClient.post(`/api/v1/agent/app/${verb}`, body);
-  return res.data as Record<string, any>;
+  const out = unwrapVerb(res.data);
+  // --json has always printed the server's answer as sent, and callers read it
+  // that way. Keep that: remember the sent form beside the one the code reads.
+  if (out && typeof out === 'object') AS_SENT.set(out, res.data);
+  return out;
 }
+
+/** The answer as the server sent it, for --json. */
+const AS_SENT = new WeakMap<object, unknown>();
+const asSent = (out: Record<string, any>): unknown => (out && AS_SENT.get(out)) ?? out;
 
 /** The folder as one zip, paths kept. Pure — the tests read it back. */
 export function zipFolder(files: Array<{ path: string; content: string; encoding?: 'base64' }>): Uint8Array {
@@ -66,7 +84,7 @@ export function buildSource(cwd: string, env: NodeJS.ProcessEnv = process.env): 
 
 function done(json: boolean, out: Record<string, any>, render: () => void): void {
   if (out && out.ok === false) {
-    if (json) printJson(out);
+    if (json) printJson(asSent(out));
     else {
       console.error(chalk.red(`✗ ${out.error || out.reason || 'refused'}`));
       if (out.next) console.error(chalk.dim(`  ${out.next}`));
@@ -74,7 +92,7 @@ function done(json: boolean, out: Record<string, any>, render: () => void): void
     process.exitCode = 1;
     return;
   }
-  if (json) printJson(out);
+  if (json) printJson(asSent(out));
   else render();
 }
 
@@ -124,6 +142,16 @@ appCommand
       const zip = zipFolder(read.files);
       const up = await call('upload_url', {});
       if (up.ok === false) return done(json, up, () => undefined);
+      if (typeof up.upload_url !== 'string' || !up.upload_url || !up.upload_id) {
+        return fail(json, 'The server did not hand back an upload link, so nothing was sent. '
+          + 'Update the CLI (solid update) and run it again; if it still fails, send this to Solid#.',
+          { answered: Object.keys(up) });
+      }
+      if (typeof up.max_bytes === 'number' && zip.byteLength > up.max_bytes) {
+        return fail(json, `The built app is ${(zip.byteLength / 1048576).toFixed(1)} MB zipped; the limit is `
+          + `${(up.max_bytes / 1048576).toFixed(0)} MB. Nothing was sent. Shrink the largest files `
+          + '(images are usually the cause) and run it again.', { bytes: zip.byteLength, max_bytes: up.max_bytes });
+      }
       const put = await fetch(up.upload_url, { method: 'PUT', headers: up.headers, body: zip });
       if (!put.ok) return fail(json, `Upload failed (${put.status}). Run it again — the link is good for an hour.`);
       out = await call('publish', {
