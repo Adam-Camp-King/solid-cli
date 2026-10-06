@@ -91,7 +91,7 @@ kbCommand
   .description('Add a knowledge base entry')
   .option('-t, --title <title>', 'Entry title')
   .option('-c, --content <content>', 'Entry content')
-  .option('--category <category>', 'Category (general, services, faq, about, products)')
+  .option('--category <category>', 'Category, as your entries already use it (services, company_identity, frequently_asked_questions, pricing_structure, operations, products — see the category column of `solid kb list`)')
   .action(async (options) => {
     if (!config.isLoggedIn()) {
       console.error(chalk.red('Not logged in. Run `solid auth login` first.'));
@@ -119,7 +119,7 @@ kbCommand
           type: 'list',
           name: 'category',
           message: 'Category:',
-          choices: ['general', 'services', 'faq', 'about', 'products', 'billing', 'support'],
+          choices: ['services', 'company_identity', 'frequently_asked_questions', 'pricing_structure', 'operations', 'products', 'communication_templates'],
           when: !category,
         },
       ]);
