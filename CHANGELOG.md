@@ -2,6 +2,29 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [2.29.1] — 2026-10-06
+
+**The AI's key can write after a switch, and `solid kb add` offers real categories.**
+
+- After `solid switch` or a login to another company, every write verb an AI called
+  over MCP answered 403 `missing_scope` — `kb.entry_update`, `page.publish`, all of
+  them. Re-pointing the AI's key minted it with `kb:read` and `pages:read` only,
+  while `solid mcp install` mints every scope the company may grant. Both now mint
+  the same key. A read-only key this CLI minted earlier is replaced once, at the
+  next `solid switch`, login or `solid ai`; a key under any other name is left
+  alone. Reconnect the MCP server afterwards (in Claude Code: `/mcp`, reconnect
+  solid). A write still needs its confirm.
+- `solid kb add` listed five categories in its help and prompt — general, services,
+  faq, about, products — and three of them exist in no knowledge base. It now lists
+  the ones the industry templates use (services, company_identity,
+  frequently_asked_questions, pricing_structure, operations, products,
+  communication_templates) and says where to read your own: the category column of
+  `solid kb list`.
+- Fixed on the server the same day, so no CLI version is needed for them:
+  `solid kb add` failed on every call; `solid kb update` saved the text without a
+  new embedding or a version; `solid kb list --offset` and `--all` returned page one
+  for every page; `solid kb add` with no `--category` was refused.
+
 ## [2.29.0] — 2026-10-05
 
 **`solid how-to protocol` — the builder protocol — and help that says what things are.**

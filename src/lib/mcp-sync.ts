@@ -45,10 +45,62 @@ export interface McpSyncResult {
   reason?: string;
 }
 
+/** The session's view of the company's keys: what exists and what may be granted. */
+export interface KeyList {
+  api_keys?: Array<{ key_prefix: string; name?: string; scopes?: string[]; is_active?: boolean }>;
+  available_scopes?: string[];
+}
+
 export interface SyncDeps {
   /** Mint an API key scoped to the CURRENT session company. */
   createKey: (name: string, scopes: string[]) => Promise<string>;
+  /** The current company's keys and the scopes it may grant (GET /api/v1/cli/api-keys/). */
+  listKeys: () => Promise<KeyList>;
   apiUrl: string;
+}
+
+/** The name every key this file mints carries — how we recognise our own. */
+const keyName = (companyId: number) => `solid ai (company ${companyId})`;
+const OWN_KEY_NAME = /^solid ai \(company \d+\)$/;
+
+/**
+ * ⛔ THE AI'S KEY CARRIES EVERY SCOPE THE COMPANY MAY GRANT — 2026-10-06.
+ *
+ * This file minted `['kb:read', 'pages:read']`, the request's default, while
+ * `solid mcp install` (lib/mcp-key.ts) mints every grantable scope. So an agent
+ * could write until the first `solid switch` or login to another company, and
+ * after it every write verb answered 403 missing_scope — `kb.entry_update`,
+ * `page.publish`, all of them — on a key the operator never chose to limit.
+ * One authority now: both paths ask the server what may be granted and mint that.
+ * A write still needs its confirm; the scope only decides whether it may be asked.
+ *
+ * Returns null when the list cannot be read. ⛔ Never falls back to a read-only
+ * pair: a key that looks fine and cannot write is the defect, not a safe default.
+ */
+async function grantable(deps: SyncDeps): Promise<{ list: KeyList; scopes: string[] } | null> {
+  try {
+    const list = await deps.listKeys();
+    const scopes = list?.available_scopes || [];
+    return scopes.length ? { list, scopes } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when `apiKey` is a key THIS file minted read-only for this company: it is
+ * listed under our name and holds neither kb:write nor pages:write. A key under
+ * any other name is somebody's deliberate choice and is left alone.
+ */
+export function isOwnReadOnlyKey(apiKey: string, list: KeyList): boolean {
+  const row = (list.api_keys || []).find((k) => {
+    if (k.is_active === false) return false;
+    const prefix = String(k.key_prefix || '').replace(/\.\.\.$/, '');
+    return prefix.length > 0 && apiKey.startsWith(prefix);
+  });
+  if (!row || !OWN_KEY_NAME.test(String(row.name || ''))) return false;
+  const scopes = row.scopes || [];
+  return !scopes.includes('kb:write') && !scopes.includes('pages:write');
 }
 
 export interface SyncOptions {
@@ -122,13 +174,29 @@ export async function syncMcpCredential(
     if (keyCompany !== null && keyCompany !== companyId) stale.push(t);
   }
 
+  // The right company, but a key this file minted read-only before 2026-10-06:
+  // replace it once. Only asked when nothing is stale, so the common case (a
+  // matching, full key) costs one list call and changes nothing.
+  let grant = stale.length ? await grantable(deps) : null;
   if (stale.length === 0) {
-    return { status: 'ok', companyId, written: [] };
+    grant = await grantable(deps);
+    if (grant) {
+      for (const t of targets) {
+        if (t.apiKey !== null && isOwnReadOnlyKey(t.apiKey, grant.list)) stale.push(t);
+      }
+    }
+    if (stale.length === 0) return { status: 'ok', companyId, written: [] };
+  }
+  if (!grant) {
+    return {
+      status: 'failed', companyId, written: [],
+      reason: 'could not read which scopes this company grants — run `solid mcp install`',
+    };
   }
 
   let key: string;
   try {
-    key = await deps.createKey(`solid ai (company ${companyId})`, ['kb:read', 'pages:read']);
+    key = await deps.createKey(keyName(companyId), grant.scopes);
   } catch (e) {
     return {
       status: 'failed',
@@ -169,9 +237,16 @@ async function provisionServer(
   deps: SyncDeps,
   client: McpClient,
 ): Promise<McpSyncResult> {
+  const grant = await grantable(deps);
+  if (!grant) {
+    return {
+      status: 'failed', companyId, written: [],
+      reason: 'could not read which scopes this company grants — run `solid mcp install`',
+    };
+  }
   let key: string;
   try {
-    key = await deps.createKey(`solid ai (company ${companyId})`, ['kb:read', 'pages:read']);
+    key = await deps.createKey(keyName(companyId), grant.scopes);
   } catch (e) {
     return {
       status: 'failed',
@@ -233,6 +308,7 @@ export async function syncMcpForCurrentCompany(
         const res = await apiClient.apiKeyCreate(name, scopes);
         return res.data.key;
       },
+      listKeys: async () => (await apiClient.apiKeyList()).data,
     }, SYNC_CLIENTS, options);
   } catch (e) {
     return {

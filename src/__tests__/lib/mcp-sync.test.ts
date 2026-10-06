@@ -8,7 +8,7 @@
  */
 import * as fs from 'fs';
 
-import { syncMcpCredential, describeMcpSync } from '../../lib/mcp-sync';
+import { syncMcpCredential, describeMcpSync, isOwnReadOnlyKey, type KeyList } from '../../lib/mcp-sync';
 
 jest.mock('fs');
 const mockFs = fs as jest.Mocked<typeof fs>;
@@ -24,14 +24,23 @@ function withConfig(json: unknown = CONFIG) {
 const keyResolvesTo = (companyId: number) =>
   jest.fn().mockResolvedValue({ ok: true, json: async () => ({ user: { company_id: companyId } }) });
 
-beforeEach(() => jest.resetAllMocks());
+// What the company may grant, and no keys on record: the ordinary case. A plain
+// function, so `resetAllMocks` cannot empty it between tests.
+const GRANTABLE = ['kb:read', 'kb:write', 'pages:read', 'pages:write', 'payments:read'];
+let keysOnRecord: KeyList['api_keys'] = [];
+const listKeys = async (): Promise<KeyList> => ({ api_keys: keysOnRecord, available_scopes: GRANTABLE });
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  keysOnRecord = [];
+});
 
 it('re-points the credential when the key belongs to another company', async () => {
   withConfig();
   (global as any).fetch = keyResolvesTo(1);
   const createKey = jest.fn().mockResolvedValue('sk_new_for_61');
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('updated');
   expect(createKey).toHaveBeenCalledTimes(1);
@@ -47,7 +56,7 @@ it('⛔ does nothing when the key already matches — no mint, no write', async 
   (global as any).fetch = keyResolvesTo(61);
   const createKey = jest.fn();
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('ok');
   expect(createKey).not.toHaveBeenCalled();
@@ -61,7 +70,7 @@ it('⛔ treats an unresolvable key as NOT stale', async () => {
   (global as any).fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
   const createKey = jest.fn();
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('ok');
   expect(createKey).not.toHaveBeenCalled();
@@ -72,7 +81,7 @@ it('skips when no Solid MCP server is configured', async () => {
   withConfig({ mcpServers: { github: {} } });
   const createKey = jest.fn();
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('skipped');
   expect(createKey).not.toHaveBeenCalled();
@@ -81,7 +90,7 @@ it('skips when no Solid MCP server is configured', async () => {
 it('skips when the session has no company', async () => {
   withConfig();
   const createKey = jest.fn();
-  expect((await syncMcpCredential(undefined, { apiUrl: 'https://x', createKey })).status).toBe('skipped');
+  expect((await syncMcpCredential(undefined, { apiUrl: 'https://x', createKey, listKeys })).status).toBe('skipped');
   expect(createKey).not.toHaveBeenCalled();
 });
 
@@ -91,7 +100,7 @@ it('reports failure without throwing when the key cannot be minted', async () =>
   (global as any).fetch = keyResolvesTo(1);
   const createKey = jest.fn().mockRejectedValue(new Error('403 forbidden'));
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('failed');
   expect(r.reason).toMatch(/403/);
@@ -136,7 +145,7 @@ it('mints a key for a Solid server that has none, instead of reporting "skipped"
   (global as any).fetch = jest.fn(() => { throw new Error('should not be called'); });
   const createKey = jest.fn().mockResolvedValue('sk_minted_for_61');
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('updated');
   expect(createKey).toHaveBeenCalledTimes(1);
@@ -150,7 +159,7 @@ it('still leaves a correct, already-matching key alone', async () => {
   (global as any).fetch = keyResolvesTo(61);
   const createKey = jest.fn();
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('ok');
   expect(createKey).not.toHaveBeenCalled();
@@ -173,7 +182,7 @@ it('⛔ creates a Solid server when the machine has none and provisioning is ask
   const createKey = jest.fn().mockResolvedValue('sk_new_for_61');
 
   const r = await syncMcpCredential(
-    61, { apiUrl: 'https://x', createKey }, ['vscode'], { provisionInto: 'vscode' },
+    61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode'], { provisionInto: 'vscode' },
   );
 
   expect(r.status).toBe('created');
@@ -193,7 +202,7 @@ it('skips only when the caller did not ask to provision', async () => {
   mockFs.existsSync.mockReturnValue(false as never);
   const createKey = jest.fn();
 
-  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey }, ['vscode']);
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
 
   expect(r.status).toBe('skipped');
   expect(createKey).not.toHaveBeenCalled();
@@ -209,9 +218,72 @@ it('⛔ refuses to overwrite a config it cannot parse — it is full of their ot
   const createKey = jest.fn().mockResolvedValue('sk_new_for_61');
 
   const r = await syncMcpCredential(
-    61, { apiUrl: 'https://x', createKey }, ['vscode'], { provisionInto: 'vscode' },
+    61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode'], { provisionInto: 'vscode' },
   );
 
   expect(r.status).toBe('failed');
   expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+});
+
+
+// ── the AI's key can write (2026-10-06) ─────────────────────────────────────
+// This path minted ['kb:read', 'pages:read'] while `solid mcp install` minted every
+// grantable scope, so an agent lost every write verb at the first `solid switch`.
+
+it('mints the key with every scope the company may grant, never a read-only pair', async () => {
+  withConfig();
+  (global as any).fetch = keyResolvesTo(1);
+  const createKey = jest.fn().mockResolvedValue('sk_new_for_61');
+
+  await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
+
+  expect(createKey).toHaveBeenCalledWith('solid ai (company 61)', GRANTABLE);
+});
+
+it('replaces a read-only key this CLI minted for the same company, once', async () => {
+  withConfig();
+  (global as any).fetch = keyResolvesTo(61);
+  keysOnRecord = [{ key_prefix: 'sk_old...', name: 'solid ai (company 61)', is_active: true,
+                    scopes: ['agents:read', 'kb:read', 'pages:read'] }];
+  const createKey = jest.fn().mockResolvedValue('sk_full_for_61');
+
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
+
+  expect(r.status).toBe('updated');
+  expect(createKey).toHaveBeenCalledWith('solid ai (company 61)', GRANTABLE);
+  expect(String(mockFs.writeFileSync.mock.calls[0][1])).toContain('sk_full_for_61');
+});
+
+it('⛔ leaves a matching key that can already write alone', async () => {
+  withConfig();
+  (global as any).fetch = keyResolvesTo(61);
+  keysOnRecord = [{ key_prefix: 'sk_old...', name: 'solid ai (company 61)', is_active: true,
+                    scopes: ['kb:read', 'kb:write', 'pages:read'] }];
+  const createKey = jest.fn();
+
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys }, ['vscode']);
+
+  expect(r.status).toBe('ok');
+  expect(createKey).not.toHaveBeenCalled();
+});
+
+it('⛔ leaves a read-only key somebody named themselves alone', () => {
+  // A key under any other name was scoped down on purpose.
+  const list: KeyList = { api_keys: [{ key_prefix: 'sk_old...', name: 'reporting bot', is_active: true,
+                                       scopes: ['kb:read'] }] };
+  expect(isOwnReadOnlyKey('sk_old', list)).toBe(false);
+  expect(isOwnReadOnlyKey('sk_other', { api_keys: [] })).toBe(false);
+});
+
+it('⛔ fails with the remedy when the grantable scopes cannot be read — never mints read-only', async () => {
+  withConfig();
+  (global as any).fetch = keyResolvesTo(1);
+  const createKey = jest.fn();
+  const broken = async (): Promise<KeyList> => { throw new Error('network'); };
+
+  const r = await syncMcpCredential(61, { apiUrl: 'https://x', createKey, listKeys: broken }, ['vscode']);
+
+  expect(r.status).toBe('failed');
+  expect(r.reason).toMatch(/solid mcp install/);
+  expect(createKey).not.toHaveBeenCalled();
 });
