@@ -2,6 +2,20 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [Unreleased]
+
+**`solid mcp doctor` scores only what can be wrong on this machine.**
+
+- The doctor counted every AI app it knows — Claude Desktop, Cursor, Windsurf — and a
+  global install of `@solidnumber/mcp`, whether or not any of them applied. A working
+  setup with one real fault read "4 of 11", and the fault was one ✗ among seven. An app
+  that is not set up, a config with no Solid# entry, and a missing global install (every
+  client runs the server through npx) are now shown with a `–` and are not counted. The
+  same machine reads 4 of 6, and both misses are the real problem.
+- A Solid# entry with no key is still a counted failure: it authenticates as nobody.
+- `--json`: `passing` and `total` count only the checks that apply; `not_applicable` is
+  how many were shown for information, and each of those carries `"applies": false`.
+
 ## [2.30.0] — 2026-10-07
 
 **An outside agent can follow the journey from a folder to a live site with a tested form.**

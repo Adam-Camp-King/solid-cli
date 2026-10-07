@@ -454,7 +454,8 @@ mcpCommand
     // that offers --json.
     const options = mergeGlobalJson(rawOptions, cmd);
     const ora = (await import('../lib/spinner')).default;
-    const checks: Array<{ label: string; ok: boolean; detail: string }> = [];
+    const { scoreChecks, clientConfigCheck } = await import('../lib/mcp-doctor-score.js');
+    const checks: import('../lib/mcp-doctor-score').DoctorCheck[] = [];
 
     // 1. Auth check
     const hasAuth = config.isLoggedIn();
@@ -553,10 +554,13 @@ mcpCommand
       const out = execSync('npm list -g @solidnumber/mcp --depth=0 2>/dev/null', { encoding: 'utf-8' });
       packageInstalled = out.includes('@solidnumber/mcp');
     } catch { /* not installed globally */ }
+    // Information only: every client launches the server through npx, so a
+    // missing global install is normal and is never counted against anyone.
     checks.push({
       label: '@solidnumber/mcp installed',
       ok: packageInstalled,
-      detail: packageInstalled ? 'Installed globally' : 'Not found globally — clients use npx on demand',
+      applies: false,
+      detail: packageInstalled ? 'Installed globally' : 'Not installed globally — not needed, clients run it through npx',
     });
 
     // 5. Client config check
@@ -589,15 +593,8 @@ mcpCommand
           }
         } catch { /* corrupt config */ }
       }
-      checks.push({
-        label: `${client} config`,
-        ok: !!entryName && hasKey,
-        detail: !entryName
-          ? (exists ? 'Config exists, Solid# not wired' : 'No config file')
-          : hasKey
-            ? `Solid# wired with a credential ("${entryName}")`
-            : `"${entryName}" is present but carries NO SOLID_API_KEY — it authenticates as nobody. Run \`solid mcp connect\`.`,
-      });
+      // An app with no Solid# entry is not counted (lib/mcp-doctor-score.ts).
+      checks.push(clientConfigCheck(client, { configExists: !!exists, entryName, hasKey }));
     }
 
     // --fix: act on the verdict instead of only describing it.
@@ -630,8 +627,10 @@ mcpCommand
         fix_commands: assessment ? verdictFixCommands(assessment) : [],
         providers: assessment?.providers ?? [],
         checks,
-        passing: checks.filter(c => c.ok).length,
-        total: checks.length,
+        // Counted checks only — a line with applies:false is information.
+        passing: scoreChecks(checks).passing,
+        total: scoreChecks(checks).total,
+        not_applicable: scoreChecks(checks).notApplicable,
         ...(fixReport && { fix: fixReport }),
       }, null, 2));
       // ⛔ Non-zero on a tenant verdict so CI and scripts can gate on it. A
@@ -644,12 +643,19 @@ mcpCommand
     console.log(chalk.bold('  MCP Doctor'));
     console.log('');
     for (const c of checks) {
+      if (c.applies === false) {
+        console.log(`  ${chalk.dim('–')} ${chalk.dim(`${c.label}: ${c.detail}`)}`);
+        continue;
+      }
       const icon = c.ok ? chalk.green('✓') : chalk.red('✗');
       console.log(`  ${icon} ${chalk.bold(c.label)}: ${c.ok ? chalk.dim(c.detail) : chalk.yellow(c.detail)}`);
     }
-    const passing = checks.filter(c => c.ok).length;
+    const score = scoreChecks(checks);
     console.log('');
-    console.log(chalk.dim(`  ${passing}/${checks.length} checks passing`));
+    console.log(chalk.dim(
+      `  ${score.passing}/${score.total} checks passing` +
+      (score.notApplicable ? ` · ${score.notApplicable} not counted (–): nothing to check on this machine` : ''),
+    ));
 
     // ⛔ THE VERDICT GETS ITS OWN BLOCK. Burying "two connections disagree"
     // as one ✗ among eight lines is how it went unnoticed: the screenshot that
