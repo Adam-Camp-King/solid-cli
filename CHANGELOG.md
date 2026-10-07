@@ -2,7 +2,7 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
-## [Unreleased]
+## [2.30.0] — 2026-10-07
 
 **An outside agent can follow the journey from a folder to a live site with a tested form.**
 
