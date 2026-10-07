@@ -2,6 +2,36 @@
 
 All notable changes to `@solidnumber/cli` will be documented in this file.
 
+## [Unreleased]
+
+**An outside agent can follow the journey from a folder to a live site with a tested form.**
+
+A dry run of the clean-room journey (a stranger's AI, only this CLI, a real client's page)
+found seven places the thread was lost. Each is fixed and pinned in
+`src/__tests__/clean-room-journey.test.ts`.
+
+- `solid bring <folder> --json` leads with the verdict and the next command. It used to
+  print the catalogue of 16 design tools twice — about 8 KB — before the answer.
+- `solid nest` says whether the design was **kept as written or converted to blocks**
+  (`import_mode`), why, the fidelity score against the original, a one-line summary, the
+  preview command and the next step — in the human output and in `--json`, for a single
+  page and for every page of a folder. It printed only an id, a status and a mode.
+- `solid nest --help` has the folder case, what keep and convert mean, what the score is,
+  and the whole journey in order. Its description no longer says "→ live page": the
+  default is the private Sandbox.
+- The preview step has a name everywhere it is needed: `solid drafts preview <page_id>`.
+- `solid publish <id> --accept-fidelity <score>`. A publish refused for fidelity said
+  "re-call with accept_fidelity=N", and the CLI had no way to say it. The refusal now
+  prints the score, what is weakest, and both ways through.
+- `solid how-to import my site` answers with the import commands (it answered with
+  `solid apply site.yaml`), and `solid how-to publish` leads with bring → nest → preview →
+  publish → domains. No help text cites an internal document path any more.
+- **`solid leads test`** — one labelled TEST lead through the live website form: the
+  site's form address, the CRM record and every alert, each marked TEST. `solid how-to
+  test-lead` explains it, and `solid find "submit a test lead"` now names it
+  (`cli_how_to`) instead of returning three unrelated verbs. The backend verb is
+  `form.test_lead`.
+
 ## [2.29.1] — 2026-10-06
 
 **The AI's key can write after a switch, and `solid kb add` offers real categories.**

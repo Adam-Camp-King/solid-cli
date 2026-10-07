@@ -33,8 +33,18 @@ import {
   flagsAsArgv,
   guessPageType,
   readFolder,
+  nestOutcome,
+  nestOutcomeLines,
   type NestFlags,
 } from './nest-helpers';
+
+/**
+ * The build step. ⛔ `/api/v1/agent/nest/execute`, not `/api/v1/cli/ant/execute`:
+ * both run the same build, but only this one answers with the fidelity score, the
+ * one-line summary and the next step. The CLI called the bare route and so had
+ * nothing to show for "was my design kept?" beyond a status.
+ */
+const NEST_EXECUTE = '/api/v1/agent/nest/execute';
 
 // Re-export helpers so existing imports from this module keep working.
 export {
@@ -85,8 +95,8 @@ function requireAuth(): void {
 // ---------------------------------------------------------------------------
 
 export const nestCommand = new Command('nest')
-  .description('Nest — drop anything, we make it real. (paste/url/file → live page)')
-  .argument('[source]', 'URL, file path, "-" for stdin, or raw code')
+  .description('Bring a page in — a URL, a file or a whole folder → your private Sandbox (add --live to place it on a site as a draft). Says whether your design was kept or converted, and how close it is.')
+  .argument('[source]', 'URL, file path, folder, "-" for stdin, or raw code')
   .option('--type <type>', 'home | website | landing | email_landing | blog | product | booking | component')
   .option('--site <id>', 'destination Site id (numeric)')
   .option('--subdomain <sub>', 'hint for promote (e.g. "promo" → promo.solidnumber.com)')
@@ -173,7 +183,7 @@ export const nestCommand = new Command('nest')
     if (spinner) spinner.text = 'Wiring…';
     let executeResponse: { data: Record<string, unknown> };
     try {
-      executeResponse = await apiClient.post('/api/v1/cli/ant/execute', {
+      executeResponse = await apiClient.post(NEST_EXECUTE, {
         import_id: importId,
         modifications: { destination },
       });
@@ -189,17 +199,11 @@ export const nestCommand = new Command('nest')
     }
 
     const result = executeResponse.data as Record<string, any>;
+    // Everything the backend said, in one shape for both outputs (nest-helpers.ts).
+    const outcome = nestOutcome(result, { importId, mode: destination.mode, pageType: destination.page_type });
 
     if (json) {
-      console.log(
-        JSON.stringify({
-          import_id: importId,
-          status: result.status,
-          mode: destination.mode,
-          page_type: destination.page_type,
-          created: result.created,
-        }),
-      );
+      console.log(JSON.stringify({ ...outcome, created: result.created }));
       return;
     }
 
@@ -212,19 +216,22 @@ export const nestCommand = new Command('nest')
     }
     console.log('');
     console.log(ui.label('Import', importId));
-    console.log(ui.label('Status', String(result.status ?? '—')));
-    console.log(ui.label('Mode', destination.mode ?? 'sandbox'));
+    console.log(ui.label('Status', String(outcome.status ?? '—')));
+    console.log(ui.label('Mode', outcome.mode));
     if (destination.page_type) console.log(ui.label('Type', destination.page_type));
-    const page = (result.created?.page ?? null) as Record<string, unknown> | null;
-    if (page?.url) console.log(ui.label('Page', String(page.url)));
-    if (page?.id) console.log(ui.label('Page ID', String(page.id)));
+    if (outcome.url) console.log(ui.label('Page', String(outcome.url)));
+    if (outcome.page_id != null) console.log(ui.label('Page ID', String(outcome.page_id)));
 
     console.log('');
-    if (destination.mode === 'sandbox') {
-      console.log(chalk.dim('  Find it in the Design Library. `solid nest promote <id>` to place it live.'));
-    } else {
-      console.log(chalk.dim('  It\'s a draft on your site. Publish when ready.'));
+    for (const line of nestOutcomeLines(outcome)) console.log(line ? `  ${line}` : '');
+    if (outcome.errors?.length) {
+      console.log('');
+      for (const e of outcome.errors) console.log(chalk.yellow(`  ! ${e}`));
     }
+    console.log('');
+    console.log(chalk.dim(outcome.mode === 'sandbox'
+      ? '  It is in your Sandbox (the Design Library) — private until you promote and publish it.'
+      : '  It is a draft on your site — nobody can see it until you publish.'));
   });
 
 // ---------------------------------------------------------------------------
@@ -279,12 +286,13 @@ async function nestFolder(dir: string, flags: NestFlags, json: boolean): Promise
     }
     if (spinner) spinner.text = `Building ${page.file}…`;
     try {
-      const res = await apiClient.post('/api/v1/cli/ant/execute', {
+      const res = await apiClient.post(NEST_EXECUTE, {
         import_id: page.import_id, modifications: { destination: where },
       });
       const out = res.data as Record<string, any>;
-      built.push({ file: page.file, import_id: page.import_id, ok: true, status: out.status,
-        url: out.created?.page?.url ?? page.url, page_id: out.created?.page?.id });
+      // The same shape a single page gets: kept or converted, why, the score, what next.
+      const o = nestOutcome(out, { importId: page.import_id, mode: where.mode });
+      built.push({ file: page.file, ok: true, ...o, url: o.url ?? page.url ?? null });
     } catch (error) {
       built.push({ file: page.file, import_id: page.import_id, ok: false, error: handleApiError(error).message });
     }
@@ -304,8 +312,18 @@ async function nestFolder(dir: string, flags: NestFlags, json: boolean): Promise
   }
   console.log('');
   for (const b of built) {
+    const design = b.import_mode === 'keep' ? 'design kept' : b.import_mode === 'convert' ? 'converted to blocks' : '';
+    const score = (b.fidelity as { overall?: number } | null)?.overall;
+    const said = [design, typeof score === 'number' ? `${score}/100` : ''].filter(Boolean).join(', ');
     console.log(`  ${b.ok ? chalk.green('✓') : chalk.red('✗')} ${String(b.file)}`
+      + (said ? `  ${said}` : '')
       + (b.url ? chalk.dim(`  → ${b.url}`) : '') + (b.error ? chalk.red(`  ${b.error}`) : ''));
+  }
+  // The home page (or the only page) speaks for the import: its summary, preview and next step.
+  const lead = built.find((b) => b.ok) as (Record<string, unknown> | undefined);
+  if (lead) {
+    console.log('');
+    for (const line of nestOutcomeLines(lead as never)) console.log(line ? `  ${line}` : '');
   }
   if (read.skipped.length) {
     console.log(chalk.dim(`\n  Skipped ${read.skipped.length} item(s): `
@@ -507,8 +525,35 @@ nestCommand
 import { appendExamples as __ae_nest, emitErrorAndExit } from '../lib/command-kit';
 __ae_nest(nestCommand, [
   { cmd: 'solid nest anglebuild.com', why: 'Fetch a URL, classify, save to Sandbox' },
+  { cmd: 'solid nest ./my-site', why: 'A folder a designer handed over: every .html page in it, with its CSS, images and scripts' },
+  { cmd: 'solid nest ./my-site --entry index.html --single', why: 'A folder, but only the one page' },
   { cmd: 'solid nest page.html --type landing --live', why: 'Nest a local file, place live as a landing page' },
   { cmd: 'cat design.jsx | solid nest - --type home', why: 'Pipe code in; land as a home page' },
   { cmd: 'solid nest <url> --type landing --site 5 --subdomain promo --campaign q2', why: 'Agent-native shape' },
   { cmd: 'solid nest list', why: 'See recent Nest drops (Design Library)' },
 ]);
+
+nestCommand.addHelpText('after', `
+What you get back (also in --json):
+  import_mode   keep     your page as you wrote it — your markup, your CSS, your form. It is one
+                         stored design: the owner changes the spots marked data-editable, not blocks.
+                convert  rebuilt from our editable blocks — every section can be edited and it
+                         follows the brand, but hand-built CSS and controls may not survive.
+                The platform tries both and builds the one that scores higher. import_mode_why says why.
+  fidelity      the score out of 100 against the original, and the score a publish needs.
+                A page under that score is refused at publish; see: solid publish --help
+  preview       the command for a private link to show the owner
+  next          the next command, in order: promote → publish → domain
+
+The journey, start to finish:
+  solid bring <folder>                 what is this, and which command?
+  solid nest <file|folder|url>         import it — lands in your Sandbox, private
+  solid drafts preview <page_id>       a private link to look at it (or: solid render <slug>)
+  solid nest promote <import_id>       put it on your site, still a draft
+  solid publish <page_id>              make it live
+  solid domains                        your own domain
+  solid leads test                     send a labelled TEST lead through the live form
+
+Where it lands: the Sandbox by default. Nothing is on a real site, and nothing is live, until
+you promote and publish. --live skips the Sandbox and places a draft on the site at once.
+`);

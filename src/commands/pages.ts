@@ -231,7 +231,7 @@ pagesCommand
       // CLI release. The backend will reject malformed shapes.
       if (typeof layoutJson !== 'object' || layoutJson === null || Array.isArray(layoutJson)) {
         console.error(chalk.red('--layout-json file must contain a JSON object.'));
-        console.error(chalk.dim('  See Owners-Manual/71-Agent-Native-CLI/05-BLOCK-SCHEMA.md for the current block schema.'));
+        console.error(chalk.dim('  The current block schema:  solid schema pages   (one block: solid schema pages --block hero)'));
         process.exit(1);
       }
     }

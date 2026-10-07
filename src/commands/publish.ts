@@ -36,6 +36,55 @@ function requireAuth(): void {
   }
 }
 
+/**
+ * A publish the platform refused because the imported page does not match its source
+ * closely enough — and the exact way through.
+ *
+ * ⛔ WHY (clean-room dry run, 2026-10-06). The refusal says "re-call with
+ * accept_fidelity=N". That name appeared nowhere in this CLI: `solid publish` had no flag
+ * for it, so an agent that hit the gate had a sentence it could not act on. The refusal is
+ * now read here and answered with the command to run. PURE.
+ */
+export interface FidelityRefusal {
+  overall: number;
+  threshold: number | null;
+  message: string;
+  weakest: Array<{ dimension: string; score: number }>;
+  /** Publish anyway — a deliberate, recorded decision. */
+  accept_with: string;
+  /** Or fix it: import again and let the design be kept. */
+  or_reimport: string;
+}
+
+export function fidelityRefusal(error: unknown, pageId: number | string): FidelityRefusal | null {
+  const data = (error as { response?: { data?: Record<string, any> } })?.response?.data;
+  const detail = (data?.detail && typeof data.detail === 'object' ? data.detail : data) as Record<string, any> | undefined;
+  if (!detail || detail.reason !== 'fidelity_below_threshold') return null;
+  const report = (detail.fidelity || {}) as Record<string, any>;
+  const overall = Number(report.overall ?? 0);
+  const weakest = Object.entries((report.dimensions || {}) as Record<string, number>)
+    .filter(([, v]) => typeof v === 'number').sort((a, b) => a[1] - b[1]).slice(0, 2)
+    .map(([dimension, score]) => ({ dimension, score }));
+  return {
+    overall,
+    threshold: typeof report.threshold === 'number' ? report.threshold : null,
+    message: String(detail.message || detail.summary || 'This page does not match its source closely enough to publish.'),
+    weakest,
+    accept_with: `solid publish ${pageId} --accept-fidelity ${overall}`,
+    or_reimport: 'solid nest <file|folder|url>   (import again; a design that scores higher kept as written is kept)',
+  };
+}
+
+/** `--accept-fidelity 62` → 62. Anything that is not a whole number 0–100 is refused. */
+export function parseAcceptFidelity(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === false) return undefined;
+  const n = String(raw).trim() === '' ? NaN : Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 100) {
+    throw new Error('--accept-fidelity takes the score the refusal named: a whole number from 0 to 100.');
+  }
+  return n;
+}
+
 export interface PublishCandidate {
   page_id: number;
   slug?: string;
@@ -89,7 +138,7 @@ async function listUnpublishedPages(): Promise<Array<Record<string, any>>> {
   return all;
 }
 
-async function publishAll(json: boolean): Promise<void> {
+async function publishAll(json: boolean, acceptFidelity?: number): Promise<void> {
   const spinner = ora({ text: 'Finding pages that are not live...', isSilent: json }).start();
   let plan: PublishCandidate[] = [];
   try {
@@ -120,11 +169,15 @@ async function publishAll(json: boolean): Promise<void> {
     }
     spinner.text = `Publishing page ${c.page_id}${c.slug ? ` (/${c.slug})` : ''}...`;
     try {
-      await apiClient.post(`/api/v1/cms/pages/${c.page_id}/publish`, {});
+      await apiClient.post(`/api/v1/cms/pages/${c.page_id}/publish`,
+        acceptFidelity === undefined ? {} : { accept_fidelity: acceptFidelity });
       results.push({ ...c, status: 'published' });
     } catch (error) {
       const e = handleApiError(error);
-      results.push({ ...c, status: 'failed', http_status: e.status, error: e.message });
+      // A page refused for not matching its source: say the command that answers it.
+      const refused = fidelityRefusal(error, c.page_id);
+      results.push({ ...c, status: 'failed', http_status: e.status,
+        error: refused ? `${refused.message} To publish it anyway: ${refused.accept_with}` : e.message });
       // The paywall is company-wide: every remaining page would get the same
       // 402, so stop calling and say so instead of hammering the endpoint.
       if (e.status === 402) paywalled = e.message || 'Payment required to publish';
@@ -161,6 +214,7 @@ export const publishCommand = new Command('publish')
   .argument('[page_id]', 'Page ID to publish (omit with --all)')
   .option('--all', 'Publish every pending draft AND every never-published page, one page at a time')
   .option('--drafts-only', 'With --all: only promote pending drafts (skips never-published pages)')
+  .option('--accept-fidelity <score>', 'Publish an imported page that scored under the bar against its original. Pass the score the refusal named — a deliberate, recorded decision.')
   .option('--json', 'JSON output (per-page results with --all)')
   .action(async (pageId: string | undefined, opts) => {
     requireAuth();
@@ -179,9 +233,17 @@ export const publishCommand = new Command('publish')
       process.exit(1);
     }
     const json = isJsonOutput(opts);
+    let acceptFidelity: number | undefined;
+    try {
+      acceptFidelity = parseAcceptFidelity(opts.acceptFidelity);
+    } catch (e) {
+      const message = (e as Error).message;
+      if (json) printJson({ ok: false, error: message }); else console.error(chalk.red(message));
+      process.exit(1);
+    }
 
     if (opts.all && !opts.draftsOnly) {
-      await publishAll(json);
+      await publishAll(json, acceptFidelity);
       return;
     }
 
@@ -211,7 +273,8 @@ export const publishCommand = new Command('publish')
     }
     const spinner = ora({ text: `Publishing page ${id}...`, isSilent: json }).start();
     try {
-      const res = await apiClient.post(`/api/v1/cms/pages/${id}/publish`, {});
+      const res = await apiClient.post(`/api/v1/cms/pages/${id}/publish`,
+        acceptFidelity === undefined ? {} : { accept_fidelity: acceptFidelity });
       // The publish response has no address, and `url: null` read as "not
       // live" when the page was being served. Compute it from the page's
       // site (or /p/<slug> on the primary site for an unattached page), and
@@ -236,7 +299,28 @@ export const publishCommand = new Command('publish')
       console.log(chalk.dim(`  Pending draft (if any) was promoted to live.`));
       if (where.url) console.log(chalk.dim(`  ${where.url}`));
       else if (where.url_unavailable_reason) console.log(chalk.yellow(`  No public URL: ${where.url_unavailable_reason}`));
-    } catch (error) { fail(spinner, 'Publish failed', error); }
+    } catch (error) {
+      const refused = fidelityRefusal(error, id);
+      if (!refused) fail(spinner, 'Publish failed', error);
+      // Not a failure to retry: the platform measured this import against its source
+      // and it is under the bar. Say the score, what is weakest, and both ways through.
+      const r = refused as FidelityRefusal;
+      spinner.stop();
+      if (json) {
+        printJson({ ok: false, published: false, page_id: id, reason: 'fidelity_below_threshold',
+          message: r.message, fidelity: { overall: r.overall, threshold: r.threshold, weakest: r.weakest },
+          accept_with: r.accept_with, or_reimport: r.or_reimport });
+      } else {
+        console.error(chalk.red(`  Not published — page ${id} scores ${r.overall}/100 against the site it was imported from`
+          + (r.threshold !== null ? ` (needs ${r.threshold}).` : '.')));
+        if (r.weakest.length) console.error(chalk.dim(`  Weakest: ${r.weakest.map((w) => `${w.dimension} ${w.score}`).join(', ')}`));
+        console.error('');
+        console.error(`  Fix it:            ${chalk.cyan(r.or_reimport)}`);
+        console.error(`  Publish it anyway: ${chalk.cyan(r.accept_with)}`);
+        console.error(chalk.dim('                     (recorded as a deliberate decision that this conversion is good enough)'));
+      }
+      process.exitCode = 1;
+    }
   });
 
 import { appendExamples as __ae_publish } from '../lib/command-kit';
@@ -245,4 +329,6 @@ __ae_publish(publishCommand, [
   { cmd: 'solid publish --all',               why: 'Pending drafts + never-published pages, per-page results' },
   { cmd: 'solid publish --all --drafts-only', why: 'Only promote pending drafts' },
   { cmd: 'solid drafts list',                 why: 'See what pending drafts exist first' },
+  { cmd: 'solid drafts preview <id>',         why: 'A private link to look at a page before it is live' },
+  { cmd: 'solid publish <id> --accept-fidelity 62', why: 'Publish an imported page the fidelity check refused, at the score it named' },
 ], 'Note: --all also publishes pages that were never published, including any page created but meant to stay private. Use --drafts-only to avoid that.');

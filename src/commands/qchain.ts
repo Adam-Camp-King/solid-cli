@@ -192,7 +192,7 @@ qchainCommand
       console.log(chalk.dim('    2. Auditor calls    GET /api/v1/predictions/substrate/export'));
       console.log(chalk.dim('       with header     Authorization: Bearer <the key above>'));
       console.log(chalk.dim('    3. Auditor walks chain locally — verifies hashes + sigs.'));
-      console.log(chalk.dim('  Full spec: Owners-Manual/75-Qchain/08-EXTERNAL-AUDITOR-FLOW.md'));
+      console.log(chalk.dim('  The chain description the auditor needs is at the .well-known address in step 1.'));
       console.log('');
     } catch (e) {
       if (spinner) spinner.stop();

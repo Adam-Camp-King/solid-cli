@@ -221,3 +221,145 @@ export function readFolder(root: string): FolderRead {
   const htmlFiles = files.map((f) => f.path).filter((p) => /\.html?$/i.test(p));
   return { files, skipped, htmlFiles };
 }
+
+// ---------------------------------------------------------------------------
+// What a nest answered — the part an agent needs, never dropped
+// ---------------------------------------------------------------------------
+
+/**
+ * ⛔ WHY THIS EXISTS (clean-room dry run, 2026-10-06). The backend answers a
+ * build with whether the design was KEPT or CONVERTED, why, the fidelity score
+ * against the original, a one-line summary and the next step. `solid nest`
+ * printed import id, status, mode, type and page — in the human output AND in
+ * --json — and threw the rest away. `solid bring` promises "the reply says
+ * import_mode", and then it did not. An agent could not tell whether the
+ * client's design survived, which is the first thing the client asks.
+ *
+ * One shaping function, used by the single-source path and the folder path and
+ * by both output modes, so the two can never disagree about what was said.
+ */
+export interface NestOutcome {
+  import_id: string | null;
+  status: string | null;
+  /** Where it went: the private sandbox, or placed on a site as a draft. */
+  mode: string;
+  page_type?: string;
+  page_id: number | string | null;
+  url: string | null;
+  /** keep = the client's own markup and CSS, as written. convert = rebuilt from blocks. */
+  import_mode: 'keep' | 'convert' | null;
+  import_mode_why: string | null;
+  /** Score out of 100 against the original, and the score a publish needs. */
+  fidelity: { overall: number; threshold: number | null; passes: boolean | null;
+    weakest: Array<{ dimension: string; score: number }> } | null;
+  /** Both scores when both were tried: {keep: n, convert: n}. */
+  fidelity_modes: Record<string, number> | null;
+  fell_back_from_keep: string | null;
+  summary: string | null;
+  /** The command that shows the owner the page before anything is live. */
+  preview: { cli: string; why: string } | null;
+  /** The next step, as the backend names it, with the CLI command that does it. */
+  next: { verb: string | null; why: string | null; cli: string | null } | null;
+  errors?: string[];
+}
+
+/** The CLI command for a backend verb's next step. null when there is no direct one. */
+export function cliForNext(verb: string | null | undefined, ids: { importId?: string | null;
+  pageId?: number | string | null }): string | null {
+  const imp = ids.importId || '<import_id>';
+  const page = ids.pageId ?? '<page_id>';
+  switch (verb) {
+    case 'nest.promote': return `solid nest promote ${imp}`;
+    case 'page.publish': return `solid publish ${page}`;
+    case 'page.preview_url': return `solid drafts preview ${page}`;
+    case 'nest.rollback': return `solid ant rollback ${imp}`;
+    case 'nest.outcomes': return 'solid nest outcomes';
+    case 'nest.execute': return `solid ant execute ${imp}`;
+    case 'domain.verify': return 'solid domains';
+    case 'nest.import': case 'nest.import_url': return 'solid nest <file|folder|url>';
+    default: return verb ? `solid verbs describe ${verb}` : null;
+  }
+}
+
+/** PURE. The backend's build answer → everything the caller needs, in one shape. */
+export function nestOutcome(result: Record<string, any> | null | undefined, ctx: {
+  importId?: string | null; mode?: string | null; pageType?: string | null } = {}): NestOutcome {
+  const r = result || {};
+  const page = (r.created?.page ?? null) as Record<string, any> | null;
+  const importId = (r.import_id as string) || ctx.importId || null;
+  const pageId = page?.id ?? r.page_id ?? null;
+  const mode = String(ctx.mode || r.mode || 'sandbox');
+  const importMode = r.import_mode === 'keep' || r.import_mode === 'convert' ? r.import_mode : null;
+
+  const report = r.fidelity && typeof r.fidelity === 'object' ? r.fidelity as Record<string, any> : null;
+  let fidelity: NestOutcome['fidelity'] = null;
+  if (report && typeof report.overall === 'number') {
+    const threshold = typeof report.threshold === 'number' ? report.threshold : null;
+    const weakest = Object.entries((report.dimensions || {}) as Record<string, number>)
+      .filter(([, v]) => typeof v === 'number')
+      .sort((a, b) => a[1] - b[1]).slice(0, 2)
+      .map(([dimension, score]) => ({ dimension, score }));
+    fidelity = { overall: report.overall, threshold,
+      passes: typeof report.passes === 'boolean' ? report.passes
+        : threshold === null ? null : report.overall >= threshold,
+      weakest };
+  }
+  const modes: Record<string, number> = {};
+  for (const [k, v] of Object.entries((r.fidelity_modes || {}) as Record<string, any>)) {
+    const n = v && typeof v === 'object' ? v.overall : v;
+    if (typeof n === 'number') modes[k] = n;
+  }
+  const fell = r.fell_back_from_keep;
+  const nextRaw = r.next && typeof r.next === 'object' ? r.next as Record<string, any> : null;
+  const nextVerb = nextRaw ? String(nextRaw.verb || nextRaw.next_verb || '') || null : null;
+
+  return {
+    import_id: importId,
+    status: r.status != null ? String(r.status) : null,
+    mode,
+    ...(ctx.pageType ? { page_type: ctx.pageType } : {}),
+    page_id: pageId,
+    url: (page?.url as string) ?? r.page_url ?? null,
+    import_mode: importMode,
+    import_mode_why: r.import_mode_why ? String(r.import_mode_why) : null,
+    fidelity,
+    fidelity_modes: Object.keys(modes).length ? modes : null,
+    fell_back_from_keep: fell ? String(typeof fell === 'object' ? (fell.summary || JSON.stringify(fell)) : fell) : null,
+    summary: r.summary ? String(r.summary) : null,
+    preview: pageId != null
+      ? { cli: `solid drafts preview ${pageId}`,
+        why: 'A private link to show the owner before anything is live.' }
+      : null,
+    next: nextRaw || mode === 'sandbox'
+      ? { verb: nextVerb ?? (mode === 'sandbox' ? 'nest.promote' : null),
+        why: nextRaw?.why ? String(nextRaw.why) : (mode === 'sandbox'
+          ? 'It is in the sandbox — nothing is on a real site yet. Promote it (it stays a draft), then publish.'
+          : null),
+        cli: cliForNext(nextVerb ?? (mode === 'sandbox' ? 'nest.promote' : null), { importId, pageId }) }
+      : null,
+    ...(Array.isArray(r.errors) && r.errors.length ? { errors: r.errors.map(String) } : {}),
+  };
+}
+
+/** The lines a person reads: was my design kept, how close is it, what do I run next. */
+export function nestOutcomeLines(o: NestOutcome): string[] {
+  const lines: string[] = [];
+  if (o.import_mode === 'keep') lines.push('Design:   KEPT as written — the original markup and CSS, not our template');
+  else if (o.import_mode === 'convert') lines.push('Design:   CONVERTED to editable blocks — it follows the brand, section by section');
+  if (o.import_mode_why) lines.push(`Why:      ${o.import_mode_why}`);
+  if (o.fell_back_from_keep) lines.push(`Not kept: ${o.fell_back_from_keep}`);
+  if (o.fidelity) {
+    const need = o.fidelity.threshold !== null ? ` (a publish needs ${o.fidelity.threshold})` : '';
+    const weak = o.fidelity.weakest.length && o.fidelity.passes === false
+      ? ` — weakest: ${o.fidelity.weakest.map((w) => `${w.dimension} ${w.score}`).join(', ')}` : '';
+    lines.push(`Fidelity: ${o.fidelity.overall}/100 against the original${need}${weak}`);
+  }
+  if (o.fidelity_modes && Object.keys(o.fidelity_modes).length > 1) {
+    lines.push(`Scored:   ${Object.entries(o.fidelity_modes).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
+  }
+  if (o.summary) lines.push('', o.summary);
+  if (o.preview) lines.push('', `Preview:  ${o.preview.cli}`, `          ${o.preview.why}`);
+  if (o.next?.cli) lines.push(`Next:     ${o.next.cli}`);
+  if (o.next?.why) lines.push(`          ${o.next.why}`);
+  return lines;
+}

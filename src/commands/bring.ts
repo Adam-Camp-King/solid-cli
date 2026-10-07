@@ -79,6 +79,39 @@ export function describeFolder(root: string): { files: string[]; code?: string; 
   return { files, entry, code: read(entry), package_json: read(pkg) };
 }
 
+/**
+ * The answer for a machine, in the order it is needed.
+ *
+ * ⛔ WHY (clean-room dry run, 2026-10-06). `design.intake` always returns the catalogue of
+ * design tools it knows (16 sources) — and the list envelope repeats it as `items`. So
+ * `solid bring <folder> --json` printed ~8 KB of Figma / Wix / Canva TWICE before the one
+ * thing asked for: what this folder is and what to run. A reader that stops at 5,000
+ * characters never reached the verdict.
+ *
+ * When the question was about a folder or a named source, the verdict comes FIRST and
+ * the catalogue is replaced by a count and the command that prints it. Nothing is hidden:
+ * `solid bring --json` with no folder still lists every tool. PURE.
+ */
+export function shapeIntake(out: Record<string, any>): Record<string, any> {
+  const { verdict, start, sources, items, total, page, has_more, ...rest } = out;
+  void total; void page; void has_more;
+  const catalogue = Array.isArray(sources) ? sources : Array.isArray(items) ? items : null;
+  if (!verdict && !start) {
+    // No folder, no "bringing": the question IS "what can I bring" — the catalogue, once.
+    return { ...rest, ...(catalogue ? { sources: catalogue } : {}) };
+  }
+  return {
+    ...(typeof out.ok === 'boolean' ? { ok: out.ok } : {}),
+    ...(verdict ? { verdict, next: verdict.next ?? rest.next } : {}),
+    ...(start ? { start } : {}),
+    ...Object.fromEntries(Object.entries(rest).filter(([k]) => k !== 'ok' && !(verdict && k === 'next'))),
+    ...(catalogue ? {
+      sources_omitted: `${catalogue.length} design tools and builders are known. `
+        + 'Run `solid bring --json` (no folder) to list them.',
+    } : {}),
+  };
+}
+
 function show(out: Record<string, any>): void {
   const v = out.verdict;
   if (v) {
@@ -181,7 +214,7 @@ export const bringCommand = new Command('bring')
         if (starter.then?.cli) console.log(`\nThen:  ${chalk.cyan(starter.then.cli)}`);
         return;
       }
-      if (json) return printJson(out);
+      if (json) return printJson(shapeIntake(out));
       show(out);
     } catch (error) {
       const message = handleApiError(error).message;

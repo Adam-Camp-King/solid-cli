@@ -61,7 +61,7 @@ describe('folder intake', () => {
           { file: 'about.html', ok: true, import_id: 'ant_2', url: '/about' },
         ] } };
       }
-      expect(url).toBe('/api/v1/cli/ant/execute');
+      expect(url).toBe('/api/v1/agent/nest/execute');
       expect(body.modifications.destination.page_type).toBeUndefined();
       return { data: { status: 'completed', created: { page: { url: `/${body.import_id}` } } } };
     });
@@ -71,7 +71,7 @@ describe('folder intake', () => {
     const out = JSON.parse(log.mock.calls.map((c) => c[0]).find((l: string) => l.startsWith('{')));
     log.mockRestore();
     expect(out.imported).toBe(2);
-    expect(post.mock.calls.filter((c) => c[0] === '/api/v1/cli/ant/execute').map((c) => c[1].import_id))
+    expect(post.mock.calls.filter((c) => c[0] === '/api/v1/agent/nest/execute').map((c) => c[1].import_id))
       .toEqual(['ant_1', 'ant_2']);
   });
 });

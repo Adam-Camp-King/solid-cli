@@ -24,7 +24,7 @@ function requireAuth() {
 
 
 export const leadsCommand = new Command('leads')
-  .description('Lead pipeline, scoring, prospecting, forms, and analytics');
+  .description('Lead pipeline, scoring, prospecting, forms, and analytics — and `solid leads test`, a labelled TEST lead through the live form');
 
 // ── Submissions ──────────────────────────────────────────────────────
 
@@ -474,8 +474,12 @@ leadsCommand
     } catch (e) { fail(spinner, 'Failed to load activity', e); }
   });
 
+import { leadsTestCommand } from './leads-test';
+leadsCommand.addCommand(leadsTestCommand);
+
 import { appendExamples as __appendExamplesLeads, fail } from '../lib/command-kit';
 __appendExamplesLeads(leadsCommand, [
+  { cmd: 'solid leads test', why: 'ONE labelled TEST lead through the live website form — proves form, CRM and alerts' },
   { cmd: 'solid leads submissions', why: 'List lead submissions (paginates)' },
   { cmd: 'solid leads recent', why: 'Latest leads across all forms' },
   { cmd: 'solid leads score <contact_id>', why: 'Full enrichment + score breakdown' },

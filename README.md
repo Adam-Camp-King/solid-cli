@@ -153,7 +153,11 @@ solid agent mission "Create a Valentine's campaign for VIP customers"
 | `solid update` | Update everything Solid# on this machine — CLI, MCP server, hook, completion, agent skills, render browser |
 | `solid pull` | Download pages, KB, settings as files |
 | `solid push` | Upload local changes (drafts / unpublished pages) |
-| `solid publish <id>` / `--all` | Make pages live (pending drafts + never-published pages) |
+| `solid bring <folder>` | START HERE with files or a design: says what it is and which command to run |
+| `solid nest <file\|folder\|url>` | Import a page — says whether the design was kept or converted, and the score |
+| `solid drafts preview <id>` | A private link to look at a page before it is live |
+| `solid publish <id>` / `--all` | Make pages live (pending drafts + never-published pages). `--accept-fidelity <score>` takes an import the fidelity check refused |
+| `solid leads test` | ONE labelled TEST lead through the live website form — proves form, CRM and alerts |
 | `solid deploy` | Create a shareable preview snapshot — does NOT publish |
 | `solid diff` | Preview changes before pushing |
 | `solid serve` | Local preview server (localhost:4000) |
@@ -313,6 +317,34 @@ JWT matches the path's company.
 |---------|-------------|
 | `solid dev` | Local development utilities |
 | `solid droplet` | Infrastructure management |
+
+## Bring an existing site live
+
+The whole journey, in order. Each command's reply names the next one.
+
+```
+1. solid bring <folder>               → What is this — a page or an app — and which command?
+2. solid nest <file|folder|url>       → Import it. Lands in your Sandbox, private.
+                                        The reply says whether your design was KEPT as written
+                                        or CONVERTED to editable blocks (import_mode), why, and
+                                        how close it is to the original (a score out of 100).
+3. solid drafts preview <page_id>     → A private link to look at it first
+4. solid nest promote <import_id>     → Put it on your site — still a draft
+5. solid publish <page_id>            → Make it live
+6. solid domains add <your-domain>    → Your own domain (solid domains dns <id> lists the records)
+7. solid leads test                   → ONE labelled TEST lead through the live form
+```
+
+**A publish refused for fidelity.** An imported page that scores under the bar against its
+original is refused, with the score. Import again (`solid nest …`), or take it deliberately:
+`solid publish <page_id> --accept-fidelity <score>`.
+
+**Testing the form.** `solid leads test` runs the real path — the site's form address, the
+CRM record, every new-lead alert the business has on — and labels all of it TEST, so nobody
+calls a customer who does not exist. The contact is tagged `website_contact_form_test`;
+delete it with `solid crm contacts delete <id>`. By hand, the same mode is the field
+`_solid_test_lead=1` on any form post to the lead address. Never type a made-up person into
+a client's live form to see if it works.
 
 ## Workflow
 

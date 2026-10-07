@@ -56,7 +56,7 @@ products): write \`site.yaml\`, then
 
 Pages go live on the company's subdomain immediately; custom domains need
 \`solid domains verify <id>\` after DNS is set. Format reference:
-\`solid apply --kinds\` and Owners-Manual/45-Developer-CLI/APPLY-DECLARATIVE-MANIFESTS.md.
+\`solid apply --kinds\` (every kind and its fields) and \`solid apply --help\`.
 
 ## Rules
 

@@ -24,7 +24,8 @@ Canonical: exactly one address per site is the URL customers see. Non-
 canonical addresses 301-redirect to canonical. The solidnumber.com
 subdomain ALWAYS stays active as a failover — never deleted.
 
-See: Owners-Manual/29-Provisioning/SITE-AND-DOMAIN-ARCHITECTURE.md`)
+The whole journey to a live site:  solid how-to publish
+Reference:                         https://solidnumber.com/docs/cli`)
   .action(async () => { domainsCommand.outputHelp(); });
 
 domainsCommand.command('list').alias('ls').description('List every site + every address (canonical first)')

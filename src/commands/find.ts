@@ -42,6 +42,7 @@ import { fail } from '../lib/command-kit';
 import { rankVerbs, clip, type SearchableVerb, type VerbMatch } from '../lib/verb-search';
 import { appendExamples } from '../lib/command-kit';
 import { readSearchAnswer, type SearchAnswer } from '../lib/find-answer';
+import { cliHowToFor } from './how-to';
 
 export const findCommand = new Command('find')
   .description('Find the verb for a task, in plain language — intent to callable name in one call')
@@ -104,6 +105,8 @@ export const findCommand = new Command('find')
       matches = rankVerbs(query, verbs, limit);
     }
     spinner?.stop();
+    // A CLI command may be the answer, not a verb. Named here, not left to a footer.
+    const cliHowTo = cliHowToFor(query);
 
     if (wantsJson) {
       // Array-of-arrays, not array-of-objects. Repeating the four keys on
@@ -147,13 +150,18 @@ export const findCommand = new Command('find')
         // to settle. Never clipped — it is instructions, not a listing.
         ...(toBuild || toAsk ? { answer: toBuild || toAsk } : {}),
         ...(noVerb && answer!.answer ? { answer: answer!.answer } : {}),
+        // The CLI command that covers this, when one does. Read it BEFORE picking a verb.
+        ...(cliHowTo.length ? { cli_how_to: cliHowTo } : {}),
         not_searched:
           'CLI-local commands (switch, company, auth, pull, push) are not verbs — ' +
           'list them with: solid schema verbs --json',
         // The literal next command. An answer that does not say what to do
         // with it sends the agent back to discovery, which is the thing this
         // command exists to avoid.
-        next: toBuild
+        next: cliHowTo.length && !toBuild && !toAsk
+          ? `${cliHowTo[0].run}   (a CLI command covers this — read it first`
+            + (matches.length ? `; the closest verb is: solid verbs describe ${matches[0].name})` : ')')
+          : toBuild
           ? `Follow answer.path.steps in order. First: solid verbs describe ${toBuild.path!.steps.find((st) => st.verb)?.verb ?? 'design.intake'}`
           : toAsk
             ? 'Settle answer.ask (ask the user only what you cannot answer), then: solid find "<one action, one sentence>"'
@@ -164,6 +172,12 @@ export const findCommand = new Command('find')
             : 'solid schema verbs --json',
       });
       return;
+    }
+
+    if (cliHowTo.length) {
+      console.log('');
+      console.log(chalk.green('  A CLI command covers this — read it before picking a verb:'));
+      for (const h of cliHowTo) console.log(`    ${chalk.cyan(h.run.padEnd(28))} ${h.title}`);
     }
 
     if (toBuild) {

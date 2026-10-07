@@ -76,12 +76,19 @@ export const HOWTO_TOPICS: HowToTopic[] = [
     title: 'Build or bring a website or an app',
     keywords: ['design', 'designer', 'build a website', 'make a website', 'make an app', 'build an app',
       'figma', 'webflow', 'framer', 'lovable', 'bolt', 'import', 'bring', 'from scratch',
+      // "how do I import my site" must land HERE. It used to land on the publish topic
+      // (whose title holds the word "site") and be told to write a site.yaml.
+      'import my site', 'import my website', 'my existing site', 'existing site', 'existing website',
+      'clone', 'clone my site', 'copy my site', 'move my site', 'bring my site', 'bring my website',
+      'already have a site', 'already have a website', 'nest',
       'page or app', 'app or page', 'javascript', 'backend', 'server code', 'structure', 'what format',
       'react', 'vite', 'hand coded', 'hand-coded'],
     body: [
       'solid bring                      # asks what you are bringing: nothing yet, a design, a site, an app',
       'solid bring <folder>             # reads the folder: a page, an app, or server code — and what to run',
       'solid nest <file|folder|url>     # a PAGE: import it (converted to editable blocks, or kept as designed)',
+      '                                 #   the reply says which (import_mode), why, and the score out of 100',
+      'solid drafts preview <page_id>   # a private link to look at it before anything is live',
       'solid app publish <built folder> --slug <name> --confirm   # an APP: publish its built files',
       'solid app github --slug <name>   # an APP: publish on every change (run once in the repo)',
       'solid schema pages               # the block structure a page is made of',
@@ -143,12 +150,49 @@ export const HOWTO_TOPICS: HowToTopic[] = [
   {
     id: 'publish',
     title: 'Get a site live',
-    keywords: ['publish', 'website', 'site', 'live', 'deploy', 'launch', 'domain', 'page'],
+    keywords: ['publish', 'website', 'site', 'live', 'deploy', 'launch', 'domain', 'page',
+      'go live', 'take it live', 'make it live', 'preview', 'custom domain', 'dns'],
     body: [
-      'solid apply site.yaml      # reconcile pages/products/site/agents/lines from one manifest',
-      'solid publish --all        # flip drafts live',
-      'solid embed chat           # wire live chat into any page',
-      'solid domains              # attach a custom domain (SSL handled)',
+      'You already have a site, a file or a folder (the usual case):',
+      '  solid bring <folder>              # what is this, and which command?',
+      '  solid nest <file|folder|url>      # import it — lands in your Sandbox, private',
+      '  solid drafts preview <page_id>    # a private link to look at it first',
+      '  solid nest promote <import_id>    # put it on your site, still a draft',
+      '  solid publish <page_id>           # make it live   (everything pending: solid publish --all)',
+      '  solid domains add <your-domain>   # your own domain; solid domains dns <id> lists the records',
+      '  solid leads test                  # a labelled TEST lead through the live form',
+      '',
+      'A publish refused for fidelity (the import does not match its original closely enough) names',
+      'a score: import again, or take it deliberately with solid publish <id> --accept-fidelity <score>.',
+      '',
+      'Starting from nothing, or declaring a whole site in one file:',
+      '  solid bring --bringing nothing    # the steps, in order',
+      '  solid apply site.yaml             # reconcile pages/products/site/agents/lines from one manifest',
+      '  solid embed chat                  # wire live chat into any page',
+    ].join('\n'),
+  },
+  {
+    // The backend has had a test mode on its lead doors since 2026-09-30 (a hidden field
+    // or JSON key, `_solid_test_lead`). It was named nowhere in this CLI, so an outside
+    // agent checking a new site either put a real-looking lead in a real business's CRM or
+    // skipped the step. `solid leads test` is that mode with a name.
+    id: 'test-lead',
+    title: 'Check a site\'s form works, without filing a real lead',
+    keywords: ['test lead', 'test a lead', 'submit a test lead', 'test the form', 'test my form',
+      'test form', 'form works', 'does the form work', 'lead test', 'check the form',
+      'fake lead', 'dummy lead', 'try the form', 'end to end', 'test submission'],
+    body: [
+      'solid leads test                 # sends ONE lead through your live website form, labelled TEST',
+      'solid leads test --json          # the same, machine-readable',
+      '',
+      'It runs the whole real path — the site\'s form address, the CRM record, and every alert the',
+      'business has switched on — so it proves all three. Every alert says TEST, so nobody calls a',
+      'customer who does not exist, and the contact is tagged (source website_contact_form_test) so',
+      'it is easy to find and delete: solid crm contacts delete <id>.',
+      '',
+      'By hand, on any form or JSON post to the lead address: add the field _solid_test_lead=1.',
+      'Do NOT type a made-up person into a client\'s live form to "see if it works" — that is a real',
+      'lead in a real business\'s CRM, and someone will call it.',
     ].join('\n'),
   },
 ];
@@ -204,6 +248,26 @@ export function findHowTo(question: string, limit = 2): HowToTopic[] {
     .filter((r) => r.s > 0)
     .slice(0, Math.max(1, limit))
     .map((r) => r.t);
+}
+
+/**
+ * The how-to topics a search for a VERB should also point at. PURE.
+ *
+ * ⛔ WHY (clean-room dry run, 2026-10-06). `solid find` ranks backend verbs, and a class of
+ * answers are CLI commands: `solid find "submit a test lead"` returned form.submit,
+ * webhook.test and flows.test, while `solid leads test` did exactly that. `find` says
+ * "CLI commands are not verbs" in a footer; it never said WHICH command.
+ *
+ * Only a phrase match counts here (score 2+) — one shared word is not evidence, and a
+ * wrong pointer beside a right verb is worse than none.
+ */
+export function cliHowToFor(question: string): Array<{ topic: string; title: string; run: string }> {
+  return HOWTO_TOPICS
+    .map((t) => ({ t, s: score(question, t) }))
+    .filter((r) => r.s >= 2)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 2)
+    .map((r) => ({ topic: r.t.id, title: r.t.title, run: `solid how-to ${r.t.id}` }));
 }
 
 /** The topic shown when someone runs `how-to` with no question at all. */
