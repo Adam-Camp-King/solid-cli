@@ -83,7 +83,7 @@ export const openCommand = new Command('open')
       return;
     }
     if (options.sites) {
-      const url = `${appUrl}/dashboard/cms/builder`;
+      const url = `${appUrl}/dashboard/cms`;
       console.log(chalk.dim(`Opening: ${url}`));
       await openBrowser(url);
       return;
@@ -165,10 +165,10 @@ export const openCommand = new Command('open')
       // Public preview — tenant site
       url = `${appUrl.replace('app.', '')}/${slug}`;
     } else if (options.editor) {
-      url = `${appUrl}/dashboard/cms/pages/edit/${pageId}`;
+      url = `${appUrl}/dashboard/cms/editor/${pageId}`;
     } else {
       // Default: visual builder
-      url = `${appUrl}/dashboard/cms/builder/${pageId}`;
+      url = `${appUrl}/dashboard/cms/visual?pageId=${pageId}`;
     }
 
     console.log(chalk.green(`Opening ${options.preview ? 'preview' : options.editor ? 'editor' : 'builder'} for "${slug}"`));

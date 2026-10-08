@@ -336,7 +336,7 @@ pagesCommand
       if (!page.is_published) {
         console.log(chalk.dim('  Publish: ') + chalk.cyan(`solid pages publish ${page.id}`));
       }
-      console.log(chalk.dim('  Edit in browser: ') + chalk.cyan(`/dashboard/cms/builder/${page.id}`));
+      console.log(chalk.dim('  Edit in browser: ') + chalk.cyan(`/dashboard/cms/visual?pageId=${page.id}`));
       console.log('');
     } catch (error) {
       fail(spinner, 'Failed to create page', error);
