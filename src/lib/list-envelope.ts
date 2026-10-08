@@ -71,6 +71,12 @@ const NON_LIST_ARRAY_KEYS = new Set<string>([
   'hints',
   'notices',
   'validation_errors',
+  // A RANKED ANSWER is not a page of records. Search (`agent.verbs.search`,
+  // `solid find`) returns `matches`, each carrying a verb's refusals, schema and
+  // undo. Aliasing that to `items` printed every match twice — about double the
+  // tokens on the call an AI makes most. `matches` is the contract. Mirrors
+  // solid-backend/services/list_envelope.py; change one, change both.
+  'matches',
 ]);
 
 export interface NormalizedEnvelope {

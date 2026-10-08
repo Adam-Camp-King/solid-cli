@@ -194,3 +194,22 @@ describe('applyListEnvelope', () => {
     }
   });
 });
+
+describe('a ranked answer is not a page of records', () => {
+  // An outside review of the live connector (2026-10-08): search returned the same five
+  // verbs under `matches` and `items`, each with its refusals and schema.
+  it('does not alias search matches to items', () => {
+    const body = {
+      query: 'move their appointment',
+      ranked_by: 'embedding',
+      matches: [{ name: 'appointment.reschedule' }, { name: 'appointment.update' }],
+    };
+    expect(detectListKey(body)).toBeNull();
+    const before = JSON.stringify(body);
+    expect(JSON.stringify(applyListEnvelope(body))).toBe(before);
+  });
+
+  it('still finds a record list that sits beside matches', () => {
+    expect(detectListKey({ contacts: [{ id: 2 }], matches: [{ id: 9 }] })).toBe('contacts');
+  });
+});
