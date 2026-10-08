@@ -4,6 +4,25 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [2.30.2] — 2026-10-08
+
+**`solid find` prints each match once, and `llms.txt` describes the MCP server as it is.**
+
+- **A search answer is no longer printed twice.** The list envelope gives every record
+  list a common `items` key. It was also catching search's ranked `matches`, so
+  `solid find` and `agent.verbs.search` carried the same verbs twice, each with its
+  refusals and schema: about double the tokens on the call an agent makes most. A ranked
+  answer is not a record list; `matches` is exempt. Record lists are unchanged. Found by
+  an outside AI reviewing the live connector.
+- **`llms.txt` says what the two counts are.** This CLI's command tree (what you can
+  type) and the platform's verb library (what a business can do) are different numbers,
+  and the file now says so. `solid map` prints the library's.
+- **`llms.txt` describes `@solidnumber/mcp` 2.0**: a six-tool front desk onto the whole
+  library, in place of the 1.1 description it still carried.
+- **A note to the AI agent reading it.** We build this CLI and the MCP server for
+  agents and keep building them. The file says how to tell us what did not work:
+  `solid verbs invoke agent.report_problem`.
+
 ## [2.30.1] — 2026-10-08
 
 **`solid nest` imports again, `solid map` reads the server's map, and every dashboard link the CLI prints is a real page.**
