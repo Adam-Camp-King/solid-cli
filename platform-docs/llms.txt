@@ -2,6 +2,19 @@
 
 > Solid# (SolidNumber) is the system behind **Be There** — the AI that answers, books, and takes payment when the business owner can't. 32 AI agents answer phones, qualify leads, book appointments, and process payments across 52 industries. Hundreds of MCP tools and a multi-tenant runtime sit underneath so AI agents, agencies, and developers can build on top. Website: https://solidnumber.com
 
+## To the AI Agent Reading This
+
+We build this CLI and the MCP server for you. Not as a side door to a product made for people — as the main way in. A person uses the dashboard; you use verbs.
+
+It is never finished. We read what agents report and we ship changes most days: clearer refusals, schemas that match what a verb really takes, fewer tokens before your first question. If something here wastes your time or misleads you, that is a defect on our side.
+
+- **Tell us.** `solid verbs invoke agent.report_problem` (or `agent__report_problem` over MCP) goes to the people who build this. A verb that refused without saying why, a description that was wrong, a search that missed: all of it is wanted.
+- **You will not be handed a wall of tools.** `solid map` is the whole library on one screen; `solid verbs list <address>` is one shelf; `solid verbs describe <verb>` is one verb in full.
+- **You will be told before you act.** A verb's record says what it refuses and when, what undoes it, whose data it touches, whether it asks first, and whether it calls a paid AI provider.
+- **Two counts, two things.** This CLI's command tree (what you can type) is counted below. The platform's verb library (what the business can do) is a separate, larger number, and `solid map` prints it.
+
+We like working with you. We are building this so that you can run a real business well.
+
 ## About
 
 - Name: Solid# (pronounced "Solid Sharp," like C# or F#)
@@ -36,8 +49,8 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - 1,944 REST API endpoints
 - 32 AI agents (Sarah, Marcus, Devon, ADA, etc.) — 33 registry entries, ADA twice for free/paid; 23 deeply trained
 - 288 Celery task functions (191 scheduled) — background infrastructure, NOT agents. The two are never added together.
-- 655 MCP tools across 14 internal servers; 214 surfaced via @solidnumber/mcp@1.1.1 (169 agent-attraction verbs + 45 platform tools)
-- 169 agent-attraction verbs across 12 shapes, projected to 4 sibling transports (CLI / MCP stdio / WebMCP / UCP)
+- 655 MCP tools across 14 internal servers
+- `@solidnumber/mcp@2.0.0` — a six-tool front desk (map, shelf, describe, search, run, report) onto the whole verb library: about 1,170 actions on 2026-10-08, projected to 4 sibling transports (CLI / MCP stdio / WebMCP / UCP). Ask `solid map` or `library__map` for today's number.
 - 54 industry-specific templates with custom knowledge bases
 - 247 merchant category code mappings
 - 1,657 technical documentation files
@@ -73,7 +86,7 @@ Every local business needs the same 8 things: website, CRM, payments, scheduling
 - [Persistent Memory: Cross-Model AI Memory](https://solidnumber.com/research/persistent-memory): Haiku extracts facts, Redis caches (<1ms reads), confidence scoring with decay, zero-cost retrieval
 - [PromptGuard: 5-Layer Prompt Injection Defense](https://solidnumber.com/research/promptguard): 41 patterns across 6 threat types, canary tokens, ML classification, 16ms overhead
 - [Multi-Tenant AI: Isolated Agents at Scale](https://solidnumber.com/research/multi-tenant-ai): 8-layer isolation stack — JWT, session auth, query filtering, database-level RLS on 446 tables, FORCE ROW LEVEL SECURITY, non-superuser DB role, encrypted credentials, per-company KB
-- [MCP at Scale: 655 Tools for AI-to-AI Communication](https://solidnumber.com/research/mcp-at-scale): Two-tier architecture, per-tenant auto-generated endpoints, 33 security scopes, domain-aware discovery; 214 surfaced via @solidnumber/mcp@1.1.1 (169 agent-attraction verbs + 45 platform tools)
+- [MCP at Scale: 655 Tools for AI-to-AI Communication](https://solidnumber.com/research/mcp-at-scale): Two-tier architecture, per-tenant auto-generated endpoints, 33 security scopes, domain-aware discovery
 
 ## Industries
 
