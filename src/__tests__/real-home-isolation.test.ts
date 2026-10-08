@@ -34,3 +34,31 @@ test('the modules that write ~/.solid resolve it under the temp home', () => {
   });
   expect(cfgDir).toBe(path.join(tmp as string, '.solid'));
 });
+
+describe('what the teardown counts as the suite touching the real home', () => {
+  const { realHomeViolation } = require('./support/global-teardown');
+  const fp = (history: string, config = '903:1') => ({ 'cli_history.json': history, 'config.json': config });
+  const old = [{ command: 'find invoices', ts: '2026-10-08T21:00:00.000Z' }];
+  const hook = { command: 'context --claude --raw --if-tenant', ts: '2026-10-08T22:41:50.521Z' };
+
+  test('nothing changed', () => {
+    expect(realHomeViolation(fp('10:1'), fp('10:1'), old, old)).toBeNull();
+  });
+
+  test('a Claude session opening mid-run is not the suite', () => {
+    expect(realHomeViolation(fp('10:1'), fp('20:2'), old, [...old, hook])).toBeNull();
+  });
+
+  test('any other new command fails and is named', () => {
+    const leak = { command: 'mcp connect gpt', ts: '2026-10-08T22:42:00.000Z' };
+    expect(realHomeViolation(fp('10:1'), fp('30:3'), old, [...old, hook, leak])).toContain('mcp connect gpt');
+  });
+
+  test('a history rewrite that adds nothing fails', () => {
+    expect(realHomeViolation(fp('10:1'), fp('2:3'), old, [])).toContain('rewrote');
+  });
+
+  test('a change to any other watched file fails even beside a hook entry', () => {
+    expect(realHomeViolation(fp('10:1'), fp('20:2', '5:9'), old, [...old, hook])).toContain('config.json');
+  });
+});
