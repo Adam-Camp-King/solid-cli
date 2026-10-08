@@ -4,7 +4,21 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
-**`solid mcp doctor` scores only what can be wrong on this machine.**
+## [2.30.1] — 2026-10-08
+
+**`solid nest` imports again, `solid map` reads the server's map, and every dashboard link the CLI prints is a real page.**
+
+- **`solid nest` works again.** 2.30.0 moved the build step onto the confirmed verb route
+  and did not send the confirmation with it, so every import stopped at "are you sure?".
+  The build call now carries the yes the user already gave on the command line.
+- **`solid map` asks the server for the map.** It downloaded the whole verb manifest
+  (about 2.47 MB) to print roughly 11,000 characters. The server folds the map now; the
+  CLI reads that and falls back to the manifest on an older server. Same output.
+- **`solid open` and `solid pages` print paths that exist.** They pointed at
+  `/dashboard/cms/builder` and `/dashboard/cms/pages/edit/<id>`, which were removed; they
+  now open `/dashboard/cms`, `/dashboard/cms/editor/<id>` and the visual editor. The old
+  paths redirect, so a link an earlier version printed still lands.
+- **`solid mcp doctor` scores only what can be wrong on this machine.**
 
 - The doctor counted every AI app it knows — Claude Desktop, Cursor, Windsurf — and a
   global install of `@solidnumber/mcp`, whether or not any of them applied. A working

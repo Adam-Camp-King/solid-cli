@@ -1,4 +1,7 @@
 node_modules/
+# also the bare name: a worktree's node_modules SYMLINK is a file, and the line above
+# only ignores a directory — one was committed on 2026-10-07 and replaced the real folder.
+node_modules
 dist/
 *.tsbuildinfo
 .env
