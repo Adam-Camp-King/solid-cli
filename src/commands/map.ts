@@ -67,6 +67,33 @@ export function buildMap(verbs: readonly MapVerb[], opts: { aliases?: boolean } 
   );
 }
 
+/** The server's map: `solid:verb-library-map/v1` from GET /api/v1/agent/verbs/map. */
+interface LibraryMap {
+  schema?: string;
+  total?: number;
+  classes?: Array<{
+    domains?: Array<{ nouns?: Array<[string | null, string, number, number]> }>;
+    nouns?: Array<[string | null, string, number, number]>;
+  }>;
+}
+
+/**
+ * Rows from the server's map — the same four fields this command has always printed,
+ * already folded. Pure. Returns null when the body is not a library map, so the
+ * caller falls back to folding the manifest itself.
+ */
+export function rowsFromLibraryMap(body: LibraryMap | null | undefined): NounRow[] | null {
+  if (!body || body.schema !== 'solid:verb-library-map/v1' || !Array.isArray(body.classes)) return null;
+  const rows: NounRow[] = [];
+  for (const cls of body.classes) {
+    const nouns = [...(cls.domains || []).flatMap((d) => d.nouns || []), ...(cls.nouns || [])];
+    for (const [coordinate, noun, verbs, writes] of nouns) {
+      rows.push({ coordinate: coordinate || '', noun: noun || '(unplaced)', verbs, writes });
+    }
+  }
+  return rows.sort((a, b) => a.coordinate.localeCompare(b.coordinate) || a.noun.localeCompare(b.noun));
+}
+
 export const mapCommand = new Command('map')
   .description('Every noun on the platform, its verb count, and its Atlas address')
   .option('--json', 'Machine-readable output')
@@ -80,19 +107,41 @@ export const mapCommand = new Command('map')
     const wantsJson = options.json || isJsonOutput();
     const spinner = wantsJson ? null : ora('Building the map…').start();
 
-    let verbs: MapVerb[];
-    try {
-      const res = await apiClient.get('/api/v1/agent/verbs');
-      const body = res.data as { verbs?: MapVerb[]; items?: MapVerb[] };
-      verbs = body.verbs || body.items || [];
-    } catch (e) {
-      fail(spinner, 'Could not reach the verb manifest', e);
-      return;
+    // ⛔ The map used to be folded here from the whole manifest — 2.47 MB downloaded
+    // to print about 11,000 characters. The server folds it now (the same data as the
+    // `library.map` verb). `--aliases` still needs the manifest: the server's map
+    // counts one name per action. A backend that does not serve the map yet (404, or
+    // any failure) falls back to the old path, so a published CLI works against
+    // whatever it is pointed at.
+    let rows: NounRow[] | null = null;
+    let total = 0;
+    let aliases = 0;
+    if (!options.aliases) {
+      try {
+        const res = await apiClient.get('/api/v1/agent/verbs/map');
+        const body = res.data as LibraryMap;
+        rows = rowsFromLibraryMap(body);
+        if (rows) total = typeof body.total === 'number' ? body.total : rows.reduce((n, r) => n + r.verbs, 0);
+      } catch {
+        rows = null;
+      }
+    }
+    if (!rows) {
+      let verbs: MapVerb[];
+      try {
+        const res = await apiClient.get('/api/v1/agent/verbs');
+        const body = res.data as { verbs?: MapVerb[]; items?: MapVerb[] };
+        verbs = body.verbs || body.items || [];
+      } catch (e) {
+        fail(spinner, 'Could not reach the verb manifest', e);
+        return;
+      }
+      rows = buildMap(verbs, { aliases: Boolean(options.aliases) });
+      aliases = options.aliases ? 0 : verbs.filter((v) => v.same_as).length;
+      total = verbs.length - aliases;
     }
     spinner?.stop();
 
-    const rows = buildMap(verbs, { aliases: Boolean(options.aliases) });
-    const aliases = options.aliases ? 0 : verbs.filter((v) => v.same_as).length;
     const unplaced = rows.filter((r) => !r.coordinate);
 
     if (wantsJson) {
@@ -100,7 +149,7 @@ export const mapCommand = new Command('map')
         schema: 'solid:agent-map/v1',
         row: ['coordinate', 'noun', 'verbs', 'writes'],
         nouns: rows.length,
-        total_verbs: verbs.length - aliases,
+        total_verbs: total,
         ...(aliases ? { hidden: { aliases } } : {}),
         // Rows are arrays for the same reason the verb index uses them:
         // repeating four keys 170+ times is most of a small payload.
@@ -130,7 +179,7 @@ export const mapCommand = new Command('map')
       );
     }
     console.log('');
-    console.log(chalk.dim(`  ${rows.length} nouns · ${verbs.length} verbs`));
+    console.log(chalk.dim(`  ${rows.length} nouns · ${total} verbs`));
     if (unplaced.length) {
       console.log(chalk.yellow(`  ⚠ ${unplaced.length} noun(s) with no coordinate: ${unplaced.map((r) => r.noun).join(', ')}`));
     }

@@ -7,7 +7,7 @@
  * ("show me those") is arithmetic the agent does locally rather than another
  * lookup.
  */
-import { buildMap } from '../../commands/map';
+import { buildMap, rowsFromLibraryMap } from '../../commands/map';
 
 const VERBS = [
   { name: 'payment.refund', side_effects: 'write', coordinate: '52', noun: 'payment' },
@@ -79,5 +79,47 @@ describe('buildMap counts one name per operation', () => {
 
   it('--aliases counts them', () => {
     expect(buildMap(verbs, { aliases: true })[0].verbs).toBe(3);
+  });
+});
+
+describe('rowsFromLibraryMap', () => {
+  // GET /api/v1/agent/verbs/map — the fold done once, on the server.
+  const BODY = {
+    schema: 'solid:verb-library-map/v1',
+    total: 6,
+    classes: [
+      { class: 5, title: 'Money & books', actions: 4,
+        domains: [{ address: '51', title: 'Receivables',
+                    nouns: [['510', 'invoice', 3, 1], ['511', 'invoice_payment', 1, 1]] }] },
+      { class: 1, title: 'Agents & AI', actions: 2, nouns: [['10', 'agent', 2, 0]] },
+    ],
+  };
+
+  it('reads the same four fields the fold produced, in coordinate order', () => {
+    expect(rowsFromLibraryMap(BODY as never)).toEqual([
+      { coordinate: '10', noun: 'agent', verbs: 2, writes: 0 },
+      { coordinate: '510', noun: 'invoice', verbs: 3, writes: 1 },
+      { coordinate: '511', noun: 'invoice_payment', verbs: 1, writes: 1 },
+    ]);
+  });
+
+  it('counts every action the server counted', () => {
+    const rows = rowsFromLibraryMap(BODY as never)!;
+    expect(rows.reduce((n, r) => n + r.verbs, 0)).toBe(BODY.total);
+  });
+
+  it('is null for anything that is not a library map, so the caller falls back', () => {
+    // An older backend answers /map with a verb record or a 404 body.
+    expect(rowsFromLibraryMap({ name: 'map' } as never)).toBeNull();
+    expect(rowsFromLibraryMap({ schema: 'solid:agent-verb-manifest/v1' } as never)).toBeNull();
+    expect(rowsFromLibraryMap(null)).toBeNull();
+    expect(rowsFromLibraryMap({ schema: 'solid:verb-library-map/v1' } as never)).toBeNull();
+  });
+
+  it('keeps a noun with no address visible', () => {
+    const rows = rowsFromLibraryMap({
+      schema: 'solid:verb-library-map/v1', classes: [{ nouns: [[null, 'zzz', 1, 0]] }],
+    } as never)!;
+    expect(rows).toEqual([{ coordinate: '', noun: 'zzz', verbs: 1, writes: 0 }]);
   });
 });
