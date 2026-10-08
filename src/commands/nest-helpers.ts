@@ -263,6 +263,15 @@ export interface NestOutcome {
   errors?: string[];
 }
 
+/**
+ * The body of the build call. `confirm: true` is the person's yes: `/api/v1/agent/nest/execute`
+ * is a write verb and refuses without it (400 confirmation_required), and running `solid nest`
+ * IS that yes — there is no `--confirm` flag to ask for. 2.30.0 left it out and every import failed.
+ */
+export function nestExecuteBody(importId: string, destination: object): Record<string, unknown> {
+  return { import_id: importId, modifications: { destination }, confirm: true };
+}
+
 /** The CLI command for a backend verb's next step. null when there is no direct one. */
 export function cliForNext(verb: string | null | undefined, ids: { importId?: string | null;
   pageId?: number | string | null }): string | null {

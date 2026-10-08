@@ -7,7 +7,7 @@
  * wording — the parts that decide whether an agent can follow the journey cold.
  */
 import { shapeIntake } from '../commands/bring';
-import { cliForNext, nestOutcome, nestOutcomeLines } from '../commands/nest-helpers';
+import { cliForNext, nestExecuteBody, nestOutcome, nestOutcomeLines } from '../commands/nest-helpers';
 import { nestCommand } from '../commands/nest';
 import { fidelityRefusal, parseAcceptFidelity, publishCommand } from '../commands/publish';
 import { cliHowToFor, findHowTo, HOWTO_TOPICS } from '../commands/how-to';
@@ -63,6 +63,19 @@ describe('2. nest says whether the design was kept, why, the score and what next
     summary: 'Your page was kept as written — your CSS, your markup, your form.',
     next: { verb: 'nest.promote', why: 'The clone is built in the sandbox.' },
   };
+
+  // 2026-10-07: the build route is a write verb and refuses without the person's yes. 2.30.0
+  // did not send it, so every `solid nest` stopped at "confirmation_required" — and the error
+  // named a --confirm flag nest does not have.
+  it('the build call carries the yes — running solid nest is the confirmation', () => {
+    expect(nestExecuteBody('imp_1', { mode: 'sandbox' })).toEqual({
+      import_id: 'imp_1', modifications: { destination: { mode: 'sandbox' } }, confirm: true,
+    });
+    const src = require('fs').readFileSync(require('path').join(__dirname, '../commands/nest.ts'), 'utf8');
+    const calls = src.match(/apiClient\.post\(NEST_EXECUTE,[^\n]*/g) || [];
+    expect(calls.length).toBe(2);
+    for (const c of calls) expect(c).toContain('nestExecuteBody(');
+  });
 
   it('carries every field through, in one shape', () => {
     const o = nestOutcome(kept, { importId: 'imp_1', mode: 'sandbox', pageType: 'home' });

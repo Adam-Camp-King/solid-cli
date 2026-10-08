@@ -33,6 +33,7 @@ import {
   flagsAsArgv,
   guessPageType,
   readFolder,
+  nestExecuteBody,
   nestOutcome,
   nestOutcomeLines,
   type NestFlags,
@@ -183,10 +184,7 @@ export const nestCommand = new Command('nest')
     if (spinner) spinner.text = 'Wiring…';
     let executeResponse: { data: Record<string, unknown> };
     try {
-      executeResponse = await apiClient.post(NEST_EXECUTE, {
-        import_id: importId,
-        modifications: { destination },
-      });
+      executeResponse = await apiClient.post(NEST_EXECUTE, nestExecuteBody(importId, destination));
     } catch (error) {
       if (spinner) spinner.fail(chalk.red('Nest build failed'));
       const apiError = handleApiError(error);
@@ -286,9 +284,7 @@ async function nestFolder(dir: string, flags: NestFlags, json: boolean): Promise
     }
     if (spinner) spinner.text = `Building ${page.file}…`;
     try {
-      const res = await apiClient.post(NEST_EXECUTE, {
-        import_id: page.import_id, modifications: { destination: where },
-      });
+      const res = await apiClient.post(NEST_EXECUTE, nestExecuteBody(page.import_id, where));
       const out = res.data as Record<string, any>;
       // The same shape a single page gets: kept or converted, why, the score, what next.
       const o = nestOutcome(out, { importId: page.import_id, mode: where.mode });
