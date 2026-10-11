@@ -8,6 +8,7 @@
  */
 import { CATALOG, cleanInputs, gatewayFrom, platformOf, runAction, serviceStateFrom, type Exec } from '../lib/helper-actions';
 import { HelperSession } from '../lib/helper-session';
+import { MAC_SCRIPT, WINDOWS_SCRIPT, uiFrom } from '../lib/helper-ui';
 
 type Call = { file: string; args: string[] };
 const host = { platform: () => 'linux' as NodeJS.Platform, release: () => '6.1', arch: () => 'x64',
@@ -25,9 +26,9 @@ function machine(answers: Record<string, { code?: number; stdout?: string }> = {
 }
 
 describe('the list', () => {
-  it('is exactly the platform\'s six actions', () => {
+  it('is exactly the platform\'s nine actions', () => {
     expect(Object.keys(CATALOG).sort()).toEqual(['network.settings', 'process.running', 'service.start',
-      'service.state', 'service.stop', 'system.info']);
+      'service.state', 'service.stop', 'system.info', 'ui.press', 'ui.read', 'ui.set']);
   });
 
   it.each(['shell.run', 'service.delete', '__proto__', 'constructor', '', 'service.stop; rm -rf /'])(
@@ -206,5 +207,114 @@ describe('the line to the platform', () => {
     expect(loadIdentity(file)).toBeNull();
     expect(forgetIdentity(file)).toBe(true);
     expect(forgetIdentity(file)).toBe(false);
+  });
+});
+
+
+describe('a program\'s window, by its labels', () => {
+  type Seen = { file: string; args: string[]; env?: Record<string, string>; timeoutMs?: number };
+  function desk(stdout: string) {
+    const seen: Seen[] = [];
+    const exec: Exec = async (file, args, options) => {
+      seen.push({ file, args, env: options?.env, timeoutMs: options?.timeoutMs });
+      return { code: 0, stdout };
+    };
+    return { seen, exec };
+  }
+  const WINDOW = ['WIN\tTerminal Setup', 'CTL\tEdit\tDevice type\tVX520', 'CTL\tAXTextField\tPassword\t(hidden)',
+    'CTL\tButton\tSave\t', 'CTL\tAXPopUpButton\tLane\t2', 'junk line'].join('\n');
+
+  it('reads the labelled controls of the front window as short lines', async () => {
+    const d = desk(WINDOW);
+    const out = await runAction('ui.read', { program: 'Setup' }, 'mac', d.exec, host);
+    expect(out).toEqual({ ok: true, data: { program: 'Setup', window: 'Terminal Setup', count: 4,
+      controls: ['Field: Device type = VX520', 'Field: Password = (hidden)', 'Button: Save', 'List: Lane = 2'] } });
+    expect(d.seen[0].file).toBe('osascript');
+    expect(d.seen[0].args).toEqual(['-e', MAC_SCRIPT, 'read', 'Setup']);
+    expect(d.seen[0].timeoutMs).toBe(10000);
+  });
+
+  it('the script is fixed text: on a Mac the inputs are arguments, on Windows they are in the environment', async () => {
+    const mac = desk('OK\tVX 680');
+    await runAction('ui.set', { program: 'Setup', control: 'Device type', value: 'VX 680' }, 'mac', mac.exec, host);
+    expect(mac.seen[0].args).toEqual(['-e', MAC_SCRIPT, 'set', 'Setup', 'Device type', 'VX 680']);
+    const win = desk('OK\tVX 680');
+    await runAction('ui.set', { program: 'Setup', control: 'Device type', value: 'VX 680' }, 'windows', win.exec, host);
+    expect(win.seen[0].file).toBe('powershell.exe');
+    expect(win.seen[0].args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
+    expect(Buffer.from(win.seen[0].args[3], 'base64').toString('utf16le')).toBe(WINDOWS_SCRIPT);
+    expect(win.seen[0].env).toEqual({ SOLID_UI_MODE: 'set', SOLID_UI_PROGRAM: 'Setup', SOLID_UI_CONTROL: 'Device type', SOLID_UI_VALUE: 'VX 680' });
+    for (const script of [MAC_SCRIPT, WINDOWS_SCRIPT]) {
+      expect(script).not.toContain('VX 680');
+      expect(script).not.toContain('Device type');
+    }
+  });
+
+  it('a set is answered from what the field holds afterwards, not from what was asked', async () => {
+    const held = desk('OK\tVX520');
+    expect(await runAction('ui.set', { program: 'Setup', control: 'Device type', value: 'VX 680' }, 'windows', held.exec, host))
+      .toEqual({ ok: false, reason: 'value_did_not_change', data: { control: 'Device type', holds: 'VX520' } });
+    const done = desk('OK\tVX 680');
+    expect(await runAction('ui.set', { program: 'Setup', control: 'Device type', value: 'VX 680' }, 'windows', done.exec, host))
+      .toEqual({ ok: true, data: { program: 'Setup', control: 'Device type', holds: 'VX 680' } });
+  });
+
+  it('a press names what it pressed', async () => {
+    const d = desk('OK');
+    expect(await runAction('ui.press', { program: 'Setup', control: 'Save' }, 'mac', d.exec, host))
+      .toEqual({ ok: true, data: { program: 'Setup', pressed: 'Save' } });
+  });
+
+  it.each([
+    ['ERR\tpassword_field', 'password_field'], ['ERR\tcontrol_not_found', 'control_not_found'],
+    ['ERR\tprogram_not_running', 'program_not_running'], ['ERR\tno_window', 'no_window'],
+    ['ERR\tvalue_not_offered', 'value_not_offered'], ['ERR\tcontrol_disabled', 'control_disabled'],
+    ['ERR\tscript\t-1719', 'not_permitted'], ['ERR\tscript\t-25211', 'not_permitted'],
+    ['ERR\tscript\t-50', 'could_not_read_window'], ['ERR\tsomething new', 'could_not_read_window'],
+    ['', 'could_not_read_window'], ['<html>', 'could_not_read_window'],
+  ])('what the machine refused is said plainly: %j', async (stdout, reason) => {
+    const d = desk(stdout);
+    expect(await runAction('ui.set', { program: 'Setup', control: 'Password', value: 'x' }, 'mac', d.exec, host))
+      .toEqual({ ok: false, reason });
+  });
+
+  it('both scripts refuse a password field and never print what one holds', () => {
+    expect(WINDOWS_SCRIPT).toContain("if ($e.Current.IsPassword) { 'ERR' + $T + 'password_field'; exit 0 }");
+    expect(WINDOWS_SCRIPT).toContain("if ($e.Current.IsPassword) { return '(hidden)' }");
+    expect(MAC_SCRIPT).toContain('if sr is "AXSecureTextField" then return "ERR" & tab & "password_field"');
+    expect(MAC_SCRIPT).toContain('if sr is "AXSecureTextField" then return "(hidden)"');
+  });
+
+  it('a label may carry a space; neither a label nor a value may carry a quote or a shell character', async () => {
+    expect(cleanInputs('ui.set', { program: 'Setup', control: 'Device type (lane 2)', value: 'VX 680' }).inputs).toBeDefined();
+    for (const bad of ['a"b', "a'b", 'a`b', 'a$b', 'a;b', 'a|b', 'a\\b', 'a\nb', '', ' x', 'x'.repeat(81)]) {
+      expect(cleanInputs('ui.set', { program: 'Setup', control: bad, value: 'x' }).reason).toBe('bad_input');
+      expect(cleanInputs('ui.set', { program: 'Setup', control: 'Name', value: bad }).reason).toBe('bad_input');
+    }
+    // The program is a name: no space.
+    expect(cleanInputs('ui.read', { program: 'My App' }).reason).toBe('bad_input');
+    expect(cleanInputs('ui.press', { program: 'Setup', control: 'Save', value: 'x' }).reason).toBe('unknown_input');
+  });
+
+  it('is not offered on Linux, and nothing is run there', async () => {
+    const d = desk(WINDOW);
+    expect(await runAction('ui.read', { program: 'Setup' }, 'linux', d.exec, host))
+      .toEqual({ ok: false, reason: 'not_supported_on_this_system' });
+    expect(d.seen).toEqual([]);
+  });
+
+  it('at most forty controls come back, each cut to size', () => {
+    const many = ['WIN\tW', ...Array.from({ length: 70 }, (_, i) => `CTL\tButton\t${'n'.repeat(90)}${i}\t${'v'.repeat(90)}`)].join('\n');
+    const got = uiFrom(many);
+    expect(got.controls).toHaveLength(40);
+    expect(Math.max(...(got.controls || []).map((c) => c.length))).toBeLessThanOrEqual(8 + 50 + 3 + 60);
+  });
+
+  it('needs a grant like any other action', async () => {
+    const d = desk(WINDOW);
+    const s = new HelperSession('mac', d.exec);
+    expect((await s.handle({ type: 'do', rid: 'r1', action: 'ui.press', inputs: { program: 'Setup', control: 'Save' }, grant_id: 7 }))?.result.reason)
+      .toBe('no_grant_on_this_machine');
+    expect(d.seen).toEqual([]);
   });
 });

@@ -6,21 +6,28 @@
  * name means here. A name that is not in this list is refused, whoever asks.
  *
  * ⛔ NO SHELL. Every action runs one fixed program with its arguments as an array
- *    (`execFile`), never a command line. An input is matched against a pattern that
- *    admits letters, digits and a few separators before it is used as one argument.
+ *    (`execFile`), never a command line. An input is a NAME (letters, digits and a few
+ *    separators) or a LABEL as it reads on screen (a name that may also carry a space
+ *    and the marks a label has); it is checked before it is used, and reaches the
+ *    program as data.
  * ⛔ ADDING AN ACTION is a decision about what may be done on someone's computer: add
  *    it here AND in the platform's list, with its undo and its proof.
  *
  * `exec` is handed in, so every action is testable without touching a machine.
  */
 import * as os from 'os';
+import { runUi } from './helper-ui';
 
 export type Platform = 'windows' | 'mac' | 'linux';
 export type Kind = 'probe' | 'act';
-export type ActionResult = { ok: boolean; reason?: string; data?: Record<string, string | number | boolean> };
-export type Exec = (file: string, args: string[]) => Promise<{ code: number; stdout: string }>;
+export type ActionResult = { ok: boolean; reason?: string; data?: Record<string, string | number | boolean | string[]> };
+export type ExecOptions = { env?: Record<string, string>; timeoutMs?: number };
+export type Exec = (file: string, args: string[], options?: ExecOptions) => Promise<{ code: number; stdout: string }>;
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,79}$/;
+const LABEL = /^[A-Za-z0-9][A-Za-z0-9 _.@:&/()#+,-]{0,79}$/;
+// The inputs that are a label as it reads on screen; every other input is a name.
+const LABELS = new Set(['control', 'value']);
 
 export const CATALOG: Record<string, { kind: Kind; inputs: string[] }> = {
   'system.info': { kind: 'probe', inputs: [] },
@@ -29,6 +36,10 @@ export const CATALOG: Record<string, { kind: Kind; inputs: string[] }> = {
   'process.running': { kind: 'probe', inputs: ['name'] },
   'service.stop': { kind: 'act', inputs: ['service'] },
   'service.start': { kind: 'act', inputs: ['service'] },
+  // A program's own window, by the labels on it (helper-ui.ts). Windows and Mac.
+  'ui.read': { kind: 'probe', inputs: ['program'] },
+  'ui.set': { kind: 'act', inputs: ['program', 'control', 'value'] },
+  'ui.press': { kind: 'act', inputs: ['program', 'control'] },
 };
 
 export function platformOf(nodePlatform: string = process.platform): Platform | null {
@@ -44,7 +55,7 @@ export function cleanInputs(action: string, inputs: unknown): { inputs?: Record<
   const out: Record<string, string> = {};
   for (const key of spec.inputs) {
     const value = given[key];
-    if (typeof value !== 'string' || !NAME.test(value)) return { reason: 'bad_input' };
+    if (typeof value !== 'string' || !(LABELS.has(key) ? LABEL : NAME).test(value)) return { reason: 'bad_input' };
     out[key] = value;
   }
   return { inputs: out };
@@ -118,6 +129,10 @@ export async function runAction(action: string, rawInputs: unknown, platform: Pl
         if (state !== wanted) return { ok: false, reason: done.code !== 0 ? 'not_permitted_or_failed' : 'state_did_not_change', data: { service: inputs.service, state } };
         return { ok: true, data: { service: inputs.service, state } };
       }
+      case 'ui.read':
+      case 'ui.set':
+      case 'ui.press':
+        return await runUi(action, inputs, platform, exec);
       default:
         return { ok: false, reason: 'unknown_action' };
     }

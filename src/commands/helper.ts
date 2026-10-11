@@ -7,7 +7,7 @@
  *   solid helper forget         remove this computer's token
  *
  * What it will and will not do is in src/lib/helper-actions.ts and helper-session.ts:
- * six named actions, never a command line, nothing without a code YOU type here, and
+ * nine named actions, never a command line, nothing without a code YOU type here, and
  * `stop` ends it at once.
  */
 import { isJsonOutput, printJson } from '../lib/json-output';
@@ -34,9 +34,10 @@ import { HelperSession } from '../lib/helper-session';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const VERSION: string = require('../../package.json').version;
 
-const exec: Exec = (file, args) => new Promise((resolve) => {
+const exec: Exec = (file, args, options) => new Promise((resolve) => {
   // ⛔ execFile, never exec: the arguments are an array, and no shell reads them.
-  execFile(file, args, { timeout: 15000, windowsHide: true }, (error, stdout) => {
+  const env = options?.env ? { ...process.env, ...options.env } : process.env;
+  execFile(file, args, { timeout: options?.timeoutMs ?? 15000, windowsHide: true, env }, (error, stdout) => {
     const code = error && typeof (error as NodeJS.ErrnoException & { code?: unknown }).code === 'number'
       ? ((error as unknown as { code: number }).code) : error ? 1 : 0;
     resolve({ code, stdout: String(stdout || '') });
