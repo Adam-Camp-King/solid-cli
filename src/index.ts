@@ -79,6 +79,7 @@ import { antCommand } from './commands/ant';
 import { bidsCommand } from './commands/bids';
 import { predictCommand } from './commands/predict';
 import { webmcpCommand } from './commands/webmcp';
+import { helperCommand } from './commands/helper';
 import { ucpCommand } from './commands/ucp';
 import { nestCommand } from './commands/nest';
 import { appCommand } from './commands/app';
@@ -592,6 +593,7 @@ program.addCommand(switchCommand);
 program.addCommand(tenantCommand);
 program.addCommand(qchainCommand);
 program.addCommand(webmcpCommand);
+program.addCommand(helperCommand);
 program.addCommand(ucpCommand);
 
 // Discovery
