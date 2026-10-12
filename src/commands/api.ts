@@ -51,8 +51,10 @@ const API_SECTIONS: Record<string, { description: string; endpoints: string[] }>
     endpoints: [
       'GET  /api/v1/kb/company',
       'POST /api/v1/kb/company',
-      'DELETE /api/v1/kb/{id}',
-      'GET  /api/v1/kb/search?q=...',
+      'GET  /api/v1/kb/company/{id}',
+      'PUT  /api/v1/kb/company/{id}',
+      'DELETE /api/v1/kb/company/{id}',
+      'POST /api/v1/kb/search  {"query": "..."}',
     ],
   },
   agents: {
