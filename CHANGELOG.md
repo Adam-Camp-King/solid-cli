@@ -4,6 +4,27 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [2.31.0] — 2026-10-12
+
+**`solid helper`: a Solid# host can do a runbook's set-up steps on this computer, with the person's approval. And `solid api` lists the knowledge base addresses that exist.**
+
+- **`solid helper enrol | status | forget | run`.** A person being walked through a
+  set-up can let the host do the steps on their computer. The machine is enrolled with a
+  one-use code and keeps its own token, which is not a company login. Nothing runs until
+  the person types the session's code here, and `stop` ends it at once. Six named actions
+  only, each run without a shell. It dials out only.
+- **A program's window, by its labels.** Within a helper session: `ui.read` lists the
+  labelled controls of one running program's front window, `ui.set` puts one value in one
+  labelled field and answers from what the field holds afterwards, `ui.press` presses one
+  labelled button. A control is found by its label, never by position. A password field
+  is never read or filled. Windows and Mac, not Linux. On a Mac the terminal needs
+  Accessibility permission. The Windows script has not yet been run on a real machine.
+- **`solid api` names knowledge base addresses that exist.** The list named
+  `DELETE /api/v1/kb/{id}` (no such route: 404) and `GET /api/v1/kb/search` (it is a
+  POST: 405), so an outside AI following it was told the knowledge base API was not
+  there. It now lists the entry routes under `/api/v1/kb/company/{id}` and
+  `POST /api/v1/kb/search` with its body.
+
 ## [2.30.2] — 2026-10-08
 
 **`solid find` prints each match once, and `llms.txt` describes the MCP server as it is.**
