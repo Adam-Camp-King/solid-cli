@@ -9,7 +9,7 @@ import { Command } from 'commander';
 import ora from '../lib/spinner';
 import chalk from 'chalk';
 import { config } from '../lib/config';
-import { apiClient, handleApiError } from '../lib/api-client';
+import { apiClient, handleApiError, failApi } from '../lib/api-client';
 import { ui } from '../lib/ui';
 import { isJsonOutput, printJson } from '../lib/json-output';
 import { requireTenantManifest } from '../lib/tenant-guard';
@@ -1248,8 +1248,11 @@ agentCommand
         console.log(chalk.dim('  ' + JSON.stringify(compact, null, 2).replace(/\n/g, '\n  ')));
       }
     } catch (error) {
-      spinner.fail(chalk.red(`Dispatch failed: ${(error as Error).message || error}`));
-      process.exit(1);
+      // The spinner prints nothing under --json or a pipe, which is how every
+      // AI calls this. Reporting a refusal only through it left the caller with
+      // an empty reply: no "confirm first", no reason, no receipt.
+      spinner.stop();
+      failApi(error);
     }
   });
 

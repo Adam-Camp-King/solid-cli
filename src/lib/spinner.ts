@@ -10,7 +10,10 @@
  *   - always writes to stderr, never stdout;
  *   - SILENT (no output at all) when JSON was explicitly asked for — --json
  *     anywhere on the command line, SOLID_JSON=1 — or --quiet / --no-spinner /
- *     --raw / SOLID_QUIET=1;
+ *     --raw / SOLID_QUIET=1. A FAILURE is the exception: fail() still writes
+ *     its one line to stderr. Many catch blocks report an error through
+ *     fail() and nothing else, so a silent fail() handed every AI caller an
+ *     empty reply and exit 1;
  *   - NO PROGRESS LINE when stdout is merely not a TTY (json-output's
  *     auto-detect): the "- Loading..." start line is dropped, but the final
  *     succeed/fail line still goes to stderr — for commands with no JSON
@@ -51,6 +54,15 @@ export default function spinner(options?: string | ora.Options): ora.Ora {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('ora');
   const factory = (mod && mod.default) || mod;
+  if (mode === 'silent' && base.isSilent === undefined) {
+    const quiet = factory(opts) as ora.Ora;
+    (quiet as { fail: ora.Ora['fail'] }).fail = (t?: string) => {
+      const line = t ?? opts.text;
+      if (line) process.stderr.write(`${line}\n`);
+      return quiet;
+    };
+    return quiet;
+  }
   if (mode !== 'no-progress') return factory(opts) as ora.Ora;
 
   // Start with no text so the non-interactive "- <text>" line is never
