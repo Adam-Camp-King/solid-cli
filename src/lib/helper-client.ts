@@ -71,6 +71,12 @@ export class HelperClient {
     return out.ok && typeof id === 'number' ? id : null;
   }
 
+  /** The person typed `allow`: the approval on this computer may change things, not only look. */
+  async allow(token: string, grantId: number): Promise<boolean> {
+    const out = await this.post('allow', { token, grant_id: grantId });
+    return out.ok && (out.data as { scope?: unknown }).scope === 'change';
+  }
+
   async stop(token: string): Promise<boolean> {
     return (await this.post('stop', { token })).ok;
   }

@@ -393,3 +393,34 @@ describe('a file on this machine, read only', () => {
     expect(b.seen).toEqual([]);
   });
 });
+
+
+describe('look first, change later', () => {
+  it('a code lets the host look; a change waits until allow is typed here, for this grant', async () => {
+    const calls: string[] = [];
+    const exec: Exec = async (file) => { calls.push(file); return { code: 0, stdout: '' }; };
+    const s = new HelperSession('linux', exec);
+    s.approved(7);
+    expect(s.changesAllowed).toBe(false);
+    const stop = { type: 'do', rid: 'r1', action: 'service.stop', inputs: { service: 'utg2' }, grant_id: 7 };
+    expect((await s.handle(stop))?.result.reason).toBe('change_not_allowed_here');
+    expect(calls).toEqual([]);
+    // A look still runs.
+    const look = await s.handle({ type: 'do', rid: 'r2', action: 'system.info', inputs: {}, grant_id: 7 });
+    expect(look?.result.ok).toBe(true);
+    expect(s.allowChanges(8)).toBe(false);          // another grant's permission is not this one's
+    expect(s.allowChanges(7)).toBe(true);
+    expect(s.changesAllowed).toBe(true);
+    await s.handle(stop);
+    expect(calls).toContain('systemctl');
+  });
+
+  it('stop or a new code takes the permission to change away again', () => {
+    const s = new HelperSession('linux', async () => ({ code: 0, stdout: '' }));
+    s.approved(7); s.allowChanges(7);
+    s.stop();
+    expect(s.changesAllowed).toBe(false);
+    s.approved(9);
+    expect(s.changesAllowed).toBe(false);
+  });
+});

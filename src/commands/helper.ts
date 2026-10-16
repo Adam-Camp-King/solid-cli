@@ -108,11 +108,18 @@ helperCommand
       say(chalk.green('Connected. Nothing can be done on this computer until you type a code here.'));
       say('When the host gives you a 6-digit code, type it and press Enter. Type `stop` to end at any time.');
     });
+    // The grant the host asked to make changes under, until the person types allow.
+    let pendingChange: number | null = null;
     socket.on('message', (raw) => {
       let request: Record<string, unknown>;
       try { request = JSON.parse(String(raw)); } catch { return; }
       if (request.type === 'grant_ended' && session.granted) say(chalk.yellow('The host has finished. Nothing more can be done until you type a new code.'));
       if (request.type === 'retired') say(chalk.yellow('This computer has been taken off the list. Run `solid helper forget`; a new code is needed to add it again.'));
+      if (request.type === 'change_request' && session.granted) {
+        pendingChange = typeof request.grant_id === 'number' ? request.grant_id : null;
+        say(chalk.bold(`The host is asking to make changes on this computer, starting with: ${String(request.what || '')}`));
+        say('Type `allow` to let it (it will still ask before each change), or `stop` to end.');
+      }
       if (request.type === 'do') say(`The host is asking to run: ${chalk.bold(String(request.action))} ${JSON.stringify(request.inputs ?? {})}`);
       void session.handle(request).then((answer) => {
         if (!answer) return;
@@ -139,6 +146,16 @@ helperCommand
         return;
       }
       if (text.toLowerCase() === 'quit' || text.toLowerCase() === 'exit') { socket.close(); return; }
+      if (text.toLowerCase() === 'allow') {
+        const grantId = pendingChange;
+        if (grantId === null || !session.granted) { say('Nothing is waiting for your permission.'); return; }
+        void client.allow(identity.token, grantId).then((ok) => {
+          if (ok && session.allowChanges(grantId)) say(chalk.green('Allowed. The host can make changes here, and still asks before each one. Type `stop` to end.'));
+          else say(chalk.red('That did not go through. Ask the host to try again.'));
+        });
+        pendingChange = null;
+        return;
+      }
       void client.approve(identity.token, text).then((grantId) => {
         if (grantId !== null && session.approved(grantId)) say(chalk.green('Approved. The host can now do this session\'s steps here. Type `stop` to end it.'));
         else say(chalk.red('That code is not right, or it has run out. Ask the host for a new one.'));
