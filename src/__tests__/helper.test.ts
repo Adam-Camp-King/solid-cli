@@ -9,6 +9,7 @@
 import { CATALOG, cleanInputs, gatewayFrom, platformOf, runAction, serviceStateFrom, type Exec } from '../lib/helper-actions';
 import { HelperSession } from '../lib/helper-session';
 import { MAC_SCRIPT, WINDOWS_SCRIPT, uiFrom } from '../lib/helper-ui';
+import { WINDOWS_EXISTS, WINDOWS_VERSION, buildOf, macVersionFrom, windowsVersionFrom } from '../lib/helper-files';
 
 type Call = { file: string; args: string[] };
 const host = { platform: () => 'linux' as NodeJS.Platform, release: () => '6.1', arch: () => 'x64',
@@ -26,9 +27,9 @@ function machine(answers: Record<string, { code?: number; stdout?: string }> = {
 }
 
 describe('the list', () => {
-  it('is exactly the platform\'s nine actions', () => {
-    expect(Object.keys(CATALOG).sort()).toEqual(['network.settings', 'process.running', 'service.start',
-      'service.state', 'service.stop', 'system.info', 'ui.press', 'ui.read', 'ui.set']);
+  it('is exactly the platform\'s eleven actions', () => {
+    expect(Object.keys(CATALOG).sort()).toEqual(['file.exists', 'file.version', 'network.settings', 'process.running',
+      'service.start', 'service.state', 'service.stop', 'system.info', 'ui.press', 'ui.read', 'ui.set']);
   });
 
   it.each(['shell.run', 'service.delete', '__proto__', 'constructor', '', 'service.stop; rm -rf /'])(
@@ -316,5 +317,79 @@ describe('a program\'s window, by its labels', () => {
     expect((await s.handle({ type: 'do', rid: 'r1', action: 'ui.press', inputs: { program: 'Setup', control: 'Save' }, grant_id: 7 }))?.result.reason)
       .toBe('no_grant_on_this_machine');
     expect(d.seen).toEqual([]);
+  });
+});
+
+
+describe('a file on this machine, read only', () => {
+  type Seen = { file: string; args: string[]; env?: Record<string, string> };
+  function box(answers: Record<string, { code?: number; stdout?: string }>) {
+    const seen: Seen[] = [];
+    const exec: Exec = async (file, args, options) => {
+      seen.push({ file, args, env: options?.env });
+      const hit = answers[file] ?? {};
+      return { code: hit.code ?? 0, stdout: hit.stdout ?? '' };
+    };
+    return { seen, exec };
+  }
+  const UTG = 'C:\\Shift4\\UTG2\\Utg2.exe';
+
+  it.each([
+    ['C:\\Shift4\\UTG2\\Utg2.exe', true], ['C:\\ProgramData\\shift4.in4m\\agentState.json', true],
+    ['/Applications/Setup.app', true], ['C:\\a\\..\\b', false], ['C:\\x*', false], ['Utg2.exe', false],
+    ['\\\\server\\share', false], ['C:\\a;b', false], ['/tmp/$HOME', false], ['C:\\a"b', false],
+    ['C:\\' + 'a'.repeat(300), false],
+  ])('a path names one file and nothing else: %s', (path, ok) => {
+    expect(Boolean(cleanInputs('file.version', { path }).inputs)).toBe(ok);
+    expect(Boolean(cleanInputs('file.exists', { path }).inputs)).toBe(ok);
+  });
+
+  it('reads the version and build of a program file on Windows, the path passed as data', async () => {
+    const b = box({ 'powershell.exe': { stdout: 'OK\t4.1.1.3191\t4.1.1.3191\r\n' } });
+    expect(await runAction('file.version', { path: UTG }, 'windows', b.exec, host))
+      .toEqual({ ok: true, data: { path: UTG, version: '4.1.1.3191', build: 3191 } });
+    expect(b.seen[0].env).toEqual({ SOLID_PATH: UTG });
+    expect(Buffer.from(b.seen[0].args[3], 'base64').toString('utf16le')).toBe(WINDOWS_VERSION);
+    expect(WINDOWS_VERSION).not.toContain('Utg2');
+  });
+
+  it('says plainly when the file is missing or carries no version', async () => {
+    expect(await runAction('file.version', { path: UTG }, 'windows', box({ 'powershell.exe': { stdout: 'missing' } }).exec, host))
+      .toEqual({ ok: false, reason: 'file_not_found' });
+    expect(windowsVersionFrom('OK\t\t')).toEqual({ reason: 'no_version_in_file' });
+    expect(windowsVersionFrom('error')).toEqual({ reason: 'could_not_read_file' });
+    expect(macVersionFrom(1, '')).toEqual({ reason: 'file_not_found' });
+    expect(macVersionFrom(0, '(null)\n')).toEqual({ reason: 'no_version_in_file' });
+    expect(macVersionFrom(0, '12.0')).toEqual({ version: '12.0' });
+  });
+
+  it('on a Mac, reads the version with mdls and checks a file with test', async () => {
+    const b = box({ mdls: { stdout: '12.0' }, test: { code: 1 } });
+    expect(await runAction('file.version', { path: '/Applications/Setup.app' }, 'mac', b.exec, host))
+      .toEqual({ ok: true, data: { path: '/Applications/Setup.app', version: '12.0', build: 0 } });
+    expect(b.seen[0]).toEqual({ file: 'mdls', args: ['-raw', '-name', 'kMDItemVersion', '/Applications/Setup.app'], env: undefined });
+    expect(await runAction('file.exists', { path: '/Applications/Missing.app' }, 'mac', b.exec, host))
+      .toEqual({ ok: true, data: { path: '/Applications/Missing.app', exists: false } });
+  });
+
+  it('checks a file on Windows through a fixed script', async () => {
+    const b = box({ 'powershell.exe': { stdout: 'yes' } });
+    expect(await runAction('file.exists', { path: 'C:\\ProgramData\\shift4.in4m\\agentState.json' }, 'windows', b.exec, host))
+      .toEqual({ ok: true, data: { path: 'C:\\ProgramData\\shift4.in4m\\agentState.json', exists: true } });
+    expect(Buffer.from(b.seen[0].args[3], 'base64').toString('utf16le')).toBe(WINDOWS_EXISTS);
+    expect(await runAction('file.exists', { path: 'C:\\x\\y' }, 'windows', box({ 'powershell.exe': { stdout: '<html>' } }).exec, host))
+      .toEqual({ ok: false, reason: 'could_not_read_file' });
+  });
+
+  it('the build is the last number of a version', () => {
+    expect(buildOf('4.1.1.3191')).toBe(3191);
+    expect(buildOf('5.0.0.3289')).toBe(3289);
+    expect(buildOf('')).toBeNull();
+  });
+
+  it('is not offered on Linux', async () => {
+    const b = box({});
+    expect(await runAction('file.exists', { path: '/etc/hosts' }, 'linux', b.exec, host)).toEqual({ ok: false, reason: 'not_supported_on_this_system' });
+    expect(b.seen).toEqual([]);
   });
 });

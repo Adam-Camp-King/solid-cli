@@ -16,6 +16,7 @@
  * `exec` is handed in, so every action is testable without touching a machine.
  */
 import * as os from 'os';
+import { runFile } from './helper-files';
 import { runUi } from './helper-ui';
 
 export type Platform = 'windows' | 'mac' | 'linux';
@@ -28,6 +29,10 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,79}$/;
 const LABEL = /^[A-Za-z0-9][A-Za-z0-9 _.@:&/()#+,-]{0,79}$/;
 // The inputs that are a label as it reads on screen; every other input is a name.
 const LABELS = new Set(['control', 'value']);
+// A file written out in full: a drive (C:\) or a root (/), then folders. No wildcard,
+// variable, quote or "..".
+const PATH = /^(?:[A-Za-z]:\\|\/)(?:[A-Za-z0-9 _.()@+-]+[\\/])*[A-Za-z0-9 _.()@+-]+$/;
+const MAX_PATH = 260;
 
 export const CATALOG: Record<string, { kind: Kind; inputs: string[] }> = {
   'system.info': { kind: 'probe', inputs: [] },
@@ -40,6 +45,9 @@ export const CATALOG: Record<string, { kind: Kind; inputs: string[] }> = {
   'ui.read': { kind: 'probe', inputs: ['program'] },
   'ui.set': { kind: 'act', inputs: ['program', 'control', 'value'] },
   'ui.press': { kind: 'act', inputs: ['program', 'control'] },
+  // A file on this machine, read only (helper-files.ts). Windows and Mac.
+  'file.exists': { kind: 'probe', inputs: ['path'] },
+  'file.version': { kind: 'probe', inputs: ['path'] },
 };
 
 export function platformOf(nodePlatform: string = process.platform): Platform | null {
@@ -55,7 +63,9 @@ export function cleanInputs(action: string, inputs: unknown): { inputs?: Record<
   const out: Record<string, string> = {};
   for (const key of spec.inputs) {
     const value = given[key];
-    if (typeof value !== 'string' || !(LABELS.has(key) ? LABEL : NAME).test(value)) return { reason: 'bad_input' };
+    const pattern = key === 'path' ? PATH : LABELS.has(key) ? LABEL : NAME;
+    if (typeof value !== 'string' || !pattern.test(value)) return { reason: 'bad_input' };
+    if (key === 'path' && (value.length > MAX_PATH || value.split(/[\\/]/).includes('..'))) return { reason: 'bad_input' };
     out[key] = value;
   }
   return { inputs: out };
@@ -133,6 +143,9 @@ export async function runAction(action: string, rawInputs: unknown, platform: Pl
       case 'ui.set':
       case 'ui.press':
         return await runUi(action, inputs, platform, exec);
+      case 'file.exists':
+      case 'file.version':
+        return await runFile(action, inputs.path, platform, exec);
       default:
         return { ok: false, reason: 'unknown_action' };
     }
