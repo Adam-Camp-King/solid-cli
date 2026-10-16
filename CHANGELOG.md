@@ -8,6 +8,12 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 **A failed command says why under `--json`, and `solid helper` looks before it changes anything.**
 
+- **`solid how-to` asks the backend first.** Signed in, it answers from the
+  `agent.how_to` verb, the same help the Claude connector and the public MCP server give,
+  including `solid how-to build-a-business`, the ordered guide to building a whole
+  business. Signed out, offline, or with no answer in four seconds, it answers from the
+  bundled topics as before. A question the backend matched nothing for still says no
+  topic matches, instead of printing the overview.
 - **A failed command says why under `--json`.** When JSON is asked for, the spinner
   prints nothing, and many commands reported an error only through the spinner, so an AI
   calling the CLI got an empty reply and exit 1 (seen on
