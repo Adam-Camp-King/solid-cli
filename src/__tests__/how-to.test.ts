@@ -103,3 +103,30 @@ describe('the builder protocol topic', () => {
     expect(protocolBody('/nonexistent/BUILDER-PROTOCOL.md')).toContain('not in this install');
   });
 });
+
+describe('backendTopics (the agent.how_to reply)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { backendTopics } = require('../commands/how-to');
+
+  it('prints the topics the backend found', () => {
+    const reply = { ok: true, result: { ok: true, matched: true,
+      topics: [{ id: 'build-a-business', title: 'Build a whole business', body: '1. ORIENT' }] } };
+    const topics = backendTopics(reply);
+    expect(topics.map((t: any) => t.id)).toEqual(['build-a-business']);
+    expect(topics[0].body).toBe('1. ORIENT');
+  });
+
+  it('a topic asked for by id comes back whole (no matched field)', () => {
+    expect(backendTopics({ ok: true, topics: [{ id: 'verbs', title: 'Verbs', body: 'x' }] })).toHaveLength(1);
+  });
+
+  it('answers offline when nothing matched, rather than printing the overview as an answer', () => {
+    expect(backendTopics({ result: { ok: true, matched: false, topics: [{ id: 'capabilities', title: 'c', body: 'b' }] } })).toBeNull();
+  });
+
+  it('answers offline on a refusal, an error or nothing at all', () => {
+    expect(backendTopics({ result: { ok: false, reason: 'unknown_topic', topics: [] } })).toBeNull();
+    expect(backendTopics(undefined)).toBeNull();
+    expect(backendTopics({ result: { ok: true, topics: [{ id: 1 }] } })).toBeNull();
+  });
+});

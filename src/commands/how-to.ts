@@ -3,9 +3,16 @@
  *
  * GPT's critique: nothing explains "how do I connect this to Claude/ChatGPT"
  * or "what can I actually do", and `solid help` is a command dump. This answers
- * those in plain language, offline (static product knowledge — no network).
+ * those in plain language.
  *
- * The matching logic is the pure `findHowTo()` so it's unit-testable.
+ * Signed in, it asks the backend first (the `agent.how_to` verb): the same help the
+ * Claude connector and the public MCP server give, including the ordered guide to
+ * building a whole business (`solid how-to build-a-business`). Signed out, offline,
+ * or when the backend does not answer in a few seconds, it answers from the topics
+ * bundled below, as it always did.
+ *
+ * The matching logic is the pure `findHowTo()` and `backendTopics()`, so both are
+ * unit-testable.
  */
 
 import { Command } from 'commander';
@@ -13,6 +20,8 @@ import chalk from 'chalk';
 import { ui } from '../lib/ui';
 import { howToBody } from '../lib/machine-extras';
 import { protocolBody, protocolDocument } from '../lib/builder-protocol';
+import { apiClient } from '../lib/api-client';
+import { config } from '../lib/config';
 
 export interface HowToTopic {
   id: string;
@@ -275,6 +284,40 @@ export function defaultHowTo(): HowToTopic {
   return HOWTO_TOPICS.find((t) => t.id === DEFAULT_ID) as HowToTopic;
 }
 
+/** How long to wait for the backend before answering from the bundled topics. */
+export const BACKEND_WAIT_MS = 4000;
+
+/**
+ * PURE. The topics in an `agent.how_to` reply worth printing, or null to answer offline.
+ * A question that matched nothing (`matched: false`) is null: the backend then sends its
+ * general overview, and printing that as an answer is the confident-wrong-topic bug the
+ * offline path refuses (see the test "returns nothing for an unmatched question").
+ */
+export function backendTopics(data: unknown): HowToTopic[] | null {
+  const body = (data as any)?.result ?? data;
+  if (!body || body.ok === false || body.matched === false) return null;
+  const topics = Array.isArray(body.topics) ? body.topics : [];
+  const out = topics
+    .filter((t: any) => t && typeof t.id === 'string' && typeof t.body === 'string')
+    .map((t: any) => ({ id: t.id, title: String(t.title || t.id), keywords: [], body: t.body }));
+  return out.length ? out : null;
+}
+
+async function askBackend(question: string): Promise<HowToTopic[] | null> {
+  if (!config.isLoggedIn()) return null;
+  // One word that looks like a topic id asks for that topic whole; anything else is a question.
+  const args = /^[a-z][a-z-]+$/.test(question) && question.includes('-') ? { topic: question } : { question };
+  const call = apiClient
+    .post('/api/v1/ada/cli-dispatch', { verb: 'agent.how_to', args, confirm: false })
+    .then((res) => backendTopics((res as any)?.data))
+    .catch(() => null);
+  const timeout = new Promise<null>((resolve) => {
+    const t = setTimeout(() => resolve(null), BACKEND_WAIT_MS);
+    (t as any).unref?.();
+  });
+  return Promise.race([call, timeout]);
+}
+
 function renderTopic(t: HowToTopic): void {
   console.log('');
   console.log(chalk.bold.cyan(t.title));
@@ -285,7 +328,7 @@ export const howToCommand = new Command('how-to')
   .description('Plain-language answers: how to connect to Claude/ChatGPT, where to start, what the CLI can do')
   .argument('[question...]', 'What you want to do, e.g. "connect to claude"')
   .option('--full', 'With `protocol`: print the whole builder protocol as Markdown, ready to save into a project')
-  .action((questionParts: string[] = [], opts: { full?: boolean } = {}) => {
+  .action(async (questionParts: string[] = [], opts: { full?: boolean } = {}) => {
     const question = (questionParts || []).join(' ').trim();
 
     if (opts.full) {
@@ -309,6 +352,14 @@ export const howToCommand = new Command('how-to')
       for (const t of HOWTO_TOPICS) {
         console.log(`  ${chalk.cyan(t.id.padEnd(14))} ${t.title}`);
       }
+      console.log(chalk.dim('  Building a whole business? `solid how-to build-a-business` (signed in): the steps in order.'));
+      console.log('');
+      return;
+    }
+
+    const fromBackend = await askBackend(question);
+    if (fromBackend) {
+      for (const t of fromBackend) renderTopic(t);
       console.log('');
       return;
     }
