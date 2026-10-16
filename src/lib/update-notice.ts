@@ -97,6 +97,18 @@ export function noticeFor(current: string, cache: UpdateCache | null): string | 
 }
 
 /**
+ * True when this run is `solid update` itself. That command asks npm live and
+ * prints the real answer, so the stored notice is skipped: it can name an older
+ * "latest" than npm has now. On 2026-10-16 a stored 2.31.0 printed
+ * "2.30.2 → 2.31.0" one line above update's own "2.30.2 → 2.32.0", and the
+ * owner read the pair as the CLI going backwards.
+ */
+export function isUpdateCommand(argv: string[]): boolean {
+  const first = argv.slice(2).find((a) => !a.startsWith('-'));
+  return first === 'update';
+}
+
+/**
  * Refresh the stored result. Never awaited by a command; never blocks exit.
  * Writes ONLY on a real answer, so a timeout does not silence the next run.
  */

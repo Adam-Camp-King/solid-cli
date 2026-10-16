@@ -176,7 +176,23 @@ function rewrite(text: string, c: Counts): string {
     // 2. STRUCTURED version fields only — a JSON/TS key whose whole job is to
     //    name the current version.
     .replace(/("(?:latest|softwareVersion|cli:version)"\s*:\s*")\d+\.\d+\.\d+(?=")/g, `$1${c.version}`)
-    .replace(/((?:^|\s)version:\s*')\d+\.\d+\.\d+(?=')/gm, `$1${c.version}`)
+    // ⛔ Only the entry whose `package:` is the CLI. This was a bare
+    //    `version: '…'` match, and /docs/sdks lists several packages that way:
+    //    from 2.30 to 2.32 every release stamped the CLI's version onto
+    //    @solidnumber/sdk, so the page said the SDK was 2.32.0 while npm had
+    //    1.2.0. Same over-match as WebMCP's 523 verbs and the #mcp
+    //    softwareVersion below — a key cannot say whose object it is in.
+    .replace(/(package:\s*'@solidnumber\/cli',\s*\n\s*version:\s*')\d+\.\d+\.\d+(?=')/g, `$1${c.version}`)
+    // 2b. JSON-LD softwareVersion — ONLY inside the object whose `name:` is the
+    //     CLI, with no line between them that STARTS another object (`name:` or
+    //     `'@type':`; a nested `offers: { '@type': … }` does not count), so it can
+    //     never reach into the #mcp or #ucp object beside it. Before this the
+    //     key was left alone entirely and nothing reported it either: /cli said
+    //     2.24.12, /docs/cli and /ai-index said 2.22.0, while npm had 2.32.0.
+    .replace(
+      /(\bname:\s*'(?:@solidnumber\/cli|Solid# CLI)',(?:\n(?!\s*(?:name:|'@type':))[^\n]*){0,12}?\n\s*softwareVersion:\s*')\d+\.\d+\.\d+(?=')/g,
+      `$1${c.version}`,
+    )
     // 3. MACHINE-READABLE claims about the published version — the ones agents
     //    and crawlers actually read: .well-known JSON, ai.txt, llms.txt,
     //    humans.txt, robots.txt, JSON-LD softwareVersion. Every shape here is a
@@ -214,7 +230,8 @@ function rewrite(text: string, c: Counts): string {
     // the same over-match the header above records (WebMCP's 523 verbs), which
     // means the warning was right there and I wrote the pattern anyway.
     // `cli:version` is safe: the key names the CLI in the key itself.
-    // softwareVersion stays REPORTED by needsAHuman, never rewritten.
+    // A bare softwareVersion key is never rewritten; the scoped rule 2b above
+    // stamps it only where the enclosing object names the CLI.
 }
 
 /**

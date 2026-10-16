@@ -38,7 +38,7 @@ activateQueueModeIfRequested(process.argv);
 // T11.3 — program-level --json flag that cascades to subcommands which
 // don't explicitly declare their own --json option.
 import { activateProgramJsonIfRequested, isNonTty, printJson } from './lib/json-output';
-import { isStale, noticeFor, readCache, refreshCache } from './lib/update-notice';
+import { isStale, isUpdateCommand, noticeFor, readCache, refreshCache } from './lib/update-notice';
 activateProgramJsonIfRequested(process.argv);
 
 // AI-first I/O — soft warn when a non-TTY caller (agent / MCP / CI) is
@@ -208,7 +208,7 @@ try {
   const cached = readCache();
   // pkg.version, never a hardcoded literal — the version lives in package.json.
   const notice = noticeFor(pkg.version, cached);
-  if (notice && !isNonTty()) {
+  if (notice && !isNonTty() && !isUpdateCommand(process.argv)) {
     process.stderr.write(`\n${chalk.yellow(notice)}\n\n`);
   }
   if (isStale(cached)) void refreshCache();

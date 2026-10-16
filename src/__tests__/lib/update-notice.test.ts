@@ -32,6 +32,7 @@ import {
   REFRESH_AFTER_MS,
   cachePath,
   isStale,
+  isUpdateCommand,
   noticeFor,
   readCache,
   refreshCache,
@@ -141,5 +142,18 @@ describe('refreshCache', () => {
     await refreshCache(tmpFile(), fake, () => 1);
     expect(sawSignal).toBe(true);
     expect(FETCH_TIMEOUT_MS).toBeLessThanOrEqual(3000);
+  });
+});
+
+describe('isUpdateCommand', () => {
+  it('is true for `solid update`, which asks npm live and prints the real answer', () => {
+    expect(isUpdateCommand(['node', 'solid', 'update'])).toBe(true);
+    expect(isUpdateCommand(['node', 'solid', '--json', 'update'])).toBe(true);
+  });
+
+  it('is false for every other command, so the notice still fires there', () => {
+    expect(isUpdateCommand(['node', 'solid'])).toBe(false);
+    expect(isUpdateCommand(['node', 'solid', 'pages', 'list'])).toBe(false);
+    expect(isUpdateCommand(['node', 'solid', 'doctor', 'update'])).toBe(false);
   });
 });
