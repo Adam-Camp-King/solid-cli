@@ -4,6 +4,24 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [2.32.0] — 2026-10-16
+
+**A failed command says why under `--json`, and `solid helper` looks before it changes anything.**
+
+- **A failed command says why under `--json`.** When JSON is asked for, the spinner
+  prints nothing, and many commands reported an error only through the spinner, so an AI
+  calling the CLI got an empty reply and exit 1 (seen on
+  `solid agent dispatch kb_entry_create --json` with no `--confirm`: no refusal, no
+  reason). A failure now always writes its one line to stderr, and `solid agent dispatch`
+  returns the reason, hint and receipt the way `solid verbs invoke` does.
+- **`solid helper`: look first, change later.** The code typed to start a session lets
+  the host look. Nothing that changes this computer runs until the person types `allow`,
+  after the helper has shown what the host wants to do. `stop` or a new code takes it
+  away again.
+- **`solid helper`: `file.exists` and `file.version`, read only.** Whether one file is
+  there, and the version written into a program file with its build number. The path is
+  one full path, checked against a strict pattern. Windows and Mac, not Linux.
+
 ## [2.31.0] — 2026-10-12
 
 **`solid helper`: a Solid# host can do a runbook's set-up steps on this computer, with the person's approval. And `solid api` lists the knowledge base addresses that exist.**
