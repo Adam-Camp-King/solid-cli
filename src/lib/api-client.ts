@@ -79,6 +79,25 @@ export function resolveSessionRef(env: string | undefined = process.env.SOLID_SE
 }
 export const CLI_SESSION_REF = resolveSessionRef();
 
+/**
+ * The AI app running this CLI, for the backend's telemetry (X-Solid-Client-App):
+ * SOLID_CLIENT_APP when set, else what the app's own shell says — AI_AGENT
+ * ("claude-code_2-1-301_agent" names claude-code) or CLAUDECODE=1. Null when
+ * nothing says, which is a person at a terminal.
+ *
+ * ⛔ Not X-Solid-Agent. That one is set by `solid ai` and marks an agent
+ * session: every request carrying it writes a row to the owner's agent-activity
+ * screen. This only names who is calling, so a run reads back with the AI named.
+ */
+export function clientAppFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
+  const clean = (v: string) => v.replace(/[^A-Za-z0-9._ -]+/g, '').trim().slice(0, 40) || null;
+  if (env.SOLID_CLIENT_APP) return clean(env.SOLID_CLIENT_APP);
+  if (env.AI_AGENT) return clean(env.AI_AGENT.split('_')[0]);
+  if (env.CLAUDECODE === '1') return 'claude-code';
+  return null;
+}
+const CLIENT_APP = clientAppFromEnv();
+
 interface ApiResponse<T = unknown> {
   data: T;
   status: number;
@@ -388,6 +407,7 @@ class ApiClient {
       requestConfig.headers['X-Solid-CLI-Version'] = CLI_VERSION;
       requestConfig.headers['User-Agent'] = `solid-cli/${CLI_VERSION} node/${process.version.slice(1)}`;
       requestConfig.headers['X-Solid-Session'] = CLI_SESSION_REF;
+      if (CLIENT_APP) requestConfig.headers['X-Solid-Client-App'] = CLIENT_APP;
 
       // Agent-aware headers — when an AI (Claude/Cursor/Codex) drives the
       // CLI via `solid ai`, these tell the backend WHO is making the call
