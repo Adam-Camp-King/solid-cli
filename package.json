@@ -126,7 +126,7 @@
     "ws": "^8.18.0"
   },
   "optionalDependencies": {
-    "@anthropic-ai/sdk": "^0.100.1"
+    "@anthropic-ai/sdk": "^0.135.0"
   },
   "overrides": {
     "minimatch": "^9.0.7",
