@@ -15,6 +15,7 @@ import chalk from 'chalk';
 import { config } from '../lib/config';
 import { apiClient, handleApiError } from '../lib/api-client';
 import { isJsonOutput } from '../lib/json-output';
+import { goesByLink, uploadByLink } from '../lib/file-transfer';
 
 function requireAuth() {
   if (!config.isLoggedIn()) {
@@ -151,9 +152,14 @@ storageCommand
     const spinner = ora({ text: `Uploading ${files.length} file(s)...`, stream: process.stderr }).start();
     for (const f of files) {
       try {
+        if (goesByLink(fs.statSync(f).size, opts.folder)) {
+          await uploadByLink(f, opts.folder);
+          uploaded++;
+          spinner.text = `Uploaded ${uploaded}/${files.length}...`;
+          continue;
+        }
         const form = new FormData();
         form.append('file', fs.createReadStream(f));
-        if (opts.folder) form.append('folder_id', opts.folder);
         if (opts.description) form.append('description', opts.description);
         await apiClient.post('/api/v1/storage/upload', form);
         uploaded++;
