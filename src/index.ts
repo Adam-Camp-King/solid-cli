@@ -150,6 +150,7 @@ import { marketplaceCommand } from './commands/marketplace';
 import { usersCommand } from './commands/users';
 import { keysCommand } from './commands/keys';
 import { storageCommand } from './commands/storage';
+import { assetsCommand } from './commands/assets';
 import { onboardingCommand } from './commands/onboarding';
 import { chainsCommand } from './commands/chains';
 import { draftsCommand } from './commands/drafts';
@@ -522,6 +523,7 @@ program.addCommand(keysCommand);
 
 // Storage / files
 program.addCommand(storageCommand);
+program.addCommand(assetsCommand);
 
 // AI
 program.addCommand(vibeCommand);
