@@ -104,6 +104,14 @@ helperCommand
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const say = (line: string) => { console.log(line); rl.prompt(true); };
 
+    // A session ending never leaves a service stopped that the host stopped here.
+    const putBack = () => session.restoreStopped().then((done) => {
+      for (const d of done) {
+        console.log(d.ok ? chalk.green(`Started ${d.service} again.`)
+          : chalk.red(`${d.service} is still stopped and did not start (${d.reason}). Start it in Windows Services.`));
+      }
+    });
+
     socket.on('open', () => {
       say(chalk.green('Connected. Nothing can be done on this computer until you type a code here.'));
       say('When the host gives you a 6-digit code, type it and press Enter. Type `stop` to end at any time.');
@@ -121,6 +129,7 @@ helperCommand
         say('Type `allow` to let it (it will still ask before each change), or `stop` to end.');
       }
       if (request.type === 'do') say(`The host is asking to run: ${chalk.bold(String(request.action))} ${JSON.stringify(request.inputs ?? {})}`);
+      if (request.type === 'grant_ended' || request.type === 'retired') void putBack();
       void session.handle(request).then((answer) => {
         if (!answer) return;
         say(answer.result.ok ? chalk.green(`  done: ${JSON.stringify(answer.result.data ?? {})}`)
@@ -131,6 +140,7 @@ helperCommand
     socket.on('close', (codeNumber) => {
       console.log(codeNumber === 4404 ? chalk.red('\nThis computer is no longer enrolled.') : '\nDisconnected.');
       session.stop();
+      void putBack();
       rl.close();
     });
     socket.on('error', () => { console.error(chalk.red('Could not connect. Check the network and try again.')); });
@@ -141,6 +151,7 @@ helperCommand
       if (!text) { rl.prompt(); return; }
       if (text.toLowerCase() === 'stop') {
         session.stop();                                  // here first; then tell the platform
+        void putBack();
         void client.stop(identity.token);
         say(chalk.yellow('Stopped. Nothing more can be done on this computer until you type a new code.'));
         return;
@@ -161,5 +172,5 @@ helperCommand
         else say(chalk.red('That code is not right, or it has run out. Ask the host for a new one.'));
       });
     });
-    rl.on('close', () => { session.stop(); void client.stop(identity.token); socket.close(); });
+    rl.on('close', () => { session.stop(); void putBack(); void client.stop(identity.token); socket.close(); });
   });

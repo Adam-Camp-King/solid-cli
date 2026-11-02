@@ -6,7 +6,7 @@
  * only, and never after Stop; a change is answered from the state read back, not from
  * what was asked; and no action ever goes through a shell.
  */
-import { CATALOG, cleanInputs, gatewayFrom, platformOf, runAction, serviceStateFrom, type Exec } from '../lib/helper-actions';
+import { CATALOG, adapterForGateway, adaptersFrom, cleanInputs, gatewayFrom, maskFromPrefix, platformOf, runAction, serviceStateFrom, type Exec } from '../lib/helper-actions';
 import { HelperSession } from '../lib/helper-session';
 import { MAC_SCRIPT, WINDOWS_SCRIPT, uiFrom } from '../lib/helper-ui';
 import { WINDOWS_EXISTS, WINDOWS_VERSION, buildOf, macVersionFrom, windowsVersionFrom } from '../lib/helper-files';
@@ -27,8 +27,8 @@ function machine(answers: Record<string, { code?: number; stdout?: string }> = {
 }
 
 describe('the list', () => {
-  it('is exactly the platform\'s eleven actions', () => {
-    expect(Object.keys(CATALOG).sort()).toEqual(['file.exists', 'file.version', 'network.settings', 'process.running',
+  it('is exactly the platform\'s thirteen actions', () => {
+    expect(Object.keys(CATALOG).sort()).toEqual(['file.exists', 'file.version', 'helper.rights', 'network.adapters', 'network.settings', 'process.running',
       'service.start', 'service.state', 'service.stop', 'system.info', 'ui.press', 'ui.read', 'ui.set']);
   });
 
@@ -422,5 +422,93 @@ describe('look first, change later', () => {
     expect(s.changesAllowed).toBe(false);
     s.approved(9);
     expect(s.changesAllowed).toBe(false);
+  });
+});
+
+describe('network adapters, the helper\'s rights, and a session that ends', () => {
+  const nic = (address: string, netmask = '255.255.255.0') => ({ address, netmask, family: 'IPv4', internal: false });
+
+  it('network.settings names the adapter the gateway is reached through, not the first one', () => {
+    const wifi = nic('10.0.0.5');
+    const ethernet = nic('192.168.1.24');
+    expect(adapterForGateway([wifi, ethernet], '192.168.1.1')).toBe(ethernet);
+    expect(adapterForGateway([wifi, ethernet], '')).toBe(wifi);
+    expect(adapterForGateway([wifi, ethernet], '172.16.0.1')).toBe(wifi);
+  });
+
+  it('a prefix is a mask', () => {
+    expect(maskFromPrefix(24)).toBe('255.255.255.0');
+    expect(maskFromPrefix(23)).toBe('255.255.254.0');
+    expect(maskFromPrefix(8)).toBe('255.0.0.0');
+    expect(maskFromPrefix(0)).toBe('0.0.0.0');
+    expect(maskFromPrefix(33)).toBe('');
+  });
+
+  it('reads each Windows adapter and whether DHCP gave it its address', () => {
+    expect(adaptersFrom('Ethernet\t192.168.1.24\t24\t192.168.1.1\tManual\r\nWi-Fi\t10.0.0.5\t24\t\tDhcp\r\n')).toEqual([
+      'Ethernet: address 192.168.1.24, mask 255.255.255.0, gateway 192.168.1.1, dhcp no',
+      'Wi-Fi: address 10.0.0.5, mask 255.255.255.0, gateway none, dhcp yes',
+    ]);
+  });
+
+  it('runs fixed programs and reads rights', async () => {
+    const win = machine({ 'powershell.exe': { stdout: 'True\r\n' } });
+    expect(await runAction('helper.rights', {}, 'windows', win.exec, host)).toEqual({ ok: true, data: { administrator: true } });
+    const nix = machine({ id: { stdout: '501\n' } });
+    expect(await runAction('helper.rights', {}, 'linux', nix.exec, host)).toEqual({ ok: true, data: { administrator: false } });
+    expect(await runAction('network.adapters', {}, 'linux', nix.exec, host))
+      .toEqual({ ok: true, data: { count: 1, adapters: ['eth0: address 192.168.1.50, mask 255.255.255.0, dhcp unknown'] } });
+  });
+
+  const stopped = { 'sc.exe query frmUtg2Service': { stdout: 'STATE : 1 STOPPED' } };
+  const started = { 'sc.exe query frmUtg2Service': { stdout: 'STATE : 4 RUNNING' } };
+  const stopIt = { type: 'do', rid: 'r1', action: 'service.stop', inputs: { service: 'frmUtg2Service' }, grant_id: 7 };
+
+  function changing(answers: Record<string, { stdout: string }>) {
+    const state = { answers };
+    const calls: string[] = [];
+    const exec: Exec = async (file, args) => {
+      calls.push(`${file} ${args.join(' ')}`);
+      return { code: 0, stdout: state.answers[`${file} ${args.join(' ')}`]?.stdout ?? '' };
+    };
+    const s = new HelperSession('windows', exec);
+    s.approved(7);
+    s.allowChanges(7);
+    return { s, state, calls };
+  }
+
+  it('a session that ends starts what it stopped, with no grant left, once', async () => {
+    const { s, state, calls } = changing(stopped);
+    await s.handle(stopIt);
+    expect(s.stoppedServices).toEqual(['frmUtg2Service']);
+    s.stop();
+    state.answers = started;
+    expect(await s.restoreStopped()).toEqual([{ service: 'frmUtg2Service', ok: true }]);
+    expect(calls.filter((c) => c === 'sc.exe start frmUtg2Service')).toHaveLength(1);
+    expect(await s.restoreStopped()).toEqual([]);
+  });
+
+  it('one the host already started again is left alone', async () => {
+    const { s, state, calls } = changing(stopped);
+    await s.handle(stopIt);
+    state.answers = started;
+    await s.handle({ ...stopIt, rid: 'r2', action: 'service.start' });
+    calls.length = 0;
+    expect(await s.restoreStopped()).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it('one that will not start is said and stays listed', async () => {
+    const { s } = changing(stopped);
+    await s.handle(stopIt);
+    const out = await s.restoreStopped();
+    expect(out[0].ok).toBe(false);
+    expect(s.stoppedServices).toEqual(['frmUtg2Service']);
+  });
+
+  it('a stop that failed is not started later', async () => {
+    const { s } = changing(started);
+    await s.handle(stopIt);
+    expect(s.stoppedServices).toEqual([]);
   });
 });

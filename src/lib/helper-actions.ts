@@ -37,6 +37,8 @@ const MAX_PATH = 260;
 export const CATALOG: Record<string, { kind: Kind; inputs: string[] }> = {
   'system.info': { kind: 'probe', inputs: [] },
   'network.settings': { kind: 'probe', inputs: [] },
+  'network.adapters': { kind: 'probe', inputs: [] },
+  'helper.rights': { kind: 'probe', inputs: [] },
   'service.state': { kind: 'probe', inputs: ['service'] },
   'process.running': { kind: 'probe', inputs: ['name'] },
   'service.stop': { kind: 'act', inputs: ['service'] },
@@ -88,6 +90,45 @@ export function gatewayFrom(platform: Platform, stdout: string): string {
   return found ? found[1] : '';
 }
 
+type Nic = { address: string; netmask: string; family: string | number; internal: boolean };
+
+const ipv4 = (text: string): number | null => {
+  const parts = text.split('.').map(Number);
+  return parts.length === 4 && parts.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)
+    ? parts.reduce((total, n) => (total * 256) + n, 0) : null;
+};
+
+/** PURE. The adapter the default gateway is reached through; the first one when none says so. */
+export function adapterForGateway(nics: Nic[], gateway: string): Nic | undefined {
+  const own = nics.filter((n) => !n.internal && n.family === 'IPv4');
+  const route = ipv4(gateway);
+  const onRoute = route === null ? undefined : own.find((n) => {
+    const address = ipv4(n.address);
+    const mask = ipv4(n.netmask);
+    if (address === null || mask === null) return false;
+    return [24, 16, 8, 0].every((shift) =>
+      (((address / 2 ** shift) & 255) & ((mask / 2 ** shift) & 255)) === (((route / 2 ** shift) & 255) & ((mask / 2 ** shift) & 255)));
+  });
+  return onRoute ?? own[0];
+}
+
+/** PURE. A prefix length as a subnet mask: 24 is 255.255.255.0. */
+export function maskFromPrefix(prefix: number): string {
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return '';
+  return [0, 1, 2, 3].map((i) => 256 - 2 ** (8 - Math.min(8, Math.max(0, prefix - (i * 8))))).join('.');
+}
+
+// Fixed text. No input reaches it. One line per adapter: name, address, prefix, gateway, origin.
+export const WINDOWS_ADAPTERS = "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' } | ForEach-Object { $g = (Get-NetRoute -InterfaceIndex $_.InterfaceIndex -DestinationPrefix 0.0.0.0/0 -ErrorAction SilentlyContinue | Select-Object -First 1).NextHop; $_.InterfaceAlias + [char]9 + $_.IPAddress + [char]9 + $_.PrefixLength + [char]9 + $g + [char]9 + $_.PrefixOrigin }";
+export const WINDOWS_RIGHTS = '([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)';
+
+/** PURE. What the Windows script printed, one readable line per adapter. */
+export function adaptersFrom(stdout: string): string[] {
+  return stdout.split(/\r?\n/).map((line) => line.split('\t')).filter((f) => f.length === 5 && f[1])
+    .map(([name, address, prefix, gateway, origin]) =>
+      `${name}: address ${address}, mask ${maskFromPrefix(Number(prefix))}, gateway ${gateway || 'none'}, dhcp ${origin.trim().toLowerCase() === 'dhcp' ? 'yes' : 'no'}`);
+}
+
 async function serviceState(platform: Platform, service: string, exec: Exec): Promise<'running' | 'stopped' | 'unknown'> {
   const run = platform === 'windows' ? exec('sc.exe', ['query', service])
     : platform === 'linux' ? exec('systemctl', ['is-active', service])
@@ -108,14 +149,28 @@ export async function runAction(action: string, rawInputs: unknown, platform: Pl
       case 'system.info':
         return { ok: true, data: { platform, release: host.release(), arch: host.arch() } };
       case 'network.settings': {
-        const own = Object.values(host.networkInterfaces()).flat()
-          .find((n) => n && !n.internal && n.family === 'IPv4');
         const route = platform === 'mac' ? await exec('route', ['-n', 'get', 'default'])
           : platform === 'linux' ? await exec('ip', ['route', 'show', 'default'])
           : await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
             '(Get-NetRoute -DestinationPrefix 0.0.0.0/0 | Select-Object -First 1).NextHop']);
+        const gateway = gatewayFrom(platform, route.stdout);
+        const own = adapterForGateway(Object.values(host.networkInterfaces()).flat().filter(Boolean) as Nic[], gateway);
         if (!own) return { ok: false, reason: 'no_network' };
-        return { ok: true, data: { address: own.address, subnet_mask: own.netmask, gateway: gatewayFrom(platform, route.stdout) } };
+        return { ok: true, data: { address: own.address, subnet_mask: own.netmask, gateway } };
+      }
+      case 'network.adapters': {
+        const adapters = platform === 'windows'
+          ? adaptersFrom((await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_ADAPTERS])).stdout)
+          : Object.entries(host.networkInterfaces()).flatMap(([name, list]) => (list ?? [])
+            .filter((n) => !n.internal && n.family === 'IPv4')
+            .map((n) => `${name}: address ${n.address}, mask ${n.netmask}, dhcp unknown`));
+        return adapters.length ? { ok: true, data: { count: adapters.length, adapters } } : { ok: false, reason: 'no_network' };
+      }
+      case 'helper.rights': {
+        const administrator = platform === 'windows'
+          ? (await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_RIGHTS])).stdout.trim().toLowerCase() === 'true'
+          : (await exec('id', ['-u'])).stdout.trim() === '0';
+        return { ok: true, data: { administrator } };
       }
       case 'service.state': {
         const state = await serviceState(platform, inputs.service, exec);

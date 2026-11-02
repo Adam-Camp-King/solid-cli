@@ -11,6 +11,9 @@
  *   ⛔ LOOK FIRST, CHANGE LATER. A code typed here lets the host LOOK. Nothing that
  *      changes this machine runs until the person also typed `allow` here.
  *   ⛔ STOP IS LOCAL AND IMMEDIATE. It clears the grant here before it tells anyone.
+ *   ⛔ A SERVICE THE HOST STOPPED IS NEVER LEFT STOPPED BY A SESSION ENDING. Stop, the end of
+ *      the grant or a lost line starts it again here, needing no grant: it only undoes
+ *      what this session did. A power cut or a killed helper is beyond it.
  *
  * Pure state plus an injected runner, so each rule is testable.
  */
@@ -23,6 +26,7 @@ export class HelperSession {
   private grantId: number | null = null;
   private mayChange = false;
   readonly log: Did[] = [];
+  private readonly stoppedHere = new Set<string>();
 
   constructor(private readonly platform: Platform | null, private readonly exec: Exec,
     private readonly now: () => number = Date.now) {}
@@ -48,6 +52,23 @@ export class HelperSession {
   /** Stop: theirs (pressed here) or the platform's (the grant ended). Always wins. */
   stop(): void { this.grantId = null; this.mayChange = false; }
 
+  /** The services this session stopped and has not started again. */
+  get stoppedServices(): string[] { return [...this.stoppedHere]; }
+
+  /** Start what this session stopped. Any that will not start stays listed, and is said. */
+  async restoreStopped(): Promise<{ service: string; ok: boolean; reason?: string }[]> {
+    const services = [...this.stoppedHere];
+    this.stoppedHere.clear();
+    const out = [];
+    for (const service of services) {
+      const result = await runAction('service.start', { service }, this.platform, this.exec);
+      this.log.push({ at: this.now(), action: 'service.start', ok: result.ok, reason: result.reason });
+      if (!result.ok) this.stoppedHere.add(service);
+      out.push({ service, ok: result.ok, ...(result.reason ? { reason: result.reason } : {}) });
+    }
+    return out;
+  }
+
   /** One request from the platform → the answer to send back, or null to send nothing. */
   async handle(request: HelperRequest): Promise<{ rid: string; result: ActionResult } | null> {
     if (!request || typeof request !== 'object') return null;
@@ -64,6 +85,9 @@ export class HelperSession {
     if (known?.kind === 'act' && !this.mayChange) return refuse('change_not_allowed_here');
     const result = await runAction(action, request.inputs, this.platform, this.exec);
     this.log.push({ at: this.now(), action, ok: result.ok, reason: result.reason });
+    const service = (request.inputs as { service?: unknown } | undefined)?.service;
+    if (result.ok && action === 'service.stop') this.stoppedHere.add(String(service));
+    if (result.ok && action === 'service.start') this.stoppedHere.delete(String(service));
     return { rid: request.rid, result };
   }
 }
