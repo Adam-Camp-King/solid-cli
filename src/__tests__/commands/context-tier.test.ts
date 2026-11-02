@@ -12,7 +12,7 @@
  */
 import { jest } from '@jest/globals';
 
-const mockGet = jest.fn<any>();
+const mockGet = jest.fn<(...a: any[]) => any>();
 jest.mock('../../lib/api-client', () => ({
   apiClient: { get: mockGet, post: jest.fn(), put: jest.fn(), patch: jest.fn(), delete: jest.fn() },
   handleApiError: jest.fn((e: unknown) => ({ message: (e as Error)?.message || 'e', status: 500 })),

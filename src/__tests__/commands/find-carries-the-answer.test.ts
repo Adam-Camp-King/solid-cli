@@ -12,8 +12,8 @@ import { jest } from '@jest/globals';
 
 import { readSearchAnswer } from '../../lib/find-answer';
 
-const mockGet = jest.fn<any>();
-const mockPost = jest.fn<any>();
+const mockGet = jest.fn<(...a: any[]) => any>();
+const mockPost = jest.fn<(...a: any[]) => any>();
 jest.mock('../../lib/api-client', () => ({
   apiClient: { get: mockGet, post: mockPost, put: jest.fn(), patch: jest.fn(), delete: jest.fn() },
   handleApiError: jest.fn((e: unknown) => ({ message: (e as Error)?.message || 'Error', status: 500 })),

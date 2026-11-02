@@ -19,8 +19,8 @@
  */
 import { jest } from '@jest/globals';
 
-const mockGet = jest.fn<any>();
-const mockPost = jest.fn<any>();
+const mockGet = jest.fn<(...a: any[]) => any>();
+const mockPost = jest.fn<(...a: any[]) => any>();
 
 jest.mock('../../lib/api-client', () => ({
   apiClient: { get: mockGet, post: mockPost, put: jest.fn(), patch: jest.fn(), delete: jest.fn() },

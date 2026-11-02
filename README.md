@@ -84,7 +84,7 @@ iwr -useb https://solidnumber.com/install.ps1 | iex
 Other ways, if you already have a package manager you trust:
 
 ```bash
-# any platform with Node 20+
+# any platform with Node 22.19+
 npm install -g @solidnumber/cli
 
 # macOS / Linux — note: on macOS older than 13 (Ventura), brew may compile
@@ -519,7 +519,7 @@ writes to stderr so pipelines are unaffected.
 
 ## Requirements
 
-- Node.js >= 20.0.0 (the one-paste installer above sets this up for you)
+- Node.js >= 22.19.0 (the one-paste installer above sets this up for you)
 - A Solid# account ([solidnumber.com](https://solidnumber.com))
 
 ## Verb taxonomy

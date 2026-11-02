@@ -21,7 +21,7 @@ jest.mock('../../lib/spinner', () => {
   return { __esModule: true, default: () => spin };
 });
 
-const post = jest.fn<any>();
+const post = jest.fn<(...a: any[]) => any>();
 jest.mock('../../lib/api-client', () => ({
   apiClient: { post: (...a: unknown[]) => post(...a), get: jest.fn() },
   handleApiError: (e: Error) => ({ message: e.message }),
