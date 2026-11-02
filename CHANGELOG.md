@@ -4,6 +4,31 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [2.33.0] — 2026-11-02
+
+**`solid helper` puts back what it paused, large files go by private link, and stored images and videos can be saved to this computer.**
+
+- **`solid helper`: a session that ends starts any service it stopped.** If a session
+  stops a service and then ends early, the helper starts it again, unless that service's
+  own program is open by hand, in which case it leaves it stopped and says so.
+- **`solid helper`: `network.adapters` and `helper.rights`, read only.** The network
+  adapters on this computer, and whether the helper is running with administrator rights.
+  `network.settings` now reads the adapter the default gateway is reached through, not
+  the first one listed. The Windows scripts have not yet been run on a real Windows
+  machine.
+- **`solid files upload`: large files go by private link.** A file over 5 MB, or any
+  file sent with `--folder`, is uploaded straight to storage through a private link. The
+  old route ignored `--folder`.
+- **`solid assets save <id>` and `solid assets move <id>`.** `save` puts a copy of a
+  stored image or video on this computer and keeps ours. `move` saves it, checks the copy
+  by size and MD5, then asks for ours to be removed; that is refused if a page uses it.
+- **A run names the AI app running it.** Requests carry `X-Solid-Client-App`, from
+  `SOLID_CLIENT_APP` or the app's own shell, so the backend can read a run back with the
+  AI named.
+- **`solid update` no longer prints an older saved notice above its own answer.**
+- **Node 22.19 or later is required.** Dependencies updated; known advisories cut from
+  36 to 6, all low, with no fixed release yet.
+
 ## [2.32.0] — 2026-10-16
 
 **A failed command says why under `--json`, and `solid helper` looks before it changes anything.**
