@@ -107,6 +107,10 @@ helperCommand
     // A session ending never leaves a service stopped that the host stopped here.
     const putBack = () => session.restoreStopped().then((done) => {
       for (const d of done) {
+        if (d.reason === 'program_open') {
+          console.log(chalk.yellow(`${d.service} is still stopped because ${d.program} is open. Close it, then start ${d.service} in Windows Services.`));
+          continue;
+        }
         console.log(d.ok ? chalk.green(`Started ${d.service} again.`)
           : chalk.red(`${d.service} is still stopped and did not start (${d.reason}). Start it in Windows Services.`));
       }

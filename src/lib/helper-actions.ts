@@ -129,6 +129,13 @@ export function adaptersFrom(stdout: string): string[] {
       `${name}: address ${address}, mask ${maskFromPrefix(Number(prefix))}, gateway ${gateway || 'none'}, dhcp ${origin.trim().toLowerCase() === 'dhcp' ? 'yes' : 'no'}`);
 }
 
+/** PURE. The program file a Windows service runs, from `sc qc`. '' when it does not say. */
+export function serviceProgramFrom(stdout: string): string {
+  const line = /BINARY_PATH_NAME\s*:\s*(.+)/i.exec(stdout)?.[1]?.trim() ?? '';
+  const file = line.startsWith('"') ? line.slice(1).split('"')[0] : line.split(/\s+/)[0];
+  return file.split(/[\\/]/).pop() ?? '';
+}
+
 async function serviceState(platform: Platform, service: string, exec: Exec): Promise<'running' | 'stopped' | 'unknown'> {
   const run = platform === 'windows' ? exec('sc.exe', ['query', service])
     : platform === 'linux' ? exec('systemctl', ['is-active', service])

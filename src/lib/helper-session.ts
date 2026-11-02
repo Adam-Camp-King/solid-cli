@@ -17,7 +17,7 @@
  *
  * Pure state plus an injected runner, so each rule is testable.
  */
-import { CATALOG, runAction, type ActionResult, type Exec, type Platform } from './helper-actions';
+import { CATALOG, runAction, serviceProgramFrom, type ActionResult, type Exec, type Platform } from './helper-actions';
 
 export type HelperRequest = { type?: unknown; rid?: unknown; action?: unknown; kind?: unknown; inputs?: unknown; grant_id?: unknown };
 export type Did = { at: number; action: string; ok: boolean; reason?: string };
@@ -55,12 +55,34 @@ export class HelperSession {
   /** The services this session stopped and has not started again. */
   get stoppedServices(): string[] { return [...this.stoppedHere]; }
 
+  private async programOpen(service: string): Promise<string> {
+    if (this.platform !== 'windows') return '';
+    try {
+      const program = serviceProgramFrom((await this.exec('sc.exe', ['qc', service])).stdout);
+      if (!program) return '';
+      const found = await runAction('process.running', { name: program }, this.platform, this.exec);
+      return found.ok && found.data?.running === true ? program : '';
+    } catch {
+      return '';
+    }
+  }
+
   /** Start what this session stopped. Any that will not start stays listed, and is said. */
-  async restoreStopped(): Promise<{ service: string; ok: boolean; reason?: string }[]> {
+  async restoreStopped(): Promise<{ service: string; ok: boolean; reason?: string; program?: string }[]> {
     const services = [...this.stoppedHere];
     this.stoppedHere.clear();
-    const out = [];
+    const out: { service: string; ok: boolean; reason?: string; program?: string }[] = [];
     for (const service of services) {
+      // Its own program still running with the service stopped: the person has that program open
+      // by hand (UTG's Stand Alone and TuneUp are the service's own program). Starting it now could
+      // run two copies, so it is left for the person.
+      const open = await this.programOpen(service);
+      if (open) {
+        this.log.push({ at: this.now(), action: 'service.start', ok: false, reason: 'program_open' });
+        this.stoppedHere.add(service);
+        out.push({ service, ok: false, reason: 'program_open', program: open });
+        continue;
+      }
       const result = await runAction('service.start', { service }, this.platform, this.exec);
       this.log.push({ at: this.now(), action: 'service.start', ok: result.ok, reason: result.reason });
       if (!result.ok) this.stoppedHere.add(service);

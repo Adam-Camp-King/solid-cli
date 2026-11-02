@@ -6,7 +6,7 @@
  * only, and never after Stop; a change is answered from the state read back, not from
  * what was asked; and no action ever goes through a shell.
  */
-import { CATALOG, adapterForGateway, adaptersFrom, cleanInputs, gatewayFrom, maskFromPrefix, platformOf, runAction, serviceStateFrom, type Exec } from '../lib/helper-actions';
+import { CATALOG, adapterForGateway, adaptersFrom, cleanInputs, gatewayFrom, maskFromPrefix, platformOf, runAction, serviceProgramFrom, serviceStateFrom, type Exec } from '../lib/helper-actions';
 import { HelperSession } from '../lib/helper-session';
 import { MAC_SCRIPT, WINDOWS_SCRIPT, uiFrom } from '../lib/helper-ui';
 import { WINDOWS_EXISTS, WINDOWS_VERSION, buildOf, macVersionFrom, windowsVersionFrom } from '../lib/helper-files';
@@ -504,6 +504,33 @@ describe('network adapters, the helper\'s rights, and a session that ends', () =
     const out = await s.restoreStopped();
     expect(out[0].ok).toBe(false);
     expect(s.stoppedServices).toEqual(['frmUtg2Service']);
+  });
+
+  it('reads the program file a service runs', () => {
+    expect(serviceProgramFrom('        BINARY_PATH_NAME   : "C:\\Shift4\\UTG2\\Utg2.exe" -s\r\n')).toBe('Utg2.exe');
+    expect(serviceProgramFrom('        BINARY_PATH_NAME   : C:\\Shift4\\Utg2.exe -s')).toBe('Utg2.exe');
+    expect(serviceProgramFrom('nothing')).toBe('');
+  });
+
+  it('a service whose own program is open by hand is left stopped, and said', async () => {
+    const { s, state, calls } = changing(stopped);
+    await s.handle(stopIt);
+    state.answers = { ...stopped,
+      'sc.exe qc frmUtg2Service': { stdout: 'BINARY_PATH_NAME : "C:\\Shift4\\UTG2\\Utg2.exe"' },
+      'tasklist.exe /FI IMAGENAME eq Utg2.exe /NH': { stdout: 'Utg2.exe 4112 Console' } };
+    expect(await s.restoreStopped()).toEqual([{ service: 'frmUtg2Service', ok: false, reason: 'program_open', program: 'Utg2.exe' }]);
+    expect(calls).not.toContain('sc.exe start frmUtg2Service');
+    expect(s.stoppedServices).toEqual(['frmUtg2Service']);
+  });
+
+  it('with its program closed the service is started', async () => {
+    const { s, state, calls } = changing(stopped);
+    await s.handle(stopIt);
+    state.answers = { ...started,
+      'sc.exe qc frmUtg2Service': { stdout: 'BINARY_PATH_NAME : "C:\\Shift4\\UTG2\\Utg2.exe"' },
+      'tasklist.exe /FI IMAGENAME eq Utg2.exe /NH': { stdout: 'INFO: No tasks are running' } };
+    expect((await s.restoreStopped())[0].ok).toBe(true);
+    expect(calls).toContain('sc.exe start frmUtg2Service');
   });
 
   it('a stop that failed is not started later', async () => {
