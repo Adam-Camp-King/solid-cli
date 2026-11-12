@@ -4,6 +4,24 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [2.34.0] — 2026-11-11
+
+**`solid promotions`: the business's own promotions and codes, and rewards a customer earns.**
+
+- **`solid promotions list | create | update | check | design`** (alias `solid promos`).
+  Every promotion in words (live, scheduled, ended or off); make or change one; check what
+  a code takes off an amount or items without changing anything; and get the words, brand
+  and image prompt for a design of one promotion. A promotion is a price, so `create` and
+  `update` run only with `--confirm`. `design` makes and spends nothing; it prints the two
+  commands to price and then make the image.
+- **`solid promotions rewards list | offer | offer-update | issue | decide`.** Rewards a
+  customer earns by doing something: a referral, a review on the business's own site, a
+  photo post, a follow or a repeat visit. Each reward is a personal one-time code that
+  works on one sale. An owner or admin sets up the offers and approves or declines a
+  teammate's reward; `decide … restore` turns a used code back on when its sale failed.
+  Every change runs only with `--confirm`. Never for a review on Google, Yelp or another
+  review site: their rules and the FTC's forbid it, and the server refuses it.
+
 ## [2.33.0] — 2026-11-02
 
 **`solid helper` puts back what it paused, large files go by private link, and stored images and videos can be saved to this computer.**

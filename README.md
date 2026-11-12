@@ -2,7 +2,7 @@
 
 Run an AI-powered business from your terminal.
 <!-- AUTO-NUMBERS: do not edit by hand; run `npm run sync:counts` (scripts/sync-counts.ts). Verified by `npm run check:counts`, which prepublishOnly runs. -->
-178 top-level commands, 933 verbs. One CLI, built for an AI agent to drive.
+179 top-level commands, 945 verbs. One CLI, built for an AI agent to drive.
 
 ## What a verb tells you before you call it
 
