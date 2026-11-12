@@ -26,7 +26,7 @@ import { requireAuth } from '../lib/command-kit';
 
 type Opts = { json?: boolean; confirm?: boolean };
 
-async function run(verb: string, args: Record<string, unknown>, opts: Opts, label: string): Promise<any> {
+export async function run(verb: string, args: Record<string, unknown>, opts: Opts, label: string): Promise<any> {
   requireAuth();
   const spinner = ora(label).start();
   try {
@@ -184,3 +184,4 @@ promotionsCommand
     console.log(`  solid agent dispatch asset.generate --args '${prompt}' --confirm`);
     console.log(chalk.dim('Image makers can misspell: check the code and dates on the image before sharing it.'));
   });
+

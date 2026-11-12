@@ -146,6 +146,7 @@ import { productsCommand } from './commands/products';
 import { ordersCommand } from './commands/orders';
 import { offerCommand } from './commands/offer';
 import { promotionsCommand } from './commands/promotions';
+import { rewardsCommand } from './commands/rewards';
 import { ecommerceCommand } from './commands/ecommerce';
 import { marketplaceCommand } from './commands/marketplace';
 import { usersCommand } from './commands/users';
@@ -550,6 +551,7 @@ program.addCommand(inventoryCommand);
 program.addCommand(productsCommand);
 program.addCommand(ordersCommand);
 program.addCommand(offerCommand);
+promotionsCommand.addCommand(rewardsCommand); // a reward is a one-time promotion code
 program.addCommand(promotionsCommand);
 program.addCommand(ecommerceCommand);
 program.addCommand(marketplaceCommand);
