@@ -4,6 +4,18 @@ All notable changes to `@solidnumber/cli` will be documented in this file.
 
 ## [Unreleased]
 
+## [2.34.1] — 2026-11-15
+
+**`solid app publish` says up front when hosted apps are off for this business.**
+
+- **The dry run checks before it says "would publish".** Without `--confirm`, `solid app
+  publish` now asks the business (`app.list`) whether hosted apps are switched on. When they
+  are off it stops with reason `hosted_apps_not_available` and what to do, and nothing is
+  sent; when they are on, the plan carries `publishing_enabled: true`. Before, the dry run
+  reported "would publish" for a publish the server then refused. If the answer cannot be
+  read, the plan says `publishing_enabled: null` (unknown), never on. The dry run still never
+  uploads or publishes.
+
 ## [2.34.0] — 2026-11-11
 
 **`solid promotions`: the business's own promotions and codes, and rewards a customer earns.**
