@@ -86,7 +86,8 @@ test('a folder with no index.html is refused before anything is sent', async () 
 test('without --confirm it says what it would publish and sends nothing', async () => {
   const dir = folder({ 'index.html': '<p>', 'assets/a.js': 'x' });
   const text = await run(['publish', dir, '--slug', 'sell']);
-  expect(post).not.toHaveBeenCalled();
+  // Only the read that says whether publishing is on; nothing is uploaded or published.
+  for (const c of post.mock.calls) expect(String(c[0])).toBe('/api/v1/agent/app/list');
   expect(text).toContain('Would publish 2 file(s)');
   expect(text).toContain('--confirm');
 });
@@ -167,7 +168,28 @@ test('the dry run reports the zipped size and says the limit is checked at publi
   expect(plan.would_publish).toBe(2);
   expect(plan.zipped_bytes).toBeGreaterThan(0);
   expect(plan.size_check).toContain('checked against the upload limit');
-  expect(post).not.toHaveBeenCalled();
+  // A dry run only READS (app.list, to say whether publishing is on); it never uploads or publishes.
+  for (const c of post.mock.calls) expect(String(c[0])).toBe('/api/v1/agent/app/list');
+});
+
+test('report #115: the dry run says up front when hosted apps are off for this business', async () => {
+  const dir = folder({ 'index.html': '<canvas></canvas>' });
+  post.mockResolvedValue({ data: { ok: true, apps: [], publishing_enabled: false,
+    note: 'Hosted apps are not switched on for this business.' } });
+  const out = JSON.parse(await run(['publish', dir, '--slug', 'hoffmann', '--json']));
+  expect(out.ok).toBe(false);
+  expect(out.reason).toBe('hosted_apps_not_available');
+  expect(out.error).toContain('not switched on for this business');
+  expect(out.next).toContain('Nothing was sent');
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(process.exitCode).toBe(1);
+  process.exitCode = 0;
+
+  post.mockReset();
+  post.mockResolvedValue({ data: { ok: true, apps: [], publishing_enabled: true } });
+  const on = JSON.parse(await run(['publish', dir, '--slug', 'hoffmann', '--json']));
+  expect(on.would_publish).toBe(1);
+  expect(on.publishing_enabled).toBe(true);
 });
 
 test('a build over the size limit is refused before it is uploaded, with both sizes', async () => {

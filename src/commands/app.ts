@@ -142,8 +142,24 @@ appCommand
       // upload answer), so the dry run reports the zipped size it would send and says
       // the check happens at publish — "would publish" must not read as "will fit".
       const zippedBytes = zipFolder(read.files).byteLength;
+      // Ask once whether publishing is on for this business (app.list, a read), so a dry
+      // run never says "would publish" to a business whose publish will be refused
+      // (report #115). Unreadable is said as unknown, never as on.
+      let publishingOn: boolean | null = null;
+      let publishingNote: string | undefined;
+      try {
+        const listed = await call('list', {});
+        if (typeof listed.publishing_enabled === 'boolean') publishingOn = listed.publishing_enabled;
+        if (typeof listed.note === 'string') publishingNote = listed.note;
+      } catch { /* unknown: the publish itself still says */ }
+      if (publishingOn === false) {
+        return fail(json, publishingNote || 'Hosted apps are not switched on for this business.', {
+          reason: 'hosted_apps_not_available', would_publish: read.files.length, slug: opts.slug,
+          next: 'Nothing was sent. Ask Solid# to switch hosted apps on for this business (agent.report_problem), '
+            + 'or build it as site pages if it does not need its own JavaScript.' });
+      }
       const plan = { would_publish: read.files.length, bytes, zipped_bytes: zippedBytes, slug: opts.slug,
-        skipped: read.skipped,
+        skipped: read.skipped, publishing_enabled: publishingOn,
         size_check: 'The zipped size is checked against the upload limit when you publish; over it, nothing is sent.',
         next: `solid app publish ${folder} --slug ${opts.slug} --confirm` };
       if (json) return printJson(plan);
